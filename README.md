@@ -42,10 +42,7 @@ Stockula automatically looks for `stockula.yaml` or `stockula.yml` in the curren
 uv run python -m stockula.main
 
 # Use a specific configuration file
-uv run python -m stockula.main --config config.example.yaml
-
-# Use a simple configuration
-uv run python -m stockula.main --config config.simple.yaml
+uv run python -m stockula.main --config config.full.yaml
 
 # Run specific mode with configuration
 uv run python -m stockula.main --mode backtest
