@@ -112,7 +112,7 @@ bbands = ta.bbands()
 ### Backtesting
 
 ```python
-from stockula import DataFetcher, BacktestRunner, SMACrossStrategy, RSIStrategy
+from stockula import DataFetcher, BacktestRunner, SMACrossStrategy, RSIStrategy, DoubleEMACrossStrategy, TripleEMACrossStrategy
 
 # Initialize backtest runner
 runner = BacktestRunner(cash=10000, commission=0.002)
@@ -122,6 +122,23 @@ results = runner.run_from_symbol("AAPL", SMACrossStrategy)
 print(f"Return: {results['Return [%]']:.2f}%")
 print(f"Sharpe Ratio: {results['Sharpe Ratio']:.2f}")
 print(f"Max Drawdown: {results['Max. Drawdown [%]']:.2f}%")
+
+# Run with Double EMA Cross strategy (34/55 periods)
+results = runner.run_from_symbol("NVDA", DoubleEMACrossStrategy)
+
+# Run with Triple EMA Cross strategy (9/21 periods) - faster signals with less lag
+results = runner.run_from_symbol("TSLA", TripleEMACrossStrategy)
+
+# Check minimum data requirements for strategies
+min_days_double = DoubleEMACrossStrategy.get_min_required_days()
+min_days_triple = TripleEMACrossStrategy.get_min_required_days()
+print(f"DoubleEMACross requires at least {min_days_double} trading days")
+print(f"TripleEMACross requires at least {min_days_triple} trading days")
+
+# Get recommended start date for a given end date
+end_date = "2025-07-25"
+start_date = DoubleEMACrossStrategy.get_recommended_start_date(end_date)
+print(f"For end date {end_date}, use start date {start_date} or earlier")
 
 # Or with your own data
 fetcher = DataFetcher()
@@ -191,6 +208,15 @@ Stockula includes several ready-to-use trading strategies:
 - **SMACrossStrategy**: Simple Moving Average crossover strategy
 - **RSIStrategy**: Relative Strength Index based strategy
 - **MACDStrategy**: MACD (Moving Average Convergence Divergence) strategy
+- **DoubleEMACrossStrategy**: Double Exponential Moving Average (34/55) crossover strategy with ATR-based stop losses
+  - Requires minimum 75 trading days (55 for slow EMA + 20 buffer)
+  - Includes data validation to warn if insufficient data
+  - Provides helper methods to calculate required date ranges
+- **TripleEMACrossStrategy**: Triple Exponential Moving Average (TEMA) crossover strategy
+  - Uses 9/21 period TEMA crossovers for reduced lag
+  - Formula: TEMA = 3*EMA - 3*EMA(EMA) + EMA(EMA(EMA))
+  - Requires minimum 81 trading days (3\*21-2=61 for slow TEMA + 20 buffer)
+  - Includes ATR-based stop losses with 1.5x multiplier
 
 ## Development
 
@@ -253,6 +279,19 @@ backtest:
       parameters:
         fast_period: 10
         slow_period: 20
+    # Example: Double EMA Cross strategy
+    # - name: DoubleEMACross
+    #   parameters:
+    #     fast_period: 34
+    #     slow_period: 55
+    #     momentum_atr_multiple: 1.25
+    #     speculative_atr_multiple: 1.0
+    # Example: Triple EMA Cross strategy (faster signals, less lag)
+    # - name: TripleEMACross
+    #   parameters:
+    #     fast_period: 9
+    #     slow_period: 21
+    #     atr_multiple: 1.5
 
 # Forecasting settings
 forecast:

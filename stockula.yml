@@ -1,15 +1,66 @@
-# Simple Stockula Configuration
-# Minimal configuration for quick start
+# Stockula Configuration - Double EMA (34/55) Portfolio Strategy
+# Based on EMA portfolio strategy document dated July 26, 2025
 data:
+  # Portfolio Universe - 20 Symbols across 3 buckets
   tickers:
+    # Momentum / Large-Cap Growth (47.5% allocation)
+    - NVDA
+    - AMD
+    - TSM
     - AAPL
+    - MSFT
     - GOOGL
+    - AMZN
+    - META
+    - TSLA
+    - PLTR
+    # Speculative High-Beta (17.5% allocation)
+    - LIDR
+    - OPEN
+    - SOFI
+    - IONQ
+  # Data timeframe for analysis
+  # Extended start date to ensure enough data for 55-day EMA calculation
+  # DoubleEMACross strategy requires: 55 days (slow EMA) + 20 days buffer = 75+ trading days minimum
+  start_date: "2025-01-01"
+  end_date: "2025-07-25"
+portfolio:
+  initial_capital: 20000
+  # Capital allocation by bucket
+  allocations:
+    broad_market_core:
+      tickers: [SPY, VOO, DFUSX, FSKAX, FSMDX, FXAIX]
+      allocation_pct: 35
+      amount: 7000
+    momentum_growth:
+      tickers: [NVDA, AMD, TSM, AAPL, MSFT, GOOGL, AMZN, META, TSLA, PLTR]
+      allocation_pct: 47.5
+      amount: 9500
+    speculative_high_beta:
+      tickers: [LIDR, OPEN, SOFI, IONQ]
+      allocation_pct: 17.5
+      amount: 3500
 backtest:
   strategies:
-    - name: SMACross
+    - name: TripleEMACross
+      type: EMA
       parameters:
-        fast_period: 10
-        slow_period: 20
+        fast_period: 9
+        slow_period: 21
+      # Risk management parameters
+      stop_loss:
+        momentum_atr_multiple: 1.5 # 1-1.5x ATR for momentum names
+        speculative_atr_multiple: 1.0 # 1x ATR for speculative names
+      # Signal evaluation
+      signal_evaluation: "daily" # Daily bars for ETFs/equities, end-of-day for mutual funds
+      # Rebalance frequency
+      rebalance_frequency: "monthly"
+performance:
+  # Risk-free rate for Sharpe ratio calculation (3-month T-Bill yield)
+  risk_free_rate: 0.0442
+  # Expected returns based on 3-month historical data
+  expected_returns:
+    broad_market_core_avg: 0.149 # 14.9% average
 forecast:
   forecast_length: 14
   model_list: "fast"

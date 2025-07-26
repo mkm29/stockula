@@ -35,6 +35,22 @@ class BacktestRunner:
         Returns:
             Backtest results dictionary
         """
+        # Validate data sufficiency for strategies with period requirements
+        if hasattr(strategy, "slow_period") and hasattr(
+            strategy, "min_trading_days_buffer"
+        ):
+            total_days = len(data)
+            required_days = strategy.slow_period + getattr(
+                strategy, "min_trading_days_buffer", 20
+            )
+
+            if total_days < required_days:
+                print(
+                    f"Warning: {strategy.__name__} requires at least {required_days} days of data "
+                    f"({strategy.slow_period} for indicators + {getattr(strategy, 'min_trading_days_buffer', 20)} buffer), "
+                    f"but only {total_days} days available."
+                )
+
         bt = Backtest(
             data,
             strategy,

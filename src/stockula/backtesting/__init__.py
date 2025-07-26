@@ -1,6 +1,13 @@
 """Backtesting module using backtesting.py library."""
 
-from .strategies import BaseStrategy, SMACrossStrategy, RSIStrategy, MACDStrategy
+from .strategies import (
+    BaseStrategy,
+    SMACrossStrategy,
+    RSIStrategy,
+    MACDStrategy,
+    DoubleEMACrossStrategy,
+    TripleEMACrossStrategy,
+)
 from .runner import BacktestRunner
 
 __all__ = [
@@ -8,5 +15,7 @@ __all__ = [
     "SMACrossStrategy",
     "RSIStrategy",
     "MACDStrategy",
+    "DoubleEMACrossStrategy",
+    "TripleEMACrossStrategy",
     "BacktestRunner",
 ]

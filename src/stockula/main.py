@@ -6,10 +6,18 @@ import sys
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, Any, List
+import pandas as pd
 
 from .data import DataFetcher
 from .technical_analysis import TechnicalIndicators
-from .backtesting import BacktestRunner, SMACrossStrategy, RSIStrategy, MACDStrategy
+from .backtesting import (
+    BacktestRunner,
+    SMACrossStrategy,
+    RSIStrategy,
+    MACDStrategy,
+    DoubleEMACrossStrategy,
+    TripleEMACrossStrategy,
+)
 from .forecasting import StockForecaster
 from .config import load_config, StockulaConfig
 
@@ -20,6 +28,8 @@ def get_strategy_class(strategy_name: str):
         "smacross": SMACrossStrategy,
         "rsi": RSIStrategy,
         "macd": MACDStrategy,
+        "doubleemacross": DoubleEMACrossStrategy,
+        "tripleemacross": TripleEMACrossStrategy,
     }
     return strategies.get(strategy_name.lower())
 
@@ -119,6 +129,11 @@ def run_backtest(ticker: str, config: StockulaConfig) -> List[Dict[str, Any]]:
                 else None,
             )
 
+            # Handle NaN values for win rate when there are no trades
+            win_rate = backtest_result.get("Win Rate [%]", 0)
+            if pd.isna(win_rate):
+                win_rate = None if backtest_result["# Trades"] == 0 else 0
+
             results.append(
                 {
                     "ticker": ticker,
@@ -128,7 +143,7 @@ def run_backtest(ticker: str, config: StockulaConfig) -> List[Dict[str, Any]]:
                     "sharpe_ratio": backtest_result["Sharpe Ratio"],
                     "max_drawdown_pct": backtest_result["Max. Drawdown [%]"],
                     "num_trades": backtest_result["# Trades"],
-                    "win_rate": backtest_result.get("Win Rate [%]", 0),
+                    "win_rate": win_rate,
                 }
             )
         except Exception as e:
@@ -226,8 +241,10 @@ def print_results(results: Dict[str, Any], output_format: str = "console"):
                 print(f"  Sharpe Ratio: {backtest['sharpe_ratio']:.2f}")
                 print(f"  Max Drawdown: {backtest['max_drawdown_pct']:.2f}%")
                 print(f"  Number of Trades: {backtest['num_trades']}")
-                if backtest.get("win_rate"):
+                if backtest.get("win_rate") is not None:
                     print(f"  Win Rate: {backtest['win_rate']:.2f}%")
+                elif backtest["num_trades"] == 0:
+                    print(f"  Win Rate: N/A (no trades)")
 
         if "forecasting" in results:
             print("\n=== Forecasting Results ===")

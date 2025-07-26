@@ -1,0 +1,305 @@
+Using configuration from: stockula.yml
+
+Processing SPY...
+                                                                                                                                   
+Processing VOO...
+                                                                                                                                   
+Processing DFUSX...
+                                                                                                                                   
+Processing FSKAX...
+                                                                                                                                   
+Processing FSMDX...
+                                                                                                                                   
+Processing FXAIX...
+                                                                                                                                   
+Processing NVDA...
+                                                                                                                                   
+Processing AMD...
+                                                                                                                                   
+Processing TSM...
+                                                                                                                                   
+Processing AAPL...
+                                                                                                                                   
+Processing MSFT...
+                                                                                                                                   
+Processing GOOGL...
+                                                                                                                                   
+Processing AMZN...
+                                                                                                                                   
+Processing META...
+                                                                                                                                   
+Processing TSLA...
+                                                                                                                                   
+Processing PLTR...
+                                                                                                                                   
+Processing LIDR...
+                                                                                                                                   
+Processing OPEN...
+                                                                                                                                   
+Processing SOFI...
+                                                                                                                                   
+Processing IONQ...
+{                                                                                                                                  
+  "backtesting": [
+    {
+      "ticker": "SPY",
+      "strategy": "DoubleEMACross",
+      "parameters": {
+        "fast_period": 34,
+        "slow_period": 55
+      },
+      "return_pct": -2.0390239775279406,
+      "sharpe_ratio": -1.7323268378177197,
+      "max_drawdown_pct": -2.039023977527943,
+      "num_trades": 1,
+      "win_rate": 0.0
+    },
+    {
+      "ticker": "VOO",
+      "strategy": "DoubleEMACross",
+      "parameters": {
+        "fast_period": 34,
+        "slow_period": 55
+      },
+      "return_pct": -2.114164783751603,
+      "sharpe_ratio": -1.749113556893713,
+      "max_drawdown_pct": -2.114164783751604,
+      "num_trades": 1,
+      "win_rate": 0.0
+    },
+    {
+      "ticker": "DFUSX",
+      "strategy": "DoubleEMACross",
+      "parameters": {
+        "fast_period": 34,
+        "slow_period": 55
+      },
+      "return_pct": -2.034894565429677,
+      "sharpe_ratio": -1.7330156552370963,
+      "max_drawdown_pct": -2.034894565429679,
+      "num_trades": 1,
+      "win_rate": 0.0
+    },
+    {
+      "ticker": "FSKAX",
+      "strategy": "DoubleEMACross",
+      "parameters": {
+        "fast_period": 34,
+        "slow_period": 55
+      },
+      "return_pct": 8.977490296630858,
+      "sharpe_ratio": 2.604106528834697,
+      "max_drawdown_pct": -1.175617669618978,
+      "num_trades": 0,
+      "win_rate": NaN
+    },
+    {
+      "ticker": "FSMDX",
+      "strategy": "DoubleEMACross",
+      "parameters": {
+        "fast_period": 34,
+        "slow_period": 55
+      },
+      "return_pct": -2.8925285229492146,
+      "sharpe_ratio": -1.6914481040898264,
+      "max_drawdown_pct": -2.8925285229492115,
+      "num_trades": 1,
+      "win_rate": 0.0
+    },
+    {
+      "ticker": "FXAIX",
+      "strategy": "DoubleEMACross",
+      "parameters": {
+        "fast_period": 34,
+        "slow_period": 55
+      },
+      "return_pct": -2.0241126562499994,
+      "sharpe_ratio": -1.7215919734077612,
+      "max_drawdown_pct": -2.024112656249999,
+      "num_trades": 1,
+      "win_rate": 0.0
+    },
+    {
+      "ticker": "NVDA",
+      "strategy": "DoubleEMACross",
+      "parameters": {
+        "fast_period": 34,
+        "slow_period": 55
+      },
+      "return_pct": 29.00117942628831,
+      "sharpe_ratio": 2.2746793176590008,
+      "max_drawdown_pct": -3.4392198822748243,
+      "num_trades": 0,
+      "win_rate": NaN
+    },
+    {
+      "ticker": "AMD",
+      "strategy": "DoubleEMACross",
+      "parameters": {
+        "fast_period": 34,
+        "slow_period": 55
+      },
+      "return_pct": 41.796798082122805,
+      "sharpe_ratio": 1.8757268241848184,
+      "max_drawdown_pct": -6.227755472326746,
+      "num_trades": 0,
+      "win_rate": NaN
+    },
+    {
+      "ticker": "TSM",
+      "strategy": "DoubleEMACross",
+      "parameters": {
+        "fast_period": 34,
+        "slow_period": 55
+      },
+      "return_pct": 25.936211481933586,
+      "sharpe_ratio": 2.0856770786408987,
+      "max_drawdown_pct": -4.468184094642769,
+      "num_trades": 0,
+      "win_rate": NaN
+    },
+    {
+      "ticker": "AAPL",
+      "strategy": "DoubleEMACross",
+      "parameters": {
+        "fast_period": 34,
+        "slow_period": 55
+      },
+      "return_pct": -0.7682025268554753,
+      "sharpe_ratio": -1.6951425822167305,
+      "max_drawdown_pct": -0.7682025268554771,
+      "num_trades": 0,
+      "win_rate": NaN
+    },
+    {
+      "ticker": "MSFT",
+      "strategy": "DoubleEMACross",
+      "parameters": {
+        "fast_period": 34,
+        "slow_period": 55
+      },
+      "return_pct": 16.033218387389205,
+      "sharpe_ratio": 3.019147007758013,
+      "max_drawdown_pct": -1.827882169862105,
+      "num_trades": 0,
+      "win_rate": NaN
+    },
+    {
+      "ticker": "GOOGL",
+      "strategy": "DoubleEMACross",
+      "parameters": {
+        "fast_period": 34,
+        "slow_period": 55
+      },
+      "return_pct": -5.9443622998046886,
+      "sharpe_ratio": -1.8787821797498507,
+      "max_drawdown_pct": -7.010635201330007,
+      "num_trades": 1,
+      "win_rate": 0.0
+    },
+    {
+      "ticker": "AMZN",
+      "strategy": "DoubleEMACross",
+      "parameters": {
+        "fast_period": 34,
+        "slow_period": 55
+      },
+      "return_pct": 12.128108481445306,
+      "sharpe_ratio": 1.7781196333922968,
+      "max_drawdown_pct": -4.173892480008412,
+      "num_trades": 0,
+      "win_rate": NaN
+    },
+    {
+      "ticker": "META",
+      "strategy": "DoubleEMACross",
+      "parameters": {
+        "fast_period": 34,
+        "slow_period": 55
+      },
+      "return_pct": 12.334970303510271,
+      "sharpe_ratio": 1.5374783014443214,
+      "max_drawdown_pct": -4.750134197486422,
+      "num_trades": 0,
+      "win_rate": NaN
+    },
+    {
+      "ticker": "TSLA",
+      "strategy": "DoubleEMACross",
+      "parameters": {
+        "fast_period": 34,
+        "slow_period": 55
+      },
+      "return_pct": -13.128227297363281,
+      "sharpe_ratio": -1.235024042652648,
+      "max_drawdown_pct": -20.855449103454415,
+      "num_trades": 1,
+      "win_rate": 0.0
+    },
+    {
+      "ticker": "PLTR",
+      "strategy": "DoubleEMACross",
+      "parameters": {
+        "fast_period": 34,
+        "slow_period": 55
+      },
+      "return_pct": 0.0,
+      "sharpe_ratio": NaN,
+      "max_drawdown_pct": -0.0,
+      "num_trades": 0,
+      "win_rate": NaN
+    },
+    {
+      "ticker": "LIDR",
+      "strategy": "DoubleEMACross",
+      "parameters": {
+        "fast_period": 34,
+        "slow_period": 55
+      },
+      "return_pct": -12.256435347057577,
+      "sharpe_ratio": -2.1537038851191572,
+      "max_drawdown_pct": -12.256435347057582,
+      "num_trades": 1,
+      "win_rate": 0.0
+    },
+    {
+      "ticker": "OPEN",
+      "strategy": "DoubleEMACross",
+      "parameters": {
+        "fast_period": 34,
+        "slow_period": 55
+      },
+      "return_pct": -13.119944632935532,
+      "sharpe_ratio": -0.7343669636550451,
+      "max_drawdown_pct": -28.653908699549678,
+      "num_trades": 0,
+      "win_rate": NaN
+    },
+    {
+      "ticker": "SOFI",
+      "strategy": "DoubleEMACross",
+      "parameters": {
+        "fast_period": 34,
+        "slow_period": 55
+      },
+      "return_pct": 60.29448814229965,
+      "sharpe_ratio": 2.2857706861205203,
+      "max_drawdown_pct": -6.438323142241531,
+      "num_trades": 0,
+      "win_rate": NaN
+    },
+    {
+      "ticker": "IONQ",
+      "strategy": "DoubleEMACross",
+      "parameters": {
+        "fast_period": 34,
+        "slow_period": 55
+      },
+      "return_pct": 22.06825754211426,
+      "sharpe_ratio": 0.4302772939672243,
+      "max_drawdown_pct": -23.683938857160648,
+      "num_trades": 0,
+      "win_rate": NaN
+    }
+  ]
+}
