@@ -112,7 +112,7 @@ bbands = ta.bbands()
 ### Backtesting
 
 ```python
-from stockula import DataFetcher, BacktestRunner, SMACrossStrategy, RSIStrategy, DoubleEMACrossStrategy, TripleEMACrossStrategy
+from stockula import DataFetcher, BacktestRunner, SMACrossStrategy, RSIStrategy, DoubleEMACrossStrategy, TripleEMACrossStrategy, TRIMACrossStrategy
 
 # Initialize backtest runner
 runner = BacktestRunner(cash=10000, commission=0.002)
@@ -129,11 +129,16 @@ results = runner.run_from_symbol("NVDA", DoubleEMACrossStrategy)
 # Run with Triple EMA Cross strategy (9/21 periods) - faster signals with less lag
 results = runner.run_from_symbol("TSLA", TripleEMACrossStrategy)
 
+# Run with TRIMA Cross strategy (14/28 periods) - smooth trend following
+results = runner.run_from_symbol("MSFT", TRIMACrossStrategy)
+
 # Check minimum data requirements for strategies
 min_days_double = DoubleEMACrossStrategy.get_min_required_days()
 min_days_triple = TripleEMACrossStrategy.get_min_required_days()
+min_days_trima = TRIMACrossStrategy.get_min_required_days()
 print(f"DoubleEMACross requires at least {min_days_double} trading days")
 print(f"TripleEMACross requires at least {min_days_triple} trading days")
+print(f"TRIMACross requires at least {min_days_trima} trading days")
 
 # Get recommended start date for a given end date
 end_date = "2025-07-25"
@@ -217,6 +222,11 @@ Stockula includes several ready-to-use trading strategies:
   - Formula: TEMA = 3*EMA - 3*EMA(EMA) + EMA(EMA(EMA))
   - Requires minimum 81 trading days (3\*21-2=61 for slow TEMA + 20 buffer)
   - Includes ATR-based stop losses with 1.5x multiplier
+- **TRIMACrossStrategy**: Triangular Moving Average (TRIMA) crossover strategy
+  - Uses 14/28 period TRIMA crossovers for smooth trend following
+  - Double-smooths data to filter short-term fluctuations
+  - Requires minimum 76 trading days (2\*28=56 for slow TRIMA + 20 buffer)
+  - Includes ATR-based stop losses with 1.2x multiplier
 
 ## Development
 
@@ -292,6 +302,12 @@ backtest:
     #     fast_period: 9
     #     slow_period: 21
     #     atr_multiple: 1.5
+    # Example: TRIMA Cross strategy (smooth trend following)
+    # - name: TRIMACross
+    #   parameters:
+    #     fast_period: 14
+    #     slow_period: 28
+    #     atr_multiple: 1.2
 
 # Forecasting settings
 forecast:

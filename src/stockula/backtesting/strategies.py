@@ -351,3 +351,136 @@ class TripleEMACrossStrategy(BaseStrategy):
         start_dt = end_dt - timedelta(days=required_calendar_days)
 
         return start_dt.strftime("%Y-%m-%d")
+
+
+class TRIMACrossStrategy(BaseStrategy):
+    """Triangular Moving Average (TRIMA) Crossover Strategy.
+
+    TRIMA represents an average of prices but places more weight on the
+    middle prices of the time period. It double-smooths the data using
+    a window width that is one-half the length of the series.
+
+    This strategy is ideal for filtering out short-term fluctuations
+    and focusing on the overall trend direction.
+    """
+
+    fast_period = 14
+    slow_period = 28
+
+    # ATR-based stop loss
+    atr_multiple = 1.2
+    atr_period = 14
+
+    # Minimum required data buffer
+    # TRIMA needs 2 * period for full calculation
+    min_trading_days_buffer = 20
+
+    def init(self):
+        """Initialize TRIMA and ATR indicators."""
+
+        # Validate we have enough data
+        total_data_points = len(self.data)
+        # TRIMA needs 2 * period for full calculation
+        required_data_points = (2 * self.slow_period) + self.min_trading_days_buffer
+
+        if total_data_points < required_data_points:
+            import warnings
+
+            warnings.warn(
+                f"Insufficient data for TRIMACrossStrategy: "
+                f"Have {total_data_points} days, need at least {required_data_points} days "
+                f"(2*{self.slow_period}={2 * self.slow_period} for slow TRIMA + {self.min_trading_days_buffer} buffer). "
+                f"Strategy may not generate any signals."
+            )
+
+        def trima(prices, period):
+            """Calculate Triangular Moving Average (TRIMA)."""
+            prices = pd.Series(prices)
+
+            # First calculate SMA
+            sma = prices.rolling(window=period).mean()
+
+            # Then calculate the rolling sum of SMA
+            sma_sum = sma.rolling(window=period).sum()
+
+            # Divide by period to get TRIMA
+            trima_values = sma_sum / period
+
+            return trima_values
+
+        def atr(high, low, close, period=14):
+            """Calculate Average True Range."""
+            high = pd.Series(high)
+            low = pd.Series(low)
+            close = pd.Series(close)
+
+            tr1 = high - low
+            tr2 = abs(high - close.shift())
+            tr3 = abs(low - close.shift())
+
+            tr = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
+            atr = tr.rolling(window=period).mean()
+            return atr
+
+        # Initialize TRIMAs
+        self.trima_fast = self.I(trima, self.data.Close, self.fast_period)
+        self.trima_slow = self.I(trima, self.data.Close, self.slow_period)
+
+        # Initialize ATR for stop loss calculation
+        self.atr = self.I(
+            atr, self.data.High, self.data.Low, self.data.Close, self.atr_period
+        )
+
+    def next(self):
+        """Execute TRIMA crossover trading logic."""
+        # Skip if we don't have enough data
+        # TRIMA needs 2 * slow_period samples
+        if len(self.data) < (2 * self.slow_period):
+            return
+
+        # Buy signal: Fast TRIMA crosses above Slow TRIMA
+        if crossover(self.trima_fast, self.trima_slow):
+            if not self.position:
+                self.buy()
+
+        # Sell signal: Fast TRIMA crosses below Slow TRIMA
+        elif crossover(self.trima_slow, self.trima_fast):
+            if self.position:
+                self.position.close()
+
+        # Check stop loss if we have a position
+        elif self.position and self.trades:
+            # Get the most recent trade entry price
+            current_trade = self.trades[-1]
+            stop_loss_price = current_trade.entry_price - (
+                self.atr_multiple * self.atr[-1]
+            )
+
+            if self.data.Close[-1] <= stop_loss_price:
+                self.position.close()
+
+    @classmethod
+    def get_min_required_days(cls):
+        """Calculate minimum required trading days for this strategy."""
+        # TRIMA needs 2 * period samples
+        return (2 * cls.slow_period) + cls.min_trading_days_buffer
+
+    @classmethod
+    def get_recommended_start_date(cls, end_date: str) -> str:
+        """Calculate recommended start date given an end date.
+
+        Args:
+            end_date: End date in YYYY-MM-DD format
+
+        Returns:
+            Recommended start date as string
+        """
+        # Convert to trading days (approximately 252 trading days per year)
+        required_trading_days = cls.get_min_required_days()
+        # Add 20% buffer for weekends/holidays
+        required_calendar_days = int(required_trading_days * 1.4)
+
+        end_dt = datetime.strptime(end_date, "%Y-%m-%d")
+        start_dt = end_dt - timedelta(days=required_calendar_days)
+
+        return start_dt.strftime("%Y-%m-%d")

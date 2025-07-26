@@ -17,6 +17,7 @@ from .backtesting import (
     MACDStrategy,
     DoubleEMACrossStrategy,
     TripleEMACrossStrategy,
+    TRIMACrossStrategy,
 )
 from .forecasting import StockForecaster
 from .config import load_config, StockulaConfig
@@ -30,6 +31,7 @@ def get_strategy_class(strategy_name: str):
         "macd": MACDStrategy,
         "doubleemacross": DoubleEMACrossStrategy,
         "tripleemacross": TripleEMACrossStrategy,
+        "trimacross": TRIMACrossStrategy,
     }
     return strategies.get(strategy_name.lower())
 

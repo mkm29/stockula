@@ -45,11 +45,11 @@ backtest:
     - name: TripleEMACross
       type: EMA
       parameters:
-        fast_period: 9
-        slow_period: 21
+        fast_period: 14
+        slow_period: 28
       # Risk management parameters
       stop_loss:
-        momentum_atr_multiple: 1.5 # 1-1.5x ATR for momentum names
+        momentum_atr_multiple: 1.25 # 1-1.5x ATR for momentum names
         speculative_atr_multiple: 1.0 # 1x ATR for speculative names
       # Signal evaluation
       signal_evaluation: "daily" # Daily bars for ETFs/equities, end-of-day for mutual funds
