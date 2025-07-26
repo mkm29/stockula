@@ -37,7 +37,7 @@ class StockForecaster:
     def fit(
         self,
         data: pd.DataFrame,
-        target_column: str = "close",
+        target_column: str = "Close",
         date_col: Optional[str] = None,
         model_list: str = "fast",
         ensemble: str = "auto",
@@ -64,6 +64,12 @@ class StockForecaster:
         if target_column not in data.columns:
             raise ValueError(f"Target column '{target_column}' not found in data")
 
+        # Reset index to have date as a column for AutoTS
+        data_for_model = data[[target_column]].copy()
+        # Ensure the index is a DatetimeIndex
+        if not isinstance(data_for_model.index, pd.DatetimeIndex):
+            data_for_model.index = pd.to_datetime(data_for_model.index)
+
         # Initialize AutoTS
         self.model = AutoTS(
             forecast_length=self.forecast_length,
@@ -78,7 +84,7 @@ class StockForecaster:
         )
 
         # Fit the model
-        self.model = self.model.fit(data[[target_column]], date_col=data.index)
+        self.model = self.model.fit(data_for_model)
 
         return self
 
@@ -110,7 +116,7 @@ class StockForecaster:
         return result
 
     def fit_predict(
-        self, data: pd.DataFrame, target_column: str = "close", **kwargs
+        self, data: pd.DataFrame, target_column: str = "Close", **kwargs
     ) -> pd.DataFrame:
         """Fit model and generate predictions in one step.
 
@@ -130,7 +136,7 @@ class StockForecaster:
         symbol: str,
         start_date: Optional[str] = None,
         end_date: Optional[str] = None,
-        target_column: str = "close",
+        target_column: str = "Close",
         **kwargs,
     ) -> pd.DataFrame:
         """Forecast stock prices by fetching data for a symbol.
@@ -162,7 +168,7 @@ class StockForecaster:
             "model_name": self.model.best_model_name,
             "model_params": self.model.best_model_params,
             "model_transformation": self.model.best_model_transformation_params,
-            "model_accuracy": self.model.best_model_accuracy,
+            "model_accuracy": getattr(self.model, "best_model_accuracy", "N/A"),
         }
 
     def plot_forecast(

@@ -33,26 +33,42 @@ Stockula is a comprehensive Python trading platform that provides tools for tech
 
 ## Quick Start
 
-Run the demo to see all features in action:
+### Using Configuration Files
+
+Stockula automatically looks for `stockula.yaml` or `stockula.yml` in the current directory:
 
 ```bash
-uv run python -m stockula.main --symbol AAPL --demo all
+# Use default configuration file (stockula.yaml/stockula.yml)
+uv run python -m stockula.main
+
+# Use a specific configuration file
+uv run python -m stockula.main --config config.example.yaml
+
+# Use a simple configuration
+uv run python -m stockula.main --config config.simple.yaml
+
+# Run specific mode with configuration
+uv run python -m stockula.main --mode backtest
+
+# Override ticker from configuration
+uv run python -m stockula.main --ticker TSLA
+
+# Output as JSON
+uv run python -m stockula.main --output json
 ```
 
-Or run specific demos:
+### Command Line Mode
+
+Run without configuration file:
 
 ```bash
-# Data fetching demo
-uv run python -m stockula.main --symbol TSLA --demo data
+# Analyze single ticker (uses default settings)
+uv run python -m stockula.main --ticker AAPL
 
-# Technical analysis demo
-uv run python -m stockula.main --symbol MSFT --demo ta
-
-# Backtesting demo
-uv run python -m stockula.main --symbol GOOGL --demo backtest
-
-# Forecasting demo
-uv run python -m stockula.main --symbol AMZN --demo forecast
+# Run specific analysis mode
+uv run python -m stockula.main --ticker GOOGL --mode ta
+uv run python -m stockula.main --ticker MSFT --mode backtest
+uv run python -m stockula.main --ticker AMZN --mode forecast
 ```
 
 ## Usage Examples
@@ -83,6 +99,7 @@ from stockula import DataFetcher, TechnicalIndicators
 # Fetch data
 fetcher = DataFetcher()
 data = fetcher.get_stock_data("AAPL")
+# Note: data contains columns ['Open', 'High', 'Low', 'Close', 'Volume']
 
 # Calculate indicators
 ta = TechnicalIndicators(data)
@@ -98,13 +115,21 @@ bbands = ta.bbands()
 ### Backtesting
 
 ```python
-from stockula import BacktestRunner, SMACrossStrategy, RSIStrategy
+from stockula import DataFetcher, BacktestRunner, SMACrossStrategy, RSIStrategy
 
 # Initialize backtest runner
 runner = BacktestRunner(cash=10000, commission=0.002)
 
 # Run backtest with SMA crossover strategy
 results = runner.run_from_symbol("AAPL", SMACrossStrategy)
+print(f"Return: {results['Return [%]']:.2f}%")
+print(f"Sharpe Ratio: {results['Sharpe Ratio']:.2f}")
+print(f"Max Drawdown: {results['Max. Drawdown [%]']:.2f}%")
+
+# Or with your own data
+fetcher = DataFetcher()
+data = fetcher.get_stock_data("AAPL", start="2023-01-01")
+results = runner.run(data, RSIStrategy)
 
 # Optimize strategy parameters
 optimal_params = runner.optimize(
@@ -152,6 +177,16 @@ src/stockula/
     └── forecaster.py    # AutoTS wrapper
 ```
 
+## Important Notes
+
+### Data Format
+
+All modules use capitalized column names for OHLCV data:
+
+- `Open`, `High`, `Low`, `Close`, `Volume`
+
+This ensures compatibility with the backtesting library and maintains consistency across all modules.
+
 ## Pre-built Strategies
 
 Stockula includes several ready-to-use trading strategies:
@@ -180,6 +215,94 @@ uv run ruff format
 uv run ruff check
 ```
 
+## Troubleshooting
+
+### AutoTS Warnings
+
+When using the forecasting module, you may see template evaluation errors from AutoTS. This is normal behavior as AutoTS tries many different models and some may fail due to:
+
+- Missing optional dependencies (like TensorFlow)
+- Data characteristics (single variable, insufficient history)
+- Model-specific requirements
+
+The library will automatically skip failed models and use the best performing ones.
+
+### Performance Tips
+
+- For faster backtesting, ensure your data doesn't have unnecessary columns
+- Use the `model_list='fast'` parameter in forecasting for quicker results
+- Technical indicators are calculated using vectorized operations for efficiency
+
+## Configuration
+
+Stockula uses Pydantic for configuration validation and supports YAML files for easy settings management. By default, Stockula looks for `stockula.yaml` or `stockula.yml` in the current directory. You can override this with the `--config` flag or the `STOCKULA_CONFIG_FILE` environment variable.
+
+### Configuration Structure
+
+```yaml
+# Data fetching settings
+data:
+  tickers: [AAPL, GOOGL, MSFT]
+  start_date: "2023-01-01"
+  end_date: null  # defaults to today
+  interval: "1d"
+
+# Backtesting settings
+backtest:
+  initial_cash: 10000.0
+  commission: 0.002
+  strategies:
+    - name: SMACross
+      parameters:
+        fast_period: 10
+        slow_period: 20
+
+# Forecasting settings
+forecast:
+  forecast_length: 30
+  model_list: "fast"
+  prediction_interval: 0.95
+
+# Technical analysis settings
+technical_analysis:
+  indicators: [sma, ema, rsi, macd, bbands, atr]
+  sma_periods: [20, 50, 200]
+  rsi_period: 14
+
+# Output settings
+output:
+  format: "console"  # or "json"
+  save_results: true
+  results_dir: "./results"
+```
+
+### Environment Variables
+
+You can override settings using environment variables:
+
+```bash
+export STOCKULA_CONFIG_FILE=my_config.yaml
+export STOCKULA_DEBUG=true
+export STOCKULA_LOG_LEVEL=DEBUG
+```
+
+### Creating Custom Configurations
+
+```python
+from stockula import StockulaConfig, load_config
+
+# Load from file
+config = load_config("my_config.yaml")
+
+# Create programmatically
+from stockula.config import DataConfig, BacktestConfig
+
+config = StockulaConfig(
+    data=DataConfig(tickers=["AAPL", "GOOGL"]),
+    backtest=BacktestConfig(initial_cash=50000)
+)
+```
+
 ## Dependencies
 
 - **pandas**: Data manipulation and analysis
@@ -188,6 +311,9 @@ uv run ruff check
 - **backtesting**: Strategy backtesting framework
 - **autots**: Automated time series forecasting
 - **matplotlib**: Plotting and visualization
+- **pydantic**: Data validation and settings management
+- **pydantic-settings**: Configuration management with environment variable support
+- **pyyaml**: YAML file parsing
 
 ## License
 

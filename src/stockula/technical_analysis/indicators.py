@@ -11,14 +11,14 @@ class TechnicalIndicators:
         """Initialize with OHLCV DataFrame.
 
         Args:
-            df: DataFrame with columns ['open', 'high', 'low', 'close', 'volume']
+            df: DataFrame with columns ['Open', 'High', 'Low', 'Close', 'Volume']
         """
         self.df = df
         self._validate_dataframe()
 
     def _validate_dataframe(self):
         """Validate that DataFrame has required columns."""
-        required_cols = ["open", "high", "low", "close", "volume"]
+        required_cols = ["Open", "High", "Low", "Close", "Volume"]
         missing_cols = [col for col in required_cols if col not in self.df.columns]
         if missing_cols:
             raise ValueError(f"DataFrame missing required columns: {missing_cols}")

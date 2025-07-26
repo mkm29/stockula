@@ -172,7 +172,6 @@ uv.lock
 # ========================
 
 # Data files (common for financial/trading projects)
-data/
 *.csv
 *.xlsx
 *.json

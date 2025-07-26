@@ -1,0 +1,15 @@
+# Simple Stockula Configuration
+# Minimal configuration for quick start
+data:
+  tickers:
+    - AAPL
+    - GOOGL
+backtest:
+  strategies:
+    - name: SMACross
+      parameters:
+        fast_period: 10
+        slow_period: 20
+forecast:
+  forecast_length: 14
+  model_list: "fast"
