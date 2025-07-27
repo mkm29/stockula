@@ -467,3 +467,437 @@ class TestDomainFactory:
         symbols = [t.symbol for t in all_tickers]
         assert "AAPL" in symbols
         assert "GOOGL" in symbols
+
+
+class TestDomainFactoryAdvanced:
+    """Test advanced DomainFactory functionality."""
+
+    def test_create_portfolio_edge_cases(self):
+        """Test portfolio creation edge cases."""
+        factory = DomainFactory()
+
+        # Test with minimal config
+        minimal_config = StockulaConfig(
+            portfolio=PortfolioConfig(
+                name="Minimal",
+                initial_capital=1000.0,
+                allocation_method="equal_weight",
+                tickers=[TickerConfig(symbol="SPY", quantity=1.0, category="INDEX")],
+            )
+        )
+
+        with patch.object(Portfolio, "validate_capital_sufficiency"):
+            with patch.object(Portfolio, "validate_allocation_constraints"):
+                portfolio = factory.create_portfolio(minimal_config)
+
+        assert portfolio.name == "Minimal"
+        assert portfolio.initial_capital == 1000.0
+        assert len(portfolio.assets) == 1
+
+    def test_create_portfolio_with_categories(self):
+        """Test portfolio creation with various category types."""
+        config = StockulaConfig(
+            portfolio=PortfolioConfig(
+                name="Category Test",
+                initial_capital=100000.0,
+                allocation_method="equal_weight",
+                tickers=[
+                    TickerConfig(symbol="VTI", quantity=10.0, category="INDEX"),
+                    TickerConfig(symbol="QQQ", quantity=5.0, category="GROWTH"),
+                    TickerConfig(symbol="VYM", quantity=15.0, category="DIVIDEND"),
+                    TickerConfig(symbol="ARKK", quantity=8.0, category="SPECULATIVE"),
+                ],
+            )
+        )
+
+        factory = DomainFactory()
+
+        with patch.object(Portfolio, "validate_capital_sufficiency"):
+            with patch.object(Portfolio, "validate_allocation_constraints"):
+                portfolio = factory.create_portfolio(config)
+
+        # Check categories are correctly assigned
+        categories = {asset.category for asset in portfolio.assets}
+        expected_categories = {
+            Category.INDEX,
+            Category.GROWTH,
+            Category.DIVIDEND,
+            Category.SPECULATIVE,
+        }
+        assert categories == expected_categories
+
+    @patch("stockula.data.fetcher.DataFetcher")
+    def test_create_portfolio_dynamic_allocation_error_handling(
+        self, mock_fetcher_class
+    ):
+        """Test error handling in dynamic allocation."""
+        # Mock fetcher that fails
+        mock_fetcher = Mock()
+        mock_fetcher.get_current_prices.side_effect = Exception("Price fetch failed")
+        mock_fetcher_class.return_value = mock_fetcher
+
+        config = StockulaConfig(
+            portfolio=PortfolioConfig(
+                name="Error Test",
+                initial_capital=10000.0,
+                dynamic_allocation=True,
+                tickers=[TickerConfig(symbol="AAPL", allocation_amount=5000.0)],
+            )
+        )
+
+        factory = DomainFactory()
+
+        # Should handle price fetch errors gracefully or raise appropriate error
+        with pytest.raises(Exception):
+            factory.create_portfolio(config)
+
+    @patch("stockula.data.fetcher.DataFetcher")
+    def test_create_portfolio_auto_allocation_categories(self, mock_fetcher_class):
+        """Test auto allocation with category ratios."""
+        mock_fetcher = Mock()
+        mock_fetcher.get_current_prices.return_value = {
+            "VTI": 200.0,
+            "QQQ": 300.0,
+            "VYM": 100.0,
+            "ARKK": 50.0,
+            "VWO": 45.0,
+        }
+        mock_fetcher_class.return_value = mock_fetcher
+
+        config = StockulaConfig(
+            portfolio=PortfolioConfig(
+                name="Auto Allocation",
+                initial_capital=100000.0,
+                auto_allocate=True,
+                category_ratios={
+                    "INDEX": 0.4,  # 40%
+                    "GROWTH": 0.3,  # 30%
+                    "DIVIDEND": 0.2,  # 20%
+                    "SPECULATIVE": 0.1,  # 10%
+                    "INTERNATIONAL": 0.0,  # 0% for VWO
+                },
+                tickers=[
+                    TickerConfig(symbol="VTI", category="INDEX"),
+                    TickerConfig(symbol="QQQ", category="GROWTH"),
+                    TickerConfig(symbol="VYM", category="DIVIDEND"),
+                    TickerConfig(symbol="ARKK", category="SPECULATIVE"),
+                    TickerConfig(symbol="VWO", category="INTERNATIONAL"),
+                ],
+            )
+        )
+
+        factory = DomainFactory()
+        portfolio = factory.create_portfolio(config)
+
+        # All tickers should be included
+        assert len(portfolio.assets) == 5
+
+        # Check that quantities were calculated
+        # Note: Even VWO with 0% allocation gets shares due to aggressive redistribution
+        for asset in portfolio.assets:
+            assert asset.quantity > 0
+
+    def test_ticker_registry_integration(self):
+        """Test ticker registry integration with factory."""
+        factory = DomainFactory()
+
+        # Clear registry first
+        registry = TickerRegistry()
+        registry._clear()
+
+        config = StockulaConfig(
+            portfolio=PortfolioConfig(
+                name="Registry Test",
+                initial_capital=50000.0,
+                allocation_method="equal_weight",
+                tickers=[
+                    TickerConfig(symbol="AAPL", quantity=5.0),
+                    TickerConfig(symbol="GOOGL", quantity=3.0),
+                ],
+            )
+        )
+
+        with patch.object(Portfolio, "validate_capital_sufficiency"):
+            with patch.object(Portfolio, "validate_allocation_constraints"):
+                portfolio = factory.create_portfolio(config)
+
+        # Check that tickers were added to registry
+        all_tickers = factory.get_all_tickers()
+        assert len(all_tickers) == 2
+
+        # Check registry contains the tickers
+        registry_tickers = registry.all()
+        assert "AAPL" in registry_tickers
+        assert "GOOGL" in registry_tickers
+
+    def test_factory_methods_consistency(self):
+        """Test that factory methods are consistent."""
+        factory = DomainFactory()
+
+        # Test that get_all_tickers returns empty list initially
+        initial_tickers = factory.get_all_tickers()
+        assert isinstance(initial_tickers, list)
+        assert len(initial_tickers) >= 0  # Could have tickers from other tests
+
+    @patch("stockula.data.fetcher.DataFetcher")
+    def test_allocation_amount_calculation(self, mock_fetcher_class):
+        """Test allocation amount calculation accuracy."""
+        mock_fetcher = Mock()
+        mock_fetcher.get_current_prices.return_value = {
+            "AAPL": 150.0,
+            "GOOGL": 2500.0,  # High price stock
+        }
+        mock_fetcher_class.return_value = mock_fetcher
+
+        config = StockulaConfig(
+            portfolio=PortfolioConfig(
+                name="Allocation Test",
+                initial_capital=100000.0,
+                dynamic_allocation=True,
+                tickers=[
+                    TickerConfig(
+                        symbol="AAPL", allocation_amount=15000.0
+                    ),  # $15k / $150 = 100 shares
+                    TickerConfig(
+                        symbol="GOOGL", allocation_amount=5000.0
+                    ),  # $5k / $2500 = 2 shares
+                ],
+            )
+        )
+
+        factory = DomainFactory()
+        portfolio = factory.create_portfolio(config)
+
+        # Check exact allocations
+        aapl_asset = portfolio.get_asset_by_symbol("AAPL")
+        assert aapl_asset.quantity == 100.0
+
+        googl_asset = portfolio.get_asset_by_symbol("GOOGL")
+        assert googl_asset.quantity == 2.0
+
+    @patch("stockula.data.fetcher.DataFetcher")
+    def test_allocation_percentage_calculation(self, mock_fetcher_class):
+        """Test allocation percentage calculation."""
+        mock_fetcher = Mock()
+        mock_fetcher.get_current_prices.return_value = {"VTI": 200.0, "QQQ": 300.0}
+        mock_fetcher_class.return_value = mock_fetcher
+
+        config = StockulaConfig(
+            portfolio=PortfolioConfig(
+                name="Percentage Test",
+                initial_capital=60000.0,
+                dynamic_allocation=True,
+                tickers=[
+                    TickerConfig(
+                        symbol="VTI", allocation_pct=60.0
+                    ),  # 60% of $60k = $36k / $200 = 180 shares
+                    TickerConfig(
+                        symbol="QQQ", allocation_pct=40.0
+                    ),  # 40% of $60k = $24k / $300 = 80 shares
+                ],
+            )
+        )
+
+        factory = DomainFactory()
+        portfolio = factory.create_portfolio(config)
+
+        vti_asset = portfolio.get_asset_by_symbol("VTI")
+        assert vti_asset.quantity == 180.0
+
+        qqq_asset = portfolio.get_asset_by_symbol("QQQ")
+        assert qqq_asset.quantity == 80.0
+
+
+class TestDomainFactoryErrorScenarios:
+    """Test error scenarios in DomainFactory."""
+
+    def test_create_portfolio_zero_capital(self):
+        """Test portfolio creation with zero capital."""
+        from pydantic import ValidationError
+
+        # Zero capital should be caught by pydantic validation
+        with pytest.raises(ValidationError):
+            config = StockulaConfig(
+                portfolio=PortfolioConfig(
+                    name="Zero Capital",
+                    initial_capital=0.0,  # This should fail validation
+                    allocation_method="equal_weight",
+                    tickers=[TickerConfig(symbol="SPY", quantity=1.0)],
+                )
+            )
+
+    @patch("stockula.data.fetcher.DataFetcher")
+    def test_create_portfolio_zero_price(self, mock_fetcher_class):
+        """Test handling of zero stock prices."""
+        mock_fetcher = Mock()
+        mock_fetcher.get_current_prices.return_value = {
+            "PENNY": 0.0  # Zero price
+        }
+        mock_fetcher_class.return_value = mock_fetcher
+
+        config = StockulaConfig(
+            portfolio=PortfolioConfig(
+                name="Zero Price Test",
+                initial_capital=10000.0,
+                dynamic_allocation=True,
+                tickers=[TickerConfig(symbol="PENNY", allocation_amount=1000.0)],
+            )
+        )
+
+        factory = DomainFactory()
+
+        # Should handle zero price gracefully or raise appropriate error
+        with pytest.raises((ValueError, ZeroDivisionError)):
+            factory.create_portfolio(config)
+
+    @patch("stockula.data.fetcher.DataFetcher")
+    def test_create_portfolio_missing_prices(self, mock_fetcher_class):
+        """Test handling of missing stock prices."""
+        mock_fetcher = Mock()
+        mock_fetcher.get_current_prices.return_value = {
+            "AAPL": 150.0
+            # GOOGL missing
+        }
+        mock_fetcher_class.return_value = mock_fetcher
+
+        config = StockulaConfig(
+            portfolio=PortfolioConfig(
+                name="Missing Price Test",
+                initial_capital=10000.0,
+                dynamic_allocation=True,
+                tickers=[
+                    TickerConfig(symbol="AAPL", allocation_amount=5000.0),
+                    TickerConfig(
+                        symbol="GOOGL", allocation_amount=5000.0
+                    ),  # Price missing
+                ],
+            )
+        )
+
+        factory = DomainFactory()
+
+        # Should raise error for missing prices in dynamic allocation
+        with pytest.raises(ValueError, match="Could not fetch price for GOOGL"):
+            factory.create_portfolio(config)
+
+
+class TestTickerRegistryAdvanced:
+    """Test advanced TickerRegistry functionality."""
+
+    def test_ticker_registry_update_behavior(self):
+        """Test ticker registry update behavior."""
+        registry = TickerRegistry()
+        registry._clear()
+
+        # Create ticker with initial data - use all required parameters
+        ticker1 = registry.get_or_create(
+            "AAPL",
+            sector="Technology",
+            market_cap=3000.0,
+            category=None,
+            price_range=None,
+        )
+        assert ticker1.sector == "Technology"
+        assert ticker1.market_cap == 3000.0
+
+        # Update with new data - use all required parameters
+        ticker2 = registry.get_or_create(
+            "AAPL", sector="Tech", market_cap=3100.0, category=None, price_range=None
+        )
+        # Since Ticker is immutable, a new instance is created with updated values
+        assert ticker2 is not ticker1  # Different object due to immutability
+        assert ticker2.symbol == ticker1.symbol  # Same symbol
+        assert ticker2.sector == "Tech"  # Updated
+        assert ticker2.market_cap == 3100.0  # Updated
+
+        # But the registry returns the new instance for the same symbol
+        ticker3 = registry.get("AAPL")
+        assert ticker3 is ticker2
+
+    def test_ticker_registry_category_handling(self):
+        """Test ticker registry category handling."""
+        registry = TickerRegistry()
+        registry._clear()
+
+        # Create ticker with category
+        ticker = registry.get_or_create("NVDA", category=Category.SPECULATIVE)
+        assert ticker.category == Category.SPECULATIVE
+
+        # Update category
+        updated_ticker = registry.get_or_create("NVDA", category=Category.GROWTH)
+        assert updated_ticker.category == Category.GROWTH
+
+    def test_ticker_registry_concurrent_access(self):
+        """Test ticker registry handles concurrent-like access."""
+        registry = TickerRegistry()
+        registry._clear()
+
+        # Simulate multiple "concurrent" creations
+        tickers = []
+        for i in range(10):
+            ticker = registry.get_or_create(f"STOCK{i}")
+            tickers.append(ticker)
+
+        # All should be unique
+        assert len(tickers) == 10
+        assert len(set(ticker.symbol for ticker in tickers)) == 10
+
+        # Registry should contain all
+        all_tickers = registry.all()
+        assert len(all_tickers) == 10
+
+
+class TestAssetAdvanced:
+    """Test advanced Asset functionality."""
+
+    def test_asset_value_edge_cases(self):
+        """Test asset value calculation edge cases."""
+        ticker = Ticker("TEST")
+        asset = Asset(ticker=ticker, quantity=10.0)
+
+        # Test with negative price (should handle gracefully)
+        value = asset.get_value(-50.0)
+        assert value == -500.0  # Mathematically correct
+
+        # Test with very large numbers
+        large_value = asset.get_value(1e10)
+        assert large_value == 1e11
+
+        # Test with very small numbers
+        small_value = asset.get_value(0.0001)
+        assert small_value == 0.001
+
+    def test_asset_quantity_edge_cases(self):
+        """Test asset with edge case quantities."""
+        # Use proper Ticker constructor with all required parameters
+        ticker = Ticker(
+            "TEST",  # symbol_init
+            None,  # sector_init
+            None,  # market_cap_init
+            None,  # category_init
+            None,  # price_range_init
+            None,  # metadata_init
+        )
+
+        # Fractional shares
+        fractional_asset = Asset(ticker=ticker, quantity=0.5)
+        assert fractional_asset.get_value(100.0) == 50.0
+
+        # Assets must have positive quantity, so test minimum positive value
+        min_asset = Asset(ticker=ticker, quantity=0.001)
+        assert min_asset.get_value(100.0) == 0.1
+
+        # Very large quantity
+        large_asset = Asset(ticker=ticker, quantity=1e6)
+        assert large_asset.get_value(100.0) == 1e8
+
+    def test_asset_category_precedence(self):
+        """Test asset category precedence over ticker category."""
+        ticker_with_category = Ticker("TEST", category=Category.INDEX)
+
+        # Asset category should override ticker category
+        asset = Asset(
+            ticker=ticker_with_category, quantity=10.0, category=Category.GROWTH
+        )
+        assert asset.category == Category.GROWTH
+        assert ticker_with_category.category == Category.INDEX  # Unchanged

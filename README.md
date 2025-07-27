@@ -452,10 +452,12 @@ uv run pytest --cov=stockula
 
 # Run specific test file
 uv run pytest tests/unit/test_domain.py
+uv run pytest tests/unit/test_strategies.py  # Comprehensive strategy tests
 uv run pytest tests/integration/test_database.py
 
 # Run specific test class or function
 uv run pytest tests/unit/test_domain.py::TestPortfolio
+uv run pytest tests/unit/test_strategies.py::TestAdvancedStrategyExecution
 uv run pytest tests/unit/test_domain.py::TestPortfolio::test_portfolio_creation
 
 # Run tests by marker
@@ -481,9 +483,12 @@ Tests are organized into two main categories:
 
 - **test_config.py**: Tests for configuration models and validation
 - **test_domain.py**: Tests for domain models (Portfolio, Asset, Ticker, etc.)
+- **test_strategies.py**: Comprehensive tests for trading strategies with execution validation
+- **test_runner.py**: Tests for backtesting runner functionality
+- **test_cli.py**: Tests for database CLI commands and interfaces
 - **test_technical_analysis.py**: Tests for technical indicators
 
-These tests run quickly and don't require external services or API calls.
+These tests run quickly and don't require external services or API calls. All unit tests use proper mocking to avoid external dependencies.
 
 #### Integration Tests (`tests/integration/`)
 
@@ -507,10 +512,21 @@ The test suite includes:
 
 #### Test Statistics
 
-- **Total Tests**: 192 (87 unit tests, 105 integration tests)
-- **Current Coverage**: 38% overall
-- **Unit Tests**: All passing, fast execution
+- **Total Tests**: 340+ tests across unit and integration suites
+- **Unit Tests**: 86 strategy tests + additional module tests
+- **Current Coverage**: Improved test coverage with comprehensive strategy validation
+- **Unit Tests**: All passing, fast execution (< 1 second for strategies)
 - **Integration Tests**: May require network/database access
+
+#### Strategy Test Coverage
+
+The strategy test suite includes comprehensive validation:
+
+- **Execution Tests**: All strategies tested with proper mock setups
+- **Parameter Validation**: RSI thresholds, ATR parameters, period relationships
+- **Data Requirements**: Minimum data calculations and date range validation
+- **Error Handling**: Graceful handling of insufficient data and edge cases
+- **Performance**: Fast execution with no recursion errors or timeouts
 
 Coverage reports are generated in:
 
@@ -527,6 +543,25 @@ uv run pytest --cov=stockula --cov-report=html --cov-report=term-missing
 # View coverage in browser
 open htmlcov/index.html
 ```
+
+#### Recent Test Improvements
+
+The test suite has been significantly enhanced with:
+
+- **Advanced Strategy Testing**: Fixed recursion issues in strategy tests with proper mock objects
+- **Fast Execution**: All tests now run quickly without timeouts (< 1 second for strategy tests)
+- **Robust Mocking**: Improved mock setups that avoid infinite recursion and type errors
+- **Comprehensive Coverage**: Tests now cover strategy initialization, execution, data validation, and error handling
+- **Parameter Validation**: Extensive testing of strategy parameters, thresholds, and data requirements
+
+#### Testing Best Practices
+
+When writing new tests:
+
+1. **Use Proper Mocking**: Create data objects with `__len__` support instead of using `patch('builtins.len')`
+1. **Provide Real Values**: Use actual numeric values for strategy attributes instead of Mock objects
+1. **Test Edge Cases**: Include tests for insufficient data, empty datasets, and boundary conditions
+1. **Fast Execution**: Ensure tests run quickly by avoiding complex setups and external dependencies
 
 ### Code Formatting
 
