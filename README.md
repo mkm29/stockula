@@ -342,9 +342,24 @@ bbands = ta.bbands()
 
 ```python
 from stockula import DataFetcher, BacktestRunner, SMACrossStrategy, RSIStrategy, DoubleEMACrossStrategy, TripleEMACrossStrategy, TRIMACrossStrategy
+from stockula.config.models import BrokerConfig
 
-# Initialize backtest runner
+# Initialize backtest runner with simple commission (legacy)
 runner = BacktestRunner(cash=10000, commission=0.002)
+
+# Or initialize with broker-specific configuration
+broker_config = BrokerConfig(
+    name="custom",
+    commission_type="percentage",
+    commission_value=0.001,  # 0.1% per trade
+    min_commission=1.0,      # Minimum $1 per trade
+    regulatory_fees=0.0000229  # SEC fee
+)
+runner = BacktestRunner(cash=10000, broker_config=broker_config)
+
+# Or use a preset broker configuration
+broker_config = BrokerConfig.from_broker_preset("robinhood")
+runner = BacktestRunner(cash=10000, broker_config=broker_config)
 
 # Run backtest with SMA crossover strategy
 results = runner.run_from_symbol("AAPL", SMACrossStrategy)
@@ -386,6 +401,58 @@ optimal_params = runner.optimize(
     fast_period=range(5, 20),
     slow_period=range(20, 50)
 )
+```
+
+#### Broker Configuration
+
+Stockula supports realistic commission calculation with broker-specific fee structures:
+
+**Available Broker Presets:**
+- `interactive_brokers`: Tiered per-share pricing ($0.005/share, $1 minimum)
+- `robinhood`: Zero commission with TAF ($0.000166/share on sells, waived for ≤50 shares)
+- `td_ameritrade`, `etrade`, `fidelity`, `schwab`: Zero commission with SEC fees
+
+**Commission Types:**
+- `percentage`: Commission as percentage of trade value
+- `fixed`: Fixed commission per trade
+- `per_share`: Commission per share traded
+- `tiered`: Volume-based tiered pricing (e.g., Interactive Brokers)
+
+**Robinhood Special Handling:**
+- $0 commission on all stock and ETF trades
+- $0 SEC fee (as of May 14, 2024)
+- TAF (Trading Activity Fee): $0.000166 per share on sell orders only
+- TAF is waived for trades of 50 shares or less
+- Maximum TAF per trade is capped at $8.30
+
+**Configuration in YAML:**
+```yaml
+backtest:
+  broker_config:
+    # Use Robinhood preset (recommended for retail traders)
+    name: "robinhood"
+    
+    # Or Interactive Brokers for active traders
+    name: "interactive_brokers"
+    
+    # Or custom configuration
+    name: "custom"
+    commission_type: "percentage"
+    commission_value: 0.001  # 0.1%
+    min_commission: 1.0      # $1 minimum
+    regulatory_fees: 0.0000229  # SEC fee
+    exchange_fees: 0.003     # Exchange fees
+```
+
+**Example: Comparing Broker Fees**
+```python
+# Compare fees across different brokers
+brokers = ["robinhood", "interactive_brokers", "fidelity"]
+for broker_name in brokers:
+    config = BrokerConfig.from_broker_preset(broker_name)
+    runner = BacktestRunner(cash=10000, broker_config=config)
+    results = runner.run_from_symbol("AAPL", SMACrossStrategy)
+    print(f"{broker_name}: Return = {results['Return [%]']:.2f}%")
 ```
 
 ### Price Forecasting
@@ -947,7 +1014,10 @@ portfolio:
 # Backtesting settings
 backtest:
   initial_cash: 10000.0
-  commission: 0.002
+  # Broker configuration for realistic commission calculation
+  broker_config:
+    name: "robinhood"  # Zero commission with TAF
+    # Other options: "interactive_brokers", "td_ameritrade", "etrade", "fidelity", "schwab"
   strategies:
     - name: SMACross
       parameters:
