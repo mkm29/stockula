@@ -220,6 +220,8 @@ Thumbs.db
 *.swp
 *.swo
 *~
+CLAUDE.market_data
+.claude
 
 # Backup files
 *.bak
