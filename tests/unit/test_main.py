@@ -515,9 +515,11 @@ class TestMainFunction:
     @patch("stockula.main.log_manager")
     @patch("stockula.main.run_backtest")
     @patch("stockula.main.print_results")
+    @patch("stockula.main.save_detailed_report")
     @patch("sys.argv", ["stockula", "--mode", "backtest"])
     def test_main_backtest_mode(
         self,
+        mock_save_report,
         mock_print,
         mock_backtest,
         mock_log_manager,
@@ -535,10 +537,12 @@ class TestMainFunction:
         container.logging_manager.return_value = Mock()
         mock_container.return_value = container
 
-        # Setup domain factory
+        # Setup domain factory with properly mocked asset
         mock_asset = Mock()
         mock_asset.symbol = "AAPL"
         mock_asset.category = Mock()
+        mock_asset.get_value = Mock(return_value=1500.0)  # Return numeric value
+
         mock_portfolio = Mock()
         mock_portfolio.name = "Test Portfolio"
         mock_portfolio.initial_capital = 100000.0
@@ -557,10 +561,16 @@ class TestMainFunction:
         container.data_fetcher.return_value = mock_fetcher
         container.backtest_runner.return_value = Mock()
         container.stock_forecaster.return_value = Mock()
-        container.backtest_runner.return_value = Mock()
 
-        # Setup backtest results
-        mock_backtest.return_value = [{"ticker": "AAPL", "strategy": "SMACross"}]
+        # Setup backtest results with strategy
+        mock_backtest.return_value = [
+            {"ticker": "AAPL", "strategy": "smacross", "num_trades": 10}
+        ]
+
+        # Mock save_detailed_report to return a path
+        mock_save_report.return_value = (
+            "results/reports/strategy_report_smacross_20250727_123456.json"
+        )
 
         main()
 
@@ -1050,14 +1060,10 @@ class TestMainAdvanced:
 
             main()
 
-        # Check output contains performance breakdown
+        # Check output contains no backtesting results message
+        # (since the new output format doesn't show portfolio summary when there are no results)
         captured = capsys.readouterr()
-        assert "PORTFOLIO PERFORMANCE SUMMARY" in captured.out
-        assert "Performance Breakdown By Category:" in captured.out
-        assert "Technology:" in captured.out
-        assert "Index:" in captured.out
-        assert "NewCategory:" in captured.out
-        assert "new category" in captured.out
+        assert "No backtesting results to display." in captured.out
 
     @patch("stockula.main.create_container")
     @patch("sys.argv", ["stockula", "--config", "test.yaml"])
@@ -1086,9 +1092,11 @@ class TestMainAdvanced:
     @patch("stockula.main.create_container")
     @patch("stockula.main.setup_logging")
     @patch("stockula.main.print_results")
+    @patch("stockula.main.save_detailed_report")
     @patch("sys.argv", ["stockula", "--mode", "backtest"])
     def test_main_with_hold_only_assets(
         self,
+        mock_save_report,
         mock_print,
         mock_logging,
         mock_create_container,
@@ -1112,16 +1120,12 @@ class TestMainAdvanced:
         mock_tradeable = Mock()
         mock_tradeable.symbol = "AAPL"
         mock_tradeable.category = Category.GROWTH
-        mock_tradeable.get_value = Mock(
-            side_effect=lambda p: 150.0 * 10 if isinstance(p, dict) else 1500.0
-        )
+        mock_tradeable.get_value = Mock(return_value=1500.0)
 
         mock_hold_only = Mock()
         mock_hold_only.symbol = "SPY"
         mock_hold_only.category = Category.INDEX
-        mock_hold_only.get_value = Mock(
-            side_effect=lambda p: 400.0 * 20 if isinstance(p, dict) else 8000.0
-        )
+        mock_hold_only.get_value = Mock(return_value=8000.0)
 
         mock_portfolio = Mock()
         mock_portfolio.name = "Test Portfolio"
@@ -1144,16 +1148,23 @@ class TestMainAdvanced:
         mock_runner = Mock()
         mock_container.backtest_runner.return_value = mock_runner
 
-        # Mock run_backtest function to return empty results
+        # Mock save_detailed_report to return a path
+        mock_save_report.return_value = (
+            "results/reports/strategy_report_test_20250727_123456.json"
+        )
+
+        # Mock run_backtest function to return results for tradeable asset
         with patch("stockula.main.run_backtest") as mock_backtest:
-            mock_backtest.return_value = []
+            mock_backtest.return_value = [
+                {"ticker": "AAPL", "strategy": "smacross", "num_trades": 5}
+            ]
 
             main()
 
-        # Check output shows asset type breakdown
+        # Check output shows strategy summary with asset type breakdown
         captured = capsys.readouterr()
-        # The hold-only message is logged, not printed to stdout
-        # But the asset type breakdown should be printed
+        # The new output format shows strategy summaries
+        assert "STRATEGY: SMACROSS" in captured.out
         assert "Asset Type Breakdown:" in captured.out
         assert "Hold-only Assets: $8,000.00" in captured.out
         assert "Tradeable Assets: $1,500.00" in captured.out
@@ -1217,9 +1228,11 @@ class TestMainAdvanced:
     @patch("stockula.main.run_backtest")
     @patch("stockula.main.print_results")
     @patch("stockula.main.log_manager")
+    @patch("stockula.main.save_detailed_report")
     @patch("sys.argv", ["stockula", "--mode", "backtest"])
     def test_main_backtest_creates_results_dict(
         self,
+        mock_save_report,
         mock_log_manager,
         mock_print,
         mock_backtest,
@@ -1237,10 +1250,12 @@ class TestMainAdvanced:
         container.logging_manager.return_value = Mock()
         mock_container.return_value = container
 
-        # Setup domain factory
+        # Setup domain factory with properly mocked asset
         mock_asset = Mock()
         mock_asset.symbol = "AAPL"
         mock_asset.category = None
+        mock_asset.get_value = Mock(return_value=1500.0)  # Return numeric value
+
         mock_portfolio = Mock()
         mock_portfolio.name = "Test Portfolio"
         mock_portfolio.initial_capital = 100000.0
@@ -1259,8 +1274,15 @@ class TestMainAdvanced:
         container.backtest_runner.return_value = Mock()
         container.stock_forecaster.return_value = Mock()
 
-        # Setup backtest results
-        mock_backtest.return_value = [{"ticker": "AAPL", "strategy": "SMACross"}]
+        # Mock save_detailed_report to return a path
+        mock_save_report.return_value = (
+            "results/reports/strategy_report_smacross_20250727_123456.json"
+        )
+
+        # Setup backtest results with proper structure
+        mock_backtest.return_value = [
+            {"ticker": "AAPL", "strategy": "smacross", "num_trades": 10}
+        ]
 
         main()
 

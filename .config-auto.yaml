@@ -3,7 +3,7 @@
 data:
   start_date: "2024-01-01"
   end_date: "2025-07-25"
-  use_cache: false
+  use_cache: false # Disabled due to database foreign key issues
 # Portfolio configuration with automatic allocation
 portfolio:
   name: "Auto-Allocated EMA Portfolio"
@@ -81,12 +81,8 @@ portfolio:
 backtest:
   strategies:
     - name: vidya
-      type: EMA
-      # - name: TripleEMACross
-      #   type: EMA
-      #   parameters:
-      #     fast_period: 14
-      #     slow_period: 28
+    - name: kama
+    - name: tripleemacross
   # Hold-only categories will not be backtested
   hold_only_categories: ["INDEX", "BOND"]
 performance:

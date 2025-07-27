@@ -145,7 +145,7 @@ def run_backtest(
             print(f"Warning: Unknown strategy '{strategy_config.name}'")
             continue
 
-        # Create strategy class with parameters
+        # Set strategy parameters if provided
         if strategy_config.parameters:
             # Set class attributes from parameters
             for key, value in strategy_config.parameters.items():
@@ -246,6 +246,77 @@ def run_forecast(
         return {"ticker": ticker, "error": str(e)}
 
 
+def save_detailed_report(
+    strategy_name: str,
+    strategy_results: List[Dict],
+    results: Dict[str, Any],
+    config: StockulaConfig,
+) -> str:
+    """Save detailed strategy report to file.
+
+    Args:
+        strategy_name: Name of the strategy
+        strategy_results: List of backtest results for this strategy
+        results: Overall results dictionary
+        config: Configuration object
+
+    Returns:
+        Path to the saved report file
+    """
+    from pathlib import Path
+    import json
+
+    # Create reports directory if it doesn't exist
+    reports_dir = Path(config.output.get("results_dir", "./results")) / "reports"
+    reports_dir.mkdir(parents=True, exist_ok=True)
+
+    # Generate filename with timestamp
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    report_file = reports_dir / f"strategy_report_{strategy_name}_{timestamp}.json"
+
+    # Prepare detailed report data
+    report_data = {
+        "strategy": strategy_name,
+        "timestamp": timestamp,
+        "date_range": {
+            "start": config.data.start_date.strftime("%Y-%m-%d")
+            if config.data.start_date
+            else None,
+            "end": config.data.end_date.strftime("%Y-%m-%d")
+            if config.data.end_date
+            else None,
+        },
+        "portfolio": {
+            "initial_value": results.get("initial_portfolio_value", 0),
+            "initial_capital": results.get("initial_capital", 0),
+        },
+        "detailed_results": strategy_results,
+        "summary": {
+            "total_trades": sum(r.get("num_trades", 0) for r in strategy_results),
+            "winning_stocks": sum(
+                1 for r in strategy_results if r.get("return_pct", 0) > 0
+            ),
+            "losing_stocks": sum(
+                1 for r in strategy_results if r.get("return_pct", 0) < 0
+            ),
+            "average_return": sum(r.get("return_pct", 0) for r in strategy_results)
+            / len(strategy_results)
+            if strategy_results
+            else 0,
+            "average_sharpe": sum(r.get("sharpe_ratio", 0) for r in strategy_results)
+            / len(strategy_results)
+            if strategy_results
+            else 0,
+        },
+    }
+
+    # Save report
+    with open(report_file, "w") as f:
+        json.dump(report_data, f, indent=2, default=str)
+
+    return str(report_file)
+
+
 def print_results(results: Dict[str, Any], output_format: str = "console"):
     """Print results in specified format.
 
@@ -279,19 +350,30 @@ def print_results(results: Dict[str, Any], output_format: str = "console"):
                         )
 
         if "backtesting" in results:
-            print("\n=== Backtesting Results ===")
-            for backtest in results["backtesting"]:
-                print(f"""
+            # Check if we have multiple strategies
+            strategies = set(b["strategy"] for b in results["backtesting"])
+            if len(strategies) > 1:
+                # For multiple strategies, only show a brief message
+                print(f"\n=== Backtesting Results ===")
+                print(
+                    f"Running {len(strategies)} strategies across {len(set(b['ticker'] for b in results['backtesting']))} stocks..."
+                )
+                print("Detailed results will be shown per strategy below.")
+            else:
+                # For single strategy, show the detailed results as before
+                print("\n=== Backtesting Results ===")
+                for backtest in results["backtesting"]:
+                    print(f"""
 {backtest["ticker"]} - {backtest["strategy"]}:
   Parameters: {backtest["parameters"]}
   Return: {backtest["return_pct"]:.2f}%
   Sharpe Ratio: {backtest["sharpe_ratio"]:.2f}
   Max Drawdown: {backtest["max_drawdown_pct"]:.2f}%
   Number of Trades: {backtest["num_trades"]}""")
-                if backtest.get("win_rate") is not None:
-                    print(f"  Win Rate: {backtest['win_rate']:.2f}%")
-                elif backtest["num_trades"] == 0:
-                    print("  Win Rate: N/A (no trades)")
+                    if backtest.get("win_rate") is not None:
+                        print(f"  Win Rate: {backtest['win_rate']:.2f}%")
+                    elif backtest["num_trades"] == 0:
+                        print("  Win Rate: N/A (no trades)")
 
         if "forecasting" in results:
             print("\n=== Forecasting Results ===")
@@ -511,12 +593,56 @@ FORECAST MODE - IMPORTANT NOTES:
     output_format = args.output or config.output.get("format", "console")
     print_results(results, output_format)
 
-    # Show final portfolio summary after backtesting
-    if args.mode in ["all", "backtest"]:
-        print(f"""
-{"=" * 50}
-PORTFOLIO PERFORMANCE SUMMARY
-{"=" * 50}""")
+    # Show strategy-specific summaries after backtesting
+    if args.mode in ["all", "backtest"] and "backtesting" in results:
+        # Group results by strategy
+        from collections import defaultdict
+
+        strategy_results = defaultdict(list)
+
+        for backtest in results["backtesting"]:
+            strategy_results[backtest["strategy"]].append(backtest)
+
+        # Only proceed if we have results
+        if not strategy_results:
+            print("\nNo backtesting results to display.")
+            return
+
+        # Show summary for each strategy
+        for strategy_name, strategy_backtests in strategy_results.items():
+            # Calculate strategy-specific metrics
+            strategy_trades = sum(b.get("num_trades", 0) for b in strategy_backtests)
+
+            # Get the first backtest to extract parameters (assuming all use same parameters)
+            strategy_params = (
+                strategy_backtests[0].get("parameters", {})
+                if strategy_backtests
+                else {}
+            )
+
+            print(f"""
+{"=" * 60}
+STRATEGY: {strategy_name.upper()}
+{"=" * 60}
+
+Parameters: {strategy_params if strategy_params else "Default"}
+
+Portfolio Value at Start Date: ${results["initial_portfolio_value"]:,.2f}
+Portfolio Value at End (Current): ${portfolio.get_portfolio_value(fetcher.get_current_prices(symbols)):,.2f}
+
+Asset Type Breakdown:
+  Hold-only Assets: ${sum(asset.get_value(fetcher.get_current_prices([asset.symbol]).get(asset.symbol, 0)) for asset in hold_only_assets):,.2f}
+  Tradeable Assets: ${sum(asset.get_value(fetcher.get_current_prices([asset.symbol]).get(asset.symbol, 0)) for asset in tradeable_assets):,.2f}
+  Total Portfolio: ${portfolio.get_portfolio_value(fetcher.get_current_prices(symbols)):,.2f}
+
+Total Trades Executed: {strategy_trades}
+Return During Period: ${portfolio.get_portfolio_value(fetcher.get_current_prices(symbols)) - results["initial_portfolio_value"]:,.2f} ({((portfolio.get_portfolio_value(fetcher.get_current_prices(symbols)) - results["initial_portfolio_value"]) / results["initial_portfolio_value"] * 100):+.2f}%)
+
+Detailed report saved to: {save_detailed_report(strategy_name, strategy_backtests, results, config)}
+""")
+
+        # Exit after showing strategy summaries
+        return
 
         # Re-fetch current prices to get the most up-to-date values
         log_manager.debug("\nFetching latest prices...")
