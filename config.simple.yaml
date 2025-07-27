@@ -1,0 +1,24 @@
+# Simple Stockula Configuration Example
+# All tickers must be defined as objects
+data:
+  start_date: "2024-01-01"
+  end_date: "2024-12-31"
+  tickers:
+    - symbol: AAPL
+      allocation_amount: 3333.33
+    - symbol: GOOGL
+      allocation_amount: 3333.33
+    - symbol: MSFT
+      allocation_amount: 3333.34
+portfolio:
+  initial_capital: 10000
+  allocation_method: equal_weight
+backtest:
+  strategies:
+    - name: SMACross
+      parameters:
+        fast_period: 10
+        slow_period: 20
+forecast:
+  forecast_length: 14
+  model_list: "fast"

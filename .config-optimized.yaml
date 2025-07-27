@@ -1,0 +1,106 @@
+# Stockula Configuration - Optimized Dynamic Allocation
+# Maximizes capital utilization by using higher allocation amounts
+data:
+  start_date: "2025-01-01"
+  end_date: "2025-07-25"
+# Portfolio configuration with optimized dynamic allocation
+portfolio:
+  name: "Optimized Dynamic EMA Portfolio"
+  initial_capital: 20000
+  allocation_method: dynamic
+  dynamic_allocation: true
+  allow_fractional_shares: false # Use integer shares only
+  rebalance_frequency: monthly
+  max_position_size: 25.0 # Allow larger positions for expensive stocks
+  # Optimized allocation amounts targeting ~95% capital utilization ($19,000 total)
+  tickers:
+    # Broad-Market Core holdings (hold-only) - $7,000 total (35%)
+    - symbol: SPY
+      category: INDEX
+      allocation_amount: 1270 # 2 shares = $1,274.20
+    - symbol: VOO
+      category: INDEX
+      allocation_amount: 1170 # 2 shares = $1,171.16
+    - symbol: DFUSX
+      category: INDEX
+      allocation_amount: 1272 # 30 shares = $1,272.00
+    - symbol: FSKAX
+      category: INDEX
+      allocation_amount: 1404 # 8 shares = $1,405.20
+    - symbol: FSMDX
+      category: INDEX
+      allocation_amount: 1463 # 40 shares = $1,463.20
+    - symbol: FXAIX
+      category: INDEX
+      allocation_amount: 443 # 2 shares = $443.96
+    # Momentum / Large-Cap Growth (tradeable) - $9,500 total (47.5%)
+    - symbol: NVDA
+      category: MOMENTUM
+      sector: Technology
+      allocation_amount: 1040 # 6 shares = $1,041.00
+    - symbol: AMD
+      category: MOMENTUM
+      sector: Technology
+      allocation_amount: 998 # 6 shares = $998.82
+    - symbol: TSM
+      category: MOMENTUM
+      sector: Technology
+      allocation_amount: 982 # 4 shares = $982.40
+    - symbol: AAPL
+      category: MOMENTUM
+      sector: Technology
+      allocation_amount: 856 # 4 shares = $855.52
+    - symbol: MSFT
+      category: MOMENTUM
+      sector: Technology
+      allocation_amount: 1027 # 2 shares = $1,027.42
+    - symbol: GOOGL
+      category: MOMENTUM
+      sector: Technology
+      allocation_amount: 772 # 4 shares = $772.72
+    - symbol: AMZN
+      category: MOMENTUM
+      sector: Consumer Cyclical
+      allocation_amount: 925 # 4 shares = $925.76
+    - symbol: META
+      category: MOMENTUM
+      sector: Technology
+      allocation_amount: 1425 # 2 shares = $1,425.36
+    - symbol: TSLA
+      category: MOMENTUM
+      sector: Consumer Cyclical
+      allocation_amount: 948 # 3 shares = $948.18
+    - symbol: PLTR
+      category: MOMENTUM
+      sector: Technology
+      allocation_amount: 794 # 5 shares = $794.00
+    # Speculative High-Beta (tradeable) - $2,500 total (12.5%)
+    - symbol: LIDR
+      category: SPECULATIVE
+      sector: Technology
+      allocation_amount: 620 # 140 shares = $620.20
+    - symbol: OPEN
+      category: SPECULATIVE
+      sector: Real Estate
+      allocation_amount: 635 # 250 shares = $635.00
+    - symbol: SOFI
+      category: SPECULATIVE
+      sector: Financial
+      allocation_amount: 636 # 30 shares = $636.00
+    - symbol: IONQ
+      category: SPECULATIVE
+      sector: Technology
+      allocation_amount: 605 # 14 shares = $604.38
+backtest:
+  strategies:
+    - name: TripleEMACross
+      type: EMA
+      parameters:
+        fast_period: 14
+        slow_period: 28
+  hold_only_categories: ["INDEX", "BOND"]
+performance:
+  risk_free_rate: 0.0442
+forecast:
+  forecast_length: 14
+  model_list: "fast"

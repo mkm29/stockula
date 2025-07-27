@@ -22,19 +22,19 @@ This document outlines a 20‑ticker universe and capital allocation plan design
 
 ## 3. Portfolio Universe (20 Symbols)
 
-| Bucket | Tickers | Count |
-| ------ | ------- | ----- |
-| Broad‑Market Core  SPY, VOO, DFUSX, FSKAX, FSMDX, FXAIX | 6 |
-| Momentum / Large‑Cap Growth | NVDA, AMD, TSM, AAPL, MSFT, GOOGL, AMZN, META, TSLA, PLTR | 10 |
-| Speculative High‑Beta | LIDR, OPEN, SOFI, IONQ | 4 |
+| Bucket                                                 | Tickers                                                   | Count |
+| ------------------------------------------------------ | --------------------------------------------------------- | ----- |
+| Broad‑Market Core SPY, VOO, DFUSX, FSKAX, FSMDX, FXAIX | 6                                                         |       |
+| Momentum / Large‑Cap Growth                            | NVDA, AMD, TSM, AAPL, MSFT, GOOGL, AMZN, META, TSLA, PLTR | 10    |
+| Speculative High‑Beta                                  | LIDR, OPEN, SOFI, IONQ                                    | 4     |
 
 ## 4. Capital Allocation
 
-| Bucket | Tickers | Allocation $ | Allocation % | $ per Ticker |
-| ------ | ------- | ------------ | ------------ | ------------- |
-| Broad‑Market Core | SPY, VOO, DFUSX, FSKAX, FSMDX, FXAIX | $7,000 | 35% | $1,167 |
-| Momentum / Large‑Cap Growth | NVDA, AMD, TSM, AAPL, MSFT, GOOGL, AMZN, META, TSLA, PLTR | $9,500 | 47.5% | $950 |
-| Speculative High‑Beta | LIDR, OPEN, SOFI, IONQ | $3,500 | 17.5% | $875 |
+| Bucket                      | Tickers                                                   | Allocation $ | Allocation % | $ per Ticker |
+| --------------------------- | --------------------------------------------------------- | ------------ | ------------ | ------------ |
+| Broad‑Market Core           | SPY, VOO, DFUSX, FSKAX, FSMDX, FXAIX                      | $7,000       | 35%          | $1,167       |
+| Momentum / Large‑Cap Growth | NVDA, AMD, TSM, AAPL, MSFT, GOOGL, AMZN, META, TSLA, PLTR | $9,500       | 47.5%        | $950         |
+| Speculative High‑Beta       | LIDR, OPEN, SOFI, IONQ                                    | $3,500       | 17.5%        | $875         |
 
 ## 5. Risk & Execution Notes
 

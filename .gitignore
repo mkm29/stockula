@@ -172,7 +172,6 @@ uv.lock
 # ========================
 
 # Data files (common for financial/trading projects)
-data/
 *.csv
 *.xlsx
 *.json
@@ -221,6 +220,8 @@ Thumbs.db
 *.swp
 *.swo
 *~
+CLAUDE.market_data
+.claude
 
 # Backup files
 *.bak
@@ -240,3 +241,6 @@ prophet_cache/
 
 # AutoTS cache
 autots_cache/
+
+# sqlite database files
+stockula.db
