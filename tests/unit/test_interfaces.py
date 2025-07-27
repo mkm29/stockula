@@ -2,7 +2,6 @@
 
 import inspect
 from abc import ABC
-from typing import get_type_hints
 import pandas as pd
 from unittest.mock import Mock
 

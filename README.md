@@ -194,14 +194,18 @@ src/stockula/
 
 ### Using Configuration Files
 
-Stockula automatically looks for `.config.yaml`, `.config.yml`, `config.yaml` or `config.yml` in the current directory:
+Stockula automatically looks for `.config.yaml` in the current directory. Example configurations are provided in the `examples/` directory:
 
 ```bash
-# Use default configuration file (.config.yaml/.config.yml/config.yaml/config.yml)
+# Use default configuration file (.config.yaml)
 uv run python -m stockula.main
 
-# Use a specific configuration file
-uv run python -m stockula.main --config config.full.yaml
+# Use a specific configuration file from examples
+uv run python -m stockula.main --config examples/config.full.yaml
+
+# Copy an example to use as default
+cp examples/config.simple.yaml .config.yaml
+uv run python -m stockula.main
 
 # Run specific mode with configuration
 uv run python -m stockula.main --mode backtest
@@ -212,6 +216,8 @@ uv run python -m stockula.main --ticker TSLA
 # Output as JSON
 uv run python -m stockula.main --output json
 ```
+
+See `examples/README.md` for detailed descriptions of each example configuration.
 
 ### Command Line Mode
 
@@ -950,7 +956,9 @@ The library will automatically skip failed models and use the best performing on
 
 ## Configuration
 
-Stockula uses Pydantic for configuration validation and supports YAML files for easy settings management. By default, Stockula looks for `.config.yaml`, `.config.yml`, `config.yaml` or `config.yml` in the current directory. You can override this with the `--config` flag or the `STOCKULA_CONFIG_FILE` environment variable.
+Stockula uses Pydantic for configuration validation and supports YAML files for easy settings management. By default, Stockula looks for `.config.yaml` in the current directory. You can override this with the `--config` flag or the `STOCKULA_CONFIG_FILE` environment variable.
+
+A comprehensive set of example configurations is provided in the `examples/` directory, ranging from simple setups to complex portfolio strategies. See `examples/README.md` for detailed descriptions.
 
 ### Configuration Structure
 

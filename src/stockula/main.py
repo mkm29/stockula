@@ -290,6 +290,23 @@ def save_detailed_report(
             "initial_value": results.get("initial_portfolio_value", 0),
             "initial_capital": results.get("initial_capital", 0),
         },
+        "broker_config": {
+            "name": config.backtest.broker_config.name
+            if config.backtest.broker_config
+            else "legacy",
+            "commission_type": config.backtest.broker_config.commission_type
+            if config.backtest.broker_config
+            else "percentage",
+            "commission_value": config.backtest.broker_config.commission_value
+            if config.backtest.broker_config
+            else config.backtest.commission,
+            "min_commission": config.backtest.broker_config.min_commission
+            if config.backtest.broker_config
+            else None,
+            "regulatory_fees": config.backtest.broker_config.regulatory_fees
+            if config.backtest.broker_config
+            else 0,
+        },
         "detailed_results": strategy_results,
         "summary": {
             "total_trades": sum(r.get("num_trades", 0) for r in strategy_results),
@@ -354,7 +371,7 @@ def print_results(results: Dict[str, Any], output_format: str = "console"):
             strategies = set(b["strategy"] for b in results["backtesting"])
             if len(strategies) > 1:
                 # For multiple strategies, only show a brief message
-                print(f"\n=== Backtesting Results ===")
+                print("\n=== Backtesting Results ===")
                 print(
                     f"Running {len(strategies)} strategies across {len(set(b['ticker'] for b in results['backtesting']))} stocks..."
                 )
@@ -620,12 +637,47 @@ FORECAST MODE - IMPORTANT NOTES:
                 else {}
             )
 
+            # Get broker config info
+            broker_info = ""
+            if config.backtest.broker_config:
+                broker_config = config.backtest.broker_config
+                if broker_config.name in [
+                    "td_ameritrade",
+                    "etrade",
+                    "robinhood",
+                    "fidelity",
+                    "schwab",
+                ]:
+                    broker_info = f"Broker: {broker_config.name} (zero-commission)"
+                elif broker_config.commission_type == "percentage":
+                    broker_info = f"Broker: {broker_config.name} ({broker_config.commission_value * 100:.1f}% commission"
+                    if broker_config.min_commission:
+                        broker_info += f", ${broker_config.min_commission:.2f} min"
+                    broker_info += ")"
+                elif broker_config.commission_type == "per_share":
+                    broker_info = f"Broker: {broker_config.name} (${broker_config.per_share_commission or broker_config.commission_value:.3f}/share"
+                    if broker_config.min_commission:
+                        broker_info += f", ${broker_config.min_commission:.2f} min"
+                    broker_info += ")"
+                elif broker_config.commission_type == "tiered":
+                    broker_info = f"Broker: {broker_config.name} (tiered pricing"
+                    if broker_config.min_commission:
+                        broker_info += f", ${broker_config.min_commission:.2f} min"
+                    broker_info += ")"
+                elif broker_config.commission_type == "fixed":
+                    broker_info = f"Broker: {broker_config.name} (${broker_config.commission_value:.2f}/trade)"
+                else:
+                    broker_info = f"Broker: {broker_config.name} ({broker_config.commission_type})"
+            else:
+                broker_info = f"Commission: {config.backtest.commission * 100:.1f}%"
+
             print(f"""
 {"=" * 60}
 STRATEGY: {strategy_name.upper()}
 {"=" * 60}
 
 Parameters: {strategy_params if strategy_params else "Default"}
+{broker_info}
 
 Portfolio Value at Start Date: ${results["initial_portfolio_value"]:,.2f}
 Portfolio Value at End (Current): ${portfolio.get_portfolio_value(fetcher.get_current_prices(symbols)):,.2f}

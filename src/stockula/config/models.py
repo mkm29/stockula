@@ -258,6 +258,94 @@ class MACDConfig(BaseModel):
         return v
 
 
+class BrokerConfig(BaseModel):
+    """Configuration for broker-specific fees and commissions."""
+
+    name: str = Field(
+        default="custom", description="Broker name or 'custom' for custom fee structure"
+    )
+    commission_type: str = Field(
+        default="percentage",
+        description="Commission type: 'percentage', 'fixed', 'tiered', 'per_share'",
+    )
+    commission_value: Union[float, Dict[str, float]] = Field(
+        default=0.002,
+        description="Commission value (float for simple types, dict for tiered)",
+    )
+    min_commission: Optional[float] = Field(
+        default=None, description="Minimum commission per trade"
+    )
+    max_commission: Optional[float] = Field(
+        default=None, description="Maximum commission per trade"
+    )
+    per_share_commission: Optional[float] = Field(
+        default=None, description="Commission per share (for per_share type)"
+    )
+    regulatory_fees: float = Field(
+        default=0.0, description="Additional regulatory fees (SEC, FINRA) as percentage"
+    )
+    exchange_fees: float = Field(default=0.0, description="Exchange fees per trade")
+
+    @classmethod
+    def from_broker_preset(cls, broker_name: str) -> "BrokerConfig":
+        """Create BrokerConfig from preset broker configurations."""
+        presets = {
+            "interactive_brokers": {
+                "name": "interactive_brokers",
+                "commission_type": "tiered",
+                "commission_value": {
+                    "0": 0.005,  # $0.005 per share for first 500k shares/month
+                    "500000": 0.004,  # $0.004 per share above 500k shares/month
+                },
+                "min_commission": 1.0,
+                "max_commission": None,
+                "per_share_commission": 0.005,
+                "regulatory_fees": 0.0000229,  # SEC fee
+                "exchange_fees": 0.003,  # Exchange fees
+            },
+            "td_ameritrade": {
+                "name": "td_ameritrade",
+                "commission_type": "fixed",
+                "commission_value": 0.0,  # Zero commission
+                "regulatory_fees": 0.0000229,
+                "exchange_fees": 0.0,
+            },
+            "etrade": {
+                "name": "etrade",
+                "commission_type": "fixed",
+                "commission_value": 0.0,  # Zero commission
+                "regulatory_fees": 0.0000229,
+                "exchange_fees": 0.0,
+            },
+            "robinhood": {
+                "name": "robinhood",
+                "commission_type": "fixed",
+                "commission_value": 0.0,  # Zero commission
+                "regulatory_fees": 0.0,  # SEC fee is $0 as of May 14, 2024
+                "exchange_fees": 0.000166,  # TAF (Trading Activity Fee) per share for equity sells
+            },
+            "fidelity": {
+                "name": "fidelity",
+                "commission_type": "fixed",
+                "commission_value": 0.0,  # Zero commission
+                "regulatory_fees": 0.0000229,
+                "exchange_fees": 0.0,
+            },
+            "schwab": {
+                "name": "schwab",
+                "commission_type": "fixed",
+                "commission_value": 0.0,  # Zero commission
+                "regulatory_fees": 0.0000229,
+                "exchange_fees": 0.0,
+            },
+        }
+
+        if broker_name.lower() in presets:
+            return cls(**presets[broker_name.lower()])
+        else:
+            raise ValueError(f"Unknown broker preset: {broker_name}")
+
+
 class BacktestConfig(BaseModel):
     """Configuration for backtesting."""
 
@@ -265,7 +353,13 @@ class BacktestConfig(BaseModel):
         default=10000.0, gt=0, description="Initial cash amount for backtesting"
     )
     commission: float = Field(
-        default=0.002, ge=0, le=1, description="Commission per trade (0.002 = 0.2%)"
+        default=0.002,
+        ge=0,
+        le=1,
+        description="Commission per trade (0.002 = 0.2%) - deprecated, use broker_config",
+    )
+    broker_config: Optional[BrokerConfig] = Field(
+        default=None, description="Broker-specific fee configuration"
     )
     margin: float = Field(
         default=1.0, ge=0, description="Margin requirement for leveraged trading"
@@ -283,6 +377,16 @@ class BacktestConfig(BaseModel):
         default=["INDEX", "BOND"],
         description="Categories of assets to exclude from backtesting (buy-and-hold only)",
     )
+
+    def model_post_init(self, __context):
+        """Initialize broker config from commission if not provided."""
+        if self.broker_config is None:
+            # Use legacy commission field for backward compatibility
+            self.broker_config = BrokerConfig(
+                name="legacy",
+                commission_type="percentage",
+                commission_value=self.commission,
+            )
 
 
 class ForecastConfig(BaseModel):

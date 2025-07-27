@@ -2283,7 +2283,7 @@ class TestDateCalculationMethods:
 
     def test_all_strategies_get_recommended_start_date(self):
         """Test get_recommended_start_date for all advanced strategies."""
-        from datetime import datetime, timedelta
+        from datetime import datetime
 
         end_date = "2024-01-15"
 

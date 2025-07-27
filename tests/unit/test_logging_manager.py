@@ -4,9 +4,7 @@ import logging
 import sys
 import tempfile
 import os
-from pathlib import Path
-from unittest.mock import Mock, patch, MagicMock
-import pytest
+from unittest.mock import Mock, patch
 
 from stockula.utils.logging_manager import LoggingManager
 from stockula.config import StockulaConfig, LoggingConfig

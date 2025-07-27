@@ -1,0 +1,122 @@
+# Stockula Configuration - Double EMA (34/55) Portfolio Strategy
+# Based on EMA portfolio strategy document dated July 26, 2025
+data:
+  # Data timeframe for analysis
+  start_date: "2025-01-01"
+  end_date: "2025-07-25"
+# Portfolio configuration with allocation tracking
+portfolio:
+  name: "Double EMA Portfolio"
+  initial_capital: 20000
+  allocation_method: custom # Using custom allocation percentages
+  rebalance_frequency: monthly
+  max_position_size: 20.0 # No single position > 10%
+  # Portfolio tickers - combines all holdings based on EMA portfolio allocations
+  tickers:
+    # Broad-Market Core holdings (hold-only) - 35% allocation, $1,167 per ticker
+    - symbol: SPY
+      category: INDEX
+      quantity: 1
+    - symbol: VOO
+      category: INDEX
+      quantity: 1
+    - symbol: DFUSX
+      category: INDEX
+      quantity: 27
+    - symbol: FSKAX
+      category: INDEX
+      quantity: 6
+    - symbol: FSMDX
+      category: INDEX
+      quantity: 31
+    - symbol: FXAIX
+      category: INDEX
+      quantity: 5
+    # Momentum / Large-Cap Growth (tradeable) - 47.5% allocation, $950 per ticker
+    - symbol: NVDA
+      category: MOMENTUM
+      sector: Technology
+      quantity: 5
+    - symbol: AMD
+      category: MOMENTUM
+      sector: Technology
+      quantity: 5
+    - symbol: TSM
+      category: MOMENTUM
+      sector: Technology
+      quantity: 3
+    - symbol: AAPL
+      category: MOMENTUM
+      sector: Technology
+      quantity: 4
+    - symbol: MSFT
+      category: MOMENTUM
+      sector: Technology
+      quantity: 1
+    - symbol: GOOGL
+      category: MOMENTUM
+      sector: Technology
+      quantity: 4
+    - symbol: AMZN
+      category: MOMENTUM
+      sector: Consumer Cyclical
+      quantity: 4
+    - symbol: META
+      category: MOMENTUM
+      sector: Technology
+      quantity: 1
+    - symbol: TSLA
+      category: MOMENTUM
+      sector: Consumer Cyclical
+      quantity: 3
+    - symbol: PLTR
+      category: MOMENTUM
+      sector: Technology
+      quantity: 5
+    # Speculative High-Beta (tradeable) - 17.5% allocation, $875 per ticker
+    - symbol: LIDR
+      category: SPECULATIVE
+      sector: Technology
+      quantity: 197
+    - symbol: OPEN
+      category: SPECULATIVE
+      sector: Real Estate
+      quantity: 344
+    - symbol: SOFI
+      category: SPECULATIVE
+      sector: Financial
+      quantity: 41
+    - symbol: IONQ
+      category: SPECULATIVE
+      sector: Technology
+      quantity: 20
+backtest:
+  strategies:
+    - name: TripleEMACross
+      type: EMA
+      parameters:
+        fast_period: 14
+        slow_period: 28
+      # Risk management parameters
+      stop_loss:
+        momentum_atr_multiple: 1.25 # 1-1.5x ATR for momentum names
+        speculative_atr_multiple: 1.0 # 1x ATR for speculative names
+      # Signal evaluation
+      signal_evaluation: "daily" # Daily bars for ETFs/equities, end-of-day for mutual funds
+      # Rebalance frequency
+      rebalance_frequency: "monthly"
+performance:
+  # Risk-free rate for Sharpe ratio calculation (3-month T-Bill yield)
+  risk_free_rate: 0.0442
+  # Expected returns based on 3-month historical data
+  expected_returns:
+    broad_market_core_avg: 0.149 # 14.9% average
+forecast:
+  forecast_length: 14
+  model_list: "fast" # Using fast models to reduce computation time
+  max_generations: 2 # Reduced from default 5 for faster results
+  num_validations: 1 # Reduced from default 2 for faster results
+  ensemble: "simple" # Simple ensemble is faster than auto
+logging:
+  enabled: false # Set to true to see detailed progress
+  level: "INFO"

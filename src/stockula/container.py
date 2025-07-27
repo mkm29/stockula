@@ -62,6 +62,9 @@ class Container(containers.DeclarativeContainer):
         commission=providers.Callable(
             lambda config: config.backtest.commission, stockula_config
         ),
+        broker_config=providers.Callable(
+            lambda config: config.backtest.broker_config, stockula_config
+        ),
         data_fetcher=data_fetcher,
     )
 
