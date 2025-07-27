@@ -593,9 +593,17 @@ Portfolio Value at End (Current): ${final_value:,.2f}""")
   Tradeable Assets: ${tradeable_value:,.2f}
   Total Portfolio: ${hold_only_value + tradeable_value:,.2f}""")
 
+        # Calculate and show total trades from backtesting results
+        total_trades = 0
+        if "backtesting" in results:
+            total_trades = sum(
+                backtest.get("num_trades", 0) for backtest in results["backtesting"]
+            )
+            print(f"\nTotal Trades Executed: {total_trades}")
+
         # Show return during period at the very end
         print(
-            f"\nReturn During Period: ${period_return:,.2f} ({period_return_pct:+.2f}%)"
+            f"Return During Period: ${period_return:,.2f} ({period_return_pct:+.2f}%)"
         )
 
     # Save results if configured

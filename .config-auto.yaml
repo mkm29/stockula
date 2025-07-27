@@ -11,13 +11,13 @@ portfolio:
   allocation_method: auto
   auto_allocate: true
   allow_fractional_shares: false # Use integer shares only
-  capital_utilization_target: 0.99 # Deploy 99% of capital
+  capital_utilization_target: 1.0 # Deploy all capital
   rebalance_frequency: monthly
   max_position_size: 20.0 # Allow larger positions since we have fewer stocks
   # Category-based allocation ratios (must sum to 1.0)
   category_ratios:
     INDEX: 0.35 # 35% in broad-market index funds
-    MOMENTUM: 0.475 # 47.5% in momentum stocks  
+    MOMENTUM: 0.475 # 47.5% in momentum stocks
     SPECULATIVE: 0.175 # 17.5% in speculative plays
   # Portfolio tickers - only symbol and category required for auto-allocation
   tickers:
@@ -94,7 +94,7 @@ performance:
 forecast:
   forecast_length: 28
   model_list: "fast"
-# Logging configuration - enable for verbose output  
+# Logging configuration - enable for verbose output
 logging:
   enabled: false # Set to true for detailed allocation and price fetching info
   level: INFO # Logging level: DEBUG, INFO, WARNING, ERROR
