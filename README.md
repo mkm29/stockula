@@ -30,6 +30,7 @@ Stockula is a comprehensive Python trading platform that provides tools for tech
 - **📈 Data Fetching**: Retrieve real-time and historical market data via yfinance
 - **🗄️ SQLite Database**: Automatic caching of all yfinance data with robust lookup capabilities
 - **🔮 Price Forecasting**: Automated time series forecasting using AutoTS
+- **📝 Centralized Logging**: Professional logging system with configurable levels and file rotation
 - **🚀 Fast Package Management**: Uses uv for lightning-fast dependency management
 
 ## Architecture Overview
@@ -61,9 +62,9 @@ graph TB
         FC[Forecasting<br/>AutoTS]
     end
     
-    subgraph "Configuration"
+    subgraph "Configuration & Utilities"
         Models[Config Models<br/>Pydantic]
-        Logging[Logging Config]
+        LogManager[Logging Manager]
     end
     
     CLI --> Config
@@ -86,14 +87,15 @@ graph TB
     Fetcher --> Cache
     Cache --> DB
     
-    Models --> Logging
-    Logging --> CLI
+    CLI --> LogManager
+    LogManager --> Models
     
     style CLI fill:#2196F3,stroke:#1976D2,color:#fff
     style Config fill:#4CAF50,stroke:#388E3C,color:#fff
     style DB fill:#FF9800,stroke:#F57C00,color:#fff
     style Portfolio fill:#9C27B0,stroke:#7B1FA2,color:#fff
     style Factory fill:#9C27B0,stroke:#7B1FA2,color:#fff
+    style LogManager fill:#607D8B,stroke:#455A64,color:#fff
 ```
 
 ### Data Flow
@@ -159,9 +161,12 @@ src/stockula/
 │   ├── __init__.py
 │   ├── strategies.py    # Pre-built strategies
 │   └── runner.py        # Backtest execution
-└── forecasting/         # Price prediction
+├── forecasting/         # Price prediction
+│   ├── __init__.py
+│   └── forecaster.py    # AutoTS wrapper
+└── utils/               # Utilities
     ├── __init__.py
-    └── forecaster.py    # AutoTS wrapper
+    └── logging_manager.py # Centralized logging management
 ```
 
 ## Installation
@@ -513,8 +518,9 @@ The test suite includes:
 #### Test Statistics
 
 - **Total Tests**: 340+ tests across unit and integration suites
-- **Unit Tests**: 86 strategy tests + additional module tests
-- **Current Coverage**: Improved test coverage with comprehensive strategy validation
+- **Unit Tests**: 62 focused strategy tests + additional module tests
+- **Main Module Coverage**: 98% (improved from 76%)
+- **Overall Coverage**: 38% with key modules well-tested
 - **Unit Tests**: All passing, fast execution (< 1 second for strategies)
 - **Integration Tests**: May require network/database access
 
@@ -553,6 +559,7 @@ The test suite has been significantly enhanced with:
 - **Robust Mocking**: Improved mock setups that avoid infinite recursion and type errors
 - **Comprehensive Coverage**: Tests now cover strategy initialization, execution, data validation, and error handling
 - **Parameter Validation**: Extensive testing of strategy parameters, thresholds, and data requirements
+- **Main Entry Point Coverage**: Improved test coverage for `main.py` from 76% to 98%
 
 #### Testing Best Practices
 
@@ -562,6 +569,37 @@ When writing new tests:
 1. **Provide Real Values**: Use actual numeric values for strategy attributes instead of Mock objects
 1. **Test Edge Cases**: Include tests for insufficient data, empty datasets, and boundary conditions
 1. **Fast Execution**: Ensure tests run quickly by avoiding complex setups and external dependencies
+
+### Logging Architecture
+
+Stockula uses a centralized `LoggingManager` class for all logging operations:
+
+- **Centralized Management**: All logging configuration and operations handled by `LoggingManager`
+- **Clean Interface**: Simple methods for all log levels (debug, info, warning, error, critical)
+- **Flexible Configuration**: Supports console and file output with rotation
+- **Third-party Noise Reduction**: Automatically reduces logging noise from external libraries
+- **Easy Testing**: Simplified mocking for unit tests
+
+The logging system supports configuration through the `.config.yaml` file:
+
+```yaml
+logging:
+  enabled: true
+  level: "INFO"
+  log_to_file: true
+  log_file: "stockula.log"
+  max_log_size: 10485760  # 10MB
+  backup_count: 5
+```
+
+### Code Quality Improvements
+
+Recent enhancements to code quality:
+
+- **Multi-line Output**: Converted multiple consecutive print statements to single multi-line f-strings for cleaner output
+- **Consistent Formatting**: All code formatted with `ruff` for consistency
+- **Improved Test Coverage**: Main module coverage increased to 98%
+- **Better Error Handling**: Enhanced error messages and exception handling throughout
 
 ### Code Formatting
 
