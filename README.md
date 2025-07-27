@@ -9,7 +9,7 @@ Stockula is a comprehensive Python trading platform that provides tools for tech
 - **Python**: 3.13 or higher
 - **Operating System**: macOS, Linux, or Windows
 - **Memory**: Minimum 8GB RAM recommended
-- **Storage**: At least 1GB free space for data caching
+- **Storage**: 100MB free space (more if caching extensive historical data)
 
 ### Python Dependencies
 
