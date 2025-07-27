@@ -2,15 +2,21 @@
 
 from backtesting import Backtest
 import pandas as pd
-from typing import Type, Dict, Any, Optional
-from ..data.fetcher import DataFetcher
+from typing import Type, Dict, Any, Optional, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from ..interfaces import IDataFetcher
 
 
 class BacktestRunner:
     """Runner for executing backtests."""
 
     def __init__(
-        self, cash: float = 10000, commission: float = 0.002, margin: float = 1.0
+        self,
+        cash: float = 10000,
+        commission: float = 0.002,
+        margin: float = 1.0,
+        data_fetcher: Optional["IDataFetcher"] = None,
     ):
         """Initialize backtest runner.
 
@@ -18,11 +24,13 @@ class BacktestRunner:
             cash: Starting cash amount
             commission: Commission per trade (0.002 = 0.2%)
             margin: Margin requirement for leveraged trading
+            data_fetcher: Injected data fetcher instance
         """
         self.cash = cash
         self.commission = commission
         self.margin = margin
         self.results = None
+        self.data_fetcher = data_fetcher
 
     def run(self, data: pd.DataFrame, strategy: Type, **kwargs) -> Dict[str, Any]:
         """Run backtest with given data and strategy.
@@ -105,8 +113,12 @@ class BacktestRunner:
         Returns:
             Backtest results
         """
-        fetcher = DataFetcher()
-        data = fetcher.get_stock_data(symbol, start_date, end_date)
+        if not self.data_fetcher:
+            raise ValueError(
+                "Data fetcher not configured. Ensure DI container is properly set up."
+            )
+
+        data = self.data_fetcher.get_stock_data(symbol, start_date, end_date)
         return self.run(data, strategy, **kwargs)
 
     def get_stats(self) -> pd.Series:

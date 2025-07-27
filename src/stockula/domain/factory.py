@@ -1,12 +1,16 @@
 """Factory for creating domain objects from configuration."""
 
 import logging
-from typing import List, Optional, Dict
+from typing import List, Optional, Dict, TYPE_CHECKING
+
 from ..config import StockulaConfig, TickerConfig
 from .ticker import Ticker, TickerRegistry
 from .asset import Asset
 from .portfolio import Portfolio
 from .category import Category
+
+if TYPE_CHECKING:
+    from ..interfaces import IDataFetcher
 
 # Create logger
 logger = logging.getLogger(__name__)
@@ -15,9 +19,22 @@ logger = logging.getLogger(__name__)
 class DomainFactory:
     """Factory for creating domain objects from configuration."""
 
-    def __init__(self):
-        """Initialize factory with ticker registry."""
-        self.ticker_registry = TickerRegistry()
+    def __init__(
+        self,
+        config: Optional[StockulaConfig] = None,
+        fetcher: Optional["IDataFetcher"] = None,
+        ticker_registry: Optional[TickerRegistry] = None,
+    ):
+        """Initialize factory with dependencies.
+
+        Args:
+            config: Configuration object
+            fetcher: Data fetcher instance
+            ticker_registry: Ticker registry instance
+        """
+        self.config = config
+        self.fetcher = fetcher
+        self.ticker_registry = ticker_registry or TickerRegistry()
 
     def _create_ticker(self, ticker_config: TickerConfig) -> Ticker:
         """Create or get ticker from configuration (internal method).
@@ -84,10 +101,8 @@ class DomainFactory:
         Returns:
             Dictionary mapping ticker symbols to calculated quantities
         """
-        from ..data.fetcher import DataFetcher
-
-        # Fetch prices for calculation - use start date if available for backtesting
-        fetcher = DataFetcher()
+        # Use injected fetcher
+        fetcher = self.fetcher
         symbols = [ticker.symbol for ticker in tickers_to_add]
 
         if config.data.start_date:
@@ -179,13 +194,11 @@ class DomainFactory:
         Returns:
             Dictionary mapping ticker symbols to calculated quantities
         """
-        from ..data.fetcher import DataFetcher
-
         if not config.portfolio.category_ratios:
             raise ValueError("Auto-allocation requires category_ratios to be specified")
 
-        # Fetch prices for calculation - use start date if available for backtesting
-        fetcher = DataFetcher()
+        # Use injected fetcher
+        fetcher = self.fetcher
         symbols = [ticker.symbol for ticker in tickers_to_add]
 
         if config.data.start_date:

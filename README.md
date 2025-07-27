@@ -517,10 +517,10 @@ The test suite includes:
 
 #### Test Statistics
 
-- **Total Tests**: 340+ tests across unit and integration suites
+- **Total Tests**: 355+ tests across unit and integration suites
 - **Unit Tests**: 62 focused strategy tests + additional module tests
-- **Main Module Coverage**: 98% (improved from 76%)
-- **Overall Coverage**: 38% with key modules well-tested
+- **Main Module Coverage**: 95% (improved from 48% after DI refactoring)
+- **Overall Coverage**: 37% with key modules well-tested
 - **Unit Tests**: All passing, fast execution (< 1 second for strategies)
 - **Integration Tests**: May require network/database access
 
@@ -528,11 +528,16 @@ The test suite includes:
 
 The strategy test suite includes comprehensive validation:
 
+- **Current Coverage**: 37% of strategies.py (344 of 829 lines covered)
 - **Execution Tests**: All strategies tested with proper mock setups
-- **Parameter Validation**: RSI thresholds, ATR parameters, period relationships
+- **Parameter Validation**: RSI thresholds, ATR parameters, period relationships  
 - **Data Requirements**: Minimum data calculations and date range validation
 - **Error Handling**: Graceful handling of insufficient data and edge cases
+- **Core Functionality**: Basic trading logic, crossover signals, buy/sell operations
+- **Advanced Features**: Stop-loss logic, insufficient data warnings, early returns
 - **Performance**: Fast execution with no recursion errors or timeouts
+
+**Note**: The remaining 63% coverage gap consists primarily of complex calculation functions within advanced trading strategies (TripleEMA, TRIMA, VIDYA, KAMA, FRAMA) that require intricate mocking of the backtesting library's property-based data structures.
 
 Coverage reports are generated in:
 
@@ -559,7 +564,8 @@ The test suite has been significantly enhanced with:
 - **Robust Mocking**: Improved mock setups that avoid infinite recursion and type errors
 - **Comprehensive Coverage**: Tests now cover strategy initialization, execution, data validation, and error handling
 - **Parameter Validation**: Extensive testing of strategy parameters, thresholds, and data requirements
-- **Main Entry Point Coverage**: Improved test coverage for `main.py` from 76% to 98%
+- **Main Entry Point Coverage**: Fixed dependency injection tests after refactoring, improving coverage to 95%
+- **Dependency Injection Testing**: Updated all main.py tests to work with new container-based architecture
 
 #### Testing Best Practices
 

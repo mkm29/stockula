@@ -8,6 +8,9 @@ from .strategies import (
     DoubleEMACrossStrategy,
     TripleEMACrossStrategy,
     TRIMACrossStrategy,
+    VIDYAStrategy,
+    KAMAStrategy,
+    FRAMAStrategy,
 )
 from .runner import BacktestRunner
 
@@ -19,5 +22,8 @@ __all__ = [
     "DoubleEMACrossStrategy",
     "TripleEMACrossStrategy",
     "TRIMACrossStrategy",
+    "VIDYAStrategy",
+    "KAMAStrategy",
+    "FRAMAStrategy",
     "BacktestRunner",
 ]

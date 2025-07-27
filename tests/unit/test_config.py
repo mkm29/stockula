@@ -2,7 +2,6 @@
 
 import pytest
 from datetime import date
-from pathlib import Path
 import yaml
 
 from stockula.config import (

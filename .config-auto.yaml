@@ -79,11 +79,13 @@ portfolio:
       sector: Technology
 backtest:
   strategies:
-    - name: TripleEMACross
+    - name: VIDYA
       type: EMA
-      parameters:
-        fast_period: 14
-        slow_period: 28
+    # - name: TripleEMACross
+    #   type: EMA
+    #   parameters:
+    #     fast_period: 14
+    #     slow_period: 28
   # Hold-only categories will not be backtested
   hold_only_categories: ["INDEX", "BOND"]
 performance:

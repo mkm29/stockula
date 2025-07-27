@@ -182,6 +182,12 @@ class DataConfig(BaseModel):
         default="1d",
         description="Data interval (1m, 2m, 5m, 15m, 30m, 60m, 90m, 1h, 1d, 5d, 1wk, 1mo, 3mo)",
     )
+    use_cache: bool = Field(
+        default=True, description="Use database caching for fetched data"
+    )
+    db_path: str = Field(
+        default="stockula.db", description="Path to SQLite database file for caching"
+    )
 
     @field_validator("start_date", "end_date", mode="before")
     @classmethod

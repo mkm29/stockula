@@ -1,7 +1,7 @@
 """Tests for domain models."""
 
 import pytest
-from unittest.mock import Mock, patch
+from unittest.mock import patch
 
 from stockula.domain import (
     Ticker,
@@ -378,9 +378,9 @@ class TestPortfolio:
 class TestDomainFactory:
     """Test DomainFactory."""
 
-    def test_create_portfolio_basic(self, sample_stockula_config):
+    def test_create_portfolio_basic(self, sample_stockula_config, mock_data_fetcher):
         """Test creating a basic portfolio from config."""
-        factory = DomainFactory()
+        factory = DomainFactory(fetcher=mock_data_fetcher)
 
         # Mock validation methods to not raise errors
         with patch.object(Portfolio, "validate_capital_sufficiency"):
@@ -396,10 +396,9 @@ class TestDomainFactory:
     ):
         """Test creating portfolio with dynamic allocation."""
         config = StockulaConfig(portfolio=dynamic_allocation_config)
-        factory = DomainFactory()
+        factory = DomainFactory(fetcher=mock_data_fetcher)
 
-        with patch("stockula.data.fetcher.DataFetcher", return_value=mock_data_fetcher):
-            portfolio = factory.create_portfolio(config)
+        portfolio = factory.create_portfolio(config)
 
         assert len(portfolio.assets) == 3
 
@@ -416,10 +415,9 @@ class TestDomainFactory:
     ):
         """Test creating portfolio with auto allocation."""
         config = StockulaConfig(portfolio=auto_allocation_config)
-        factory = DomainFactory()
+        factory = DomainFactory(fetcher=mock_data_fetcher)
 
-        with patch("stockula.data.fetcher.DataFetcher", return_value=mock_data_fetcher):
-            portfolio = factory.create_portfolio(config)
+        portfolio = factory.create_portfolio(config)
 
         assert len(portfolio.assets) == 5
 
@@ -453,9 +451,9 @@ class TestDomainFactory:
                 )
             )
 
-    def test_get_all_tickers(self, sample_stockula_config):
+    def test_get_all_tickers(self, sample_stockula_config, mock_data_fetcher):
         """Test getting all tickers from factory."""
-        factory = DomainFactory()
+        factory = DomainFactory(fetcher=mock_data_fetcher)
 
         # Create portfolio to populate registry
         with patch.object(Portfolio, "validate_capital_sufficiency"):
@@ -472,9 +470,9 @@ class TestDomainFactory:
 class TestDomainFactoryAdvanced:
     """Test advanced DomainFactory functionality."""
 
-    def test_create_portfolio_edge_cases(self):
+    def test_create_portfolio_edge_cases(self, mock_data_fetcher):
         """Test portfolio creation edge cases."""
-        factory = DomainFactory()
+        factory = DomainFactory(fetcher=mock_data_fetcher)
 
         # Test with minimal config
         minimal_config = StockulaConfig(
@@ -494,7 +492,7 @@ class TestDomainFactoryAdvanced:
         assert portfolio.initial_capital == 1000.0
         assert len(portfolio.assets) == 1
 
-    def test_create_portfolio_with_categories(self):
+    def test_create_portfolio_with_categories(self, mock_data_fetcher):
         """Test portfolio creation with various category types."""
         config = StockulaConfig(
             portfolio=PortfolioConfig(
@@ -510,7 +508,7 @@ class TestDomainFactoryAdvanced:
             )
         )
 
-        factory = DomainFactory()
+        factory = DomainFactory(fetcher=mock_data_fetcher)
 
         with patch.object(Portfolio, "validate_capital_sufficiency"):
             with patch.object(Portfolio, "validate_allocation_constraints"):
@@ -526,80 +524,73 @@ class TestDomainFactoryAdvanced:
         }
         assert categories == expected_categories
 
-    @patch("stockula.data.fetcher.DataFetcher")
     def test_create_portfolio_dynamic_allocation_error_handling(
-        self, mock_fetcher_class
+        self, mock_data_fetcher
     ):
         """Test error handling in dynamic allocation."""
-        # Mock fetcher that fails
-        mock_fetcher = Mock()
-        mock_fetcher.get_current_prices.side_effect = Exception("Price fetch failed")
-        mock_fetcher_class.return_value = mock_fetcher
-
-        config = StockulaConfig(
-            portfolio=PortfolioConfig(
-                name="Error Test",
-                initial_capital=10000.0,
-                dynamic_allocation=True,
-                tickers=[TickerConfig(symbol="AAPL", allocation_amount=5000.0)],
+        # Patch the get_current_prices method to raise an exception
+        with patch.object(mock_data_fetcher, 'get_current_prices', side_effect=Exception("Price fetch failed")):
+            config = StockulaConfig(
+                portfolio=PortfolioConfig(
+                    name="Error Test",
+                    initial_capital=10000.0,
+                    dynamic_allocation=True,
+                    tickers=[TickerConfig(symbol="AAPL", allocation_amount=5000.0)],
+                )
             )
-        )
 
-        factory = DomainFactory()
+            factory = DomainFactory(fetcher=mock_data_fetcher)
 
-        # Should handle price fetch errors gracefully or raise appropriate error
-        with pytest.raises(Exception):
-            factory.create_portfolio(config)
+            # Should handle price fetch errors gracefully or raise appropriate error
+            with pytest.raises(Exception):
+                factory.create_portfolio(config)
 
-    @patch("stockula.data.fetcher.DataFetcher")
-    def test_create_portfolio_auto_allocation_categories(self, mock_fetcher_class):
+    def test_create_portfolio_auto_allocation_categories(self, mock_data_fetcher):
         """Test auto allocation with category ratios."""
-        mock_fetcher = Mock()
-        mock_fetcher.get_current_prices.return_value = {
+        # Override the return value for this specific test
+        with patch.object(mock_data_fetcher, 'get_current_prices', return_value={
             "VTI": 200.0,
             "QQQ": 300.0,
             "VYM": 100.0,
             "ARKK": 50.0,
             "VWO": 45.0,
-        }
-        mock_fetcher_class.return_value = mock_fetcher
-
-        config = StockulaConfig(
-            portfolio=PortfolioConfig(
-                name="Auto Allocation",
-                initial_capital=100000.0,
-                auto_allocate=True,
-                category_ratios={
-                    "INDEX": 0.4,  # 40%
-                    "GROWTH": 0.3,  # 30%
-                    "DIVIDEND": 0.2,  # 20%
-                    "SPECULATIVE": 0.1,  # 10%
-                    "INTERNATIONAL": 0.0,  # 0% for VWO
-                },
-                tickers=[
-                    TickerConfig(symbol="VTI", category="INDEX"),
-                    TickerConfig(symbol="QQQ", category="GROWTH"),
-                    TickerConfig(symbol="VYM", category="DIVIDEND"),
-                    TickerConfig(symbol="ARKK", category="SPECULATIVE"),
-                    TickerConfig(symbol="VWO", category="INTERNATIONAL"),
-                ],
+        }):
+            config = StockulaConfig(
+                portfolio=PortfolioConfig(
+                    name="Auto Allocation",
+                    initial_capital=100000.0,
+                    auto_allocate=True,
+                    category_ratios={
+                        "INDEX": 0.4,  # 40%
+                        "GROWTH": 0.3,  # 30%
+                        "DIVIDEND": 0.2,  # 20%
+                        "SPECULATIVE": 0.1,  # 10%
+                        "INTERNATIONAL": 0.0,  # 0% for VWO
+                    },
+                    tickers=[
+                        TickerConfig(symbol="VTI", category="INDEX"),
+                        TickerConfig(symbol="QQQ", category="GROWTH"),
+                        TickerConfig(symbol="VYM", category="DIVIDEND"),
+                        TickerConfig(symbol="ARKK", category="SPECULATIVE"),
+                        TickerConfig(symbol="VWO", category="INTERNATIONAL"),
+                    ],
+                )
             )
-        )
 
-        factory = DomainFactory()
-        portfolio = factory.create_portfolio(config)
+            factory = DomainFactory(fetcher=mock_data_fetcher)
+            portfolio = factory.create_portfolio(config)
 
-        # All tickers should be included
-        assert len(portfolio.assets) == 5
+            # All tickers should be included
+            assert len(portfolio.assets) == 5
 
-        # Check that quantities were calculated
-        # Note: Even VWO with 0% allocation gets shares due to aggressive redistribution
-        for asset in portfolio.assets:
-            assert asset.quantity > 0
+            # Check that quantities were calculated
+            # Note: Even VWO with 0% allocation gets shares due to aggressive redistribution
+            for asset in portfolio.assets:
+                assert asset.quantity > 0
 
-    def test_ticker_registry_integration(self):
+    def test_ticker_registry_integration(self, mock_data_fetcher):
         """Test ticker registry integration with factory."""
-        factory = DomainFactory()
+        factory = DomainFactory(fetcher=mock_data_fetcher)
 
         # Clear registry first
         registry = TickerRegistry()
@@ -630,82 +621,76 @@ class TestDomainFactoryAdvanced:
         assert "AAPL" in registry_tickers
         assert "GOOGL" in registry_tickers
 
-    def test_factory_methods_consistency(self):
+    def test_factory_methods_consistency(self, mock_data_fetcher):
         """Test that factory methods are consistent."""
-        factory = DomainFactory()
+        factory = DomainFactory(fetcher=mock_data_fetcher)
 
         # Test that get_all_tickers returns empty list initially
         initial_tickers = factory.get_all_tickers()
         assert isinstance(initial_tickers, list)
         assert len(initial_tickers) >= 0  # Could have tickers from other tests
 
-    @patch("stockula.data.fetcher.DataFetcher")
-    def test_allocation_amount_calculation(self, mock_fetcher_class):
+    def test_allocation_amount_calculation(self, mock_data_fetcher):
         """Test allocation amount calculation accuracy."""
-        mock_fetcher = Mock()
-        mock_fetcher.get_current_prices.return_value = {
+        # Override the return value for this specific test
+        with patch.object(mock_data_fetcher, 'get_current_prices', return_value={
             "AAPL": 150.0,
             "GOOGL": 2500.0,  # High price stock
-        }
-        mock_fetcher_class.return_value = mock_fetcher
-
-        config = StockulaConfig(
-            portfolio=PortfolioConfig(
-                name="Allocation Test",
-                initial_capital=100000.0,
-                dynamic_allocation=True,
-                tickers=[
-                    TickerConfig(
-                        symbol="AAPL", allocation_amount=15000.0
-                    ),  # $15k / $150 = 100 shares
-                    TickerConfig(
-                        symbol="GOOGL", allocation_amount=5000.0
-                    ),  # $5k / $2500 = 2 shares
-                ],
+        }):
+            config = StockulaConfig(
+                portfolio=PortfolioConfig(
+                    name="Allocation Test",
+                    initial_capital=100000.0,
+                    dynamic_allocation=True,
+                    tickers=[
+                        TickerConfig(
+                            symbol="AAPL", allocation_amount=15000.0
+                        ),  # $15k / $150 = 100 shares
+                        TickerConfig(
+                            symbol="GOOGL", allocation_amount=5000.0
+                        ),  # $5k / $2500 = 2 shares
+                    ],
+                )
             )
-        )
 
-        factory = DomainFactory()
-        portfolio = factory.create_portfolio(config)
+            factory = DomainFactory(fetcher=mock_data_fetcher)
+            portfolio = factory.create_portfolio(config)
 
-        # Check exact allocations
-        aapl_asset = portfolio.get_asset_by_symbol("AAPL")
-        assert aapl_asset.quantity == 100.0
+            # Check exact allocations
+            aapl_asset = portfolio.get_asset_by_symbol("AAPL")
+            assert aapl_asset.quantity == 100.0
 
-        googl_asset = portfolio.get_asset_by_symbol("GOOGL")
-        assert googl_asset.quantity == 2.0
+            googl_asset = portfolio.get_asset_by_symbol("GOOGL")
+            assert googl_asset.quantity == 2.0
 
-    @patch("stockula.data.fetcher.DataFetcher")
-    def test_allocation_percentage_calculation(self, mock_fetcher_class):
+    def test_allocation_percentage_calculation(self, mock_data_fetcher):
         """Test allocation percentage calculation."""
-        mock_fetcher = Mock()
-        mock_fetcher.get_current_prices.return_value = {"VTI": 200.0, "QQQ": 300.0}
-        mock_fetcher_class.return_value = mock_fetcher
-
-        config = StockulaConfig(
-            portfolio=PortfolioConfig(
-                name="Percentage Test",
-                initial_capital=60000.0,
-                dynamic_allocation=True,
-                tickers=[
-                    TickerConfig(
-                        symbol="VTI", allocation_pct=60.0
-                    ),  # 60% of $60k = $36k / $200 = 180 shares
-                    TickerConfig(
-                        symbol="QQQ", allocation_pct=40.0
-                    ),  # 40% of $60k = $24k / $300 = 80 shares
-                ],
+        # Override the return value for this specific test
+        with patch.object(mock_data_fetcher, 'get_current_prices', return_value={"VTI": 200.0, "QQQ": 300.0}):
+            config = StockulaConfig(
+                portfolio=PortfolioConfig(
+                    name="Percentage Test",
+                    initial_capital=60000.0,
+                    dynamic_allocation=True,
+                    tickers=[
+                        TickerConfig(
+                            symbol="VTI", allocation_pct=60.0
+                        ),  # 60% of $60k = $36k / $200 = 180 shares
+                        TickerConfig(
+                            symbol="QQQ", allocation_pct=40.0
+                        ),  # 40% of $60k = $24k / $300 = 80 shares
+                    ],
+                )
             )
-        )
 
-        factory = DomainFactory()
-        portfolio = factory.create_portfolio(config)
+            factory = DomainFactory(fetcher=mock_data_fetcher)
+            portfolio = factory.create_portfolio(config)
 
-        vti_asset = portfolio.get_asset_by_symbol("VTI")
-        assert vti_asset.quantity == 180.0
+            vti_asset = portfolio.get_asset_by_symbol("VTI")
+            assert vti_asset.quantity == 180.0
 
-        qqq_asset = portfolio.get_asset_by_symbol("QQQ")
-        assert qqq_asset.quantity == 80.0
+            qqq_asset = portfolio.get_asset_by_symbol("QQQ")
+            assert qqq_asset.quantity == 80.0
 
 
 class TestDomainFactoryErrorScenarios:
@@ -726,59 +711,53 @@ class TestDomainFactoryErrorScenarios:
                 )
             )
 
-    @patch("stockula.data.fetcher.DataFetcher")
-    def test_create_portfolio_zero_price(self, mock_fetcher_class):
+    def test_create_portfolio_zero_price(self, mock_data_fetcher):
         """Test handling of zero stock prices."""
-        mock_fetcher = Mock()
-        mock_fetcher.get_current_prices.return_value = {
+        # Override the return value for this specific test
+        with patch.object(mock_data_fetcher, 'get_current_prices', return_value={
             "PENNY": 0.0  # Zero price
-        }
-        mock_fetcher_class.return_value = mock_fetcher
-
-        config = StockulaConfig(
-            portfolio=PortfolioConfig(
-                name="Zero Price Test",
-                initial_capital=10000.0,
-                dynamic_allocation=True,
-                tickers=[TickerConfig(symbol="PENNY", allocation_amount=1000.0)],
+        }):
+            config = StockulaConfig(
+                portfolio=PortfolioConfig(
+                    name="Zero Price Test",
+                    initial_capital=10000.0,
+                    dynamic_allocation=True,
+                    tickers=[TickerConfig(symbol="PENNY", allocation_amount=1000.0)],
+                )
             )
-        )
 
-        factory = DomainFactory()
+            factory = DomainFactory(fetcher=mock_data_fetcher)
 
-        # Should handle zero price gracefully or raise appropriate error
-        with pytest.raises((ValueError, ZeroDivisionError)):
-            factory.create_portfolio(config)
+            # Should handle zero price gracefully or raise appropriate error
+            with pytest.raises((ValueError, ZeroDivisionError)):
+                factory.create_portfolio(config)
 
-    @patch("stockula.data.fetcher.DataFetcher")
-    def test_create_portfolio_missing_prices(self, mock_fetcher_class):
+    def test_create_portfolio_missing_prices(self, mock_data_fetcher):
         """Test handling of missing stock prices."""
-        mock_fetcher = Mock()
-        mock_fetcher.get_current_prices.return_value = {
+        # Override the return value for this specific test
+        with patch.object(mock_data_fetcher, 'get_current_prices', return_value={
             "AAPL": 150.0
             # GOOGL missing
-        }
-        mock_fetcher_class.return_value = mock_fetcher
-
-        config = StockulaConfig(
-            portfolio=PortfolioConfig(
-                name="Missing Price Test",
-                initial_capital=10000.0,
-                dynamic_allocation=True,
-                tickers=[
-                    TickerConfig(symbol="AAPL", allocation_amount=5000.0),
-                    TickerConfig(
-                        symbol="GOOGL", allocation_amount=5000.0
-                    ),  # Price missing
-                ],
+        }):
+            config = StockulaConfig(
+                portfolio=PortfolioConfig(
+                    name="Missing Price Test",
+                    initial_capital=10000.0,
+                    dynamic_allocation=True,
+                    tickers=[
+                        TickerConfig(symbol="AAPL", allocation_amount=5000.0),
+                        TickerConfig(
+                            symbol="GOOGL", allocation_amount=5000.0
+                        ),  # Price missing
+                    ],
+                )
             )
-        )
 
-        factory = DomainFactory()
+            factory = DomainFactory(fetcher=mock_data_fetcher)
 
-        # Should raise error for missing prices in dynamic allocation
-        with pytest.raises(ValueError, match="Could not fetch price for GOOGL"):
-            factory.create_portfolio(config)
+            # Should raise error for missing prices in dynamic allocation
+            with pytest.raises(ValueError, match="Could not fetch price for GOOGL"):
+                factory.create_portfolio(config)
 
 
 class TestTickerRegistryAdvanced:

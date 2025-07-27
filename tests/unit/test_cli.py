@@ -2,11 +2,8 @@
 
 import pytest
 import argparse
-import sys
 import pandas as pd
-from datetime import datetime, timedelta
-from unittest.mock import Mock, patch, MagicMock, call
-from io import StringIO
+from unittest.mock import Mock, patch, call
 
 from stockula.database.cli import (
     fetch_symbol_data,

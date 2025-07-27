@@ -2,15 +2,15 @@
 
 import argparse
 import json
-import sys
 from datetime import datetime, timedelta
-from typing import Dict, Any, List
+from pathlib import Path
+from typing import Dict, Any, List, Optional
 import pandas as pd
+from dependency_injector.wiring import inject, Provide
 
-from .data.fetcher import DataFetcher
+from .container import create_container, Container
 from .technical_analysis import TechnicalIndicators
 from .backtesting import (
-    BacktestRunner,
     SMACrossStrategy,
     RSIStrategy,
     MACDStrategy,
@@ -18,18 +18,27 @@ from .backtesting import (
     TripleEMACrossStrategy,
     TRIMACrossStrategy,
 )
-from .forecasting import StockForecaster
-from .config import load_config, StockulaConfig
-from .domain import DomainFactory, Category
-from .utils import LoggingManager
+from .config import StockulaConfig
+from .domain import Category
+from .interfaces import (
+    IDataFetcher,
+    IBacktestRunner,
+    IStockForecaster,
+    ILoggingManager,
+)
 
-# Create logging manager instance
-log_manager = LoggingManager("stockula.main")
+# Global logging manager instance
+log_manager: Optional[ILoggingManager] = None
 
 
-def setup_logging(config: StockulaConfig) -> None:
+@inject
+def setup_logging(
+    config: StockulaConfig,
+    logging_manager: ILoggingManager = Provide[Container.logging_manager],
+) -> None:
     """Configure logging based on configuration."""
-    # Use the logging manager to set up logging
+    global log_manager
+    log_manager = logging_manager
     log_manager.setup(config)
 
 
@@ -46,18 +55,23 @@ def get_strategy_class(strategy_name: str):
     return strategies.get(strategy_name.lower())
 
 
-def run_technical_analysis(ticker: str, config: StockulaConfig) -> Dict[str, Any]:
+@inject
+def run_technical_analysis(
+    ticker: str,
+    config: StockulaConfig,
+    data_fetcher: IDataFetcher = Provide[Container.data_fetcher],
+) -> Dict[str, Any]:
     """Run technical analysis for a ticker.
 
     Args:
         ticker: Stock symbol
         config: Configuration object
+        data_fetcher: Injected data fetcher
 
     Returns:
         Dictionary with indicator results
     """
-    fetcher = DataFetcher()
-    data = fetcher.get_stock_data(
+    data = data_fetcher.get_stock_data(
         ticker,
         start=config.data.start_date.strftime("%Y-%m-%d")
         if config.data.start_date
@@ -99,21 +113,23 @@ def run_technical_analysis(ticker: str, config: StockulaConfig) -> Dict[str, Any
     return results
 
 
-def run_backtest(ticker: str, config: StockulaConfig) -> List[Dict[str, Any]]:
+@inject
+def run_backtest(
+    ticker: str,
+    config: StockulaConfig,
+    backtest_runner: IBacktestRunner = Provide[Container.backtest_runner],
+) -> List[Dict[str, Any]]:
     """Run backtesting for a ticker.
 
     Args:
         ticker: Stock symbol
         config: Configuration object
+        backtest_runner: Injected backtest runner
 
     Returns:
         List of backtest results
     """
-    runner = BacktestRunner(
-        cash=config.backtest.initial_cash,
-        commission=config.backtest.commission,
-        margin=config.backtest.margin,
-    )
+    runner = backtest_runner
 
     results = []
 
@@ -164,12 +180,18 @@ def run_backtest(ticker: str, config: StockulaConfig) -> List[Dict[str, Any]]:
     return results
 
 
-def run_forecast(ticker: str, config: StockulaConfig) -> Dict[str, Any]:
+@inject
+def run_forecast(
+    ticker: str,
+    config: StockulaConfig,
+    stock_forecaster: IStockForecaster = Provide[Container.stock_forecaster],
+) -> Dict[str, Any]:
     """Run forecasting for a ticker.
 
     Args:
         ticker: Stock symbol
         config: Configuration object
+        stock_forecaster: Injected stock forecaster
 
     Returns:
         Dictionary with forecast results
@@ -178,13 +200,7 @@ def run_forecast(ticker: str, config: StockulaConfig) -> Dict[str, Any]:
         f"\nForecasting {ticker} for {config.forecast.forecast_length} days..."
     )
 
-    forecaster = StockForecaster(
-        forecast_length=config.forecast.forecast_length,
-        frequency=config.forecast.frequency,
-        prediction_interval=config.forecast.prediction_interval,
-        num_validations=config.forecast.num_validations,
-        validation_method=config.forecast.validation_method,
-    )
+    forecaster = stock_forecaster
 
     try:
         predictions = forecaster.forecast_from_symbol(
@@ -314,48 +330,14 @@ def main():
 
     args = parser.parse_args()
 
-    # Load configuration
-    try:
-        from pathlib import Path
+    # Initialize DI container first
+    container = create_container(args.config)
 
-        # Check if we're using a specific config file or looking for defaults
-        if args.config:
-            config = load_config(args.config)
-            print(f"Using configuration from: {args.config}")
-        else:
-            # Check for default files
-            default_files = [
-                ".config.yaml",
-                ".config.yml",
-                "config.yaml",
-                "config.yml",
-                ".stockula.yaml",
-                ".stockula.yml",
-                "stockula.yaml",
-                "stockula.yml",
-            ]
-            found_config = None
-            for filename in default_files:
-                if Path(filename).exists():
-                    found_config = filename
-                    break
-
-            if found_config:
-                config = load_config()
-                print(f"Using configuration from: {found_config}")
-            else:
-                config = load_config()
-                print("No configuration file found. Using default settings.")
-    except FileNotFoundError as e:
-        print(f"Error: {e}")
-        print("Using default configuration...")
-        config = StockulaConfig()
-    except Exception as e:
-        print(f"Error loading configuration: {e}")
-        sys.exit(1)
+    # Load configuration - the container will handle this
+    config = container.stockula_config()
 
     # Set up logging based on configuration
-    setup_logging(config)
+    setup_logging(config, logging_manager=container.logging_manager())
 
     # Override ticker if provided
     if args.ticker:
@@ -371,8 +353,8 @@ def main():
         print(f"Configuration saved to {args.save_config}")
         return
 
-    # Create domain objects from configuration
-    factory = DomainFactory()
+    # Get injected services from container
+    factory = container.domain_factory()
     portfolio = factory.create_portfolio(config)
 
     log_manager.info("\nPortfolio Summary:")
@@ -382,7 +364,7 @@ def main():
     log_manager.info(f"  Allocation Method: {portfolio.allocation_method}")
 
     # Get portfolio value at start of backtest period
-    fetcher = DataFetcher()
+    fetcher = container.data_fetcher()
     symbols = [asset.symbol for asset in portfolio.get_all_assets()]
 
     # Get prices at the start date if backtesting
@@ -480,7 +462,11 @@ def main():
         if args.mode in ["all", "ta"]:
             if "technical_analysis" not in results:
                 results["technical_analysis"] = []
-            results["technical_analysis"].append(run_technical_analysis(ticker, config))
+            results["technical_analysis"].append(
+                run_technical_analysis(
+                    ticker, config, data_fetcher=container.data_fetcher()
+                )
+            )
 
         if args.mode in ["all", "backtest"]:
             if is_hold_only:
@@ -488,7 +474,11 @@ def main():
             else:
                 if "backtesting" not in results:
                     results["backtesting"] = []
-                results["backtesting"].extend(run_backtest(ticker, config))
+                results["backtesting"].extend(
+                    run_backtest(
+                        ticker, config, backtest_runner=container.backtest_runner()
+                    )
+                )
 
         if args.mode in ["all", "forecast"]:
             if "forecasting" not in results:
@@ -506,7 +496,9 @@ FORECAST MODE - IMPORTANT NOTES:
 • Enable logging for more detailed progress information
 {"=" * 60}""")
 
-            forecast_result = run_forecast(ticker, config)
+            forecast_result = run_forecast(
+                ticker, config, stock_forecaster=container.stock_forecaster()
+            )
             results["forecasting"].append(forecast_result)
 
     # Output results

@@ -1,11 +1,9 @@
 """Tests for main CLI module."""
 
-import pytest
 import sys
 import json
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import Mock, patch
 from io import StringIO
-import argparse
 
 from stockula.main import (
     main,

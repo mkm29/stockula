@@ -10,15 +10,26 @@ from ..database import DatabaseManager
 class DataFetcher:
     """Fetch financial data using yfinance with SQLite caching."""
 
-    def __init__(self, use_cache: bool = True, db_path: str = "stockula.db"):
+    def __init__(
+        self,
+        use_cache: bool = True,
+        db_path: str = "stockula.db",
+        database_manager: Optional[DatabaseManager] = None,
+    ):
         """Initialize data fetcher.
 
         Args:
             use_cache: Whether to use database caching
             db_path: Path to SQLite database file
+            database_manager: Injected database manager instance
         """
         self.use_cache = use_cache
-        self.db = DatabaseManager(db_path) if use_cache else None
+
+        # Use injected database manager if provided, otherwise create one
+        if database_manager is not None:
+            self.db = database_manager if use_cache else None
+        else:
+            self.db = DatabaseManager(db_path) if use_cache else None
 
     def get_stock_data(
         self,
@@ -337,14 +348,14 @@ class DataFetcher:
         # Fetch and store price history
         try:
             self.get_stock_data(symbol, start, end, force_refresh=True)
-            print(f"  ✓ Price history stored")
+            print("  ✓ Price history stored")
         except Exception as e:
             print(f"  ✗ Error fetching price history: {e}")
 
         # Fetch and store stock info
         try:
             self.get_info(symbol, force_refresh=True)
-            print(f"  ✓ Stock info stored")
+            print("  ✓ Stock info stored")
         except Exception as e:
             print(f"  ✗ Error fetching stock info: {e}")
 
@@ -354,7 +365,7 @@ class DataFetcher:
             if not dividends.empty:
                 print(f"  ✓ Dividends stored ({len(dividends)} records)")
             else:
-                print(f"  ○ No dividends found")
+                print("  ○ No dividends found")
         except Exception as e:
             print(f"  ✗ Error fetching dividends: {e}")
 
@@ -364,7 +375,7 @@ class DataFetcher:
             if not splits.empty:
                 print(f"  ✓ Splits stored ({len(splits)} records)")
             else:
-                print(f"  ○ No splits found")
+                print("  ○ No splits found")
         except Exception as e:
             print(f"  ✗ Error fetching splits: {e}")
 
@@ -376,7 +387,7 @@ class DataFetcher:
                     f"  ✓ Options chain stored ({len(calls)} calls, {len(puts)} puts)"
                 )
             else:
-                print(f"  ○ No options chain found")
+                print("  ○ No options chain found")
         except Exception as e:
             print(f"  ✗ Error fetching options chain: {e}")
 

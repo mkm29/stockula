@@ -1,12 +1,9 @@
 """Integration tests for Stockula."""
 
 import pytest
-import tempfile
-from pathlib import Path
 import yaml
 from unittest.mock import patch
 
-from stockula.main import main
 from stockula.config import StockulaConfig, load_config
 from stockula.domain import DomainFactory
 from stockula.data.fetcher import DataFetcher

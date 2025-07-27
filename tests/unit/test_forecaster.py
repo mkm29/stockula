@@ -3,8 +3,8 @@
 import pytest
 import pandas as pd
 import numpy as np
-from datetime import datetime, timedelta
-from unittest.mock import Mock, patch, MagicMock, call
+from datetime import timedelta
+from unittest.mock import Mock, patch
 import warnings
 import logging
 import signal
@@ -110,6 +110,7 @@ class TestStockForecasterInitialization:
             prediction_interval=0.95,
             num_validations=3,
             validation_method="seasonal",
+            data_fetcher=None,
         )
 
         assert forecaster.forecast_length == 30
@@ -361,42 +362,48 @@ class TestStockForecasterForecastFromSymbol:
             }
         )
 
-        forecaster = StockForecaster()
+        # Create mock data fetcher
+        mock_fetcher = Mock()
+        mock_fetcher.get_stock_data.return_value = stock_data
+        
+        # Create forecaster with mock data fetcher
+        forecaster = StockForecaster(data_fetcher=mock_fetcher)
 
-        with patch("stockula.forecasting.forecaster.DataFetcher") as mock_fetcher_class:
-            mock_fetcher = Mock()
-            mock_fetcher.get_stock_data.return_value = stock_data
-            mock_fetcher_class.return_value = mock_fetcher
+        with patch.object(forecaster, "fit_predict") as mock_fit_predict:
+            mock_fit_predict.return_value = predictions
 
-            with patch.object(forecaster, "fit_predict") as mock_fit_predict:
-                mock_fit_predict.return_value = predictions
+            result = forecaster.forecast_from_symbol(
+                "AAPL", start_date="2023-01-01"
+            )
 
-                result = forecaster.forecast_from_symbol(
-                    "AAPL", start_date="2023-01-01"
-                )
+            # Should fetch data
+            mock_fetcher.get_stock_data.assert_called_once_with(
+                "AAPL", "2023-01-01", None
+            )
 
-                # Should fetch data
-                mock_fetcher.get_stock_data.assert_called_once_with(
-                    "AAPL", "2023-01-01", None
-                )
+            # Should fit and predict
+            mock_fit_predict.assert_called_once()
 
-                # Should fit and predict
-                mock_fit_predict.assert_called_once()
+            # Should return predictions
+            assert result.equals(predictions)
 
-                # Should return predictions
-                assert result.equals(predictions)
+    def test_forecast_from_symbol_no_data_fetcher(self):
+        """Test forecast from symbol without data fetcher configured."""
+        forecaster = StockForecaster(data_fetcher=None)
+
+        with pytest.raises(ValueError, match="Data fetcher not configured"):
+            forecaster.forecast_from_symbol("TEST")
 
     def test_forecast_from_symbol_no_data(self):
         """Test forecast from symbol with no data available."""
-        forecaster = StockForecaster()
+        # Create mock data fetcher
+        mock_fetcher = Mock()
+        mock_fetcher.get_stock_data.return_value = pd.DataFrame()  # Empty
+        
+        forecaster = StockForecaster(data_fetcher=mock_fetcher)
 
-        with patch("stockula.forecasting.forecaster.DataFetcher") as mock_fetcher_class:
-            mock_fetcher = Mock()
-            mock_fetcher.get_stock_data.return_value = pd.DataFrame()  # Empty
-            mock_fetcher_class.return_value = mock_fetcher
-
-            with pytest.raises(ValueError, match="No data available for symbol TEST"):
-                forecaster.forecast_from_symbol("TEST")
+        with pytest.raises(ValueError, match="No data available for symbol TEST"):
+            forecaster.forecast_from_symbol("TEST")
 
 
 class TestStockForecasterGetBestModel:

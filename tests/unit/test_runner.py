@@ -3,8 +3,7 @@
 import pytest
 import pandas as pd
 import numpy as np
-from datetime import datetime, timedelta
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import Mock, patch
 
 from stockula.backtesting.runner import BacktestRunner
 from stockula.backtesting.strategies import SMACrossStrategy
@@ -13,21 +12,23 @@ from stockula.backtesting.strategies import SMACrossStrategy
 class TestBacktestRunnerInitialization:
     """Test BacktestRunner initialization."""
 
-    def test_initialization_with_defaults(self):
+    def test_initialization_with_defaults(self, mock_data_fetcher):
         """Test BacktestRunner initialization with default parameters."""
-        runner = BacktestRunner()
+        runner = BacktestRunner(data_fetcher=mock_data_fetcher)
         assert runner.cash == 10000
         assert runner.commission == 0.002
         assert runner.margin == 1.0
         assert runner.results is None
+        assert runner.data_fetcher == mock_data_fetcher
 
-    def test_initialization_with_custom_params(self):
+    def test_initialization_with_custom_params(self, mock_data_fetcher):
         """Test BacktestRunner initialization with custom parameters."""
-        runner = BacktestRunner(cash=50000, commission=0.001, margin=2.0)
+        runner = BacktestRunner(cash=50000, commission=0.001, margin=2.0, data_fetcher=mock_data_fetcher)
         assert runner.cash == 50000
         assert runner.commission == 0.001
         assert runner.margin == 2.0
         assert runner.results is None
+        assert runner.data_fetcher == mock_data_fetcher
 
 
 class TestBacktestRunnerRun:
@@ -64,7 +65,7 @@ class TestBacktestRunnerRun:
         mock_backtest.run.return_value = mock_results
         mock_backtest_class.return_value = mock_backtest
 
-        runner = BacktestRunner()
+        runner = BacktestRunner(data_fetcher=None)
         results = runner.run(sample_data, SMACrossStrategy)
 
         # Verify backtest was created with correct parameters
@@ -87,7 +88,7 @@ class TestBacktestRunnerRun:
         mock_backtest.run.return_value = mock_results
         mock_backtest_class.return_value = mock_backtest
 
-        runner = BacktestRunner()
+        runner = BacktestRunner(data_fetcher=None)
         results = runner.run(
             sample_data, SMACrossStrategy, fast_period=5, slow_period=15
         )
@@ -110,7 +111,7 @@ class TestBacktestRunnerRun:
         mock_backtest.run.return_value = {}
         mock_backtest_class.return_value = mock_backtest
 
-        runner = BacktestRunner()
+        runner = BacktestRunner(data_fetcher=None)
         runner.run(sample_data, mock_strategy)
 
         # Check warning was printed
@@ -125,7 +126,7 @@ class TestBacktestRunnerRun:
         mock_backtest.run.return_value = {}
         mock_backtest_class.return_value = mock_backtest
 
-        runner = BacktestRunner(cash=25000, commission=0.005, margin=1.5)
+        runner = BacktestRunner(cash=25000, commission=0.005, margin=1.5, data_fetcher=None)
         runner.run(sample_data, SMACrossStrategy)
 
         # Verify custom parameters were used
@@ -162,7 +163,7 @@ class TestBacktestRunnerOptimize:
         mock_backtest.optimize.return_value = mock_results
         mock_backtest_class.return_value = mock_backtest
 
-        runner = BacktestRunner()
+        runner = BacktestRunner(data_fetcher=None)
         results = runner.optimize(
             sample_data,
             SMACrossStrategy,
@@ -189,7 +190,7 @@ class TestBacktestRunnerOptimize:
         mock_backtest.optimize.return_value = {}
         mock_backtest_class.return_value = mock_backtest
 
-        runner = BacktestRunner(cash=30000, commission=0.001)
+        runner = BacktestRunner(cash=30000, commission=0.001, data_fetcher=None)
         runner.optimize(sample_data, SMACrossStrategy, fast_period=range(5, 10))
 
         # Verify custom parameters were used
@@ -201,12 +202,20 @@ class TestBacktestRunnerOptimize:
 class TestBacktestRunnerFromSymbol:
     """Test BacktestRunner run_from_symbol method."""
 
-    @patch("stockula.backtesting.runner.DataFetcher")
+    def test_run_from_symbol_no_data_fetcher(self):
+        """Test run_from_symbol without data fetcher raises error."""
+        runner = BacktestRunner(data_fetcher=None)
+        
+        with pytest.raises(ValueError, match="Data fetcher not configured"):
+            runner.run_from_symbol("AAPL", SMACrossStrategy)
+
     @patch("stockula.backtesting.runner.Backtest")
-    def test_run_from_symbol_basic(self, mock_backtest_class, mock_fetcher_class):
+    def test_run_from_symbol_basic(self, mock_backtest_class):
         """Test run_from_symbol with basic parameters."""
-        # Mock data fetcher
-        mock_fetcher = Mock()
+        # Create a mock data fetcher
+        mock_data_fetcher = Mock()
+        
+        # Setup mock data
         sample_data = pd.DataFrame(
             {
                 "Open": [100, 101, 102],
@@ -216,8 +225,7 @@ class TestBacktestRunnerFromSymbol:
                 "Volume": [1000000, 1100000, 1200000],
             }
         )
-        mock_fetcher.get_stock_data.return_value = sample_data
-        mock_fetcher_class.return_value = mock_fetcher
+        mock_data_fetcher.get_stock_data.return_value = sample_data
 
         # Mock backtest
         mock_backtest = Mock()
@@ -225,12 +233,11 @@ class TestBacktestRunnerFromSymbol:
         mock_backtest.run.return_value = mock_results
         mock_backtest_class.return_value = mock_backtest
 
-        runner = BacktestRunner()
+        runner = BacktestRunner(data_fetcher=mock_data_fetcher)
         results = runner.run_from_symbol("AAPL", SMACrossStrategy)
 
         # Verify data fetcher was called
-        mock_fetcher_class.assert_called_once()
-        mock_fetcher.get_stock_data.assert_called_once_with("AAPL", None, None)
+        mock_data_fetcher.get_stock_data.assert_called_once_with("AAPL", None, None)
 
         # Verify backtest was run with fetched data
         mock_backtest_class.assert_called_once_with(
@@ -239,19 +246,18 @@ class TestBacktestRunnerFromSymbol:
 
         assert results == mock_results
 
-    @patch("stockula.backtesting.runner.DataFetcher")
     @patch("stockula.backtesting.runner.Backtest")
-    def test_run_from_symbol_with_dates(self, mock_backtest_class, mock_fetcher_class):
+    def test_run_from_symbol_with_dates(self, mock_backtest_class):
         """Test run_from_symbol with date parameters."""
-        mock_fetcher = Mock()
-        mock_fetcher.get_stock_data.return_value = pd.DataFrame()
-        mock_fetcher_class.return_value = mock_fetcher
+        # Create a mock data fetcher
+        mock_data_fetcher = Mock()
+        mock_data_fetcher.get_stock_data.return_value = pd.DataFrame()
 
         mock_backtest = Mock()
         mock_backtest.run.return_value = {}
         mock_backtest_class.return_value = mock_backtest
 
-        runner = BacktestRunner()
+        runner = BacktestRunner(data_fetcher=mock_data_fetcher)
         runner.run_from_symbol(
             "TSLA",
             SMACrossStrategy,
@@ -261,7 +267,7 @@ class TestBacktestRunnerFromSymbol:
         )
 
         # Verify dates were passed correctly
-        mock_fetcher.get_stock_data.assert_called_once_with(
+        mock_data_fetcher.get_stock_data.assert_called_once_with(
             "TSLA", "2023-01-01", "2023-12-31"
         )
 
@@ -274,14 +280,14 @@ class TestBacktestRunnerStats:
 
     def test_get_stats_no_results(self):
         """Test get_stats when no results available."""
-        runner = BacktestRunner()
+        runner = BacktestRunner(data_fetcher=None)
 
         with pytest.raises(ValueError, match="No backtest results available"):
             runner.get_stats()
 
     def test_get_stats_with_results(self):
         """Test get_stats with available results."""
-        runner = BacktestRunner()
+        runner = BacktestRunner(data_fetcher=None)
         mock_results = pd.Series(
             {"Return [%]": 15.5, "Sharpe Ratio": 1.25, "Max. Drawdown [%]": -8.3}
         )
@@ -296,14 +302,14 @@ class TestBacktestRunnerPlot:
 
     def test_plot_no_results(self):
         """Test plot when no results available."""
-        runner = BacktestRunner()
+        runner = BacktestRunner(data_fetcher=None)
 
         with pytest.raises(ValueError, match="No backtest results available"):
             runner.plot()
 
     def test_plot_with_results(self):
         """Test plot with available results."""
-        runner = BacktestRunner()
+        runner = BacktestRunner(data_fetcher=None)
         mock_results = Mock()
         runner.results = mock_results
 
@@ -314,7 +320,7 @@ class TestBacktestRunnerPlot:
 
     def test_plot_no_kwargs(self):
         """Test plot without additional arguments."""
-        runner = BacktestRunner()
+        runner = BacktestRunner(data_fetcher=None)
         mock_results = Mock()
         runner.results = mock_results
 
@@ -348,7 +354,7 @@ class TestBacktestRunnerIntegration:
         data["High"] = np.maximum(data["High"], data[["Open", "Close"]].max(axis=1))
         data["Low"] = np.minimum(data["Low"], data[["Open", "Close"]].min(axis=1))
 
-        runner = BacktestRunner(cash=10000, commission=0.001)
+        runner = BacktestRunner(cash=10000, commission=0.001, data_fetcher=None)
 
         # This would be a real integration test if we had a working strategy
         # For now, we test the runner setup
@@ -358,7 +364,7 @@ class TestBacktestRunnerIntegration:
 
     def test_error_handling(self):
         """Test error handling in runner methods."""
-        runner = BacktestRunner()
+        runner = BacktestRunner(data_fetcher=None)
 
         # Test with empty DataFrame
         empty_data = pd.DataFrame()

@@ -5,12 +5,13 @@ import warnings
 import logging
 import signal
 import sys
-import os
-from contextlib import contextmanager, redirect_stdout, redirect_stderr
+from contextlib import contextmanager
 from io import StringIO
 from autots import AutoTS
-from typing import Optional, Dict, Any
-from ..data.fetcher import DataFetcher
+from typing import Optional, Dict, Any, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from ..interfaces import IDataFetcher
 
 # Create logger
 logger = logging.getLogger(__name__)
@@ -59,6 +60,8 @@ class StockForecaster:
         prediction_interval: float = 0.9,
         num_validations: int = 2,
         validation_method: str = "backwards",
+        model_list: str = "fast",
+        data_fetcher: Optional["IDataFetcher"] = None,
     ):
         """Initialize forecaster.
 
@@ -68,14 +71,18 @@ class StockForecaster:
             prediction_interval: Confidence interval for predictions (0-1)
             num_validations: Number of validation splits
             validation_method: Validation method ('backwards', 'seasonal', 'similarity')
+            model_list: Default model list to use
+            data_fetcher: Injected data fetcher instance
         """
         self.forecast_length = forecast_length
         self.frequency = frequency
         self.prediction_interval = prediction_interval
         self.num_validations = num_validations
         self.validation_method = validation_method
+        self.model_list = model_list
         self.model = None
         self.prediction = None
+        self.data_fetcher = data_fetcher
 
     def fit(
         self,
@@ -127,7 +134,7 @@ class StockForecaster:
         logger.info(
             f"Starting AutoTS model fitting for {len(data_for_model)} data points..."
         )
-        logger.info(f"This may take a few minutes. Press Ctrl+C to cancel.")
+        logger.info("This may take a few minutes. Press Ctrl+C to cancel.")
 
         try:
             with suppress_autots_output():
@@ -239,8 +246,12 @@ class StockForecaster:
             DataFrame with predictions
         """
         logger.info(f"Fetching data for {symbol}...")
-        fetcher = DataFetcher()
-        data = fetcher.get_stock_data(symbol, start_date, end_date)
+        if not self.data_fetcher:
+            raise ValueError(
+                "Data fetcher not configured. Ensure DI container is properly set up."
+            )
+
+        data = self.data_fetcher.get_stock_data(symbol, start_date, end_date)
 
         if data.empty:
             raise ValueError(f"No data available for symbol {symbol}")

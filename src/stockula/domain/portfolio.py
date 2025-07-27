@@ -1,12 +1,15 @@
 """Portfolio domain model for managing asset allocations."""
 
 import logging
-from typing import List, Dict, Optional, Tuple
+from typing import List, Dict, Optional, Tuple, TYPE_CHECKING
 from functools import lru_cache
 from dataclasses import dataclass, field, InitVar
 from .asset import Asset
 from .ticker import Ticker
 from .category import Category
+
+if TYPE_CHECKING:
+    from ..interfaces import IDataFetcher
 
 # Create logger
 logger = logging.getLogger(__name__)
@@ -262,30 +265,38 @@ class Portfolio:
         """Get list of all ticker symbols in the portfolio."""
         return [asset.symbol for asset in self.assets]
 
-    def get_current_value(self) -> float:
+    def get_current_value(self, fetcher: Optional["IDataFetcher"] = None) -> float:
         """Get current portfolio value by fetching latest prices.
 
         This is a convenience method that fetches current prices.
         For better performance when prices are already available,
         use get_portfolio_value(prices) instead.
 
+        Args:
+            fetcher: Optional data fetcher instance. If not provided, creates a new one.
+
         Returns:
             Current total portfolio value
         """
-        from ..data.fetcher import DataFetcher
+        if fetcher is None:
+            from ..data.fetcher import DataFetcher
 
-        fetcher = DataFetcher()
+            fetcher = DataFetcher()
+
         prices = fetcher.get_current_prices(self.symbols)
         return self.get_portfolio_value(prices)
 
     def validate_capital_sufficiency(
-        self, validation_prices: Optional[Dict[str, float]] = None
+        self,
+        validation_prices: Optional[Dict[str, float]] = None,
+        fetcher: Optional["IDataFetcher"] = None,
     ) -> None:
         """Validate that initial capital is sufficient to cover the specified asset quantities.
 
         Args:
             validation_prices: Optional price dictionary to use for validation. If not provided,
                              fetches current prices. This allows validation with historical prices.
+            fetcher: Optional data fetcher instance.
 
         Raises:
             ValueError: If initial capital is less than the required portfolio value
@@ -295,9 +306,11 @@ class Portfolio:
             return  # No assets to validate
 
         if validation_prices is None:
-            from ..data.fetcher import DataFetcher
+            if fetcher is None:
+                from ..data.fetcher import DataFetcher
 
-            fetcher = DataFetcher()
+                fetcher = DataFetcher()
+
             validation_prices = fetcher.get_current_prices(self.symbols)
 
         # Calculate required capital based on asset quantities
@@ -324,12 +337,15 @@ class Portfolio:
             )
 
     def validate_allocation_constraints(
-        self, prices: Optional[Dict[str, float]] = None
+        self,
+        prices: Optional[Dict[str, float]] = None,
+        fetcher: Optional["IDataFetcher"] = None,
     ) -> None:
         """Validate portfolio allocation constraints against risk management rules.
 
         Args:
             prices: Optional price dictionary, will fetch current prices if not provided
+            fetcher: Optional data fetcher instance.
 
         Raises:
             ValueError: If any allocation constraint is violated
@@ -338,9 +354,11 @@ class Portfolio:
             return  # No assets to validate
 
         if prices is None:
-            from ..data.fetcher import DataFetcher
+            if fetcher is None:
+                from ..data.fetcher import DataFetcher
 
-            fetcher = DataFetcher()
+                fetcher = DataFetcher()
+
             prices = fetcher.get_current_prices(self.symbols)
 
         if not prices:
