@@ -5,6 +5,49 @@ from typing import Optional, List, Dict, Any, Union
 from pydantic import BaseModel, Field, field_validator, ConfigDict
 
 
+class BacktestResult(BaseModel):
+    """Individual backtest result for a single asset."""
+    
+    ticker: str = Field(description="Asset ticker symbol")
+    strategy: str = Field(description="Strategy name")
+    parameters: Dict[str, Any] = Field(default_factory=dict, description="Strategy parameters used")
+    return_pct: float = Field(description="Return percentage")
+    sharpe_ratio: float = Field(description="Sharpe ratio")
+    max_drawdown_pct: float = Field(description="Maximum drawdown percentage")
+    num_trades: int = Field(description="Number of trades executed")
+    win_rate: Optional[float] = Field(default=None, description="Win rate percentage")
+    
+
+class StrategyBacktestSummary(BaseModel):
+    """Summary of backtest results for a single strategy across all assets."""
+    
+    strategy_name: str = Field(description="Strategy name")
+    parameters: Dict[str, Any] = Field(default_factory=dict, description="Strategy parameters")
+    initial_portfolio_value: float = Field(description="Initial portfolio value")
+    final_portfolio_value: float = Field(description="Final portfolio value after backtest")
+    total_return_pct: float = Field(description="Total portfolio return percentage")
+    total_trades: int = Field(description="Total trades across all assets")
+    winning_stocks: int = Field(description="Number of stocks with positive returns")
+    losing_stocks: int = Field(description="Number of stocks with negative returns")
+    average_return_pct: float = Field(description="Average return across all assets")
+    average_sharpe_ratio: float = Field(description="Average Sharpe ratio")
+    detailed_results: List[BacktestResult] = Field(default_factory=list, description="Per-asset results")
+    
+
+class PortfolioBacktestResults(BaseModel):
+    """Complete backtest results for all strategies."""
+    
+    initial_portfolio_value: float = Field(description="Initial portfolio value")
+    initial_capital: float = Field(description="Initial capital")
+    date_range: Dict[str, str] = Field(description="Backtest date range")
+    broker_config: Dict[str, Any] = Field(description="Broker configuration used")
+    strategy_summaries: List[StrategyBacktestSummary] = Field(
+        default_factory=list, 
+        description="Summary results for each strategy"
+    )
+    timestamp: datetime = Field(default_factory=datetime.now, description="When backtest was run")
+    
+
 class TickerConfig(BaseModel):
     """Configuration for individual ticker/asset."""
 

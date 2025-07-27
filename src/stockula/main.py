@@ -22,6 +22,11 @@ from .backtesting import (
     FRAMAStrategy,
 )
 from .config import StockulaConfig
+from .config.models import (
+    BacktestResult, 
+    StrategyBacktestSummary, 
+    PortfolioBacktestResults
+)
 from .domain import Category
 from .interfaces import (
     IDataFetcher,
@@ -251,6 +256,7 @@ def save_detailed_report(
     strategy_results: List[Dict],
     results: Dict[str, Any],
     config: StockulaConfig,
+    portfolio_results: Optional[PortfolioBacktestResults] = None,
 ) -> str:
     """Save detailed strategy report to file.
 
@@ -330,8 +336,117 @@ def save_detailed_report(
     # Save report
     with open(report_file, "w") as f:
         json.dump(report_data, f, indent=2, default=str)
+        
+    # Also save structured results if provided
+    if portfolio_results:
+        structured_file = reports_dir / f"portfolio_backtest_{timestamp}.json"
+        with open(structured_file, "w") as f:
+            # Convert to dict using model_dump
+            json.dump(portfolio_results.model_dump(), f, indent=2, default=str)
 
     return str(report_file)
+
+
+def create_portfolio_backtest_results(
+    results: Dict[str, Any],
+    config: StockulaConfig,
+    strategy_results: Dict[str, List[Dict]]
+) -> PortfolioBacktestResults:
+    """Create structured backtest results.
+    
+    Args:
+        results: Main results dictionary with initial values
+        config: Configuration object
+        strategy_results: Raw backtest results grouped by strategy
+        
+    Returns:
+        Structured portfolio backtest results
+    """
+    # Build strategy summaries
+    strategy_summaries = []
+    
+    for strategy_name, backtests in strategy_results.items():
+        # Create BacktestResult objects
+        detailed_results = []
+        for backtest in backtests:
+            detailed_results.append(
+                BacktestResult(
+                    ticker=backtest["ticker"],
+                    strategy=backtest["strategy"],
+                    parameters=backtest.get("parameters", {}),
+                    return_pct=backtest["return_pct"],
+                    sharpe_ratio=backtest["sharpe_ratio"],
+                    max_drawdown_pct=backtest["max_drawdown_pct"],
+                    num_trades=backtest["num_trades"],
+                    win_rate=backtest.get("win_rate")
+                )
+            )
+        
+        # Calculate summary metrics
+        total_return = sum(r.return_pct for r in detailed_results)
+        avg_return = total_return / len(detailed_results) if detailed_results else 0
+        avg_sharpe = sum(r.sharpe_ratio for r in detailed_results) / len(detailed_results) if detailed_results else 0
+        total_trades = sum(r.num_trades for r in detailed_results)
+        winning_stocks = sum(1 for r in detailed_results if r.return_pct > 0)
+        losing_stocks = sum(1 for r in detailed_results if r.return_pct < 0)
+        
+        # Calculate approximate final portfolio value
+        final_value = results["initial_portfolio_value"] * (1 + avg_return / 100)
+        
+        # Get strategy parameters from first result
+        strategy_params = detailed_results[0].parameters if detailed_results else {}
+        
+        # Create strategy summary
+        summary = StrategyBacktestSummary(
+            strategy_name=strategy_name,
+            parameters=strategy_params,
+            initial_portfolio_value=results["initial_portfolio_value"],
+            final_portfolio_value=final_value,
+            total_return_pct=avg_return,
+            total_trades=total_trades,
+            winning_stocks=winning_stocks,
+            losing_stocks=losing_stocks,
+            average_return_pct=avg_return,
+            average_sharpe_ratio=avg_sharpe,
+            detailed_results=detailed_results
+        )
+        
+        strategy_summaries.append(summary)
+    
+    # Create broker config dict
+    broker_config = {}
+    if config.backtest.broker_config:
+        broker_config = {
+            "name": config.backtest.broker_config.name,
+            "commission_type": config.backtest.broker_config.commission_type,
+            "commission_value": config.backtest.broker_config.commission_value,
+            "min_commission": config.backtest.broker_config.min_commission,
+            "regulatory_fees": config.backtest.broker_config.regulatory_fees,
+            "exchange_fees": getattr(config.backtest.broker_config, "exchange_fees", 0)
+        }
+    else:
+        broker_config = {
+            "name": "legacy",
+            "commission_type": "percentage",
+            "commission_value": config.backtest.commission,
+            "min_commission": None,
+            "regulatory_fees": 0,
+            "exchange_fees": 0
+        }
+    
+    # Create portfolio results
+    portfolio_results = PortfolioBacktestResults(
+        initial_portfolio_value=results.get("initial_portfolio_value", 0),
+        initial_capital=results.get("initial_capital", 0),
+        date_range={
+            "start": config.data.start_date.strftime("%Y-%m-%d") if config.data.start_date else None,
+            "end": config.data.end_date.strftime("%Y-%m-%d") if config.data.end_date else None
+        },
+        broker_config=broker_config,
+        strategy_summaries=strategy_summaries
+    )
+    
+    return portfolio_results
 
 
 def print_results(results: Dict[str, Any], output_format: str = "console"):
@@ -624,39 +739,14 @@ FORECAST MODE - IMPORTANT NOTES:
         if not strategy_results:
             print("\nNo backtesting results to display.")
             return
-
-        # Show summary for each strategy
-        for strategy_name, strategy_backtests in strategy_results.items():
-            # Calculate strategy-specific metrics
-            strategy_trades = sum(b.get("num_trades", 0) for b in strategy_backtests)
             
-            # Calculate strategy-specific portfolio performance
-            strategy_total_return = 0.0
-            strategy_winning_stocks = 0
-            strategy_losing_stocks = 0
-            
-            for backtest in strategy_backtests:
-                return_pct = backtest.get("return_pct", 0)
-                strategy_total_return += return_pct
-                if return_pct > 0:
-                    strategy_winning_stocks += 1
-                elif return_pct < 0:
-                    strategy_losing_stocks += 1
-            
-            # Calculate average return (simple average, not weighted)
-            strategy_avg_return = strategy_total_return / len(strategy_backtests) if strategy_backtests else 0
-            
-            # Calculate approximate final portfolio value based on average return
-            # This is a simplification - actual portfolio value would depend on position sizing
-            strategy_final_value = results["initial_portfolio_value"] * (1 + strategy_avg_return / 100)
-
-            # Get the first backtest to extract parameters (assuming all use same parameters)
-            strategy_params = (
-                strategy_backtests[0].get("parameters", {})
-                if strategy_backtests
-                else {}
-            )
-
+        # Create structured backtest results
+        portfolio_backtest_results = create_portfolio_backtest_results(
+            results, config, strategy_results
+        )
+        
+        # Show summary for each strategy using structured data
+        for strategy_summary in portfolio_backtest_results.strategy_summaries:
             # Get broker config info
             broker_info = ""
             if config.backtest.broker_config:
@@ -693,24 +783,24 @@ FORECAST MODE - IMPORTANT NOTES:
 
             print(f"""
 {"=" * 60}
-STRATEGY: {strategy_name.upper()}
+STRATEGY: {strategy_summary.strategy_name.upper()}
 {"=" * 60}
 
-Parameters: {strategy_params if strategy_params else "Default"}
+Parameters: {strategy_summary.parameters if strategy_summary.parameters else "Default"}
 {broker_info}
 
-Portfolio Value at Start Date: ${results["initial_portfolio_value"]:,.2f}
-Portfolio Value at End (Backtest): ${strategy_final_value:,.2f}
+Portfolio Value at Start Date: ${strategy_summary.initial_portfolio_value:,.2f}
+Portfolio Value at End (Backtest): ${strategy_summary.final_portfolio_value:,.2f}
 
 Strategy Performance:
-  Average Return: {strategy_avg_return:+.2f}%
-  Winning Stocks: {strategy_winning_stocks}
-  Losing Stocks: {strategy_losing_stocks}
-  Total Trades: {strategy_trades}
+  Average Return: {strategy_summary.average_return_pct:+.2f}%
+  Winning Stocks: {strategy_summary.winning_stocks}
+  Losing Stocks: {strategy_summary.losing_stocks}
+  Total Trades: {strategy_summary.total_trades}
 
-Return During Period: ${strategy_final_value - results["initial_portfolio_value"]:,.2f} ({strategy_avg_return:+.2f}%)
+Return During Period: ${strategy_summary.final_portfolio_value - strategy_summary.initial_portfolio_value:,.2f} ({strategy_summary.total_return_pct:+.2f}%)
 
-Detailed report saved to: {save_detailed_report(strategy_name, strategy_backtests, results, config)}
+Detailed report saved to: {save_detailed_report(strategy_summary.strategy_name, [r.model_dump() for r in strategy_summary.detailed_results], results, config)}
 """)
 
         # Exit after showing strategy summaries
