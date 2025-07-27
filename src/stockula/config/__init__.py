@@ -9,6 +9,7 @@ from .models import (
     StockulaConfig,
     TickerConfig,
     PortfolioConfig,
+    LoggingConfig,
 )
 from .settings import Settings, load_config, save_config
 
@@ -21,6 +22,7 @@ __all__ = [
     "StockulaConfig",
     "TickerConfig",
     "PortfolioConfig",
+    "LoggingConfig",
     "Settings",
     "load_config",
     "save_config",

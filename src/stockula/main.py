@@ -252,6 +252,8 @@ def run_forecast(ticker: str, config: StockulaConfig) -> Dict[str, Any]:
     Returns:
         Dictionary with forecast results
     """
+    logger.info(f"\nForecasting {ticker} for {config.forecast.forecast_length} days...")
+
     forecaster = StockForecaster(
         forecast_length=config.forecast.forecast_length,
         frequency=config.forecast.frequency,
@@ -276,6 +278,8 @@ def run_forecast(ticker: str, config: StockulaConfig) -> Dict[str, Any]:
 
         model_info = forecaster.get_best_model()
 
+        logger.info(f"Forecast completed for {ticker} using {model_info['model_name']}")
+
         return {
             "ticker": ticker,
             "current_price": predictions["forecast"].iloc[0],
@@ -286,8 +290,11 @@ def run_forecast(ticker: str, config: StockulaConfig) -> Dict[str, Any]:
             "best_model": model_info["model_name"],
             "model_params": model_info.get("model_params", {}),
         }
+    except KeyboardInterrupt:
+        logger.warning(f"Forecast for {ticker} interrupted by user")
+        return {"ticker": ticker, "error": "Interrupted by user"}
     except Exception as e:
-        print(f"Error forecasting {ticker}: {e}")
+        logger.error(f"Error forecasting {ticker}: {e}")
         return {"ticker": ticker, "error": str(e)}
 
 
@@ -558,7 +565,20 @@ def main():
         if args.mode in ["all", "forecast"]:
             if "forecasting" not in results:
                 results["forecasting"] = []
-            results["forecasting"].append(run_forecast(ticker, config))
+
+            # Show warning about forecast mode
+            if args.mode == "forecast" and ticker == config.portfolio.tickers[0].symbol:
+                print("\n" + "=" * 60)
+                print("FORECAST MODE - IMPORTANT NOTES:")
+                print("=" * 60)
+                print("• AutoTS will try multiple models to find the best fit")
+                print("• This process may take several minutes per ticker")
+                print("• Press Ctrl+C at any time to cancel")
+                print("• Enable logging for more detailed progress information")
+                print("=" * 60)
+
+            forecast_result = run_forecast(ticker, config)
+            results["forecasting"].append(forecast_result)
 
     # Output results
     output_format = args.output or config.output.get("format", "console")

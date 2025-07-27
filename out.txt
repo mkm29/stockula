@@ -1,0 +1,180 @@
+platform darwin -- Python 3.13.3, pytest-8.4.1, pluggy-1.6.0 -- /Users/mitchellmurphy/Developer/github.com/mkm29/stockula/.venv/bin/python3
+cachedir: .pytest_cache
+Fugue tests will be initialized with options:
+rootdir: /Users/mitchellmurphy/Developer/github.com/mkm29/stockula
+configfile: pytest.ini
+plugins: anyio-4.9.0, fugue-0.9.1, cov-6.2.1
+collected 87 items                                                                                                                
+
+tests/unit/test_config.py::TestTickerConfig::test_ticker_with_quantity PASSED                                               [  1%]
+tests/unit/test_config.py::TestTickerConfig::test_ticker_with_allocation_pct PASSED                                         [  2%]
+tests/unit/test_config.py::TestTickerConfig::test_ticker_with_allocation_amount PASSED                                      [  3%]
+tests/unit/test_config.py::TestTickerConfig::test_ticker_with_category_only PASSED                                          [  4%]
+tests/unit/test_config.py::TestTickerConfig::test_ticker_multiple_allocations_raises_error PASSED                           [  5%]
+tests/unit/test_config.py::TestTickerConfig::test_ticker_no_allocation_no_category_raises_error PASSED                      [  6%]
+tests/unit/test_config.py::TestTickerConfig::test_ticker_with_full_details PASSED                                           [  8%]
+tests/unit/test_config.py::TestPortfolioConfig::test_default_portfolio_config PASSED                                        [  9%]
+tests/unit/test_config.py::TestPortfolioConfig::test_dynamic_allocation_config PASSED                                       [ 10%]
+tests/unit/test_config.py::TestPortfolioConfig::test_auto_allocation_config PASSED                                          [ 11%]
+tests/unit/test_config.py::TestPortfolioConfig::test_auto_allocation_without_ratios_raises_error PASSED                     [ 12%]
+tests/unit/test_config.py::TestPortfolioConfig::test_auto_allocation_ratios_not_sum_to_one_raises_error PASSED              [ 13%]
+tests/unit/test_config.py::TestPortfolioConfig::test_dynamic_allocation_exceeds_capital_raises_error PASSED                 [ 14%]
+tests/unit/test_config.py::TestPortfolioConfig::test_risk_management_settings PASSED                                        [ 16%]
+tests/unit/test_config.py::TestDataConfig::test_data_config_with_dates PASSED                                               [ 17%]
+tests/unit/test_config.py::TestDataConfig::test_data_config_with_date_objects PASSED                                        [ 18%]
+tests/unit/test_config.py::TestDataConfig::test_data_config_defaults PASSED                                                 [ 19%]
+tests/unit/test_config.py::TestStrategyConfigs::test_sma_cross_config PASSED                                                [ 20%]
+tests/unit/test_config.py::TestStrategyConfigs::test_sma_cross_invalid_periods_raises_error PASSED                          [ 21%]
+tests/unit/test_config.py::TestStrategyConfigs::test_rsi_config PASSED                                                      [ 22%]
+tests/unit/test_config.py::TestStrategyConfigs::test_rsi_invalid_thresholds_raises_error PASSED                             [ 24%]
+tests/unit/test_config.py::TestStrategyConfigs::test_macd_config PASSED                                                     [ 25%]
+tests/unit/test_config.py::TestStrategyConfigs::test_strategy_config PASSED                                                 [ 26%]
+tests/unit/test_config.py::TestBacktestConfig::test_backtest_config_defaults PASSED                                         [ 27%]
+tests/unit/test_config.py::TestBacktestConfig::test_backtest_with_strategies PASSED                                         [ 28%]
+tests/unit/test_config.py::TestForecastConfig::test_forecast_config_defaults PASSED                                         [ 29%]
+tests/unit/test_config.py::TestForecastConfig::test_forecast_config_custom PASSED                                           [ 31%]
+tests/unit/test_config.py::TestTechnicalAnalysisConfig::test_ta_config_defaults PASSED                                      [ 32%]
+tests/unit/test_config.py::TestTechnicalAnalysisConfig::test_ta_config_custom PASSED                                        [ 33%]
+tests/unit/test_config.py::TestLoggingConfig::test_logging_config_defaults PASSED                                           [ 34%]
+tests/unit/test_config.py::TestLoggingConfig::test_logging_config_custom PASSED                                             [ 35%]
+tests/unit/test_config.py::TestStockulaConfig::test_stockula_config_defaults PASSED                                         [ 36%]
+tests/unit/test_config.py::TestStockulaConfig::test_stockula_config_custom PASSED                                           [ 37%]
+tests/unit/test_config.py::TestConfigLoading::test_load_config_from_file PASSED                                             [ 39%]
+tests/unit/test_config.py::TestConfigLoading::test_load_config_missing_file PASSED                                          [ 40%]
+tests/unit/test_config.py::TestConfigLoading::test_load_config_no_file_uses_defaults PASSED                                 [ 41%]
+tests/unit/test_config.py::TestConfigLoading::test_save_config PASSED                                                       [ 42%]
+tests/unit/test_config.py::TestConfigLoading::test_config_yaml_serialization PASSED                                         [ 43%]
+tests/unit/test_config.py::TestConfigLoading::test_environment_variable_override PASSED                                     [ 44%]
+tests/unit/test_domain.py::TestTicker::test_ticker_creation PASSED                                                          [ 45%]
+tests/unit/test_domain.py::TestTicker::test_ticker_defaults PASSED                                                          [ 47%]
+tests/unit/test_domain.py::TestTicker::test_ticker_equality PASSED                                                          [ 48%]
+tests/unit/test_domain.py::TestTicker::test_ticker_hash PASSED                                                              [ 49%]
+tests/unit/test_domain.py::TestTicker::test_ticker_string_representation PASSED                                             [ 50%]
+tests/unit/test_domain.py::TestTickerRegistry::test_ticker_registry_singleton PASSED                                        [ 51%]
+tests/unit/test_domain.py::TestTickerRegistry::test_get_or_create_ticker PASSED                                             [ 52%]
+tests/unit/test_domain.py::TestTickerRegistry::test_get_ticker PASSED                                                       [ 54%]
+tests/unit/test_domain.py::TestTickerRegistry::test_all_tickers PASSED                                                      [ 55%]
+tests/unit/test_domain.py::TestTickerRegistry::test_clear_registry PASSED                                                   [ 56%]
+tests/unit/test_domain.py::TestAsset::test_asset_creation PASSED                                                            [ 57%]
+tests/unit/test_domain.py::TestAsset::test_asset_without_category PASSED                                                    [ 58%]
+tests/unit/test_domain.py::TestAsset::test_asset_category_override PASSED                                                   [ 59%]
+tests/unit/test_domain.py::TestAsset::test_asset_value_calculation PASSED                                                   [ 60%]
+tests/unit/test_domain.py::TestAsset::test_asset_string_representation PASSED                                               [ 62%]
+tests/unit/test_domain.py::TestCategory::test_category_values PASSED                                                        [ 63%]
+tests/unit/test_domain.py::TestCategory::test_category_from_string PASSED                                                   [ 64%]
+tests/unit/test_domain.py::TestPortfolio::test_portfolio_creation PASSED                                                    [ 65%]
+tests/unit/test_domain.py::TestPortfolio::test_add_asset PASSED                                                             [ 66%]
+tests/unit/test_domain.py::TestPortfolio::test_add_duplicate_asset_raises_error PASSED                                      [ 67%]
+tests/unit/test_domain.py::TestPortfolio::test_get_all_assets PASSED                                                        [ 68%]
+tests/unit/test_domain.py::TestPortfolio::test_get_assets_by_category PASSED                                                [ 70%]
+tests/unit/test_domain.py::TestPortfolio::test_get_asset_by_symbol PASSED                                                   [ 71%]
+tests/unit/test_domain.py::TestPortfolio::test_portfolio_value_calculation PASSED                                           [ 72%]
+tests/unit/test_domain.py::TestPortfolio::test_portfolio_value_with_missing_prices PASSED                                   [ 73%]
+tests/unit/test_domain.py::TestPortfolio::test_get_allocation_by_category PASSED                                            [ 74%]
+tests/unit/test_domain.py::TestPortfolio::test_validate_capital_sufficiency PASSED                                          [ 75%]
+tests/unit/test_domain.py::TestPortfolio::test_validate_allocation_constraints PASSED                                       [ 77%]
+tests/unit/test_domain.py::TestDomainFactory::test_create_portfolio_basic PASSED                                            [ 78%]
+tests/unit/test_domain.py::TestDomainFactory::test_create_portfolio_with_dynamic_allocation PASSED                          [ 79%]
+tests/unit/test_domain.py::TestDomainFactory::test_create_portfolio_with_auto_allocation PASSED                             [ 80%]
+tests/unit/test_domain.py::TestDomainFactory::test_create_portfolio_insufficient_allocation PASSED                          [ 81%]
+tests/unit/test_domain.py::TestDomainFactory::test_get_all_tickers PASSED                                                   [ 82%]
+tests/unit/test_technical_analysis.py::TestTechnicalIndicators::test_initialization PASSED                                  [ 83%]
+tests/unit/test_technical_analysis.py::TestTechnicalIndicators::test_sma PASSED                                             [ 85%]
+tests/unit/test_technical_analysis.py::TestTechnicalIndicators::test_ema PASSED                                             [ 86%]
+tests/unit/test_technical_analysis.py::TestTechnicalIndicators::test_rsi PASSED                                             [ 87%]
+tests/unit/test_technical_analysis.py::TestTechnicalIndicators::test_macd FAILED                                            [ 88%]
+tests/unit/test_technical_analysis.py::TestTechnicalIndicators::test_bbands FAILED                                          [ 89%]
+tests/unit/test_technical_analysis.py::TestTechnicalIndicators::test_atr FAILED                                             [ 90%]
+tests/unit/test_technical_analysis.py::TestTechnicalIndicators::test_adx PASSED                                             [ 91%]
+tests/unit/test_technical_analysis.py::TestTechnicalIndicators::test_stochastic FAILED                                      [ 93%]
+tests/unit/test_technical_analysis.py::TestTechnicalIndicators::test_volume_indicators PASSED                               [ 94%]
+tests/unit/test_technical_analysis.py::TestTechnicalIndicators::test_ichimoku FAILED                                        [ 95%]
+tests/unit/test_technical_analysis.py::TestTechnicalIndicators::test_invalid_period PASSED                                  [ 96%]
+tests/unit/test_technical_analysis.py::TestTechnicalIndicators::test_empty_data FAILED                                      [ 97%]
+tests/unit/test_technical_analysis.py::TestTechnicalIndicators::test_missing_columns FAILED                                 [ 98%]
+tests/unit/test_technical_analysis.py::TestTechnicalIndicators::test_all_indicators_together FAILED                         [100%]
+
+============================================================ FAILURES =============================================================
+________________________________________________ TestTechnicalIndicators.test_macd ________________________________________________
+tests/unit/test_technical_analysis.py:131: in test_macd
+    assert all(col in macd_result.columns for col in expected_columns)
+E   assert False
+E    +  where False = all(<generator object TestTechnicalIndicators.test_macd.<locals>.<genexpr> at 0x136f0a5a0>)
+_______________________________________________ TestTechnicalIndicators.test_bbands _______________________________________________
+tests/unit/test_technical_analysis.py:190: in test_bbands
+    assert within_bands.sum() / within_bands.dropna().count() > 0.8
+E   assert (np.int64(76) / np.int64(100)) > 0.8
+E    +  where np.int64(76) = sum()
+E    +    where sum = 2023-01-01    False\n2023-01-02    False\n2023-01-03    False\n2023-01-04    False\n2023-01-05    False\n              ...  \n2023-04-06     True\n2023-04-07     True\n2023-04-08     True\n2023-04-09     True\n2023-04-10     True\nFreq: D, Length: 100, dtype: bool.sum
+E    +  and   np.int64(100) = count()
+E    +    where count = 2023-01-01    False\n2023-01-02    False\n2023-01-03    False\n2023-01-04    False\n2023-01-05    False\n              ...  \n2023-04-06     True\n2023-04-07     True\n2023-04-08     True\n2023-04-09     True\n2023-04-10     True\nFreq: D, Length: 100, dtype: bool.count
+E    +      where 2023-01-01    False\n2023-01-02    False\n2023-01-03    False\n2023-01-04    False\n2023-01-05    False\n              ...  \n2023-04-06     True\n2023-04-07     True\n2023-04-08     True\n2023-04-09     True\n2023-04-10     True\nFreq: D, Length: 100, dtype: bool = dropna()
+E    +        where dropna = 2023-01-01    False\n2023-01-02    False\n2023-01-03    False\n2023-01-04    False\n2023-01-05    False\n              ...  \n2023-04-06     True\n2023-04-07     True\n2023-04-08     True\n2023-04-09     True\n2023-04-10     True\nFreq: D, Length: 100, dtype: bool.dropna
+________________________________________________ TestTechnicalIndicators.test_atr _________________________________________________
+tests/unit/test_technical_analysis.py:208: in test_atr
+    assert (atr <= daily_range * 2).all()  # Allow for gaps
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   assert np.False_
+E    +  where np.False_ = all()
+E    +    where all = 2023-01-01         NaN\n2023-01-02         NaN\n2023-01-03         NaN\n2023-01-04         NaN\n2023-01-05         NaN\n                ...   \n2023-04-06    2.218745\n2023-04-07    2.148638\n2023-04-08    2.141228\n2023-04-09    2.053332\n2023-04-10    1.956055\nFreq: D, Name: 14 period ATR, Length: 100, dtype: float64 <= (2023-01-01    2.326734\n2023-01-02    2.544032\n2023-01-03    1.210068\n2023-01-04    1.284640\n2023-01-05    0.507357\n                ...   \n2023-04-06    2.250448\n2023-04-07    1.752879\n2023-04-08    2.655590\n2023-04-09    1.366142\n2023-04-10    0.644408\nFreq: D, Length: 100, dtype: float64 * 2).all
+_____________________________________________ TestTechnicalIndicators.test_stochastic _____________________________________________
+tests/unit/test_technical_analysis.py:230: in test_stochastic
+    assert isinstance(stoch, pd.DataFrame)
+E   AssertionError: assert False
+E    +  where False = isinstance(2023-01-01          NaN\n2023-01-02          NaN\n2023-01-03          NaN\n2023-01-04          NaN\n2023-01-05          NaN\n                ...    \n2023-04-06    13.433319\n2023-04-07    21.894282\n2023-04-08    29.550713\n2023-04-09    30.915736\n2023-04-10    26.338934\nFreq: D, Name: 14 period STOCH %K, Length: 100, dtype: float64, <class 'pandas.core.frame.DataFrame'>)
+E    +    where <class 'pandas.core.frame.DataFrame'> = pd.DataFrame
+______________________________________________ TestTechnicalIndicators.test_ichimoku ______________________________________________
+tests/unit/test_technical_analysis.py:266: in test_ichimoku
+    ichimoku = ta_indicators.ichimoku()
+               ^^^^^^^^^^^^^^^^^^^^^^^^
+src/stockula/technical_analysis/indicators.py:93: in ichimoku
+    result.columns = ['ICHIMOKU_TENKAN', 'ICHIMOKU_KIJUN', 'ICHIMOKU_SENKOU_A', 'ICHIMOKU_SENKOU_B']
+    ^^^^^^^^^^^^^^
+.venv/lib/python3.13/site-packages/pandas/core/generic.py:6332: in __setattr__
+    return object.__setattr__(self, name, value)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+pandas/_libs/properties.pyx:69: in pandas._libs.properties.AxisProperty.__set__
+    ???
+.venv/lib/python3.13/site-packages/pandas/core/generic.py:814: in _set_axis
+    self._mgr.set_axis(axis, labels)
+.venv/lib/python3.13/site-packages/pandas/core/internals/managers.py:238: in set_axis
+    self._validate_set_axis(axis, new_labels)
+.venv/lib/python3.13/site-packages/pandas/core/internals/base.py:98: in _validate_set_axis
+    raise ValueError(
+E   ValueError: Length mismatch: Expected axis has 5 elements, new values have 4 elements
+_____________________________________________ TestTechnicalIndicators.test_empty_data _____________________________________________
+tests/unit/test_technical_analysis.py:305: in test_empty_data
+    assert ta.sma(10).empty
+           ^^^^^^^^^^
+src/stockula/technical_analysis/indicators.py:32: in sma
+    raise ValueError(f"Period {period} exceeds data length {len(self.df)}")
+E   ValueError: Period 10 exceeds data length 0
+__________________________________________ TestTechnicalIndicators.test_missing_columns ___________________________________________
+tests/unit/test_technical_analysis.py:313: in test_missing_columns
+    ta = TechnicalIndicators(data_no_volume)
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+src/stockula/technical_analysis/indicators.py:18: in __init__
+    self._validate_dataframe()
+src/stockula/technical_analysis/indicators.py:25: in _validate_dataframe
+    raise ValueError(f"DataFrame missing required columns: {missing_cols}")
+E   ValueError: DataFrame missing required columns: ['Volume']
+______________________________________ TestTechnicalIndicators.test_all_indicators_together _______________________________________
+tests/unit/test_technical_analysis.py:336: in test_all_indicators_together
+    "ichimoku": ta_indicators.ichimoku(),
+                ^^^^^^^^^^^^^^^^^^^^^^^^
+src/stockula/technical_analysis/indicators.py:93: in ichimoku
+    result.columns = ['ICHIMOKU_TENKAN', 'ICHIMOKU_KIJUN', 'ICHIMOKU_SENKOU_A', 'ICHIMOKU_SENKOU_B']
+    ^^^^^^^^^^^^^^
+.venv/lib/python3.13/site-packages/pandas/core/generic.py:6332: in __setattr__
+    return object.__setattr__(self, name, value)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+pandas/_libs/properties.pyx:69: in pandas._libs.properties.AxisProperty.__set__
+    ???
+.venv/lib/python3.13/site-packages/pandas/core/generic.py:814: in _set_axis
+    self._mgr.set_axis(axis, labels)
+.venv/lib/python3.13/site-packages/pandas/core/internals/managers.py:238: in set_axis
+    self._validate_set_axis(axis, new_labels)
+.venv/lib/python3.13/site-packages/pandas/core/internals/base.py:98: in _validate_set_axis
+    raise ValueError(
+E   ValueError: Length mismatch: Expected axis has 5 elements, new values have 4 elements
+======================================================== warnings summary =========================================================

@@ -22,7 +22,7 @@ class DatabaseManager:
 
     def _init_database(self) -> None:
         """Initialize database and create tables if they don't exist."""
-        with sqlite3.connect(self.db_path) as conn:
+        with self.get_connection() as conn:
             # Enable foreign key constraints
             conn.execute("PRAGMA foreign_keys = ON")
 
@@ -162,7 +162,7 @@ class DatabaseManager:
             symbol: Stock ticker symbol
             info: Stock information dictionary from yfinance
         """
-        with sqlite3.connect(self.db_path) as conn:
+        with self.get_connection() as conn:
             # Extract key fields for stocks table
             name = info.get("longName") or info.get("shortName", "")
             sector = info.get("sector", "")
@@ -205,7 +205,7 @@ class DatabaseManager:
         if data.empty:
             return
 
-        with sqlite3.connect(self.db_path) as conn:
+        with self.get_connection() as conn:
             for date, row in data.iterrows():
                 conn.execute(
                     """
@@ -235,7 +235,7 @@ class DatabaseManager:
         if dividends.empty:
             return
 
-        with sqlite3.connect(self.db_path) as conn:
+        with self.get_connection() as conn:
             for date, amount in dividends.items():
                 conn.execute(
                     """
@@ -255,7 +255,7 @@ class DatabaseManager:
         if splits.empty:
             return
 
-        with sqlite3.connect(self.db_path) as conn:
+        with self.get_connection() as conn:
             for date, ratio in splits.items():
                 conn.execute(
                     """
@@ -276,7 +276,7 @@ class DatabaseManager:
             puts: DataFrame with put options
             expiration_date: Options expiration date
         """
-        with sqlite3.connect(self.db_path) as conn:
+        with self.get_connection() as conn:
             # Store calls
             if not calls.empty:
                 for _, row in calls.iterrows():
@@ -345,7 +345,7 @@ class DatabaseManager:
         Returns:
             DataFrame with historical price data
         """
-        with sqlite3.connect(self.db_path) as conn:
+        with self.get_connection() as conn:
             query = """
                 SELECT date, open_price as Open, high_price as High, low_price as Low, 
                        close_price as Close, volume as Volume
@@ -378,7 +378,7 @@ class DatabaseManager:
         Returns:
             Stock information dictionary or None if not found
         """
-        with sqlite3.connect(self.db_path) as conn:
+        with self.get_connection() as conn:
             cursor = conn.execute(
                 "SELECT info_json FROM stock_info WHERE symbol = ?", (symbol,)
             )
@@ -403,7 +403,7 @@ class DatabaseManager:
         Returns:
             Series with dividend data
         """
-        with sqlite3.connect(self.db_path) as conn:
+        with self.get_connection() as conn:
             query = "SELECT date, amount FROM dividends WHERE symbol = ?"
             params = [symbol]
 
@@ -438,7 +438,7 @@ class DatabaseManager:
         Returns:
             Series with split data
         """
-        with sqlite3.connect(self.db_path) as conn:
+        with self.get_connection() as conn:
             query = "SELECT date, ratio FROM splits WHERE symbol = ?"
             params = [symbol]
 
@@ -469,7 +469,7 @@ class DatabaseManager:
         Returns:
             Tuple of (calls DataFrame, puts DataFrame)
         """
-        with sqlite3.connect(self.db_path) as conn:
+        with self.get_connection() as conn:
             # Get calls
             calls_df = pd.read_sql_query(
                 """
@@ -506,7 +506,7 @@ class DatabaseManager:
         Returns:
             List of all ticker symbols
         """
-        with sqlite3.connect(self.db_path) as conn:
+        with self.get_connection() as conn:
             cursor = conn.execute("SELECT symbol FROM stocks ORDER BY symbol")
             return [row[0] for row in cursor.fetchall()]
 
@@ -519,7 +519,7 @@ class DatabaseManager:
         Returns:
             Latest close price or None if not found
         """
-        with sqlite3.connect(self.db_path) as conn:
+        with self.get_connection() as conn:
             cursor = conn.execute(
                 """
                 SELECT close_price FROM price_history 
@@ -543,7 +543,7 @@ class DatabaseManager:
         Returns:
             True if we have data in the date range
         """
-        with sqlite3.connect(self.db_path) as conn:
+        with self.get_connection() as conn:
             cursor = conn.execute(
                 """
                 SELECT COUNT(*) FROM price_history 
@@ -564,7 +564,7 @@ class DatabaseManager:
             "%Y-%m-%d"
         )
 
-        with sqlite3.connect(self.db_path) as conn:
+        with self.get_connection() as conn:
             # Clean up old price history
             conn.execute("DELETE FROM price_history WHERE date < ?", (cutoff_date,))
 
@@ -583,6 +583,11 @@ class DatabaseManager:
             )
 
             # Vacuum to reclaim space
+            # Commit the transaction before VACUUM
+            conn.commit()
+
+        # VACUUM must run outside a transaction
+        with self.get_connection() as conn:
             conn.execute("VACUUM")
 
     def get_database_stats(self) -> Dict[str, int]:
@@ -602,9 +607,165 @@ class DatabaseManager:
             "stock_info",
         ]
 
-        with sqlite3.connect(self.db_path) as conn:
+        with self.get_connection() as conn:
             for table in tables:
                 cursor = conn.execute(f"SELECT COUNT(*) FROM {table}")
                 stats[table] = cursor.fetchone()[0]
 
         return stats
+
+    # Context manager support
+    def get_connection(self):
+        """Get a database connection as context manager."""
+        conn = sqlite3.connect(self.db_path)
+        # Enable foreign key constraints for this connection
+        conn.execute("PRAGMA foreign_keys = ON")
+        return conn
+
+    # Backward compatibility aliases for tests
+    @property
+    def conn(self):
+        """Get database connection (deprecated - use get_connection())."""
+        return sqlite3.connect(self.db_path)
+
+    def add_stock(
+        self, symbol: str, name: str, sector: str = "", market_cap: float = None
+    ):
+        """Add stock to database (backward compatibility)."""
+        self.store_stock_info(
+            symbol, {"longName": name, "sector": sector, "marketCap": market_cap}
+        )
+
+    def add_price_data(
+        self,
+        symbol: str,
+        date,
+        open_price: float,
+        high: float,
+        low: float,
+        close: float,
+        volume: int,
+        interval: str = "1d",
+    ):
+        """Add single price data point (backward compatibility)."""
+        df = pd.DataFrame(
+            [
+                {
+                    "Open": open_price,
+                    "High": high,
+                    "Low": low,
+                    "Close": close,
+                    "Volume": volume,
+                }
+            ],
+            index=[pd.to_datetime(date)],
+        )
+        self.store_price_history(symbol, df, interval)
+
+    def bulk_add_price_data(self, price_data_list):
+        """Bulk add price data (backward compatibility)."""
+        # Use a single transaction for all operations
+        with self.get_connection() as conn:
+            try:
+                for row in price_data_list:
+                    symbol, date, open_p, high, low, close, volume, interval = row
+                    conn.execute(
+                        """
+                        INSERT OR REPLACE INTO price_history 
+                        (symbol, date, open_price, high_price, low_price, close_price, volume, interval)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                        """,
+                        (
+                            symbol,
+                            date.strftime("%Y-%m-%d")
+                            if hasattr(date, "strftime")
+                            else date,
+                            open_p,
+                            high,
+                            low,
+                            close,
+                            volume,
+                            interval,
+                        ),
+                    )
+                conn.commit()
+            except Exception:
+                conn.rollback()
+                raise
+
+    def add_stock_info(self, symbol: str, info: Dict[str, Any]):
+        """Add stock info (backward compatibility)."""
+        self.store_stock_info(symbol, info)
+
+    def add_dividends(self, symbol: str, dividends: pd.Series):
+        """Add dividends (backward compatibility)."""
+        self.store_dividends(symbol, dividends)
+
+    def add_splits(self, symbol: str, splits: pd.Series):
+        """Add splits (backward compatibility)."""
+        self.store_splits(symbol, splits)
+
+    def add_options_data(
+        self, symbol: str, calls: pd.DataFrame, puts: pd.DataFrame, expiry: str
+    ):
+        """Add options data (backward compatibility)."""
+        self.store_options_chain(symbol, calls, puts, expiry)
+
+    def get_latest_price_date(self, symbol: str) -> Optional[datetime]:
+        """Get latest price date for a symbol."""
+        with self.get_connection() as conn:
+            cursor = conn.execute(
+                """
+                SELECT MAX(date) FROM price_history 
+                WHERE symbol = ?
+                """,
+                (symbol,),
+            )
+            result = cursor.fetchone()
+            if result and result[0]:
+                return datetime.fromisoformat(result[0])
+            return None
+
+    def cleanup_old_data(self, days_to_keep: int = 365) -> int:
+        """Clean up old data from database."""
+        from datetime import timedelta
+
+        cutoff_date = (datetime.now() - timedelta(days=days_to_keep)).strftime(
+            "%Y-%m-%d"
+        )
+
+        with self.get_connection() as conn:
+            cursor = conn.execute(
+                """
+                DELETE FROM price_history 
+                WHERE date < ?
+                """,
+                (cutoff_date,),
+            )
+            deleted_rows = cursor.rowcount
+
+            # Also clean up old options data
+            conn.execute(
+                """
+                DELETE FROM options_calls 
+                WHERE expiration_date < ?
+                """,
+                (cutoff_date,),
+            )
+
+            conn.execute(
+                """
+                DELETE FROM options_puts 
+                WHERE expiration_date < ?
+                """,
+                (cutoff_date,),
+            )
+
+            # Commit the transaction before VACUUM
+            conn.commit()
+
+        # VACUUM must run outside a transaction
+        with self.get_connection() as conn:
+            conn.execute("VACUUM")
+
+            return deleted_rows
