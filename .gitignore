@@ -239,3 +239,6 @@ prophet_cache/
 
 # AutoTS cache
 autots_cache/
+
+# sqlite database files
+stockula.db
