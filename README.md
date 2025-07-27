@@ -505,11 +505,28 @@ The test suite includes:
 - **Fixtures**: Reusable test data and mock objects in `conftest.py`
 - **Mocking**: External API calls are mocked to avoid network dependencies
 
+#### Test Statistics
+
+- **Total Tests**: 192 (87 unit tests, 105 integration tests)
+- **Current Coverage**: 38% overall
+- **Unit Tests**: All passing, fast execution
+- **Integration Tests**: May require network/database access
+
 Coverage reports are generated in:
 
 - Terminal: Shows missing lines directly
 - HTML: `htmlcov/index.html` - Interactive coverage report
 - XML: `coverage.xml` - For CI/CD integration
+
+To improve coverage, run tests with coverage report:
+
+```bash
+# Generate detailed coverage report
+uv run pytest --cov=stockula --cov-report=html --cov-report=term-missing
+
+# View coverage in browser
+open htmlcov/index.html
+```
 
 ### Code Formatting
 
