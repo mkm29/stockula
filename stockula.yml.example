@@ -1,0 +1,123 @@
+# Stockula Configuration Example
+# This shows the new simplified structure with Category as an Enum
+
+# Data fetching configuration
+data:
+  # Default tickers if portfolio.tickers is not specified
+  tickers:
+    - symbol: AAPL
+      quantity: 10
+      category: TECHNOLOGY
+    - symbol: GOOGL
+      quantity: 5
+      category: TECHNOLOGY
+    - symbol: MSFT
+      quantity: 8
+      category: TECHNOLOGY
+    - symbol: JPM
+      quantity: 15
+      category: FINANCIAL
+    - symbol: BAC
+      quantity: 20
+      category: FINANCIAL
+  start_date: "2023-01-01"
+  end_date: null
+  interval: "1d"
+
+# Portfolio configuration
+portfolio:
+  name: "Tech and Finance Portfolio"
+  initial_capital: 100000.0
+  allocation_method: "equal_weight"
+  rebalance_frequency: "monthly"
+  max_position_size: 25.0  # Max 25% per position
+  stop_loss_pct: 10.0      # 10% stop loss
+  
+  # Optional: Override data.tickers with portfolio-specific tickers
+  tickers:
+    - symbol: AAPL
+      quantity: 20
+      category: TECHNOLOGY
+    - symbol: NVDA
+      quantity: 10
+      category: TECHNOLOGY
+    - symbol: SPY
+      quantity: 30
+      category: INDEX
+    - symbol: QQQ
+      quantity: 25
+      category: ETF
+    - symbol: BTC-USD
+      quantity: 0.5
+      category: CRYPTO
+
+# Backtesting configuration
+backtest:
+  initial_cash: 10000.0
+  commission: 0.002
+  margin: 1.0
+  optimize: false
+  # Categories to exclude from backtesting (buy-and-hold only)
+  hold_only_categories:
+    - INDEX
+    - BOND
+  strategies:
+    - name: SMACross
+      parameters:
+        fast_period: 10
+        slow_period: 20
+    - name: RSI
+      parameters:
+        period: 14
+        oversold_threshold: 30
+        overbought_threshold: 70
+
+# Forecasting configuration
+forecast:
+  forecast_length: 30
+  frequency: "infer"
+  prediction_interval: 0.95
+  model_list: "fast"
+  ensemble: "auto"
+  max_generations: 5
+  num_validations: 2
+  validation_method: "backwards"
+
+# Technical analysis configuration
+technical_analysis:
+  indicators:
+    - sma
+    - ema
+    - rsi
+    - macd
+    - bbands
+    - atr
+  sma_periods: [20, 50, 200]
+  ema_periods: [12, 26]
+  rsi_period: 14
+  macd_params:
+    period_fast: 12
+    period_slow: 26
+    signal: 9
+  bbands_params:
+    period: 20
+    std: 2
+  atr_period: 14
+
+# Output configuration
+output:
+  format: "console"
+  save_results: true
+  results_dir: "./results"
+
+# Available Category Enums:
+# - Sector: TECHNOLOGY, HEALTHCARE, FINANCIAL, CONSUMER, INDUSTRIAL, ENERGY, UTILITIES, REAL_ESTATE, MATERIALS, COMMUNICATION
+# - Strategy: GROWTH, VALUE, DIVIDEND, MOMENTUM
+# - Risk: LARGE_CAP, MID_CAP, SMALL_CAP, INTERNATIONAL, EMERGING_MARKETS
+# - Asset Class: EQUITY, BOND, COMMODITY, CRYPTO, REIT
+# - Special: INDEX, ETF, SPECULATIVE, DEFENSIVE
+
+# Note: The following categories are treated as "hold-only" and excluded from backtesting:
+# - INDEX: Buy-and-hold index funds
+# - BOND: Fixed income securities
+# You can modify the hold_only_categories set in main.py to customize this behavior

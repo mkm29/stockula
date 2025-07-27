@@ -1,17 +1,84 @@
-Using configuration from: stockula.yml
+Using configuration from: stockula-dynamic.yml
+Using dynamic allocation - calculating quantities based on allocation percentages/amounts...
+  SPY: 1.0000 shares
+  VOO: 1.0000 shares
+  DFUSX: 27.0000 shares
+  FSKAX: 6.0000 shares
+  FSMDX: 31.0000 shares
+  FXAIX: 5.0000 shares
+  NVDA: 5.0000 shares
+  AMD: 5.0000 shares
+  TSM: 3.0000 shares
+  AAPL: 4.0000 shares
+  MSFT: 1.0000 shares
+  GOOGL: 4.0000 shares
+  AMZN: 4.0000 shares
+  META: 1.0000 shares
+  TSLA: 3.0000 shares
+  PLTR: 5.0000 shares
+  LIDR: 197.0000 shares
+  OPEN: 344.0000 shares
+  SOFI: 41.0000 shares
+  IONQ: 20.0000 shares
+
+Portfolio Summary:
+  Name: Dynamic EMA Portfolio
+  Initial Capital: $20,000.00
+  Total Assets: 20
+  Allocation Method: dynamic
+
+Fetching prices at start date (2025-01-01)...
+$SPY: possibly delisted; no price data found  (1d 2025-01-01 -> 2025-01-01)
+$VOO: possibly delisted; no price data found  (1d 2025-01-01 -> 2025-01-01)
+$DFUSX: possibly delisted; no price data found  (1d 2025-01-01 -> 2025-01-01)
+$FSKAX: possibly delisted; no price data found  (1d 2025-01-01 -> 2025-01-01)
+$FSMDX: possibly delisted; no price data found  (1d 2025-01-01 -> 2025-01-01)
+$FXAIX: possibly delisted; no price data found  (1d 2025-01-01 -> 2025-01-01)
+$NVDA: possibly delisted; no price data found  (1d 2025-01-01 -> 2025-01-01)
+$AMD: possibly delisted; no price data found  (1d 2025-01-01 -> 2025-01-01)
+$TSM: possibly delisted; no price data found  (1d 2025-01-01 -> 2025-01-01)
+$AAPL: possibly delisted; no price data found  (1d 2025-01-01 -> 2025-01-01)
+$MSFT: possibly delisted; no price data found  (1d 2025-01-01 -> 2025-01-01)
+$GOOGL: possibly delisted; no price data found  (1d 2025-01-01 -> 2025-01-01)
+$AMZN: possibly delisted; no price data found  (1d 2025-01-01 -> 2025-01-01)
+$META: possibly delisted; no price data found  (1d 2025-01-01 -> 2025-01-01)
+$TSLA: possibly delisted; no price data found  (1d 2025-01-01 -> 2025-01-01)
+$PLTR: possibly delisted; no price data found  (1d 2025-01-01 -> 2025-01-01)
+$LIDR: possibly delisted; no price data found  (1d 2025-01-01 -> 2025-01-01)
+$OPEN: possibly delisted; no price data found  (1d 2025-01-01 -> 2025-01-01)
+$SOFI: possibly delisted; no price data found  (1d 2025-01-01 -> 2025-01-01)
+$IONQ: possibly delisted; no price data found  (1d 2025-01-01 -> 2025-01-01)
+
+Portfolio Value at Start Date: $14,553.85
+Initial Capital: $20,000.00
+Return Since Inception: $-5,446.15 (-27.23%)
+
+Hold-only assets (excluded from backtesting):
+  SPY (Index)
+  VOO (Index)
+  DFUSX (Index)
+  FSKAX (Index)
+  FSMDX (Index)
+  FXAIX (Index)
 
 Processing SPY...
-                                                                                                                                   
+  Skipping backtest for SPY (hold-only asset)
+
 Processing VOO...
-                                                                                                                                   
+  Skipping backtest for VOO (hold-only asset)
+
 Processing DFUSX...
-                                                                                                                                   
+  Skipping backtest for DFUSX (hold-only asset)
+
 Processing FSKAX...
-                                                                                                                                   
+  Skipping backtest for FSKAX (hold-only asset)
+
 Processing FSMDX...
-                                                                                                                                   
+  Skipping backtest for FSMDX (hold-only asset)
+
 Processing FXAIX...
-                                                                                                                                   
+  Skipping backtest for FXAIX (hold-only asset)
+
 Processing NVDA...
                                                                                                                                    
 Processing AMD...
@@ -39,267 +106,142 @@ Processing OPEN...
 Processing SOFI...
                                                                                                                                    
 Processing IONQ...
-{                                                                                                                                  
-  "backtesting": [
-    {
-      "ticker": "SPY",
-      "strategy": "DoubleEMACross",
-      "parameters": {
-        "fast_period": 34,
-        "slow_period": 55
-      },
-      "return_pct": -2.0390239775279406,
-      "sharpe_ratio": -1.7323268378177197,
-      "max_drawdown_pct": -2.039023977527943,
-      "num_trades": 1,
-      "win_rate": 0.0
-    },
-    {
-      "ticker": "VOO",
-      "strategy": "DoubleEMACross",
-      "parameters": {
-        "fast_period": 34,
-        "slow_period": 55
-      },
-      "return_pct": -2.114164783751603,
-      "sharpe_ratio": -1.749113556893713,
-      "max_drawdown_pct": -2.114164783751604,
-      "num_trades": 1,
-      "win_rate": 0.0
-    },
-    {
-      "ticker": "DFUSX",
-      "strategy": "DoubleEMACross",
-      "parameters": {
-        "fast_period": 34,
-        "slow_period": 55
-      },
-      "return_pct": -2.034894565429677,
-      "sharpe_ratio": -1.7330156552370963,
-      "max_drawdown_pct": -2.034894565429679,
-      "num_trades": 1,
-      "win_rate": 0.0
-    },
-    {
-      "ticker": "FSKAX",
-      "strategy": "DoubleEMACross",
-      "parameters": {
-        "fast_period": 34,
-        "slow_period": 55
-      },
-      "return_pct": 8.977490296630858,
-      "sharpe_ratio": 2.604106528834697,
-      "max_drawdown_pct": -1.175617669618978,
-      "num_trades": 0,
-      "win_rate": NaN
-    },
-    {
-      "ticker": "FSMDX",
-      "strategy": "DoubleEMACross",
-      "parameters": {
-        "fast_period": 34,
-        "slow_period": 55
-      },
-      "return_pct": -2.8925285229492146,
-      "sharpe_ratio": -1.6914481040898264,
-      "max_drawdown_pct": -2.8925285229492115,
-      "num_trades": 1,
-      "win_rate": 0.0
-    },
-    {
-      "ticker": "FXAIX",
-      "strategy": "DoubleEMACross",
-      "parameters": {
-        "fast_period": 34,
-        "slow_period": 55
-      },
-      "return_pct": -2.0241126562499994,
-      "sharpe_ratio": -1.7215919734077612,
-      "max_drawdown_pct": -2.024112656249999,
-      "num_trades": 1,
-      "win_rate": 0.0
-    },
-    {
-      "ticker": "NVDA",
-      "strategy": "DoubleEMACross",
-      "parameters": {
-        "fast_period": 34,
-        "slow_period": 55
-      },
-      "return_pct": 29.00117942628831,
-      "sharpe_ratio": 2.2746793176590008,
-      "max_drawdown_pct": -3.4392198822748243,
-      "num_trades": 0,
-      "win_rate": NaN
-    },
-    {
-      "ticker": "AMD",
-      "strategy": "DoubleEMACross",
-      "parameters": {
-        "fast_period": 34,
-        "slow_period": 55
-      },
-      "return_pct": 41.796798082122805,
-      "sharpe_ratio": 1.8757268241848184,
-      "max_drawdown_pct": -6.227755472326746,
-      "num_trades": 0,
-      "win_rate": NaN
-    },
-    {
-      "ticker": "TSM",
-      "strategy": "DoubleEMACross",
-      "parameters": {
-        "fast_period": 34,
-        "slow_period": 55
-      },
-      "return_pct": 25.936211481933586,
-      "sharpe_ratio": 2.0856770786408987,
-      "max_drawdown_pct": -4.468184094642769,
-      "num_trades": 0,
-      "win_rate": NaN
-    },
-    {
-      "ticker": "AAPL",
-      "strategy": "DoubleEMACross",
-      "parameters": {
-        "fast_period": 34,
-        "slow_period": 55
-      },
-      "return_pct": -0.7682025268554753,
-      "sharpe_ratio": -1.6951425822167305,
-      "max_drawdown_pct": -0.7682025268554771,
-      "num_trades": 0,
-      "win_rate": NaN
-    },
-    {
-      "ticker": "MSFT",
-      "strategy": "DoubleEMACross",
-      "parameters": {
-        "fast_period": 34,
-        "slow_period": 55
-      },
-      "return_pct": 16.033218387389205,
-      "sharpe_ratio": 3.019147007758013,
-      "max_drawdown_pct": -1.827882169862105,
-      "num_trades": 0,
-      "win_rate": NaN
-    },
-    {
-      "ticker": "GOOGL",
-      "strategy": "DoubleEMACross",
-      "parameters": {
-        "fast_period": 34,
-        "slow_period": 55
-      },
-      "return_pct": -5.9443622998046886,
-      "sharpe_ratio": -1.8787821797498507,
-      "max_drawdown_pct": -7.010635201330007,
-      "num_trades": 1,
-      "win_rate": 0.0
-    },
-    {
-      "ticker": "AMZN",
-      "strategy": "DoubleEMACross",
-      "parameters": {
-        "fast_period": 34,
-        "slow_period": 55
-      },
-      "return_pct": 12.128108481445306,
-      "sharpe_ratio": 1.7781196333922968,
-      "max_drawdown_pct": -4.173892480008412,
-      "num_trades": 0,
-      "win_rate": NaN
-    },
-    {
-      "ticker": "META",
-      "strategy": "DoubleEMACross",
-      "parameters": {
-        "fast_period": 34,
-        "slow_period": 55
-      },
-      "return_pct": 12.334970303510271,
-      "sharpe_ratio": 1.5374783014443214,
-      "max_drawdown_pct": -4.750134197486422,
-      "num_trades": 0,
-      "win_rate": NaN
-    },
-    {
-      "ticker": "TSLA",
-      "strategy": "DoubleEMACross",
-      "parameters": {
-        "fast_period": 34,
-        "slow_period": 55
-      },
-      "return_pct": -13.128227297363281,
-      "sharpe_ratio": -1.235024042652648,
-      "max_drawdown_pct": -20.855449103454415,
-      "num_trades": 1,
-      "win_rate": 0.0
-    },
-    {
-      "ticker": "PLTR",
-      "strategy": "DoubleEMACross",
-      "parameters": {
-        "fast_period": 34,
-        "slow_period": 55
-      },
-      "return_pct": 0.0,
-      "sharpe_ratio": NaN,
-      "max_drawdown_pct": -0.0,
-      "num_trades": 0,
-      "win_rate": NaN
-    },
-    {
-      "ticker": "LIDR",
-      "strategy": "DoubleEMACross",
-      "parameters": {
-        "fast_period": 34,
-        "slow_period": 55
-      },
-      "return_pct": -12.256435347057577,
-      "sharpe_ratio": -2.1537038851191572,
-      "max_drawdown_pct": -12.256435347057582,
-      "num_trades": 1,
-      "win_rate": 0.0
-    },
-    {
-      "ticker": "OPEN",
-      "strategy": "DoubleEMACross",
-      "parameters": {
-        "fast_period": 34,
-        "slow_period": 55
-      },
-      "return_pct": -13.119944632935532,
-      "sharpe_ratio": -0.7343669636550451,
-      "max_drawdown_pct": -28.653908699549678,
-      "num_trades": 0,
-      "win_rate": NaN
-    },
-    {
-      "ticker": "SOFI",
-      "strategy": "DoubleEMACross",
-      "parameters": {
-        "fast_period": 34,
-        "slow_period": 55
-      },
-      "return_pct": 60.29448814229965,
-      "sharpe_ratio": 2.2857706861205203,
-      "max_drawdown_pct": -6.438323142241531,
-      "num_trades": 0,
-      "win_rate": NaN
-    },
-    {
-      "ticker": "IONQ",
-      "strategy": "DoubleEMACross",
-      "parameters": {
-        "fast_period": 34,
-        "slow_period": 55
-      },
-      "return_pct": 22.06825754211426,
-      "sharpe_ratio": 0.4302772939672243,
-      "max_drawdown_pct": -23.683938857160648,
-      "num_trades": 0,
-      "win_rate": NaN
-    }
-  ]
-}
+                                                                                                                                   
+=== Backtesting Results ===
+
+NVDA - TripleEMACross:
+  Parameters: {'fast_period': 14, 'slow_period': 28}
+  Return: -3.71%
+  Sharpe Ratio: -1.42
+  Max Drawdown: -4.92%
+  Number of Trades: 2
+  Win Rate: 0.00%
+
+AMD - TripleEMACross:
+  Parameters: {'fast_period': 14, 'slow_period': 28}
+  Return: -0.15%
+  Sharpe Ratio: -0.03
+  Max Drawdown: -9.46%
+  Number of Trades: 2
+  Win Rate: 50.00%
+
+TSM - TripleEMACross:
+  Parameters: {'fast_period': 14, 'slow_period': 28}
+  Return: 0.00%
+  Sharpe Ratio: nan
+  Max Drawdown: -0.00%
+  Number of Trades: 0
+  Win Rate: N/A (no trades)
+
+AAPL - TripleEMACross:
+  Parameters: {'fast_period': 14, 'slow_period': 28}
+  Return: 4.22%
+  Sharpe Ratio: 1.32
+  Max Drawdown: -2.28%
+  Number of Trades: 1
+  Win Rate: 100.00%
+
+MSFT - TripleEMACross:
+  Parameters: {'fast_period': 14, 'slow_period': 28}
+  Return: 0.00%
+  Sharpe Ratio: nan
+  Max Drawdown: -0.00%
+  Number of Trades: 0
+  Win Rate: N/A (no trades)
+
+GOOGL - TripleEMACross:
+  Parameters: {'fast_period': 14, 'slow_period': 28}
+  Return: 2.42%
+  Sharpe Ratio: 0.47
+  Max Drawdown: -6.73%
+  Number of Trades: 2
+  Win Rate: 50.00%
+
+AMZN - TripleEMACross:
+  Parameters: {'fast_period': 14, 'slow_period': 28}
+  Return: 0.00%
+  Sharpe Ratio: nan
+  Max Drawdown: -0.00%
+  Number of Trades: 0
+  Win Rate: N/A (no trades)
+
+META - TripleEMACross:
+  Parameters: {'fast_period': 14, 'slow_period': 28}
+  Return: 0.00%
+  Sharpe Ratio: nan
+  Max Drawdown: -0.00%
+  Number of Trades: 0
+  Win Rate: N/A (no trades)
+
+TSLA - TripleEMACross:
+  Parameters: {'fast_period': 14, 'slow_period': 28}
+  Return: -5.55%
+  Sharpe Ratio: -0.92
+  Max Drawdown: -7.97%
+  Number of Trades: 0
+  Win Rate: N/A (no trades)
+
+PLTR - TripleEMACross:
+  Parameters: {'fast_period': 14, 'slow_period': 28}
+  Return: -5.61%
+  Sharpe Ratio: -0.62
+  Max Drawdown: -14.06%
+  Number of Trades: 3
+  Win Rate: 0.00%
+
+LIDR - TripleEMACross:
+  Parameters: {'fast_period': 14, 'slow_period': 28}
+  Return: -22.55%
+  Sharpe Ratio: -1.57
+  Max Drawdown: -24.59%
+  Number of Trades: 3
+  Win Rate: 0.00%
+
+OPEN - TripleEMACross:
+  Parameters: {'fast_period': 14, 'slow_period': 28}
+  Return: 157.95%
+  Sharpe Ratio: 0.46
+  Max Drawdown: -43.18%
+  Number of Trades: 3
+  Win Rate: 0.00%
+
+SOFI - TripleEMACross:
+  Parameters: {'fast_period': 14, 'slow_period': 28}
+  Return: 28.11%
+  Sharpe Ratio: 1.68
+  Max Drawdown: -6.13%
+  Number of Trades: 2
+  Win Rate: 50.00%
+
+IONQ - TripleEMACross:
+  Parameters: {'fast_period': 14, 'slow_period': 28}
+  Return: -9.45%
+  Sharpe Ratio: -0.79
+  Max Drawdown: -21.94%
+  Number of Trades: 2
+  Win Rate: 0.00%
+
+==================================================
+PORTFOLIO PERFORMANCE SUMMARY
+==================================================
+
+Fetching latest prices...
+
+Portfolio Value at Start Date: $14,553.85
+Portfolio Value at End (Current): $17,104.54
+
+Return During Period: $2,550.68 (+17.53%)
+
+Return vs Initial Capital:
+  Initial Capital: $20,000.00
+  Total Return: $-2,895.46 (-14.48%)
+
+Allocation by Category:
+  Momentum: $7,959.22 (46.5%)
+  Index: $5,665.26 (33.1%)
+  Speculative: $3,480.05 (20.3%)
+
+Performance Breakdown:
+  Hold-only Assets: $5,665.26
+  Tradeable Assets: $11,439.28
+  Total Portfolio: $17,104.54

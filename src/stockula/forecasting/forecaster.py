@@ -2,7 +2,7 @@
 
 import pandas as pd
 from autots import AutoTS
-from typing import Optional, Dict, Any, Tuple
+from typing import Optional, Dict, Any
 from ..data.fetcher import DataFetcher
 
 

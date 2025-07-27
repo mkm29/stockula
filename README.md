@@ -7,6 +7,7 @@ Stockula is a comprehensive Python trading platform that provides tools for tech
 - **📊 Technical Analysis**: Calculate popular indicators (SMA, EMA, RSI, MACD, Bollinger Bands, etc.) using the finta library
 - **🔄 Backtesting**: Test trading strategies on historical data with detailed performance metrics
 - **📈 Data Fetching**: Retrieve real-time and historical market data via yfinance
+- **🗄️ SQLite Database**: Automatic caching of all yfinance data with robust lookup capabilities
 - **🔮 Price Forecasting**: Automated time series forecasting using AutoTS
 - **🚀 Fast Package Management**: Uses uv for lightning-fast dependency management
 
@@ -75,18 +76,87 @@ uv run python -m stockula.main --ticker AMZN --mode forecast
 ```python
 from stockula import DataFetcher
 
-# Initialize fetcher
-fetcher = DataFetcher()
+# Initialize fetcher with database caching (default)
+fetcher = DataFetcher(use_cache=True, db_path="stockula.db")
 
-# Get historical data
+# Get historical data (automatically cached)
 data = fetcher.get_stock_data("AAPL", start="2023-01-01", end="2024-01-01")
 
 # Get real-time price
 current_price = fetcher.get_realtime_price("AAPL")
 
-# Get company info
+# Get company info (cached in database)
 info = fetcher.get_info("AAPL")
+
+# Force refresh from yfinance (bypasses cache)
+fresh_data = fetcher.get_stock_data("AAPL", force_refresh=True)
+
+# Fetch and store all data types for a symbol
+fetcher.fetch_and_store_all_data("AAPL", start="2023-01-01")
 ```
+
+### SQLite Database Features
+
+Stockula automatically stores all yfinance data in a SQLite database (`stockula.db`) for fast lookups and offline access:
+
+```python
+from stockula import DataFetcher, DatabaseManager
+
+# DataFetcher automatically uses database caching
+fetcher = DataFetcher()
+
+# First call fetches from yfinance and stores in database
+data = fetcher.get_stock_data("AAPL")
+
+# Subsequent calls use cached data (much faster)
+cached_data = fetcher.get_stock_data("AAPL")
+
+# Direct database access
+db = DatabaseManager("stockula.db")
+
+# Query price history
+price_data = db.get_price_history("AAPL", start_date="2023-01-01")
+
+# Get stock information
+stock_info = db.get_stock_info("AAPL")
+
+# Get dividends and splits
+dividends = db.get_dividends("AAPL")
+splits = db.get_splits("AAPL")
+
+# Database statistics
+stats = db.get_database_stats()
+print(f"Total price records: {stats['price_history']}")
+
+# Clean up old data
+db.cleanup_old_data(days_to_keep=365)
+```
+
+#### Database CLI Commands
+
+```bash
+# Show database statistics
+uv run python -m stockula.database.cli stats
+
+# Fetch data for specific symbols
+uv run python -m stockula.database.cli fetch AAPL MSFT GOOGL
+
+# Query cached data for a symbol
+uv run python -m stockula.database.cli query AAPL
+
+# Clean up old data
+uv run python -m stockula.database.cli cleanup --days 365
+```
+
+#### Database Schema
+
+The database contains the following tables:
+- **stocks**: Basic stock metadata (name, sector, market cap, etc.)
+- **price_history**: Historical OHLCV data with configurable intervals
+- **dividends**: Dividend payment history
+- **splits**: Stock split history
+- **options_calls/options_puts**: Options chain data
+- **stock_info**: Complete yfinance info as JSON
 
 ### Technical Analysis
 
@@ -183,7 +253,11 @@ src/stockula/
 ├── main.py               # CLI demo application
 ├── data/                 # Data fetching module
 │   ├── __init__.py
-│   └── fetcher.py       # yfinance wrapper
+│   └── fetcher.py       # yfinance wrapper with SQLite caching
+├── database/             # SQLite database management
+│   ├── __init__.py
+│   ├── manager.py       # Database operations
+│   └── cli.py           # Command-line interface
 ├── technical_analysis/   # Technical indicators
 │   ├── __init__.py
 │   └── indicators.py    # finta wrapper
@@ -272,13 +346,62 @@ Stockula uses Pydantic for configuration validation and supports YAML files for 
 
 ### Configuration Structure
 
+All tickers must be defined as objects with properties and allocation tracking:
+
 ```yaml
 # Data fetching settings
 data:
-  tickers: [AAPL, GOOGL, MSFT]
   start_date: "2023-01-01"
   end_date: null  # defaults to today
   interval: "1d"
+  # Ticker objects with properties (required format)
+  tickers:
+    - symbol: AAPL
+      sector: Technology
+      market_cap: 3000.0  # billions
+      category: large_cap
+      allocation_amount: 10000  # dollar allocation
+    - symbol: NVDA
+      sector: Technology
+      category: momentum
+      allocation_amount: 5000  # fixed dollar amount
+
+# Portfolio management settings
+portfolio:
+  initial_capital: 100000
+  allocation_method: custom  # equal_weight, market_cap, or custom
+  rebalance_frequency: monthly
+  max_position_size: 20.0  # max 20% per position
+  stop_loss_pct: 10.0  # global stop loss
+  
+  # Portfolio buckets for organized allocation
+  buckets:
+    - name: core_holdings
+      description: "Long-term core positions"
+      allocation_amount: 50000  # $50k allocation
+      tickers:
+        - symbol: SPY
+          allocation_amount: 20000  # $20k
+        - symbol: QQQ
+          allocation_amount: 15000
+        - symbol: VTI
+          allocation_amount: 15000
+    
+    - name: growth_stocks
+      description: "High growth technology"
+      allocation_amount: 30000  # $30k
+      tickers:
+        - symbol: NVDA
+        - symbol: AMD
+        - symbol: GOOGL
+        - symbol: META
+    
+    - name: value_plays
+      allocation_amount: 20000  # fixed $20k
+      tickers:
+        - symbol: BAC
+        - symbol: DIS
+        - symbol: CVX
 
 # Backtesting settings
 backtest:
@@ -326,6 +449,54 @@ output:
   format: "console"  # or "json"
   save_results: true
   results_dir: "./results"
+```
+
+### Ticker Configuration
+
+All tickers must be defined as objects with the following structure:
+
+```yaml
+tickers:
+  - symbol: AAPL           # Required: ticker symbol
+    sector: Technology     # Optional: market sector
+    market_cap: 3000.0     # Optional: market cap in billions
+    category: large_cap    # Optional: category (momentum, growth, value, etc.)
+    allocation_amount: 5000 # Optional: dollar allocation amount
+    price_range:           # Optional: price data
+      open: 180.0
+      high: 185.0
+      low: 178.0
+      close: 183.0
+```
+
+### Portfolio Allocation
+
+The portfolio configuration supports sophisticated allocation strategies:
+
+- **Equal Weight**: Distribute capital equally across all positions
+- **Market Cap Weighted**: Allocate based on market capitalization
+- **Custom Allocation**: Define specific dollar amounts
+
+Allocations can be specified at multiple levels:
+1. **Individual ticker level**: `allocation_amount` in dollars
+2. **Bucket level**: Group related assets and allocate a fixed amount to the bucket
+3. **Portfolio level**: Overall allocation strategy
+
+Example with multi-level allocation:
+```yaml
+portfolio:
+  initial_capital: 100000
+  allocation_method: custom
+  buckets:
+    - name: tech_growth
+      allocation_amount: 60000  # $60k to this bucket
+      tickers:
+        - symbol: NVDA
+          allocation_amount: 24000  # $24k
+        - symbol: AMD
+          allocation_amount: 18000  # $18k
+        - symbol: GOOGL
+          allocation_amount: 18000  # $18k
 ```
 
 ### Environment Variables

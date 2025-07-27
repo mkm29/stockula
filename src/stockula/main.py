@@ -3,12 +3,11 @@
 import argparse
 import json
 import sys
-from datetime import datetime
-from pathlib import Path
+from datetime import datetime, timedelta
 from typing import Dict, Any, List
 import pandas as pd
 
-from .data import DataFetcher
+from .data.fetcher import DataFetcher
 from .technical_analysis import TechnicalIndicators
 from .backtesting import (
     BacktestRunner,
@@ -21,6 +20,7 @@ from .backtesting import (
 )
 from .forecasting import StockForecaster
 from .config import load_config, StockulaConfig
+from .domain import DomainFactory, Category
 
 
 def get_strategy_class(strategy_name: str):
@@ -214,6 +214,7 @@ def print_results(results: Dict[str, Any], output_format: str = "console"):
         print(json.dumps(results, indent=2, default=str))
     else:
         # Console output
+
         if "technical_analysis" in results:
             print("\n=== Technical Analysis Results ===")
             for ta_result in results["technical_analysis"]:
@@ -246,7 +247,7 @@ def print_results(results: Dict[str, Any], output_format: str = "console"):
                 if backtest.get("win_rate") is not None:
                     print(f"  Win Rate: {backtest['win_rate']:.2f}%")
                 elif backtest["num_trades"] == 0:
-                    print(f"  Win Rate: N/A (no trades)")
+                    print("  Win Rate: N/A (no trades)")
 
         if "forecasting" in results:
             print("\n=== Forecasting Results ===")
@@ -327,7 +328,9 @@ def main():
 
     # Override ticker if provided
     if args.ticker:
-        config.data.tickers = [args.ticker]
+        from .config import TickerConfig
+
+        config.portfolio.tickers = [TickerConfig(symbol=args.ticker, quantity=1.0)]
 
     # Save configuration if requested
     if args.save_config:
@@ -337,11 +340,105 @@ def main():
         print(f"Configuration saved to {args.save_config}")
         return
 
-    # Run operations
-    results = {}
+    # Create domain objects from configuration
+    factory = DomainFactory()
+    portfolio = factory.create_portfolio(config)
 
-    for ticker in config.data.tickers:
+    print("\nPortfolio Summary:")
+    print(f"  Name: {portfolio.name}")
+    print(f"  Initial Capital: ${portfolio.initial_capital:,.2f}")
+    print(f"  Total Assets: {len(portfolio.get_all_assets())}")
+    print(f"  Allocation Method: {portfolio.allocation_method}")
+
+    # Get portfolio value at start of backtest period
+    fetcher = DataFetcher()
+    symbols = [asset.symbol for asset in portfolio.get_all_assets()]
+
+    # Get prices at the start date if backtesting
+    if args.mode in ["all", "backtest"] and config.data.start_date:
+        print(f"\nFetching prices at start date ({config.data.start_date})...")
+        start_date_str = config.data.start_date.strftime("%Y-%m-%d")
+        # Fetch one day of data at the start date to get opening prices
+        start_prices = {}
+        for symbol in symbols:
+            try:
+                data = fetcher.get_stock_data(
+                    symbol, start=start_date_str, end=start_date_str
+                )
+                if not data.empty:
+                    start_prices[symbol] = data["Close"].iloc[0]
+                else:
+                    # If no data on exact date, get the next available date
+                    end_date = (config.data.start_date + timedelta(days=7)).strftime(
+                        "%Y-%m-%d"
+                    )
+                    data = fetcher.get_stock_data(
+                        symbol, start=start_date_str, end=end_date
+                    )
+                    if not data.empty:
+                        start_prices[symbol] = data["Close"].iloc[0]
+            except Exception as e:
+                print(f"  Warning: Could not get start price for {symbol}: {e}")
+
+        initial_portfolio_value = portfolio.get_portfolio_value(start_prices)
+        print(f"\nPortfolio Value at Start Date: ${initial_portfolio_value:,.2f}")
+    else:
+        print("\nFetching current prices...")
+        current_prices = fetcher.get_current_prices(symbols)
+        initial_portfolio_value = portfolio.get_portfolio_value(current_prices)
+        print(f"\nCurrent Portfolio Value: ${initial_portfolio_value:,.2f}")
+
+    print(f"Initial Capital: ${portfolio.initial_capital:,.2f}")
+    initial_return = initial_portfolio_value - portfolio.initial_capital
+    initial_return_pct = (initial_return / portfolio.initial_capital) * 100
+    print(
+        f"Return Since Inception: ${initial_return:,.2f} ({initial_return_pct:+.2f}%)"
+    )
+
+    # Run operations
+    results = {
+        "initial_portfolio_value": initial_portfolio_value,
+        "initial_capital": portfolio.initial_capital,
+    }
+
+    # Get all assets from portfolio
+    all_assets = portfolio.get_all_assets()
+
+    # Separate tradeable and hold-only assets
+    # Get hold-only categories from config
+    hold_only_category_names = set(config.backtest.hold_only_categories)
+    hold_only_categories = set()
+    for category_name in hold_only_category_names:
+        try:
+            hold_only_categories.add(Category[category_name])
+        except KeyError:
+            print(
+                f"Warning: Unknown category '{category_name}' in hold_only_categories"
+            )
+
+    tradeable_assets = []
+    hold_only_assets = []
+
+    for asset in all_assets:
+        if asset.category in hold_only_categories:
+            hold_only_assets.append(asset)
+        else:
+            tradeable_assets.append(asset)
+
+    if hold_only_assets:
+        print("\nHold-only assets (excluded from backtesting):")
+        for asset in hold_only_assets:
+            print(f"  {asset.symbol} ({asset.category})")
+
+    # Get ticker symbols for processing
+    ticker_symbols = [asset.symbol for asset in all_assets]
+
+    for ticker in ticker_symbols:
         print(f"\nProcessing {ticker}...")
+
+        # Get the asset to check its category
+        asset = next((a for a in all_assets if a.symbol == ticker), None)
+        is_hold_only = asset and asset.category in hold_only_categories
 
         if args.mode in ["all", "ta"]:
             if "technical_analysis" not in results:
@@ -349,9 +446,12 @@ def main():
             results["technical_analysis"].append(run_technical_analysis(ticker, config))
 
         if args.mode in ["all", "backtest"]:
-            if "backtesting" not in results:
-                results["backtesting"] = []
-            results["backtesting"].extend(run_backtest(ticker, config))
+            if is_hold_only:
+                print(f"  Skipping backtest for {ticker} (hold-only asset)")
+            else:
+                if "backtesting" not in results:
+                    results["backtesting"] = []
+                results["backtesting"].extend(run_backtest(ticker, config))
 
         if args.mode in ["all", "forecast"]:
             if "forecasting" not in results:
@@ -361,6 +461,67 @@ def main():
     # Output results
     output_format = args.output or config.output.get("format", "console")
     print_results(results, output_format)
+
+    # Show final portfolio summary after backtesting
+    if args.mode in ["all", "backtest"]:
+        print("\n" + "=" * 50)
+        print("PORTFOLIO PERFORMANCE SUMMARY")
+        print("=" * 50)
+
+        # Re-fetch current prices to get the most up-to-date values
+        print("\nFetching latest prices...")
+        final_prices = fetcher.get_current_prices(symbols)
+        final_value = portfolio.get_portfolio_value(final_prices)
+
+        print(
+            f"\nPortfolio Value at Start Date: ${results['initial_portfolio_value']:,.2f}"
+        )
+        print(f"Portfolio Value at End (Current): ${final_value:,.2f}")
+
+        period_return = final_value - results["initial_portfolio_value"]
+        period_return_pct = (period_return / results["initial_portfolio_value"]) * 100
+
+        print(
+            f"\nReturn During Period: ${period_return:,.2f} ({period_return_pct:+.2f}%)"
+        )
+
+        # Show return relative to initial capital
+        capital_return = final_value - portfolio.initial_capital
+        capital_return_pct = (capital_return / portfolio.initial_capital) * 100
+        print("\nReturn vs Initial Capital:")
+        print(f"  Initial Capital: ${portfolio.initial_capital:,.2f}")
+        print(f"  Total Return: ${capital_return:,.2f} ({capital_return_pct:+.2f}%)")
+
+        # Show category breakdown if available
+        category_allocations = portfolio.get_allocation_by_category(final_prices)
+        if category_allocations:
+            print("\nAllocation by Category:")
+            for category, data in sorted(
+                category_allocations.items(), key=lambda x: x[1]["value"], reverse=True
+            ):
+                print(
+                    f"  {category}: ${data['value']:,.2f} ({data['percentage']:.1f}%)"
+                )
+
+        # Show performance breakdown by asset type
+        if hold_only_assets and tradeable_assets:
+            print("\nPerformance Breakdown:")
+
+            # Calculate hold-only assets value
+            hold_only_value = sum(
+                asset.get_value(final_prices.get(asset.symbol, 0))
+                for asset in hold_only_assets
+            )
+
+            # Calculate tradeable assets value
+            tradeable_value = sum(
+                asset.get_value(final_prices.get(asset.symbol, 0))
+                for asset in tradeable_assets
+            )
+
+            print(f"  Hold-only Assets: ${hold_only_value:,.2f}")
+            print(f"  Tradeable Assets: ${tradeable_value:,.2f}")
+            print(f"  Total Portfolio: ${final_value:,.2f}")
 
     # Save results if configured
     if config.output.get("save_results", False):

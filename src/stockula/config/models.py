@@ -2,16 +2,176 @@
 
 from datetime import date, datetime
 from typing import Optional, List, Dict, Any, Union
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, ConfigDict
+
+
+class TickerConfig(BaseModel):
+    """Configuration for individual ticker/asset."""
+
+    symbol: str = Field(description="Stock ticker symbol (e.g., AAPL)")
+    quantity: Optional[float] = Field(
+        default=None,
+        gt=0,
+        description="Number of shares to hold (required if not using dynamic allocation)",
+    )
+    allocation_pct: Optional[float] = Field(
+        default=None,
+        ge=0,
+        le=100,
+        description="Percentage of portfolio to allocate to this asset (for dynamic allocation)",
+    )
+    allocation_amount: Optional[float] = Field(
+        default=None,
+        ge=0,
+        description="Fixed dollar amount to allocate to this asset (for dynamic allocation)",
+    )
+    # Optional market data fields that can be populated
+    market_cap: Optional[float] = Field(
+        default=None, description="Market capitalization in billions"
+    )
+    price_range: Optional[Dict[str, float]] = Field(
+        default=None,
+        description="Price range with 'open', 'high', 'low', 'close' keys",
+    )
+    sector: Optional[str] = Field(default=None, description="Market sector")
+    category: Optional[str] = Field(
+        default=None,
+        description="Category for classification (e.g., 'TECHNOLOGY', 'GROWTH', 'LARGE_CAP')",
+    )
+
+    def model_post_init(self, __context):
+        """Validate that exactly one allocation method is specified."""
+        allocation_methods = [
+            self.quantity is not None,
+            self.allocation_pct is not None,
+            self.allocation_amount is not None,
+        ]
+
+        # For auto-allocation mode, only category is required
+        if sum(allocation_methods) == 0 and self.category is not None:
+            return  # Valid for auto-allocation
+
+        if sum(allocation_methods) != 1:
+            raise ValueError(
+                f"Ticker {self.symbol} must specify exactly one of: quantity, allocation_pct, allocation_amount, or just category (for auto-allocation)"
+            )
+
+
+class PortfolioConfig(BaseModel):
+    """Configuration for portfolio management."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    name: str = Field(default="Main Portfolio", description="Portfolio name")
+    initial_capital: float = Field(
+        default=10000.0, gt=0, description="Initial portfolio capital"
+    )
+    allocation_method: str = Field(
+        default="equal_weight",
+        description="Allocation method: 'equal_weight', 'market_cap', 'custom', 'dynamic', 'auto'",
+    )
+    dynamic_allocation: bool = Field(
+        default=False,
+        description="Enable dynamic quantity calculation based on allocation percentages/amounts",
+    )
+    auto_allocate: bool = Field(
+        default=False,
+        description="Automatically allocate based on category ratios and initial capital only",
+    )
+    category_ratios: Optional[Dict[str, float]] = Field(
+        default=None,
+        description="Target allocation ratios by category (e.g., {'INDEX': 0.35, 'MOMENTUM': 0.475, 'SPECULATIVE': 0.175})",
+    )
+    allow_fractional_shares: bool = Field(
+        default=False,
+        description="Allow fractional shares when calculating dynamic quantities",
+    )
+    capital_utilization_target: float = Field(
+        default=0.95,
+        ge=0.5,
+        le=1.0,
+        description="Target percentage of initial capital to deploy (0.5-1.0)",
+    )
+    rebalance_frequency: Optional[str] = Field(
+        default="monthly",
+        description="Rebalancing frequency: 'daily', 'weekly', 'monthly', 'quarterly', 'yearly', 'never'",
+    )
+    tickers: List[TickerConfig] = Field(
+        default_factory=lambda: [
+            TickerConfig(symbol="AAPL", quantity=10),
+            TickerConfig(symbol="GOOGL", quantity=5),
+            TickerConfig(symbol="MSFT", quantity=8),
+        ],
+        description="List of ticker configurations in the portfolio",
+    )
+    # Risk management
+    max_position_size: Optional[float] = Field(
+        default=None,
+        ge=0,
+        le=100,
+        description="Maximum position size as percentage of portfolio (0-100)",
+    )
+    stop_loss_pct: Optional[float] = Field(
+        default=None,
+        ge=0,
+        le=100,
+        description="Global stop loss percentage (0-100)",
+    )
+
+    def model_post_init(self, __context):
+        """Validate portfolio configuration constraints."""
+        # Validate dynamic allocation settings
+        if self.dynamic_allocation and self.allocation_method != "dynamic":
+            print(
+                "Warning: dynamic_allocation=True but allocation_method is not 'dynamic'. Setting allocation_method to 'dynamic'."
+            )
+            # Note: Cannot modify field here due to frozen model, but validation should catch this
+
+        # If using dynamic allocation, validate that tickers have allocation info
+        if self.dynamic_allocation:
+            for ticker in self.tickers:
+                if ticker.quantity is not None:
+                    print(
+                        f"Warning: Ticker {ticker.symbol} has quantity specified but dynamic_allocation is enabled. Quantity will be ignored."
+                    )
+
+        # Validate auto-allocation settings
+        if self.auto_allocate:
+            if not self.category_ratios:
+                raise ValueError(
+                    "auto_allocate=True requires category_ratios to be specified"
+                )
+
+            total_ratio = sum(self.category_ratios.values())
+            if abs(total_ratio - 1.0) > 0.01:  # Allow small tolerance
+                raise ValueError(f"Category ratios must sum to 1.0, got {total_ratio}")
+
+        # Check that total percentage allocations don't exceed 100%
+        if self.dynamic_allocation:
+            total_pct = sum(
+                ticker.allocation_pct
+                for ticker in self.tickers
+                if ticker.allocation_pct is not None
+            )
+            if total_pct > 100:
+                raise ValueError(
+                    f"Total allocation percentages ({total_pct}%) exceed 100%"
+                )
+
+            total_amount = sum(
+                ticker.allocation_amount
+                for ticker in self.tickers
+                if ticker.allocation_amount is not None
+            )
+            if total_amount > self.initial_capital:
+                raise ValueError(
+                    f"Total allocation amounts (${total_amount:,.2f}) exceed initial capital (${self.initial_capital:,.2f})"
+                )
 
 
 class DataConfig(BaseModel):
     """Configuration for data fetching."""
 
-    tickers: List[str] = Field(
-        default=["AAPL", "GOOGL", "MSFT"],
-        description="List of stock ticker symbols to analyze",
-    )
     start_date: Optional[Union[str, date]] = Field(
         default=None, description="Start date for historical data (YYYY-MM-DD)"
     )
@@ -113,6 +273,10 @@ class BacktestConfig(BaseModel):
     optimization_params: Optional[Dict[str, Any]] = Field(
         default=None, description="Parameter ranges for optimization"
     )
+    hold_only_categories: List[str] = Field(
+        default=["INDEX", "BOND"],
+        description="Categories of assets to exclude from backtesting (buy-and-hold only)",
+    )
 
 
 class ForecastConfig(BaseModel):
@@ -176,6 +340,7 @@ class StockulaConfig(BaseModel):
     """Main configuration model for Stockula."""
 
     data: DataConfig = Field(default_factory=DataConfig)
+    portfolio: PortfolioConfig = Field(default_factory=PortfolioConfig)
     backtest: BacktestConfig = Field(default_factory=BacktestConfig)
     forecast: ForecastConfig = Field(default_factory=ForecastConfig)
     technical_analysis: TechnicalAnalysisConfig = Field(
