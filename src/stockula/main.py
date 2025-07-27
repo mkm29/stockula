@@ -629,6 +629,26 @@ FORECAST MODE - IMPORTANT NOTES:
         for strategy_name, strategy_backtests in strategy_results.items():
             # Calculate strategy-specific metrics
             strategy_trades = sum(b.get("num_trades", 0) for b in strategy_backtests)
+            
+            # Calculate strategy-specific portfolio performance
+            strategy_total_return = 0.0
+            strategy_winning_stocks = 0
+            strategy_losing_stocks = 0
+            
+            for backtest in strategy_backtests:
+                return_pct = backtest.get("return_pct", 0)
+                strategy_total_return += return_pct
+                if return_pct > 0:
+                    strategy_winning_stocks += 1
+                elif return_pct < 0:
+                    strategy_losing_stocks += 1
+            
+            # Calculate average return (simple average, not weighted)
+            strategy_avg_return = strategy_total_return / len(strategy_backtests) if strategy_backtests else 0
+            
+            # Calculate approximate final portfolio value based on average return
+            # This is a simplification - actual portfolio value would depend on position sizing
+            strategy_final_value = results["initial_portfolio_value"] * (1 + strategy_avg_return / 100)
 
             # Get the first backtest to extract parameters (assuming all use same parameters)
             strategy_params = (
@@ -680,15 +700,15 @@ Parameters: {strategy_params if strategy_params else "Default"}
 {broker_info}
 
 Portfolio Value at Start Date: ${results["initial_portfolio_value"]:,.2f}
-Portfolio Value at End (Current): ${portfolio.get_portfolio_value(fetcher.get_current_prices(symbols)):,.2f}
+Portfolio Value at End (Backtest): ${strategy_final_value:,.2f}
 
-Asset Type Breakdown:
-  Hold-only Assets: ${sum(asset.get_value(fetcher.get_current_prices([asset.symbol]).get(asset.symbol, 0)) for asset in hold_only_assets):,.2f}
-  Tradeable Assets: ${sum(asset.get_value(fetcher.get_current_prices([asset.symbol]).get(asset.symbol, 0)) for asset in tradeable_assets):,.2f}
-  Total Portfolio: ${portfolio.get_portfolio_value(fetcher.get_current_prices(symbols)):,.2f}
+Strategy Performance:
+  Average Return: {strategy_avg_return:+.2f}%
+  Winning Stocks: {strategy_winning_stocks}
+  Losing Stocks: {strategy_losing_stocks}
+  Total Trades: {strategy_trades}
 
-Total Trades Executed: {strategy_trades}
-Return During Period: ${portfolio.get_portfolio_value(fetcher.get_current_prices(symbols)) - results["initial_portfolio_value"]:,.2f} ({((portfolio.get_portfolio_value(fetcher.get_current_prices(symbols)) - results["initial_portfolio_value"]) / results["initial_portfolio_value"] * 100):+.2f}%)
+Return During Period: ${strategy_final_value - results["initial_portfolio_value"]:,.2f} ({strategy_avg_return:+.2f}%)
 
 Detailed report saved to: {save_detailed_report(strategy_name, strategy_backtests, results, config)}
 """)
