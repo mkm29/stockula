@@ -1172,6 +1172,117 @@ forecast:
   ensemble: "simple"       # Simple is faster than auto
 ```
 
+## Backtest Data Structures
+
+Stockula provides structured data models for backtest results using Pydantic, ensuring type safety and easy serialization.
+
+### Data Models
+
+#### BacktestResult
+Individual backtest result for a single asset:
+```python
+class BacktestResult(BaseModel):
+    ticker: str                    # Asset ticker symbol
+    strategy: str                  # Strategy name
+    parameters: Dict[str, Any]     # Strategy parameters used
+    return_pct: float             # Return percentage
+    sharpe_ratio: float           # Sharpe ratio
+    max_drawdown_pct: float       # Maximum drawdown percentage
+    num_trades: int               # Number of trades executed
+    win_rate: Optional[float]     # Win rate percentage (None if no trades)
+```
+
+#### StrategyBacktestSummary
+Summary of backtest results for a single strategy across all assets:
+```python
+class StrategyBacktestSummary(BaseModel):
+    strategy_name: str                        # Strategy name
+    parameters: Dict[str, Any]                # Strategy parameters
+    initial_portfolio_value: float            # Initial portfolio value
+    final_portfolio_value: float              # Final portfolio value after backtest
+    total_return_pct: float                   # Total portfolio return percentage
+    total_trades: int                         # Total trades across all assets
+    winning_stocks: int                       # Number of stocks with positive returns
+    losing_stocks: int                        # Number of stocks with negative returns
+    average_return_pct: float                 # Average return across all assets
+    average_sharpe_ratio: float               # Average Sharpe ratio
+    detailed_results: List[BacktestResult]    # Per-asset results
+```
+
+#### PortfolioBacktestResults
+Complete backtest results for all strategies:
+```python
+class PortfolioBacktestResults(BaseModel):
+    initial_portfolio_value: float                    # Initial portfolio value
+    initial_capital: float                            # Initial capital
+    date_range: Dict[str, str]                        # Backtest date range
+    broker_config: Dict[str, Any]                     # Broker configuration used
+    strategy_summaries: List[StrategyBacktestSummary] # Summary results for each strategy
+    timestamp: datetime                               # When backtest was run
+```
+
+### Usage Example
+
+```python
+from stockula import BacktestRunner, SMACrossStrategy
+from stockula.config.models import BacktestResult, StrategyBacktestSummary, PortfolioBacktestResults
+
+# Run backtest
+runner = BacktestRunner(cash=10000, commission=0.002)
+results = runner.run_from_symbol("AAPL", SMACrossStrategy)
+
+# Convert to structured data
+backtest_result = BacktestResult(
+    ticker="AAPL",
+    strategy="SMACross",
+    parameters={"fast_period": 10, "slow_period": 20},
+    return_pct=results["Return [%]"],
+    sharpe_ratio=results["Sharpe Ratio"],
+    max_drawdown_pct=results["Max. Drawdown [%]"],
+    num_trades=results["# Trades"],
+    win_rate=results.get("Win Rate [%]") if results["# Trades"] > 0 else None
+)
+
+# Create strategy summary
+summary = StrategyBacktestSummary(
+    strategy_name="SMACross",
+    parameters={"fast_period": 10, "slow_period": 20},
+    initial_portfolio_value=10000.0,
+    final_portfolio_value=10000.0 * (1 + backtest_result.return_pct / 100),
+    total_return_pct=backtest_result.return_pct,
+    total_trades=backtest_result.num_trades,
+    winning_stocks=1 if backtest_result.return_pct > 0 else 0,
+    losing_stocks=1 if backtest_result.return_pct < 0 else 0,
+    average_return_pct=backtest_result.return_pct,
+    average_sharpe_ratio=backtest_result.sharpe_ratio,
+    detailed_results=[backtest_result]
+)
+
+# Serialize to JSON
+json_data = summary.model_dump()
+```
+
+### Integration with Main Application
+
+The main application automatically creates these structured results when running backtests:
+
+```bash
+# Run backtest mode - automatically creates structured results
+uv run python -m stockula.main --mode backtest
+
+# Results are saved in both legacy and structured format
+# Legacy: results/reports/strategy_report_<strategy>_<timestamp>.json
+# Structured: results/reports/portfolio_backtest_<timestamp>.json
+```
+
+### Benefits
+
+1. **Type Safety**: Pydantic validation ensures data integrity
+2. **Documentation**: Field descriptions provide clear documentation
+3. **Serialization**: Easy conversion to/from JSON for storage and APIs
+4. **Extensibility**: Easy to add new fields or create derived models
+5. **Testing**: Structured data makes testing more reliable
+
 ### Running Forecasts
 
 The correct command syntax is:

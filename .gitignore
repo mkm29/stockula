@@ -245,4 +245,4 @@ prophet_cache/
 autots_cache/
 
 # sqlite database files
-stockula.db
+# stockula.db

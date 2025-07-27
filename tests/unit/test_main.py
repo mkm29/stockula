@@ -14,8 +14,15 @@ from stockula.main import (
     run_forecast,
     print_results,
     main,
+    create_portfolio_backtest_results,
+    save_detailed_report,
 )
 from stockula.config import StockulaConfig, TickerConfig
+from stockula.config.models import (
+    BacktestResult,
+    StrategyBacktestSummary,
+    PortfolioBacktestResults,
+)
 
 
 class TestSetupLogging:
@@ -529,6 +536,8 @@ class TestMainFunction:
         """Test main function in backtest mode."""
         # Setup config
         config = StockulaConfig()
+        config.data.start_date = datetime(2024, 1, 1)
+        config.data.end_date = datetime(2025, 7, 25)
         config.portfolio.tickers = [TickerConfig(symbol="AAPL", quantity=1.0)]
 
         # Setup container
@@ -564,7 +573,16 @@ class TestMainFunction:
 
         # Setup backtest results with strategy
         mock_backtest.return_value = [
-            {"ticker": "AAPL", "strategy": "smacross", "num_trades": 10}
+            {
+                "ticker": "AAPL",
+                "strategy": "smacross",
+                "return_pct": 10.5,
+                "sharpe_ratio": 1.2,
+                "max_drawdown_pct": -8.5,
+                "num_trades": 10,
+                "win_rate": 60.0,
+                "parameters": {},
+            }
         ]
 
         # Mock save_detailed_report to return a path
@@ -807,6 +825,7 @@ class TestMainAdvanced:
         # Setup config with start date
         config = StockulaConfig()
         config.data.start_date = datetime(2023, 1, 1)
+        config.data.end_date = datetime(2023, 12, 31)
         config.backtest.hold_only_categories = ["INDEX"]
 
         # Create mock container
@@ -881,7 +900,16 @@ class TestMainAdvanced:
 
         # Setup backtest results
         mock_backtest.return_value = [
-            {"ticker": "AAPL", "strategy": "SMACross", "return_pct": 10.0}
+            {
+                "ticker": "AAPL",
+                "strategy": "SMACross",
+                "return_pct": 10.0,
+                "sharpe_ratio": 1.5,
+                "max_drawdown_pct": -5.0,
+                "num_trades": 8,
+                "win_rate": 62.5,
+                "parameters": {},
+            }
         ]
 
         main()
@@ -1106,6 +1134,8 @@ class TestMainAdvanced:
         """Test main function with hold-only assets showing asset type breakdown."""
         # Setup config
         config = StockulaConfig()
+        config.data.start_date = datetime(2024, 1, 1)
+        config.data.end_date = datetime(2025, 7, 25)
         config.backtest.hold_only_categories = ["INDEX"]
 
         # Create mock container
@@ -1156,18 +1186,26 @@ class TestMainAdvanced:
         # Mock run_backtest function to return results for tradeable asset
         with patch("stockula.main.run_backtest") as mock_backtest:
             mock_backtest.return_value = [
-                {"ticker": "AAPL", "strategy": "smacross", "num_trades": 5}
+                {
+                    "ticker": "AAPL",
+                    "strategy": "smacross",
+                    "return_pct": 8.2,
+                    "sharpe_ratio": 0.9,
+                    "max_drawdown_pct": -12.0,
+                    "num_trades": 5,
+                    "win_rate": 40.0,
+                    "parameters": {},
+                }
             ]
 
             main()
 
-        # Check output shows strategy summary with asset type breakdown
+        # Check output shows strategy summary
         captured = capsys.readouterr()
         # The new output format shows strategy summaries
         assert "STRATEGY: SMACROSS" in captured.out
-        assert "Asset Type Breakdown:" in captured.out
-        assert "Hold-only Assets: $8,000.00" in captured.out
-        assert "Tradeable Assets: $1,500.00" in captured.out
+        assert "Portfolio Value at Start Date:" in captured.out
+        assert "Strategy Performance:" in captured.out
 
     @patch("stockula.main.create_container")
     @patch("stockula.main.setup_logging")
@@ -1242,6 +1280,8 @@ class TestMainAdvanced:
         """Test that backtest mode properly creates backtesting key in results."""
         # Setup config
         config = StockulaConfig()
+        config.data.start_date = datetime(2024, 1, 1)
+        config.data.end_date = datetime(2025, 7, 25)
         config.backtest.hold_only_categories = []
 
         # Setup container
@@ -1281,7 +1321,16 @@ class TestMainAdvanced:
 
         # Setup backtest results with proper structure
         mock_backtest.return_value = [
-            {"ticker": "AAPL", "strategy": "smacross", "num_trades": 10}
+            {
+                "ticker": "AAPL",
+                "strategy": "smacross",
+                "return_pct": 15.0,
+                "sharpe_ratio": 1.3,
+                "max_drawdown_pct": -7.5,
+                "num_trades": 10,
+                "win_rate": 70.0,
+                "parameters": {},
+            }
         ]
 
         main()
@@ -1546,3 +1595,231 @@ class TestMainEntryPoint:
             finally:
                 # Restore original __name__
                 main_module.__name__ = original_name
+
+
+class TestCreatePortfolioBacktestResults:
+    """Test create_portfolio_backtest_results function."""
+
+    def test_create_portfolio_backtest_results_single_strategy(self):
+        """Test creating portfolio results with single strategy."""
+        # Setup test data
+        results = {"initial_portfolio_value": 10000.0, "initial_capital": 10000.0}
+
+        config = StockulaConfig()
+        config.data.start_date = datetime(2024, 1, 1)
+        config.data.end_date = datetime(2025, 7, 25)
+        config.backtest.broker_config = None  # Test legacy commission
+
+        strategy_results = {
+            "SMACross": [
+                {
+                    "ticker": "AAPL",
+                    "strategy": "SMACross",
+                    "parameters": {"fast_period": 10},
+                    "return_pct": 15.0,
+                    "sharpe_ratio": 1.2,
+                    "max_drawdown_pct": -10.0,
+                    "num_trades": 20,
+                    "win_rate": 60.0,
+                },
+                {
+                    "ticker": "GOOGL",
+                    "strategy": "SMACross",
+                    "parameters": {"fast_period": 10},
+                    "return_pct": -5.0,
+                    "sharpe_ratio": -0.3,
+                    "max_drawdown_pct": -15.0,
+                    "num_trades": 15,
+                    "win_rate": 33.33,
+                },
+            ]
+        }
+
+        # Create portfolio results
+        portfolio_results = create_portfolio_backtest_results(
+            results, config, strategy_results
+        )
+
+        # Verify structure
+        assert isinstance(portfolio_results, PortfolioBacktestResults)
+        assert portfolio_results.initial_portfolio_value == 10000.0
+        assert portfolio_results.initial_capital == 10000.0
+        assert portfolio_results.date_range["start"] == "2024-01-01"
+        assert portfolio_results.date_range["end"] == "2025-07-25"
+
+        # Check broker config (should be legacy)
+        assert portfolio_results.broker_config["name"] == "legacy"
+        assert portfolio_results.broker_config["commission_type"] == "percentage"
+        assert portfolio_results.broker_config["commission_value"] == 0.002
+
+        # Check strategy summary
+        assert len(portfolio_results.strategy_summaries) == 1
+        summary = portfolio_results.strategy_summaries[0]
+        assert summary.strategy_name == "SMACross"
+        assert summary.total_trades == 35  # 20 + 15
+        assert summary.winning_stocks == 1
+        assert summary.losing_stocks == 1
+        assert summary.average_return_pct == 5.0  # (15 - 5) / 2
+        assert len(summary.detailed_results) == 2
+
+    def test_create_portfolio_backtest_results_multiple_strategies(self):
+        """Test creating portfolio results with multiple strategies."""
+        results = {"initial_portfolio_value": 20000.0, "initial_capital": 20000.0}
+
+        config = StockulaConfig()
+        config.data.start_date = datetime(2024, 1, 1)
+        config.data.end_date = datetime(2025, 7, 25)
+        config.backtest.broker_config = Mock()
+        config.backtest.broker_config.name = "robinhood"
+        config.backtest.broker_config.commission_type = "fixed"
+        config.backtest.broker_config.commission_value = 0.0
+        config.backtest.broker_config.min_commission = None
+        config.backtest.broker_config.regulatory_fees = 0.0
+        config.backtest.broker_config.exchange_fees = 0.000166
+
+        strategy_results = {
+            "VIDYA": [
+                {
+                    "ticker": "NVDA",
+                    "strategy": "VIDYA",
+                    "parameters": {},
+                    "return_pct": 64.42,
+                    "sharpe_ratio": 2.1,
+                    "max_drawdown_pct": -5.0,
+                    "num_trades": 0,
+                    "win_rate": None,
+                }
+            ],
+            "KAMA": [
+                {
+                    "ticker": "NVDA",
+                    "strategy": "KAMA",
+                    "parameters": {},
+                    "return_pct": 21.69,
+                    "sharpe_ratio": 1.5,
+                    "max_drawdown_pct": -8.0,
+                    "num_trades": 5,
+                    "win_rate": 80.0,
+                }
+            ],
+        }
+
+        portfolio_results = create_portfolio_backtest_results(
+            results, config, strategy_results
+        )
+
+        # Check multiple strategies
+        assert len(portfolio_results.strategy_summaries) == 2
+
+        # Check VIDYA summary
+        vidya = portfolio_results.strategy_summaries[0]
+        assert vidya.strategy_name == "VIDYA"
+        assert vidya.average_return_pct == 64.42
+        assert vidya.final_portfolio_value == pytest.approx(32884.0, rel=1e-1)
+
+        # Check KAMA summary
+        kama = portfolio_results.strategy_summaries[1]
+        assert kama.strategy_name == "KAMA"
+        assert kama.average_return_pct == 21.69
+        assert kama.final_portfolio_value == pytest.approx(24338.0, rel=1e-1)
+
+    def test_create_portfolio_backtest_results_empty_strategies(self):
+        """Test creating portfolio results with no strategies."""
+        results = {"initial_portfolio_value": 10000.0, "initial_capital": 10000.0}
+
+        config = StockulaConfig()
+        config.data.start_date = datetime(2024, 1, 1)
+        config.data.end_date = datetime(2025, 7, 25)
+        strategy_results = {}
+
+        portfolio_results = create_portfolio_backtest_results(
+            results, config, strategy_results
+        )
+
+        assert len(portfolio_results.strategy_summaries) == 0
+        assert portfolio_results.initial_portfolio_value == 10000.0
+
+
+class TestSaveDetailedReport:
+    """Test save_detailed_report function."""
+
+    @patch("stockula.main.Path")
+    @patch("builtins.open", create=True)
+    @patch("stockula.main.json.dump")
+    def test_save_detailed_report_basic(self, mock_json_dump, mock_open, mock_path):
+        """Test saving basic detailed report."""
+        # Setup mocks
+        mock_path.return_value.mkdir.return_value = None
+        mock_file = Mock()
+        mock_open.return_value.__enter__ = Mock(return_value=mock_file)
+        mock_open.return_value.__exit__ = Mock(return_value=None)
+
+        # Test data
+        strategy_results = [
+            {
+                "ticker": "AAPL",
+                "strategy": "SMACross",
+                "return_pct": 10.0,
+                "num_trades": 5,
+            }
+        ]
+
+        results = {"initial_portfolio_value": 10000.0, "initial_capital": 10000.0}
+
+        config = StockulaConfig()
+        config.data.start_date = datetime(2024, 1, 1)
+        config.data.end_date = datetime(2025, 7, 25)
+
+        # Call function
+        report_path = save_detailed_report(
+            "SMACross", strategy_results, results, config
+        )
+
+        # Verify
+        assert "SMACross" in report_path
+        assert mock_json_dump.called
+
+    @patch("stockula.main.Path")
+    @patch("builtins.open", create=True)
+    @patch("stockula.main.json.dump")
+    def test_save_detailed_report_with_portfolio_results(
+        self, mock_json_dump, mock_open, mock_path
+    ):
+        """Test saving detailed report with portfolio results."""
+        # Setup mocks
+        mock_reports_dir = Mock()
+        mock_path.return_value = mock_reports_dir
+        mock_reports_dir.__truediv__ = Mock(return_value=mock_reports_dir)
+        mock_reports_dir.mkdir.return_value = None
+
+        mock_file = Mock()
+        mock_open.return_value.__enter__ = Mock(return_value=mock_file)
+        mock_open.return_value.__exit__ = Mock(return_value=None)
+
+        # Create portfolio results
+        portfolio_results = PortfolioBacktestResults(
+            initial_portfolio_value=10000.0,
+            initial_capital=10000.0,
+            date_range={"start": "2024-01-01", "end": "2025-07-25"},
+            broker_config={"name": "robinhood"},
+            strategy_summaries=[],
+        )
+
+        strategy_results = []
+        results = {"initial_portfolio_value": 10000.0}
+        config = StockulaConfig()
+        config.data.start_date = datetime(2024, 1, 1)
+        config.data.end_date = datetime(2025, 7, 25)
+
+        # Call function
+        report_path = save_detailed_report(
+            "TestStrategy",
+            strategy_results,
+            results,
+            config,
+            portfolio_results=portfolio_results,
+        )
+
+        # Should save two files (regular and portfolio)
+        assert mock_open.call_count >= 2
+        assert mock_json_dump.call_count >= 2

@@ -15,6 +15,12 @@ from stockula.backtesting import (
     TripleEMACrossStrategy,
     TRIMACrossStrategy,
 )
+from stockula.config.models import (
+    BacktestResult,
+    StrategyBacktestSummary,
+    PortfolioBacktestResults,
+    BrokerConfig,
+)
 
 
 class TestBacktestRunner:
@@ -51,20 +57,18 @@ class TestBacktestRunner:
 
     def test_run_from_symbol(self, mock_data_fetcher, backtest_data):
         """Test running backtest from symbol."""
-        runner = BacktestRunner()
-
         # Create a mock that returns our backtest data
         mock_fetcher = Mock()
         mock_fetcher.get_stock_data = Mock(return_value=backtest_data)
 
-        with patch(
-            "stockula.backtesting.runner.DataFetcher", return_value=mock_fetcher
-        ):
-            results = runner.run_from_symbol("AAPL", SMACrossStrategy)
+        # Create runner with mocked data fetcher
+        runner = BacktestRunner(data_fetcher=mock_fetcher)
 
-            assert isinstance(results, pd.Series)  # backtesting library returns Series
-            assert "Return [%]" in results.index
-            mock_fetcher.get_stock_data.assert_called_once()
+        results = runner.run_from_symbol("AAPL", SMACrossStrategy)
+
+        assert isinstance(results, pd.Series)  # backtesting library returns Series
+        assert "Return [%]" in results.index
+        mock_fetcher.get_stock_data.assert_called_once()
 
     def test_optimize(self, backtest_data):
         """Test strategy optimization."""
@@ -395,3 +399,144 @@ class TestBacktestingEdgeCases:
         # High commission should reduce returns
         if results_no_comm["# Trades"] > 0:
             assert results_high_comm["Return [%]"] < results_no_comm["Return [%]"]
+
+    def test_runner_with_broker_config(self, backtest_data):
+        """Test BacktestRunner with broker configuration."""
+        # Test with Robinhood preset
+        broker_config = BrokerConfig.from_broker_preset("robinhood")
+        runner = BacktestRunner(broker_config=broker_config)
+
+        assert runner.broker_config == broker_config
+        assert callable(runner.commission)
+
+        # Run backtest
+        results = runner.run(backtest_data, SMACrossStrategy)
+        assert isinstance(results, pd.Series)
+        assert "Return [%]" in results.index
+
+    def test_convert_results_to_backtest_result(self, backtest_data):
+        """Test converting raw backtest results to BacktestResult model."""
+        runner = BacktestRunner()
+        results = runner.run(backtest_data, SMACrossStrategy)
+
+        # Convert to BacktestResult
+        backtest_result = BacktestResult(
+            ticker="TEST",
+            strategy="SMACross",
+            parameters={"fast_period": 10, "slow_period": 20},
+            return_pct=results["Return [%]"],
+            sharpe_ratio=results["Sharpe Ratio"],
+            max_drawdown_pct=results["Max. Drawdown [%]"],
+            num_trades=results["# Trades"],
+            win_rate=results.get("Win Rate [%]") if results["# Trades"] > 0 else None,
+        )
+
+        assert backtest_result.ticker == "TEST"
+        assert backtest_result.strategy == "SMACross"
+        assert isinstance(backtest_result.return_pct, (int, float))
+        assert isinstance(backtest_result.num_trades, int)
+
+
+class TestBacktestDataStructures:
+    """Test the new backtest data structures in integration scenarios."""
+
+    def test_full_portfolio_backtest_workflow(self, backtest_data):
+        """Test complete workflow with new data structures."""
+        # Setup portfolio with multiple strategies
+        strategies = [
+            ("SMACross", SMACrossStrategy, {}),
+            ("RSI", RSIStrategy, {"period": 14}),
+        ]
+
+        strategy_summaries = []
+
+        for strategy_name, strategy_class, params in strategies:
+            runner = BacktestRunner(cash=10000)
+            results = runner.run(backtest_data, strategy_class)
+
+            # Create BacktestResult
+            backtest_result = BacktestResult(
+                ticker="TEST",
+                strategy=strategy_name,
+                parameters=params,
+                return_pct=results["Return [%]"],
+                sharpe_ratio=results["Sharpe Ratio"],
+                max_drawdown_pct=results["Max. Drawdown [%]"],
+                num_trades=results["# Trades"],
+                win_rate=results.get("Win Rate [%]")
+                if results["# Trades"] > 0
+                else None,
+            )
+
+            # Create strategy summary
+            summary = StrategyBacktestSummary(
+                strategy_name=strategy_name,
+                parameters=params,
+                initial_portfolio_value=10000.0,
+                final_portfolio_value=10000.0 * (1 + backtest_result.return_pct / 100),
+                total_return_pct=backtest_result.return_pct,
+                total_trades=backtest_result.num_trades,
+                winning_stocks=1 if backtest_result.return_pct > 0 else 0,
+                losing_stocks=1 if backtest_result.return_pct < 0 else 0,
+                average_return_pct=backtest_result.return_pct,
+                average_sharpe_ratio=backtest_result.sharpe_ratio,
+                detailed_results=[backtest_result],
+            )
+
+            strategy_summaries.append(summary)
+
+        # Create portfolio results
+        portfolio_results = PortfolioBacktestResults(
+            initial_portfolio_value=10000.0,
+            initial_capital=10000.0,
+            date_range={"start": "2023-01-01", "end": "2023-12-31"},
+            broker_config={
+                "name": "robinhood",
+                "commission_type": "fixed",
+                "commission_value": 0.0,
+            },
+            strategy_summaries=strategy_summaries,
+        )
+
+        # Verify structure
+        assert len(portfolio_results.strategy_summaries) == 2
+        assert portfolio_results.strategy_summaries[0].strategy_name == "SMACross"
+        assert portfolio_results.strategy_summaries[1].strategy_name == "RSI"
+
+        # Test serialization
+        data = portfolio_results.model_dump()
+        assert isinstance(data, dict)
+        assert "strategy_summaries" in data
+        assert len(data["strategy_summaries"]) == 2
+
+    def test_broker_config_impact_on_results(self, backtest_data):
+        """Test how different broker configs affect results."""
+        brokers = ["robinhood", "interactive_brokers", "fidelity"]
+        results_by_broker = {}
+
+        for broker_name in brokers:
+            broker_config = BrokerConfig.from_broker_preset(broker_name)
+            runner = BacktestRunner(cash=10000, broker_config=broker_config)
+            results = runner.run(backtest_data, SMACrossStrategy)
+
+            results_by_broker[broker_name] = BacktestResult(
+                ticker="TEST",
+                strategy="SMACross",
+                parameters={},
+                return_pct=results["Return [%]"],
+                sharpe_ratio=results["Sharpe Ratio"],
+                max_drawdown_pct=results["Max. Drawdown [%]"],
+                num_trades=results["# Trades"],
+                win_rate=results.get("Win Rate [%]")
+                if results["# Trades"] > 0
+                else None,
+            )
+
+        # Verify different brokers may have different results due to fees
+        # Interactive Brokers has per-share fees, others are zero commission
+        if results_by_broker["robinhood"].num_trades > 0:
+            # IB should have lower returns due to commission
+            assert (
+                results_by_broker["interactive_brokers"].return_pct
+                <= results_by_broker["robinhood"].return_pct
+            )
