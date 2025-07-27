@@ -1,9 +1,52 @@
 """Stock price forecasting using AutoTS."""
 
 import pandas as pd
+import warnings
+import logging
+import signal
+import sys
+import os
+from contextlib import contextmanager, redirect_stdout, redirect_stderr
+from io import StringIO
 from autots import AutoTS
 from typing import Optional, Dict, Any
 from ..data.fetcher import DataFetcher
+
+# Create logger
+logger = logging.getLogger(__name__)
+
+# Global flag for interruption
+_interrupted = False
+
+
+@contextmanager
+def suppress_autots_output():
+    """Context manager to suppress AutoTS verbose output."""
+    # Suppress warnings
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore")
+
+        # Redirect stdout and stderr if not in debug mode
+        if not logger.isEnabledFor(logging.DEBUG):
+            old_stdout = sys.stdout
+            old_stderr = sys.stderr
+            sys.stdout = StringIO()
+            sys.stderr = StringIO()
+            try:
+                yield
+            finally:
+                sys.stdout = old_stdout
+                sys.stderr = old_stderr
+        else:
+            yield
+
+
+def signal_handler(signum, frame):
+    """Handle interrupt signals gracefully."""
+    global _interrupted
+    _interrupted = True
+    logger.info("\nReceived interrupt signal. Stopping forecast...")
+    sys.exit(0)
 
 
 class StockForecaster:
@@ -64,27 +107,65 @@ class StockForecaster:
         if target_column not in data.columns:
             raise ValueError(f"Target column '{target_column}' not found in data")
 
-        # Reset index to have date as a column for AutoTS
+        # Prepare data for AutoTS - it needs date as a column, not index
         data_for_model = data[[target_column]].copy()
+
         # Ensure the index is a DatetimeIndex
         if not isinstance(data_for_model.index, pd.DatetimeIndex):
             data_for_model.index = pd.to_datetime(data_for_model.index)
 
-        # Initialize AutoTS
-        self.model = AutoTS(
-            forecast_length=self.forecast_length,
-            frequency=self.frequency,
-            prediction_interval=self.prediction_interval,
-            ensemble=ensemble,
-            model_list=model_list,
-            max_generations=max_generations,
-            num_validations=self.num_validations,
-            validation_method=self.validation_method,
-            verbose=0,
-        )
+        # Reset index to have date as a column named 'date'
+        data_for_model = data_for_model.reset_index()
+        data_for_model.columns = ["date", target_column]
 
-        # Fit the model
-        self.model = self.model.fit(data_for_model)
+        # Ensure date column is datetime format
+        data_for_model["date"] = pd.to_datetime(data_for_model["date"])
+
+        # Set up signal handler for graceful interruption
+        signal.signal(signal.SIGINT, signal_handler)
+
+        logger.info(
+            f"Starting AutoTS model fitting for {len(data_for_model)} data points..."
+        )
+        logger.info(f"This may take a few minutes. Press Ctrl+C to cancel.")
+
+        try:
+            with suppress_autots_output():
+                # Initialize AutoTS with minimal verbosity
+                self.model = AutoTS(
+                    forecast_length=self.forecast_length,
+                    frequency=self.frequency,
+                    prediction_interval=self.prediction_interval,
+                    ensemble=ensemble,
+                    model_list=model_list,
+                    max_generations=max_generations,
+                    num_validations=self.num_validations,
+                    validation_method=self.validation_method,
+                    verbose=0,  # Minimal verbosity
+                    no_negatives=True,  # Stock prices can't be negative
+                    drop_most_recent=0,  # Don't drop recent data
+                    n_jobs="auto",  # Use available cores
+                )
+
+                # Fit the model
+                logger.debug(
+                    f"Fitting AutoTS with parameters: model_list={model_list}, max_generations={max_generations}"
+                )
+                self.model = self.model.fit(
+                    data_for_model,
+                    date_col="date",  # Using 'date' column
+                    value_col=target_column,
+                    id_col=None,  # Single series
+                )
+
+            logger.info("Model fitting completed successfully.")
+
+        except KeyboardInterrupt:
+            logger.warning("Model fitting interrupted by user.")
+            raise
+        except Exception as e:
+            logger.error(f"Error during model fitting: {str(e)}")
+            raise
 
         return self
 
@@ -97,7 +178,11 @@ class StockForecaster:
         if self.model is None:
             raise ValueError("Model not fitted. Call fit() first.")
 
-        self.prediction = self.model.predict()
+        logger.debug("Generating predictions...")
+
+        with suppress_autots_output():
+            self.prediction = self.model.predict()
+
         forecast = self.prediction.forecast
 
         # Get upper and lower bounds
@@ -112,6 +197,8 @@ class StockForecaster:
                 "upper_bound": upper_forecast.iloc[:, 0],
             }
         )
+
+        logger.debug(f"Generated {len(result)} forecast points")
 
         return result
 
@@ -151,8 +238,14 @@ class StockForecaster:
         Returns:
             DataFrame with predictions
         """
+        logger.info(f"Fetching data for {symbol}...")
         fetcher = DataFetcher()
         data = fetcher.get_stock_data(symbol, start_date, end_date)
+
+        if data.empty:
+            raise ValueError(f"No data available for symbol {symbol}")
+
+        logger.info(f"Fetched {len(data)} data points for {symbol}")
         return self.fit_predict(data, target_column, **kwargs)
 
     def get_best_model(self) -> Dict[str, Any]:
@@ -164,12 +257,15 @@ class StockForecaster:
         if self.model is None:
             raise ValueError("Model not fitted. Call fit() first.")
 
-        return {
+        model_info = {
             "model_name": self.model.best_model_name,
             "model_params": self.model.best_model_params,
             "model_transformation": self.model.best_model_transformation_params,
             "model_accuracy": getattr(self.model, "best_model_accuracy", "N/A"),
         }
+
+        logger.debug(f"Best model: {model_info['model_name']}")
+        return model_info
 
     def plot_forecast(
         self, historical_data: Optional[pd.DataFrame] = None, n_historical: int = 100
@@ -184,3 +280,18 @@ class StockForecaster:
             raise ValueError("No predictions available. Call predict() first.")
 
         self.model.plot(self.prediction, include_history=True, n_back=n_historical)
+
+    def forecast(
+        self, data: pd.DataFrame, target_column: str = "Close", **kwargs
+    ) -> pd.DataFrame:
+        """Forecast future values (alias for fit_predict).
+
+        Args:
+            data: DataFrame with time series data
+            target_column: Column to forecast
+            **kwargs: Additional arguments for fit()
+
+        Returns:
+            DataFrame with predictions
+        """
+        return self.fit_predict(data, target_column, **kwargs)

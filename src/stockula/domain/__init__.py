@@ -1,6 +1,7 @@
 """Domain models for Stockula."""
 
-from .ticker import Ticker, TickerRegistry
+from .ticker import Ticker as _TickerClass, TickerRegistry
+from .ticker_wrapper import Ticker
 from .asset import Asset
 from .category import Category
 from .portfolio import Portfolio

@@ -6,6 +6,7 @@ from functools import lru_cache
 from dataclasses import dataclass, field, InitVar
 from .asset import Asset
 from .ticker import Ticker
+from .category import Category
 
 # Create logger
 logger = logging.getLogger(__name__)
@@ -78,6 +79,11 @@ class Portfolio:
 
     def add_asset(self, asset: Asset) -> None:
         """Add an asset to the portfolio."""
+        # Check for duplicate
+        if self.has_asset(asset.symbol):
+            raise ValueError(
+                f"Asset with symbol {asset.symbol} already exists in portfolio"
+            )
         self.assets.append(asset)
 
     def get_asset(self, symbol: str) -> Optional[Asset]:
@@ -112,6 +118,17 @@ class Portfolio:
         Delegates to inherited get_asset method.
         """
         return self.get_asset(symbol)
+
+    def get_assets_by_category(self, category: Category) -> List[Asset]:
+        """Get all assets belonging to a specific category.
+
+        Args:
+            category: The category to filter by
+
+        Returns:
+            List of assets with the specified category
+        """
+        return [asset for asset in self.assets if asset.category == category]
 
     def get_portfolio_value(self, prices: Dict[str, float]) -> float:
         """Calculate total portfolio value based on current prices."""

@@ -8,14 +8,16 @@ from dataclasses import dataclass, field, InitVar
 class Ticker:
     """Represents a tradable ticker/symbol with metadata."""
 
-    symbol: InitVar[str]
-    sector: InitVar[Optional[str]] = None
-    market_cap: InitVar[Optional[float]] = None  # in billions
-    category: InitVar[Optional[str]] = (
+    symbol_init: InitVar[str]
+    sector_init: InitVar[Optional[str]] = None
+    market_cap_init: InitVar[Optional[float]] = None  # in billions
+    category_init: InitVar[Optional[str]] = (
         None  # momentum, growth, value, speculative, etc.
     )
-    price_range: InitVar[Optional[Dict[str, float]]] = None  # open, high, low, close
-    metadata: InitVar[Dict[str, Any]] = field(default_factory=dict)
+    price_range_init: InitVar[Optional[Dict[str, float]]] = (
+        None  # open, high, low, close
+    )
+    metadata_init: InitVar[Dict[str, Any]] = None
     _symbol: str = field(init=False, repr=False)
     _sector: Optional[str] = field(init=False, repr=False)
     _market_cap: Optional[float] = field(init=False, repr=False)
@@ -25,20 +27,20 @@ class Ticker:
 
     def __post_init__(
         self,
-        symbol: str,
-        sector: Optional[str],
-        market_cap: Optional[float],
-        category: Optional[str],
-        price_range: Optional[Dict[str, float]],
-        metadata: Dict[str, Any],
+        symbol_init: str,
+        sector_init: Optional[str],
+        market_cap_init: Optional[float],
+        category_init: Optional[str],
+        price_range_init: Optional[Dict[str, float]],
+        metadata_init: Optional[Dict[str, Any]],
     ):
         """Initialize and validate symbol."""
-        self._symbol = symbol.upper()  # Always store symbols in uppercase
-        self._sector = sector
-        self._market_cap = market_cap
-        self._category = category
-        self._price_range = price_range
-        self._metadata = metadata
+        self._symbol = symbol_init.upper()  # Always store symbols in uppercase
+        self._sector = sector_init
+        self._market_cap = market_cap_init
+        self._category = category_init
+        self._price_range = price_range_init
+        self._metadata = metadata_init if metadata_init is not None else {}
 
     @property
     def symbol(self) -> str:  # noqa: F811
@@ -86,24 +88,46 @@ class Ticker:
 
     def __repr__(self):
         """Detailed representation."""
+        sector_repr = f"'{self._sector}'" if self._sector is not None else "None"
+        category_repr = f"'{self._category}'" if self._category is not None else "None"
         return (
-            f"Ticker(symbol='{self._symbol}', sector='{self._sector}', "
-            f"market_cap={self._market_cap}, category='{self._category}')"
+            f"Ticker(symbol='{self._symbol}', sector={sector_repr}, "
+            f"market_cap={self._market_cap}, category={category_repr})"
+        )
+
+    @classmethod
+    def create(
+        cls,
+        symbol: str,
+        sector: Optional[str] = None,
+        market_cap: Optional[float] = None,
+        category: Optional[str] = None,
+        price_range: Optional[Dict[str, float]] = None,
+        metadata: Optional[Dict[str, Any]] = None,
+    ) -> "Ticker":
+        """Factory method to create Ticker with intuitive parameter names."""
+        return cls(
+            symbol_init=symbol,
+            sector_init=sector,
+            market_cap_init=market_cap,
+            category_init=category,
+            price_range_init=price_range,
+            metadata_init=metadata,
         )
 
 
 class TickerRegistry:
     """Singleton registry for managing ticker instances."""
 
-    _instance: Optional["TickerRegistry"] = None
-    _tickers: Dict[str, Ticker] = {}
+    _instances: Dict[type, "TickerRegistry"] = {}
 
     def __new__(cls):
-        """Ensure only one instance exists."""
-        if cls._instance is None:
-            cls._instance = super().__new__(cls)
-            cls._instance._tickers = {}
-        return cls._instance
+        """Ensure only one instance exists per class."""
+        if cls not in cls._instances:
+            instance = super().__new__(cls)
+            instance._tickers = {}
+            cls._instances[cls] = instance
+        return cls._instances[cls]
 
     def get_or_create(self, symbol: str, **kwargs) -> Ticker:
         """Get existing ticker or create new one.
@@ -118,7 +142,16 @@ class TickerRegistry:
         symbol = symbol.upper()
 
         if symbol not in self._tickers:
-            self._tickers[symbol] = Ticker(symbol=symbol, **kwargs)
+            # Map kwargs to the _init parameter names
+            init_kwargs = {
+                "symbol_init": symbol,
+                "sector_init": kwargs.get("sector"),
+                "market_cap_init": kwargs.get("market_cap"),
+                "category_init": kwargs.get("category"),
+                "price_range_init": kwargs.get("price_range"),
+                "metadata_init": kwargs.get("metadata", {}),
+            }
+            self._tickers[symbol] = Ticker(**init_kwargs)
         else:
             # If ticker exists and new values are provided, create a new instance
             # with merged attributes (since Ticker is now immutable)
@@ -126,13 +159,14 @@ class TickerRegistry:
             if any(v is not None for v in kwargs.values()):
                 # Merge existing values with new ones
                 merged_kwargs = {
-                    "sector": kwargs.get("sector", existing.sector),
-                    "market_cap": kwargs.get("market_cap", existing.market_cap),
-                    "category": kwargs.get("category", existing.category),
-                    "price_range": kwargs.get("price_range", existing.price_range),
-                    "metadata": kwargs.get("metadata", existing.metadata),
+                    "symbol_init": symbol,
+                    "sector_init": kwargs.get("sector", existing.sector),
+                    "market_cap_init": kwargs.get("market_cap", existing.market_cap),
+                    "category_init": kwargs.get("category", existing.category),
+                    "price_range_init": kwargs.get("price_range", existing.price_range),
+                    "metadata_init": kwargs.get("metadata", existing.metadata),
                 }
-                self._tickers[symbol] = Ticker(symbol=symbol, **merged_kwargs)
+                self._tickers[symbol] = Ticker(**merged_kwargs)
 
         return self._tickers[symbol]
 

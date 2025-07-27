@@ -435,9 +435,133 @@ Stockula includes several ready-to-use trading strategies:
 
 ### Running Tests
 
+Stockula includes a comprehensive test suite using pytest with fixtures for easy testing. Tests are organized into unit and integration test directories.
+
 ```bash
+# Run all tests
 uv run pytest
+
+# Run only unit tests (fast, no external dependencies)
+uv run pytest tests/unit
+
+# Run only integration tests (may require external services)
+uv run pytest tests/integration
+
+# Run with coverage report
+uv run pytest --cov=stockula
+
+# Run specific test file
+uv run pytest tests/unit/test_domain.py
+uv run pytest tests/unit/test_strategies.py  # Comprehensive strategy tests
+uv run pytest tests/integration/test_database.py
+
+# Run specific test class or function
+uv run pytest tests/unit/test_domain.py::TestPortfolio
+uv run pytest tests/unit/test_strategies.py::TestAdvancedStrategyExecution
+uv run pytest tests/unit/test_domain.py::TestPortfolio::test_portfolio_creation
+
+# Run tests by marker
+uv run pytest -m unit          # Only unit tests
+uv run pytest -m integration   # Only integration tests
+uv run pytest -m "not slow"    # Skip slow tests
+
+# Run tests in parallel (requires pytest-xdist)
+uv run pytest -n auto
+
+# Run with verbose output
+uv run pytest -v
+
+# Run with minimal output
+uv run pytest -q
 ```
+
+### Test Organization
+
+Tests are organized into two main categories:
+
+#### Unit Tests (`tests/unit/`)
+
+- **test_config.py**: Tests for configuration models and validation
+- **test_domain.py**: Tests for domain models (Portfolio, Asset, Ticker, etc.)
+- **test_strategies.py**: Comprehensive tests for trading strategies with execution validation
+- **test_runner.py**: Tests for backtesting runner functionality
+- **test_cli.py**: Tests for database CLI commands and interfaces
+- **test_technical_analysis.py**: Tests for technical indicators
+
+These tests run quickly and don't require external services or API calls. All unit tests use proper mocking to avoid external dependencies.
+
+#### Integration Tests (`tests/integration/`)
+
+- **test_data.py**: Tests for data fetching with yfinance
+- **test_database.py**: Tests for SQLite database operations
+- **test_backtesting.py**: Tests for backtesting strategies
+- **test_forecasting.py**: Tests for AutoTS forecasting
+- **test_integration.py**: End-to-end integration scenarios
+- **test_main.py**: Tests for the main CLI entry point
+
+These tests may be slower and could require network access or database setup.
+
+### Test Coverage
+
+The test suite includes:
+
+- **Unit Tests**: Test individual components in isolation
+- **Integration Tests**: Test component interactions and external services
+- **Fixtures**: Reusable test data and mock objects in `conftest.py`
+- **Mocking**: External API calls are mocked to avoid network dependencies
+
+#### Test Statistics
+
+- **Total Tests**: 340+ tests across unit and integration suites
+- **Unit Tests**: 86 strategy tests + additional module tests
+- **Current Coverage**: Improved test coverage with comprehensive strategy validation
+- **Unit Tests**: All passing, fast execution (< 1 second for strategies)
+- **Integration Tests**: May require network/database access
+
+#### Strategy Test Coverage
+
+The strategy test suite includes comprehensive validation:
+
+- **Execution Tests**: All strategies tested with proper mock setups
+- **Parameter Validation**: RSI thresholds, ATR parameters, period relationships
+- **Data Requirements**: Minimum data calculations and date range validation
+- **Error Handling**: Graceful handling of insufficient data and edge cases
+- **Performance**: Fast execution with no recursion errors or timeouts
+
+Coverage reports are generated in:
+
+- Terminal: Shows missing lines directly
+- HTML: `htmlcov/index.html` - Interactive coverage report
+- XML: `coverage.xml` - For CI/CD integration
+
+To improve coverage, run tests with coverage report:
+
+```bash
+# Generate detailed coverage report
+uv run pytest --cov=stockula --cov-report=html --cov-report=term-missing
+
+# View coverage in browser
+open htmlcov/index.html
+```
+
+#### Recent Test Improvements
+
+The test suite has been significantly enhanced with:
+
+- **Advanced Strategy Testing**: Fixed recursion issues in strategy tests with proper mock objects
+- **Fast Execution**: All tests now run quickly without timeouts (< 1 second for strategy tests)
+- **Robust Mocking**: Improved mock setups that avoid infinite recursion and type errors
+- **Comprehensive Coverage**: Tests now cover strategy initialization, execution, data validation, and error handling
+- **Parameter Validation**: Extensive testing of strategy parameters, thresholds, and data requirements
+
+#### Testing Best Practices
+
+When writing new tests:
+
+1. **Use Proper Mocking**: Create data objects with `__len__` support instead of using `patch('builtins.len')`
+1. **Provide Real Values**: Use actual numeric values for strategy attributes instead of Mock objects
+1. **Test Edge Cases**: Include tests for insufficient data, empty datasets, and boundary conditions
+1. **Fast Execution**: Ensure tests run quickly by avoiding complex setups and external dependencies
 
 ### Code Formatting
 
@@ -449,6 +573,19 @@ uv run ruff format
 
 ```bash
 uv run ruff check
+
+# Auto-fix linting issues
+uv run ruff check --fix
+```
+
+### Type Checking
+
+```bash
+# Install mypy if not already installed
+uv add --dev mypy
+
+# Run type checking
+uv run mypy src/stockula
 ```
 
 ## Troubleshooting
@@ -656,6 +793,65 @@ config = StockulaConfig(
     backtest=BacktestConfig(initial_cash=50000)
 )
 ```
+
+## Forecasting
+
+Stockula uses AutoTS for time series forecasting, which automatically tests multiple models to find the best fit for your data.
+
+### Important Notes on Forecasting
+
+When running forecast mode, please be aware:
+
+- **AutoTS is verbose**: The library tests many models and outputs errors for those that don't fit well. This is normal behavior.
+- **Process can take time**: Depending on your settings, forecasting can take several minutes per ticker.
+- **Use Ctrl+C to cancel**: The process now handles interrupts gracefully.
+
+### Optimizing Forecast Performance
+
+To speed up forecasting and reduce verbosity:
+
+```yaml
+forecast:
+  forecast_length: 14      # Shorter forecasts are faster
+  model_list: "fast"       # Use only fast models
+  max_generations: 2       # Reduce from default 5
+  num_validations: 1       # Reduce from default 2
+  ensemble: "simple"       # Simple is faster than auto
+```
+
+### Running Forecasts
+
+The correct command syntax is:
+
+```bash
+# Correct - using Python module syntax
+uv run python -m stockula.main --config .config.yaml --mode forecast
+
+# Test with minimal configuration
+uv run python test_forecast.py
+```
+
+### Troubleshooting Forecasts
+
+If forecasting is taking too long or producing too many errors:
+
+1. **Enable logging** to see progress:
+
+   ```yaml
+   logging:
+     enabled: true
+     level: "INFO"
+   ```
+
+1. **Use faster settings** as shown above
+
+1. **Test with single ticker** first:
+
+   ```bash
+   uv run python -m stockula.main --ticker AAPL --mode forecast
+   ```
+
+1. **Check data availability**: Ensure the ticker has sufficient historical data
 
 ## License
 

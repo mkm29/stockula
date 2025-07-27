@@ -113,4 +113,11 @@ performance:
     broad_market_core_avg: 0.149 # 14.9% average
 forecast:
   forecast_length: 14
-  model_list: "fast"
+  model_list: "fast"  # Using fast models to reduce computation time
+  max_generations: 2  # Reduced from default 5 for faster results
+  num_validations: 1  # Reduced from default 2 for faster results
+  ensemble: "simple"  # Simple ensemble is faster than auto
+
+logging:
+  enabled: false      # Set to true to see detailed progress
+  level: "INFO"

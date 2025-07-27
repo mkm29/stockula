@@ -256,6 +256,10 @@ class DomainFactory:
         )
         calculated_quantities = {}
 
+        # Initialize all tickers with 0 quantity
+        for ticker_config in tickers_to_add:
+            calculated_quantities[ticker_config.symbol] = 0
+
         logger.debug(
             f"Auto-allocation target capital: ${target_capital:,.2f} ({config.portfolio.capital_utilization_target:.1%} of ${config.portfolio.initial_capital:,.2f})"
         )

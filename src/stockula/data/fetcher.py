@@ -47,11 +47,15 @@ class DataFetcher:
 
         # Try to get data from cache first
         if self.use_cache and not force_refresh:
-            cached_data = self.db.get_price_history(symbol, start, end, interval)
-            if not cached_data.empty:
-                # Check if we have complete data for the requested range
-                if self.db.has_data(symbol, start, end):
-                    return cached_data
+            try:
+                cached_data = self.db.get_price_history(symbol, start, end, interval)
+                if not cached_data.empty:
+                    # Check if we have complete data for the requested range
+                    if self.db.has_data(symbol, start, end):
+                        return cached_data
+            except Exception as e:
+                # If database fails, fall back to yfinance
+                print(f"Database error, falling back to yfinance: {e}")
 
         # Fetch from yfinance
         ticker = yf.Ticker(symbol)
@@ -110,15 +114,19 @@ class DataFetcher:
 
         return data
 
-    def get_current_prices(self, symbols: List[str]) -> Dict[str, float]:
+    def get_current_prices(self, symbols: List[str] | str) -> Dict[str, float]:
         """Get current prices for multiple symbols.
 
         Args:
-            symbols: List of stock ticker symbols
+            symbols: List of stock ticker symbols or single symbol string
 
         Returns:
             Dictionary mapping symbols to their current prices
         """
+        # Handle single symbol case
+        if isinstance(symbols, str):
+            symbols = [symbols]
+
         prices = {}
         for symbol in symbols:
             try:
