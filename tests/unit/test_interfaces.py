@@ -23,38 +23,41 @@ class TestIDataFetcher:
     def test_is_abstract_base_class(self):
         """Test that IDataFetcher is an abstract base class."""
         assert issubclass(IDataFetcher, ABC)
-        assert hasattr(IDataFetcher, '__abstractmethods__')
+        assert hasattr(IDataFetcher, "__abstractmethods__")
 
     def test_has_required_methods(self):
         """Test that IDataFetcher has all required abstract methods."""
-        required_methods = [
-            'get_stock_data',
-            'get_current_prices',
-            'get_info'
-        ]
-        
+        required_methods = ["get_stock_data", "get_current_prices", "get_info"]
+
         for method in required_methods:
             assert hasattr(IDataFetcher, method)
             assert callable(getattr(IDataFetcher, method))
 
     def test_get_stock_data_signature(self):
         """Test get_stock_data method signature."""
-        method = getattr(IDataFetcher, 'get_stock_data')
+        method = getattr(IDataFetcher, "get_stock_data")
         sig = inspect.signature(method)
-        
+
         # Check parameter names
         param_names = list(sig.parameters.keys())
-        expected_params = ['self', 'symbol', 'start', 'end', 'interval', 'force_refresh']
+        expected_params = [
+            "self",
+            "symbol",
+            "start",
+            "end",
+            "interval",
+            "force_refresh",
+        ]
         assert param_names == expected_params
 
     def test_get_current_prices_signature(self):
         """Test get_current_prices method signature."""
-        method = getattr(IDataFetcher, 'get_current_prices')
+        method = getattr(IDataFetcher, "get_current_prices")
         sig = inspect.signature(method)
-        
+
         param_names = list(sig.parameters.keys())
-        assert 'self' in param_names
-        assert 'symbols' in param_names
+        assert "self" in param_names
+        assert "symbols" in param_names
 
     def test_cannot_instantiate_directly(self):
         """Test that IDataFetcher cannot be instantiated directly."""
@@ -74,12 +77,8 @@ class TestIDatabaseManager:
 
     def test_has_required_methods(self):
         """Test that IDatabaseManager has all required abstract methods."""
-        required_methods = [
-            'get_price_history',
-            'store_price_history',
-            'has_data'
-        ]
-        
+        required_methods = ["get_price_history", "store_price_history", "has_data"]
+
         for method in required_methods:
             assert hasattr(IDatabaseManager, method)
 
@@ -101,19 +100,19 @@ class TestIStockForecaster:
 
     def test_has_required_methods(self):
         """Test that IStockForecaster has all required abstract methods."""
-        required_methods = ['forecast', 'forecast_from_symbol']
-        
+        required_methods = ["forecast", "forecast_from_symbol"]
+
         for method in required_methods:
             assert hasattr(IStockForecaster, method)
 
     def test_forecast_method_signature(self):
         """Test forecast method signature."""
-        method = getattr(IStockForecaster, 'forecast')
+        method = getattr(IStockForecaster, "forecast")
         sig = inspect.signature(method)
-        
+
         param_names = list(sig.parameters.keys())
-        assert 'self' in param_names
-        assert 'data' in param_names
+        assert "self" in param_names
+        assert "data" in param_names
 
 
 class TestIBacktestRunner:
@@ -125,20 +124,20 @@ class TestIBacktestRunner:
 
     def test_has_required_methods(self):
         """Test that IBacktestRunner has all required abstract methods."""
-        required_methods = ['run', 'run_from_symbol']
-        
+        required_methods = ["run", "run_from_symbol"]
+
         for method in required_methods:
             assert hasattr(IBacktestRunner, method)
 
     def test_run_method_signature(self):
         """Test run method signature."""
-        method = getattr(IBacktestRunner, 'run')
+        method = getattr(IBacktestRunner, "run")
         sig = inspect.signature(method)
-        
+
         param_names = list(sig.parameters.keys())
-        assert 'self' in param_names
-        assert 'data' in param_names
-        assert 'strategy' in param_names
+        assert "self" in param_names
+        assert "data" in param_names
+        assert "strategy" in param_names
 
 
 class TestIDomainFactory:
@@ -150,18 +149,18 @@ class TestIDomainFactory:
 
     def test_has_required_methods(self):
         """Test that IDomainFactory has all required abstract methods."""
-        required_methods = ['create_portfolio', 'create_asset']
-        
+        required_methods = ["create_portfolio", "create_asset"]
+
         for method in required_methods:
             assert hasattr(IDomainFactory, method)
 
     def test_create_portfolio_signature(self):
         """Test create_portfolio method signature."""
-        method = getattr(IDomainFactory, 'create_portfolio')
+        method = getattr(IDomainFactory, "create_portfolio")
         sig = inspect.signature(method)
-        
+
         param_names = list(sig.parameters.keys())
-        assert 'self' in param_names
+        assert "self" in param_names
 
 
 class TestILoggingManager:
@@ -173,20 +172,20 @@ class TestILoggingManager:
 
     def test_has_required_methods(self):
         """Test that ILoggingManager has all required abstract methods."""
-        required_methods = ['setup', 'debug', 'info', 'warning', 'error', 'critical']
-        
+        required_methods = ["setup", "debug", "info", "warning", "error", "critical"]
+
         for method in required_methods:
             assert hasattr(ILoggingManager, method)
 
     def test_logging_methods_signatures(self):
         """Test logging method signatures."""
-        for method_name in ['debug', 'info', 'warning', 'error', 'critical']:
+        for method_name in ["debug", "info", "warning", "error", "critical"]:
             method = getattr(ILoggingManager, method_name)
             sig = inspect.signature(method)
-            
+
             param_names = list(sig.parameters.keys())
-            assert 'self' in param_names
-            assert 'message' in param_names
+            assert "self" in param_names
+            assert "message" in param_names
 
 
 class TestITechnicalIndicators:
@@ -198,8 +197,8 @@ class TestITechnicalIndicators:
 
     def test_has_required_methods(self):
         """Test that ITechnicalIndicators has all required abstract methods."""
-        required_methods = ['sma', 'ema', 'rsi', 'macd']
-        
+        required_methods = ["sma", "ema", "rsi", "macd"]
+
         for method in required_methods:
             assert hasattr(ITechnicalIndicators, method)
 
@@ -219,31 +218,43 @@ class TestInterfaceIntegration:
         """Test that all interfaces can be imported."""
         from stockula.interfaces import (
             IDataFetcher,
-            IDatabaseManager, 
+            IDatabaseManager,
             IStockForecaster,
             IBacktestRunner,
             IDomainFactory,
             ILoggingManager,
             ITechnicalIndicators,
         )
-        
+
         # Just checking they exist and are classes
-        for interface in [IDataFetcher, IDatabaseManager, IStockForecaster, 
-                         IBacktestRunner, IDomainFactory, ILoggingManager, ITechnicalIndicators]:
+        for interface in [
+            IDataFetcher,
+            IDatabaseManager,
+            IStockForecaster,
+            IBacktestRunner,
+            IDomainFactory,
+            ILoggingManager,
+            ITechnicalIndicators,
+        ]:
             assert inspect.isclass(interface)
             assert issubclass(interface, ABC)
 
     def test_interface_method_consistency(self):
         """Test that interface methods have consistent patterns."""
         interfaces = [
-            IDataFetcher, IDatabaseManager, IStockForecaster,
-            IBacktestRunner, IDomainFactory, ILoggingManager, ITechnicalIndicators
+            IDataFetcher,
+            IDatabaseManager,
+            IStockForecaster,
+            IBacktestRunner,
+            IDomainFactory,
+            ILoggingManager,
+            ITechnicalIndicators,
         ]
-        
+
         for interface in interfaces:
             # All interfaces should have at least one abstract method
             assert len(interface.__abstractmethods__) > 0
-            
+
             # All abstract methods should be callable
             for method_name in interface.__abstractmethods__:
                 method = getattr(interface, method_name)
@@ -253,13 +264,18 @@ class TestInterfaceIntegration:
         """Test interface inheritance structure."""
         # All our interfaces should inherit from ABC
         interfaces = [
-            IDataFetcher, IDatabaseManager, IStockForecaster,
-            IBacktestRunner, IDomainFactory, ILoggingManager, ITechnicalIndicators
+            IDataFetcher,
+            IDatabaseManager,
+            IStockForecaster,
+            IBacktestRunner,
+            IDomainFactory,
+            ILoggingManager,
+            ITechnicalIndicators,
         ]
-        
+
         for interface in interfaces:
             assert ABC in interface.__mro__
-            assert interface.__module__ == 'stockula.interfaces'
+            assert interface.__module__ == "stockula.interfaces"
 
 
 class TestInterfaceUsage:
@@ -267,18 +283,20 @@ class TestInterfaceUsage:
 
     def test_interface_implementation_pattern(self):
         """Test that interfaces can be properly implemented."""
-        
+
         # Create a mock implementation
         class MockDataFetcher(IDataFetcher):
-            def get_stock_data(self, symbol, start=None, end=None, interval="1d", force_refresh=False):
+            def get_stock_data(
+                self, symbol, start=None, end=None, interval="1d", force_refresh=False
+            ):
                 return pd.DataFrame()
-            
+
             def get_current_prices(self, symbols):
                 return {}
-            
+
             def get_info(self, symbol, force_refresh=False):
                 return {}
-        
+
         # Should be able to instantiate the implementation
         mock_fetcher = MockDataFetcher()
         assert isinstance(mock_fetcher, IDataFetcher)
@@ -287,10 +305,10 @@ class TestInterfaceUsage:
         """Test interface type checking functionality."""
         # Mock implementation for testing
         mock_fetcher = Mock(spec=IDataFetcher)
-        
+
         # Should pass isinstance check
         assert isinstance(mock_fetcher, type(mock_fetcher))
-        
+
         # Should have the interface methods
         for method in IDataFetcher.__abstractmethods__:
             assert hasattr(mock_fetcher, method)

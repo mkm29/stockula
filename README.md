@@ -414,27 +414,258 @@ All modules use capitalized column names for OHLCV data:
 
 This ensures compatibility with the backtesting library and maintains consistency across all modules.
 
-## Pre-built Strategies
+## Backtesting Strategies
 
-Stockula includes several ready-to-use trading strategies:
+Stockula includes comprehensive trading strategies for backtesting. Each strategy implements specific technical analysis approaches with configurable parameters and built-in risk management.
 
-- **SMACrossStrategy**: Simple Moving Average crossover strategy
-- **RSIStrategy**: Relative Strength Index based strategy
-- **MACDStrategy**: MACD (Moving Average Convergence Divergence) strategy
-- **DoubleEMACrossStrategy**: Double Exponential Moving Average (34/55) crossover strategy with ATR-based stop losses
-  - Requires minimum 75 trading days (55 for slow EMA + 20 buffer)
-  - Includes data validation to warn if insufficient data
-  - Provides helper methods to calculate required date ranges
-- **TripleEMACrossStrategy**: Triple Exponential Moving Average (TEMA) crossover strategy
-  - Uses 9/21 period TEMA crossovers for reduced lag
-  - Formula: TEMA = 3*EMA - 3*EMA(EMA) + EMA(EMA(EMA))
-  - Requires minimum 81 trading days (3\*21-2=61 for slow TEMA + 20 buffer)
-  - Includes ATR-based stop losses with 1.5x multiplier
-- **TRIMACrossStrategy**: Triangular Moving Average (TRIMA) crossover strategy
-  - Uses 14/28 period TRIMA crossovers for smooth trend following
-  - Double-smooths data to filter short-term fluctuations
-  - Requires minimum 76 trading days (2\*28=56 for slow TRIMA + 20 buffer)
-  - Includes ATR-based stop losses with 1.2x multiplier
+### Available Strategies
+
+#### **Basic Strategies**
+
+##### **1. SMACross - Simple Moving Average Crossover**
+
+- **Configuration Name**: `smacross`
+- **Class**: `SMACrossStrategy`
+- **Description**: Classic crossover strategy using two Simple Moving Averages
+- **Parameters**:
+  - `fast_period`: 10 (default) - Fast SMA period
+  - `slow_period`: 20 (default) - Slow SMA period
+- **Data Requirements**: 40 trading days minimum (slow_period + 20 buffer)
+- **Signals**: Buy when fast SMA crosses above slow SMA, sell on reverse crossover
+
+##### **2. RSI - Relative Strength Index**
+
+- **Configuration Name**: `rsi`
+- **Class**: `RSIStrategy`
+- **Description**: Momentum oscillator strategy using RSI overbought/oversold levels
+- **Parameters**:
+  - `period`: 14 (default) - RSI calculation period
+  - `oversold_threshold`: 30 (default) - Buy signal threshold
+  - `overbought_threshold`: 70 (default) - Sell signal threshold
+- **Data Requirements**: 34 trading days minimum (period + 20 buffer)
+- **Signals**: Buy when RSI < oversold, sell when RSI > overbought
+
+##### **3. MACD - Moving Average Convergence Divergence**
+
+- **Configuration Name**: `macd`
+- **Class**: `MACDStrategy`
+- **Description**: Trend-following momentum strategy using MACD line and signal line
+- **Parameters**:
+  - `fast_period`: 12 (default) - Fast EMA period
+  - `slow_period`: 26 (default) - Slow EMA period
+  - `signal_period`: 9 (default) - Signal line EMA period
+- **Data Requirements**: 46 trading days minimum (slow_period + 20 buffer)
+- **Signals**: Buy when MACD crosses above signal line, sell on reverse crossover
+
+#### **Advanced EMA-Based Strategies**
+
+##### **4. DoubleEMACross - Double Exponential Moving Average**
+
+- **Configuration Name**: `doubleemacross`
+- **Class**: `DoubleEMACrossStrategy`
+- **Description**: Enhanced EMA crossover with ATR-based stop losses for different asset classes
+- **Parameters**:
+  - `fast_period`: 34 (default) - Fast EMA period
+  - `slow_period`: 55 (default) - Slow EMA period
+  - `momentum_atr_multiple`: 1.25 (default) - Stop loss multiplier for momentum assets
+  - `speculative_atr_multiple`: 1.0 (default) - Stop loss multiplier for speculative assets
+  - `atr_period`: 14 (default) - ATR calculation period
+- **Data Requirements**: 75 trading days minimum (55 + 20 buffer)
+- **Features**: Dynamic stop losses, asset class categorization, data validation warnings
+
+##### **5. TripleEMACross - Triple Exponential Moving Average (TEMA)**
+
+- **Configuration Name**: `tripleemacross`
+- **Class**: `TripleEMACrossStrategy`
+- **Description**: Reduced-lag moving average using triple exponential smoothing
+- **Formula**: `TEMA = 3*EMA - 3*EMA(EMA) + EMA(EMA(EMA))`
+- **Parameters**:
+  - `fast_period`: 9 (default) - Fast TEMA period
+  - `slow_period`: 21 (default) - Slow TEMA period
+  - `atr_multiple`: 1.5 (default) - Stop loss multiplier
+  - `atr_period`: 14 (default) - ATR calculation period
+- **Data Requirements**: 81 trading days minimum (3\*21-2=61 + 20 buffer)
+- **Features**: Faster signals with reduced lag, ATR-based stop losses
+
+##### **6. TRIMACross - Triangular Moving Average**
+
+- **Configuration Name**: `trimacross`
+- **Class**: `TRIMACrossStrategy`
+- **Description**: Smooth trend-following strategy using double-smoothed data
+- **Parameters**:
+  - `fast_period`: 14 (default) - Fast TRIMA period
+  - `slow_period`: 28 (default) - Slow TRIMA period
+  - `atr_multiple`: 1.2 (default) - Stop loss multiplier
+  - `atr_period`: 14 (default) - ATR calculation period
+- **Data Requirements**: 76 trading days minimum (2\*28=56 + 20 buffer)
+- **Features**: Filters short-term noise, smooth trend identification
+
+#### **Adaptive Strategies**
+
+##### **7. VIDYA - Variable Index Dynamic Average**
+
+- **Configuration Name**: `vidya`
+- **Class**: `VIDYAStrategy`
+- **Description**: Adaptive moving average using Chande Momentum Oscillator (CMO)
+- **Parameters**:
+  - `period`: 14 (default) - CMO calculation period
+  - `smoothing_factor`: 0.1 (default) - Base smoothing factor
+- **Formula**: `VIDYA = Alpha * Close + (1 - Alpha) * Previous VIDYA`
+- **Features**: Adapts smoothing based on market volatility and trend strength
+
+##### **8. KAMA - Kaufman's Adaptive Moving Average**
+
+- **Configuration Name**: `kama`
+- **Class**: `KAMAStrategy`
+- **Description**: Adaptive moving average using Efficiency Ratio (ER)
+- **Parameters**:
+  - `period`: 10 (default) - Efficiency ratio calculation period
+  - `fast_sc`: 2 (default) - Fast smoothing constant
+  - `slow_sc`: 30 (default) - Slow smoothing constant
+- **Features**: Moves faster in trending markets, slower during consolidation
+
+##### **9. FRAMA - Fractal Adaptive Moving Average**
+
+- **Configuration Name**: `frama`
+- **Class**: `FRAMAStrategy`
+- **Description**: Adaptive moving average using fractal dimension
+- **Parameters**:
+  - `period`: 16 (default) - Fractal calculation period
+  - `batch_size`: 128 (default) - Batch size for calculations
+- **Features**: Adjusts to market fractal properties and price behavior
+
+### Strategy Configuration Examples
+
+#### Basic Configuration
+
+```yaml
+backtest:
+  initial_cash: 10000.0
+  commission: 0.002
+  strategies:
+    - name: smacross
+      parameters:
+        fast_period: 10
+        slow_period: 20
+    
+    - name: rsi
+      parameters:
+        period: 14
+        oversold_threshold: 30
+        overbought_threshold: 70
+```
+
+#### Advanced EMA Strategy Configuration
+
+```yaml
+backtest:
+  strategies:
+    - name: doubleemacross
+      parameters:
+        fast_period: 34
+        slow_period: 55
+        momentum_atr_multiple: 1.25
+        speculative_atr_multiple: 1.0
+        atr_period: 14
+    
+    - name: tripleemacross
+      parameters:
+        fast_period: 9
+        slow_period: 21
+        atr_multiple: 1.5
+    
+    - name: trimacross
+      parameters:
+        fast_period: 14
+        slow_period: 28
+        atr_multiple: 1.2
+```
+
+#### Multiple Strategy Comparison
+
+```yaml
+backtest:
+  strategies:
+    - name: smacross     # Classic approach
+    - name: doubleemacross  # Modern EMA with risk management
+    - name: tripleemacross  # Low-lag TEMA approach
+    - name: rsi          # Momentum-based approach
+    - name: vidya        # Adaptive volatility-based
+    - name: kama         # Adaptive efficiency-based
+    - name: frama        # Fractal-based adaptive
+```
+
+### Strategy Features
+
+#### **Risk Management**
+
+- **ATR-Based Stop Losses**: Advanced strategies use Average True Range for dynamic stop losses
+- **Position Sizing**: Automatic position sizing based on available capital
+- **Data Validation**: Warnings for insufficient historical data
+- **Asset Classification**: Different parameters for momentum vs speculative assets
+
+#### **Performance Optimization**
+
+- **Minimum Data Requirements**: Each strategy calculates required data automatically
+- **Date Range Helpers**: Built-in methods to determine optimal start dates
+- **Buffer Periods**: Additional data buffer for indicator warm-up
+
+#### **Backtesting Integration**
+
+- **Parameter Optimization**: All strategies support parameter optimization
+- **Performance Metrics**: Standard backtesting metrics (Sharpe ratio, drawdown, etc.)
+- **Multi-Strategy Testing**: Run multiple strategies simultaneously for comparison
+
+### Usage Examples
+
+#### Running Single Strategy
+
+```python
+from stockula import BacktestRunner, SMACrossStrategy
+
+runner = BacktestRunner(cash=10000, commission=0.002)
+results = runner.run_from_symbol("AAPL", SMACrossStrategy)
+```
+
+#### Strategy Comparison
+
+```python
+strategies = [SMACrossStrategy, DoubleEMACrossStrategy, TripleEMACrossStrategy]
+for strategy in strategies:
+    results = runner.run_from_symbol("AAPL", strategy)
+    print(f"{strategy.__name__}: {results['Return [%]']:.2f}%")
+```
+
+#### Parameter Optimization
+
+```python
+optimal_params = runner.optimize(
+    data,
+    SMACrossStrategy,
+    fast_period=range(5, 20),
+    slow_period=range(20, 50)
+)
+```
+
+### Data Requirements Summary
+
+| Strategy       | Min Days | Calculation      | Notes                     |
+| -------------- | -------- | ---------------- | ------------------------- |
+| SMACross       | 40       | slow_period + 20 | Basic crossover           |
+| RSI            | 34       | period + 20      | Momentum oscillator       |
+| MACD           | 46       | slow_period + 20 | Trend following           |
+| DoubleEMACross | 75       | 55 + 20          | Enhanced with stop loss   |
+| TripleEMACross | 81       | 3\*21-2 + 20     | Reduced lag TEMA          |
+| TRIMACross     | 76       | 2\*28 + 20       | Smooth trend following    |
+| VIDYA          | 34       | period + 20      | Adaptive volatility-based |
+| KAMA           | 30       | period + 20      | Adaptive efficiency-based |
+| FRAMA          | 36       | period + 20      | Fractal adaptive          |
+
+### Common Configuration Issues
+
+1. **"Unknown strategy" Warning**: Use the exact configuration name (e.g., `doubleemacross`, not `DoubleEMACross`, `vidya` not `VIDYA`)
+1. **Insufficient Data**: Ensure your date range provides enough historical data for the strategy
+1. **Parameter Validation**: Some strategies validate parameter relationships (e.g., slow_period > fast_period)
 
 ## Development
 
@@ -530,7 +761,7 @@ The strategy test suite includes comprehensive validation:
 
 - **Current Coverage**: 37% of strategies.py (344 of 829 lines covered)
 - **Execution Tests**: All strategies tested with proper mock setups
-- **Parameter Validation**: RSI thresholds, ATR parameters, period relationships  
+- **Parameter Validation**: RSI thresholds, ATR parameters, period relationships
 - **Data Requirements**: Minimum data calculations and date range validation
 - **Error Handling**: Graceful handling of insufficient data and edge cases
 - **Core Functionality**: Basic trading logic, crossover signals, buy/sell operations

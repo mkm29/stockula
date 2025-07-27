@@ -577,7 +577,9 @@ class TestDataFetcherErrorHandling:
                     data = fetcher.get_stock_data("TEST")
 
                     # Should print database error message
-                    mock_print.assert_called_with("Database error, falling back to yfinance: Database connection failed")
+                    mock_print.assert_called_with(
+                        "Database error, falling back to yfinance: Database connection failed"
+                    )
                     # Should still return data from yfinance
                     assert not data.empty
                     assert len(data) == 1
@@ -585,10 +587,13 @@ class TestDataFetcherErrorHandling:
     def test_get_multiple_stocks_with_errors(self):
         """Test get_multiple_stocks with individual stock errors - covers lines 123-124."""
         with patch("yfinance.Ticker") as mock_yf:
+
             def side_effect(symbol):
                 mock_ticker = Mock()
                 if symbol == "INVALID":
-                    mock_ticker.history.side_effect = Exception(f"Error fetching data for {symbol}")
+                    mock_ticker.history.side_effect = Exception(
+                        f"Error fetching data for {symbol}"
+                    )
                 else:
                     mock_ticker.history.return_value = pd.DataFrame(
                         {"Close": [100]}, index=pd.date_range("2023-01-01", periods=1)
@@ -602,7 +607,9 @@ class TestDataFetcherErrorHandling:
                 results = fetcher.get_multiple_stocks(["AAPL", "INVALID", "GOOGL"])
 
                 # Should print error for invalid symbol
-                mock_print.assert_called_with("Error fetching data for INVALID: Error fetching data for INVALID")
+                mock_print.assert_called_with(
+                    "Error fetching data for INVALID: Error fetching data for INVALID"
+                )
                 # Should return data for valid symbols only
                 assert len(results) == 2
                 assert "AAPL" in results
@@ -629,7 +636,9 @@ class TestDataFetcherCurrentPrices:
         """Test fallback to regularMarketPrice - covers lines 154-155."""
         mock_ticker = Mock(spec=yf.Ticker)
         mock_ticker.history.return_value = pd.DataFrame()  # Empty history
-        mock_ticker.info = {"regularMarketPrice": 160.25}  # No currentPrice, but has regularMarketPrice
+        mock_ticker.info = {
+            "regularMarketPrice": 160.25
+        }  # No currentPrice, but has regularMarketPrice
 
         with patch("yfinance.Ticker", return_value=mock_ticker):
             fetcher = DataFetcher(use_cache=False)
@@ -648,7 +657,9 @@ class TestDataFetcherCurrentPrices:
                 fetcher = DataFetcher(use_cache=False)
                 prices = fetcher.get_current_prices(["TEST"])
 
-                mock_print.assert_called_with("Warning: Could not get current price for TEST")
+                mock_print.assert_called_with(
+                    "Warning: Could not get current price for TEST"
+                )
                 assert prices == {}
 
     def test_get_current_prices_with_exception(self):
@@ -661,7 +672,9 @@ class TestDataFetcherCurrentPrices:
                 fetcher = DataFetcher(use_cache=False)
                 prices = fetcher.get_current_prices(["TEST"])
 
-                mock_print.assert_called_with("Error fetching price for TEST: API error")
+                mock_print.assert_called_with(
+                    "Error fetching price for TEST: API error"
+                )
                 assert prices == {}
 
     def test_get_current_prices_single_string_input(self):
@@ -695,7 +708,9 @@ class TestDataFetcherOptionsChainAdvanced:
         mock_ticker.options = ("2024-01-19",)
 
         with patch("stockula.data.fetcher.DatabaseManager", return_value=mock_db):
-            with patch("yfinance.Ticker", return_value=mock_ticker) as mock_ticker_class:
+            with patch(
+                "yfinance.Ticker", return_value=mock_ticker
+            ) as mock_ticker_class:
                 fetcher = DataFetcher(use_cache=True)
                 calls, puts = fetcher.get_options_chain("TEST", "2024-01-19")
 
@@ -703,7 +718,9 @@ class TestDataFetcherOptionsChainAdvanced:
                 pd.testing.assert_frame_equal(calls, cached_calls)
                 pd.testing.assert_frame_equal(puts, cached_puts)
                 # Should not call option_chain method since cache hit
-                mock_ticker.option_chain.assert_not_called() if hasattr(mock_ticker, 'option_chain') else None
+                mock_ticker.option_chain.assert_not_called() if hasattr(
+                    mock_ticker, "option_chain"
+                ) else None
 
     def test_get_options_chain_with_exception(self):
         """Test options chain exception handling - covers lines 246-248."""
@@ -716,7 +733,9 @@ class TestDataFetcherOptionsChainAdvanced:
                 fetcher = DataFetcher(use_cache=False)
                 calls, puts = fetcher.get_options_chain("TEST", "2024-01-19")
 
-                mock_print.assert_called_with("Error fetching options chain for TEST: Options API error")
+                mock_print.assert_called_with(
+                    "Error fetching options chain for TEST: Options API error"
+                )
                 assert calls.empty
                 assert puts.empty
 
@@ -725,8 +744,7 @@ class TestDataFetcherOptionsChainAdvanced:
         mock_ticker = Mock(spec=yf.Ticker)
         mock_ticker.options = ("2024-01-19", "2024-02-16", "2024-03-15")
         mock_ticker.option_chain.return_value = Mock(
-            calls=pd.DataFrame({"strike": [100]}),
-            puts=pd.DataFrame({"strike": [100]})
+            calls=pd.DataFrame({"strike": [100]}), puts=pd.DataFrame({"strike": [100]})
         )
 
         with patch("yfinance.Ticker", return_value=mock_ticker):
@@ -742,7 +760,9 @@ class TestDataFetcherDividendsAndSplitsAdvanced:
 
     def test_get_dividends_with_cache_hit(self):
         """Test dividends cache hit - covers lines 270-272."""
-        cached_dividends = pd.Series([0.25, 0.30], index=pd.to_datetime(["2023-01-15", "2023-04-15"]))
+        cached_dividends = pd.Series(
+            [0.25, 0.30], index=pd.to_datetime(["2023-01-15", "2023-04-15"])
+        )
 
         mock_db = Mock()
         mock_db.get_dividends.return_value = cached_dividends
@@ -758,14 +778,18 @@ class TestDataFetcherDividendsAndSplitsAdvanced:
         """Test dividends with date range filtering - covers lines 284-287."""
         dividend_series = pd.Series(
             [0.20, 0.25, 0.30, 0.35],
-            index=pd.to_datetime(["2022-12-15", "2023-01-15", "2023-04-15", "2023-07-15"])
+            index=pd.to_datetime(
+                ["2022-12-15", "2023-01-15", "2023-04-15", "2023-07-15"]
+            ),
         )
         mock_ticker = Mock(spec=yf.Ticker)
         mock_ticker.dividends = dividend_series
 
         with patch("yfinance.Ticker", return_value=mock_ticker):
             fetcher = DataFetcher(use_cache=False)
-            dividends = fetcher.get_dividends("TEST", start="2023-01-01", end="2023-06-30")
+            dividends = fetcher.get_dividends(
+                "TEST", start="2023-01-01", end="2023-06-30"
+            )
 
             # Should filter to only dividends within date range
             assert len(dividends) == 2  # Should include 2023-01-15 and 2023-04-15
@@ -774,7 +798,9 @@ class TestDataFetcherDividendsAndSplitsAdvanced:
 
     def test_get_splits_with_cache_hit(self):
         """Test splits cache hit - covers lines 311-313."""
-        cached_splits = pd.Series([2.0, 3.0], index=pd.to_datetime(["2022-06-01", "2023-06-01"]))
+        cached_splits = pd.Series(
+            [2.0, 3.0], index=pd.to_datetime(["2022-06-01", "2023-06-01"])
+        )
 
         mock_db = Mock()
         mock_db.get_splits.return_value = cached_splits
@@ -790,7 +816,9 @@ class TestDataFetcherDividendsAndSplitsAdvanced:
         """Test splits with date range filtering - covers lines 325-328."""
         split_series = pd.Series(
             [1.5, 2.0, 3.0, 2.5],
-            index=pd.to_datetime(["2021-06-01", "2022-06-01", "2023-06-01", "2024-06-01"])
+            index=pd.to_datetime(
+                ["2021-06-01", "2022-06-01", "2023-06-01", "2024-06-01"]
+            ),
         )
         mock_ticker = Mock(spec=yf.Ticker)
         mock_ticker.splits = split_series
@@ -814,15 +842,19 @@ class TestDataFetcherBulkOperationsAdvanced:
             fetcher = DataFetcher(use_cache=False)
             fetcher.fetch_and_store_all_data("TEST")
 
-            mock_print.assert_called_with("Warning: Caching is disabled, data will not be stored")
+            mock_print.assert_called_with(
+                "Warning: Caching is disabled, data will not be stored"
+            )
 
     def test_fetch_and_store_all_data_with_errors(self):
         """Test bulk fetch with individual data fetch errors - covers lines 352-353, 359-360, 368-370, 378-380, 390-392."""
         mock_ticker = Mock(spec=yf.Ticker)
-        
+
         # Mock failures for different data types
         mock_ticker.history.side_effect = Exception("Price history error")
-        mock_ticker.info = Exception("Info error")  # This will cause an error when accessed
+        mock_ticker.info = Exception(
+            "Info error"
+        )  # This will cause an error when accessed
         mock_ticker.dividends = pd.Series(dtype=float)  # Empty dividends
         mock_ticker.splits = pd.Series(dtype=float)  # Empty splits
         mock_ticker.options = ()  # No options available
@@ -834,23 +866,37 @@ class TestDataFetcherBulkOperationsAdvanced:
                 with patch("builtins.print") as mock_print:
                     # Mock individual methods to control their behavior
                     fetcher = DataFetcher(use_cache=True)
-                    
+
                     # Mock methods to raise specific exceptions
-                    fetcher.get_stock_data = Mock(side_effect=Exception("Price history error"))
+                    fetcher.get_stock_data = Mock(
+                        side_effect=Exception("Price history error")
+                    )
                     fetcher.get_info = Mock(side_effect=Exception("Info error"))
-                    fetcher.get_dividends = Mock(return_value=pd.Series(dtype=float))  # Empty series
-                    fetcher.get_splits = Mock(return_value=pd.Series(dtype=float))  # Empty series
-                    fetcher.get_options_chain = Mock(side_effect=Exception("Options error"))
-                    
+                    fetcher.get_dividends = Mock(
+                        return_value=pd.Series(dtype=float)
+                    )  # Empty series
+                    fetcher.get_splits = Mock(
+                        return_value=pd.Series(dtype=float)
+                    )  # Empty series
+                    fetcher.get_options_chain = Mock(
+                        side_effect=Exception("Options error")
+                    )
+
                     fetcher.fetch_and_store_all_data("TEST")
 
                     # Should print error messages for failed operations
                     print_calls = [call[0][0] for call in mock_print.call_args_list]
-                    assert any("Error fetching price history" in call for call in print_calls)
-                    assert any("Error fetching stock info" in call for call in print_calls)
+                    assert any(
+                        "Error fetching price history" in call for call in print_calls
+                    )
+                    assert any(
+                        "Error fetching stock info" in call for call in print_calls
+                    )
                     assert any("No dividends found" in call for call in print_calls)
                     assert any("No splits found" in call for call in print_calls)
-                    assert any("Error fetching options chain" in call for call in print_calls)
+                    assert any(
+                        "Error fetching options chain" in call for call in print_calls
+                    )
 
 
 class TestDataFetcherUtilityMethods:
@@ -869,7 +915,9 @@ class TestDataFetcherUtilityMethods:
             fetcher = DataFetcher(use_cache=False)
             fetcher.cleanup_old_data(30)
 
-            mock_print.assert_any_call("Warning: Caching is disabled, no data to clean up")
+            mock_print.assert_any_call(
+                "Warning: Caching is disabled, no data to clean up"
+            )
 
     def test_cleanup_old_data_with_cache(self):
         """Test cleanup_old_data with cache enabled."""
@@ -923,11 +971,11 @@ class TestDataFetcherUtilityMethods:
     def test_initialization_with_injected_database_manager(self):
         """Test initialization with injected database manager - covers line 30."""
         mock_db = Mock()
-        
+
         # Test with cache enabled and injected db manager
         fetcher = DataFetcher(use_cache=True, database_manager=mock_db)
         assert fetcher.db is mock_db
-        
+
         # Test with cache disabled and injected db manager
         fetcher = DataFetcher(use_cache=False, database_manager=mock_db)
         assert fetcher.db is None

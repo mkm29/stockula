@@ -1,8 +1,9 @@
 # Stockula Configuration - Auto-Allocation Example
 # Only requires initial capital and category ratios - automatically determines optimal quantities
 data:
-  start_date: "2025-01-01"
+  start_date: "2024-01-01"
   end_date: "2025-07-25"
+  use_cache: false
 # Portfolio configuration with automatic allocation
 portfolio:
   name: "Auto-Allocated EMA Portfolio"
@@ -79,13 +80,13 @@ portfolio:
       sector: Technology
 backtest:
   strategies:
-    - name: VIDYA
+    - name: vidya
       type: EMA
-    # - name: TripleEMACross
-    #   type: EMA
-    #   parameters:
-    #     fast_period: 14
-    #     slow_period: 28
+      # - name: TripleEMACross
+      #   type: EMA
+      #   parameters:
+      #     fast_period: 14
+      #     slow_period: 28
   # Hold-only categories will not be backtested
   hold_only_categories: ["INDEX", "BOND"]
 performance:

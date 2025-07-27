@@ -529,7 +529,11 @@ class TestDomainFactoryAdvanced:
     ):
         """Test error handling in dynamic allocation."""
         # Patch the get_current_prices method to raise an exception
-        with patch.object(mock_data_fetcher, 'get_current_prices', side_effect=Exception("Price fetch failed")):
+        with patch.object(
+            mock_data_fetcher,
+            "get_current_prices",
+            side_effect=Exception("Price fetch failed"),
+        ):
             config = StockulaConfig(
                 portfolio=PortfolioConfig(
                     name="Error Test",
@@ -548,13 +552,17 @@ class TestDomainFactoryAdvanced:
     def test_create_portfolio_auto_allocation_categories(self, mock_data_fetcher):
         """Test auto allocation with category ratios."""
         # Override the return value for this specific test
-        with patch.object(mock_data_fetcher, 'get_current_prices', return_value={
-            "VTI": 200.0,
-            "QQQ": 300.0,
-            "VYM": 100.0,
-            "ARKK": 50.0,
-            "VWO": 45.0,
-        }):
+        with patch.object(
+            mock_data_fetcher,
+            "get_current_prices",
+            return_value={
+                "VTI": 200.0,
+                "QQQ": 300.0,
+                "VYM": 100.0,
+                "ARKK": 50.0,
+                "VWO": 45.0,
+            },
+        ):
             config = StockulaConfig(
                 portfolio=PortfolioConfig(
                     name="Auto Allocation",
@@ -633,10 +641,14 @@ class TestDomainFactoryAdvanced:
     def test_allocation_amount_calculation(self, mock_data_fetcher):
         """Test allocation amount calculation accuracy."""
         # Override the return value for this specific test
-        with patch.object(mock_data_fetcher, 'get_current_prices', return_value={
-            "AAPL": 150.0,
-            "GOOGL": 2500.0,  # High price stock
-        }):
+        with patch.object(
+            mock_data_fetcher,
+            "get_current_prices",
+            return_value={
+                "AAPL": 150.0,
+                "GOOGL": 2500.0,  # High price stock
+            },
+        ):
             config = StockulaConfig(
                 portfolio=PortfolioConfig(
                     name="Allocation Test",
@@ -666,7 +678,11 @@ class TestDomainFactoryAdvanced:
     def test_allocation_percentage_calculation(self, mock_data_fetcher):
         """Test allocation percentage calculation."""
         # Override the return value for this specific test
-        with patch.object(mock_data_fetcher, 'get_current_prices', return_value={"VTI": 200.0, "QQQ": 300.0}):
+        with patch.object(
+            mock_data_fetcher,
+            "get_current_prices",
+            return_value={"VTI": 200.0, "QQQ": 300.0},
+        ):
             config = StockulaConfig(
                 portfolio=PortfolioConfig(
                     name="Percentage Test",
@@ -714,9 +730,13 @@ class TestDomainFactoryErrorScenarios:
     def test_create_portfolio_zero_price(self, mock_data_fetcher):
         """Test handling of zero stock prices."""
         # Override the return value for this specific test
-        with patch.object(mock_data_fetcher, 'get_current_prices', return_value={
-            "PENNY": 0.0  # Zero price
-        }):
+        with patch.object(
+            mock_data_fetcher,
+            "get_current_prices",
+            return_value={
+                "PENNY": 0.0  # Zero price
+            },
+        ):
             config = StockulaConfig(
                 portfolio=PortfolioConfig(
                     name="Zero Price Test",
@@ -735,10 +755,14 @@ class TestDomainFactoryErrorScenarios:
     def test_create_portfolio_missing_prices(self, mock_data_fetcher):
         """Test handling of missing stock prices."""
         # Override the return value for this specific test
-        with patch.object(mock_data_fetcher, 'get_current_prices', return_value={
-            "AAPL": 150.0
-            # GOOGL missing
-        }):
+        with patch.object(
+            mock_data_fetcher,
+            "get_current_prices",
+            return_value={
+                "AAPL": 150.0
+                # GOOGL missing
+            },
+        ):
             config = StockulaConfig(
                 portfolio=PortfolioConfig(
                     name="Missing Price Test",

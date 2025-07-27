@@ -23,7 +23,9 @@ class TestBacktestRunnerInitialization:
 
     def test_initialization_with_custom_params(self, mock_data_fetcher):
         """Test BacktestRunner initialization with custom parameters."""
-        runner = BacktestRunner(cash=50000, commission=0.001, margin=2.0, data_fetcher=mock_data_fetcher)
+        runner = BacktestRunner(
+            cash=50000, commission=0.001, margin=2.0, data_fetcher=mock_data_fetcher
+        )
         assert runner.cash == 50000
         assert runner.commission == 0.001
         assert runner.margin == 2.0
@@ -126,7 +128,9 @@ class TestBacktestRunnerRun:
         mock_backtest.run.return_value = {}
         mock_backtest_class.return_value = mock_backtest
 
-        runner = BacktestRunner(cash=25000, commission=0.005, margin=1.5, data_fetcher=None)
+        runner = BacktestRunner(
+            cash=25000, commission=0.005, margin=1.5, data_fetcher=None
+        )
         runner.run(sample_data, SMACrossStrategy)
 
         # Verify custom parameters were used
@@ -205,7 +209,7 @@ class TestBacktestRunnerFromSymbol:
     def test_run_from_symbol_no_data_fetcher(self):
         """Test run_from_symbol without data fetcher raises error."""
         runner = BacktestRunner(data_fetcher=None)
-        
+
         with pytest.raises(ValueError, match="Data fetcher not configured"):
             runner.run_from_symbol("AAPL", SMACrossStrategy)
 
@@ -214,7 +218,7 @@ class TestBacktestRunnerFromSymbol:
         """Test run_from_symbol with basic parameters."""
         # Create a mock data fetcher
         mock_data_fetcher = Mock()
-        
+
         # Setup mock data
         sample_data = pd.DataFrame(
             {

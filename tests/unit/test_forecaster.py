@@ -365,16 +365,14 @@ class TestStockForecasterForecastFromSymbol:
         # Create mock data fetcher
         mock_fetcher = Mock()
         mock_fetcher.get_stock_data.return_value = stock_data
-        
+
         # Create forecaster with mock data fetcher
         forecaster = StockForecaster(data_fetcher=mock_fetcher)
 
         with patch.object(forecaster, "fit_predict") as mock_fit_predict:
             mock_fit_predict.return_value = predictions
 
-            result = forecaster.forecast_from_symbol(
-                "AAPL", start_date="2023-01-01"
-            )
+            result = forecaster.forecast_from_symbol("AAPL", start_date="2023-01-01")
 
             # Should fetch data
             mock_fetcher.get_stock_data.assert_called_once_with(
@@ -399,7 +397,7 @@ class TestStockForecasterForecastFromSymbol:
         # Create mock data fetcher
         mock_fetcher = Mock()
         mock_fetcher.get_stock_data.return_value = pd.DataFrame()  # Empty
-        
+
         forecaster = StockForecaster(data_fetcher=mock_fetcher)
 
         with pytest.raises(ValueError, match="No data available for symbol TEST"):

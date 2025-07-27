@@ -32,7 +32,7 @@ class TestSetupLogging:
         # Create a mock logging manager
         mock_logging_manager = Mock()
         mock_logging_manager.setup = Mock()
-        
+
         # Call setup_logging with the mock
         setup_logging(config, logging_manager=mock_logging_manager)
 
@@ -47,7 +47,7 @@ class TestSetupLogging:
         # Create a mock logging manager
         mock_logging_manager = Mock()
         mock_logging_manager.setup = Mock()
-        
+
         # Call setup_logging with the mock
         setup_logging(config, logging_manager=mock_logging_manager)
 
@@ -254,7 +254,7 @@ class TestRunBacktest:
 
         # Mock unknown strategy
         mock_get_strategy.return_value = None
-        
+
         # Create mock runner
         mock_runner = Mock()
 
@@ -471,7 +471,7 @@ class TestMainFunction:
         """Test main function in TA mode."""
         # Setup config
         config = StockulaConfig()
-        
+
         # Setup container
         container = Mock()
         container.stockula_config.return_value = config
@@ -488,7 +488,7 @@ class TestMainFunction:
         mock_portfolio.get_all_assets.return_value = [mock_asset]
         mock_portfolio.get_portfolio_value.return_value = 110000
         mock_portfolio.allocation_method = "equal"
-        
+
         mock_factory = Mock()
         mock_factory.create_portfolio.return_value = mock_portfolio
         container.domain_factory.return_value = mock_factory
@@ -528,7 +528,7 @@ class TestMainFunction:
         # Setup config
         config = StockulaConfig()
         config.portfolio.tickers = [TickerConfig(symbol="AAPL", quantity=1.0)]
-        
+
         # Setup container
         container = Mock()
         container.stockula_config.return_value = config
@@ -546,7 +546,7 @@ class TestMainFunction:
         mock_portfolio.get_portfolio_value.return_value = 100000
         mock_portfolio.allocation_method = "equal"
         mock_portfolio.get_allocation_by_category.return_value = {}
-        
+
         mock_factory = Mock()
         mock_factory.create_portfolio.return_value = mock_portfolio
         container.domain_factory.return_value = mock_factory
@@ -583,7 +583,7 @@ class TestMainFunction:
     def test_main_save_config(self, mock_container):
         """Test main function with save config option."""
         config = StockulaConfig()
-        
+
         # Setup container
         container = Mock()
         container.stockula_config.return_value = config
@@ -652,7 +652,7 @@ class TestMainAdvanced:
         # Setup config
         config = StockulaConfig()
         config.portfolio.tickers = [TickerConfig(symbol="AAPL", quantity=1.0)]
-        
+
         # Setup container
         container = Mock()
         container.stockula_config.return_value = config
@@ -669,7 +669,7 @@ class TestMainAdvanced:
         mock_portfolio.get_all_assets.return_value = [mock_asset]
         mock_portfolio.get_portfolio_value.return_value = 110000
         mock_portfolio.allocation_method = "equal"
-        
+
         mock_factory = Mock()
         mock_factory.create_portfolio.return_value = mock_portfolio
         container.domain_factory.return_value = mock_factory
@@ -725,7 +725,7 @@ class TestMainAdvanced:
         config = StockulaConfig()
         config.output["save_results"] = True
         config.output["results_dir"] = "./test_results"
-        
+
         # Setup container
         container = Mock()
         container.stockula_config.return_value = config
@@ -798,18 +798,18 @@ class TestMainAdvanced:
         config = StockulaConfig()
         config.data.start_date = datetime(2023, 1, 1)
         config.backtest.hold_only_categories = ["INDEX"]
-        
+
         # Create mock container
         mock_container = Mock()
         mock_create_container.return_value = mock_container
-        
+
         # Mock config from container
         mock_container.stockula_config.return_value = config
-        
+
         # Mock logging manager
         mock_logging_manager = Mock()
         mock_container.logging_manager.return_value = mock_logging_manager
-        
+
         # Setup domain factory with hold-only asset
         mock_asset1 = Mock()
         mock_asset1.symbol = "AAPL"
@@ -835,7 +835,7 @@ class TestMainAdvanced:
             "Index": {"value": 8000, "percentage": 84.2, "assets": ["SPY"]},
             "Uncategorized": {"value": 1500, "percentage": 15.8, "assets": ["AAPL"]},
         }
-        
+
         # Mock domain factory
         mock_factory = Mock()
         mock_factory.create_portfolio.return_value = mock_portfolio
@@ -864,12 +864,12 @@ class TestMainAdvanced:
         mock_fetcher.get_stock_data.side_effect = side_effect
         mock_fetcher.get_current_prices.return_value = {"AAPL": 160.0, "SPY": 420.0}
         mock_container.data_fetcher.return_value = mock_fetcher
-        
+
         # Mock backtest runner
         mock_runner = Mock()
         mock_container.backtest_runner.return_value = mock_runner
 
-        # Setup backtest results  
+        # Setup backtest results
         mock_backtest.return_value = [
             {"ticker": "AAPL", "strategy": "SMACross", "return_pct": 10.0}
         ]
@@ -880,9 +880,11 @@ class TestMainAdvanced:
         assert mock_fetcher.get_stock_data.call_count >= 2  # Called for each symbol
 
         # Should call backtest only for tradeable assets
-        mock_backtest.assert_called_once_with("AAPL", config, backtest_runner=mock_runner)
+        mock_backtest.assert_called_once_with(
+            "AAPL", config, backtest_runner=mock_runner
+        )
 
-        # Should show portfolio summary  
+        # Should show portfolio summary
         mock_print.assert_called_once()
 
     @patch("stockula.main.create_container")
@@ -903,7 +905,7 @@ class TestMainAdvanced:
         # Setup config
         config = StockulaConfig()
         config.portfolio.tickers = [TickerConfig(symbol="AAPL", quantity=1.0)]
-        
+
         # Setup container
         container = Mock()
         container.stockula_config.return_value = config
@@ -940,7 +942,7 @@ class TestMainAdvanced:
 
         # Should call TA for each ticker (our config has 1 ticker)
         assert mock_ta.call_count == 1
-        
+
         # Check that print_results was called
         print(f"Debug: mock_print.call_count = {mock_print.call_count}")
         print(f"Debug: mock_print.call_args = {mock_print.call_args}")
@@ -979,12 +981,20 @@ class TestMainAdvanced:
         mock_asset1 = Mock()
         mock_asset1.symbol = "AAPL"
         mock_asset1.category = Mock()
-        mock_asset1.get_value = Mock(side_effect=lambda p: 10 * p if isinstance(p, (int, float)) else 10 * p.get("AAPL", 0))
+        mock_asset1.get_value = Mock(
+            side_effect=lambda p: 10 * p
+            if isinstance(p, (int, float))
+            else 10 * p.get("AAPL", 0)
+        )
 
         mock_asset2 = Mock()
         mock_asset2.symbol = "SPY"
         mock_asset2.category = Mock()
-        mock_asset2.get_value = Mock(side_effect=lambda p: 20 * p if isinstance(p, (int, float)) else 20 * p.get("SPY", 0))
+        mock_asset2.get_value = Mock(
+            side_effect=lambda p: 20 * p
+            if isinstance(p, (int, float))
+            else 20 * p.get("SPY", 0)
+        )
 
         mock_portfolio = Mock()
         mock_portfolio.name = "Test Portfolio"
@@ -1054,10 +1064,14 @@ class TestMainAdvanced:
     def test_main_with_default_config_search(self, mock_create_container):
         """Test main searches for default config files."""
         # Mock container creation to raise FileNotFoundError for config loading
-        mock_create_container.side_effect = FileNotFoundError("Configuration file not found: test.yaml")
+        mock_create_container.side_effect = FileNotFoundError(
+            "Configuration file not found: test.yaml"
+        )
 
         # Should propagate the FileNotFoundError
-        with pytest.raises(FileNotFoundError, match="Configuration file not found: test.yaml"):
+        with pytest.raises(
+            FileNotFoundError, match="Configuration file not found: test.yaml"
+        ):
             main()
 
     def test_main_entry_point(self):
@@ -1098,12 +1112,16 @@ class TestMainAdvanced:
         mock_tradeable = Mock()
         mock_tradeable.symbol = "AAPL"
         mock_tradeable.category = Category.GROWTH
-        mock_tradeable.get_value = Mock(side_effect=lambda p: 150.0 * 10 if isinstance(p, dict) else 1500.0)
+        mock_tradeable.get_value = Mock(
+            side_effect=lambda p: 150.0 * 10 if isinstance(p, dict) else 1500.0
+        )
 
         mock_hold_only = Mock()
         mock_hold_only.symbol = "SPY"
         mock_hold_only.category = Category.INDEX
-        mock_hold_only.get_value = Mock(side_effect=lambda p: 400.0 * 20 if isinstance(p, dict) else 8000.0)
+        mock_hold_only.get_value = Mock(
+            side_effect=lambda p: 400.0 * 20 if isinstance(p, dict) else 8000.0
+        )
 
         mock_portfolio = Mock()
         mock_portfolio.name = "Test Portfolio"
@@ -1155,7 +1173,7 @@ class TestMainAdvanced:
         """Test that forecast mode creates forecasting key in results."""
         # Setup config
         config = StockulaConfig()
-        
+
         # Setup container
         container = Mock()
         container.stockula_config.return_value = config
@@ -1212,7 +1230,7 @@ class TestMainAdvanced:
         # Setup config
         config = StockulaConfig()
         config.backtest.hold_only_categories = []
-        
+
         # Setup container
         container = Mock()
         container.stockula_config.return_value = config
@@ -1256,12 +1274,14 @@ class TestMainAdvanced:
     @patch("stockula.main.setup_logging")
     @patch("stockula.main.print_results")
     @patch("sys.argv", ["stockula"])
-    def test_main_no_default_config_found(self, mock_print, mock_logging, mock_create_container, mock_log_manager):
+    def test_main_no_default_config_found(
+        self, mock_print, mock_logging, mock_create_container, mock_log_manager
+    ):
         """Test main when no default config files are found."""
         # Create mock container
         mock_container = Mock()
         mock_create_container.return_value = mock_container
-        
+
         # Setup config
         config = StockulaConfig()
         mock_container.stockula_config.return_value = config
@@ -1283,14 +1303,17 @@ class TestMainAdvanced:
         mock_fetcher = Mock()
         mock_fetcher.get_current_prices.return_value = {}
         mock_container.data_fetcher.return_value = mock_fetcher
-        
+
         # Mock the analysis functions to avoid data issues
         with patch("stockula.main.run_technical_analysis") as mock_ta:
             with patch("stockula.main.run_backtest") as mock_backtest:
                 with patch("stockula.main.run_forecast") as mock_forecast:
                     mock_ta.return_value = {"ticker": "AAPL", "indicators": {}}
                     mock_backtest.return_value = []
-                    mock_forecast.return_value = {"ticker": "AAPL", "forecast_price": 100.0}
+                    mock_forecast.return_value = {
+                        "ticker": "AAPL",
+                        "forecast_price": 100.0,
+                    }
 
                     main()
 
@@ -1319,7 +1342,7 @@ class TestMainAdvanced:
         # Setup config
         config = StockulaConfig()
         config.backtest.hold_only_categories = []
-        
+
         # Setup container
         container = Mock()
         container.stockula_config.return_value = config
@@ -1379,7 +1402,7 @@ class TestMainAdvanced:
         # Setup config with invalid category
         config = StockulaConfig()
         config.backtest.hold_only_categories = ["INVALID_CATEGORY"]
-        
+
         # Setup container
         container = Mock()
         container.stockula_config.return_value = config
@@ -1432,7 +1455,7 @@ class TestMainAdvanced:
         # Setup config with start date
         config = StockulaConfig()
         config.data.start_date = datetime(2023, 1, 1)
-        
+
         # Setup container
         container = Mock()
         container.stockula_config.return_value = config
@@ -1480,24 +1503,24 @@ class TestMainEntryPoint:
         with patch("stockula.main.main") as mock_main:
             # Test the entry point by simulating the condition
             # This directly tests the line: if __name__ == "__main__": main()
-            
+
             # Get the main module code and execute the specific condition
             import stockula.main as main_module
-            
+
             # Save original __name__
             original_name = main_module.__name__
-            
+
             try:
-                # Set module name to trigger the condition 
+                # Set module name to trigger the condition
                 main_module.__name__ = "__main__"
-                
+
                 # Execute just the if condition block to test line 610
                 if main_module.__name__ == "__main__":
                     main_module.main()
-                
+
                 # Verify main was called
                 mock_main.assert_called_once()
-                
+
             finally:
                 # Restore original __name__
                 main_module.__name__ = original_name

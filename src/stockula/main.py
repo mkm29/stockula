@@ -17,6 +17,9 @@ from .backtesting import (
     DoubleEMACrossStrategy,
     TripleEMACrossStrategy,
     TRIMACrossStrategy,
+    VIDYAStrategy,
+    KAMAStrategy,
+    FRAMAStrategy,
 )
 from .config import StockulaConfig
 from .domain import Category
@@ -51,6 +54,9 @@ def get_strategy_class(strategy_name: str):
         "doubleemacross": DoubleEMACrossStrategy,
         "tripleemacross": TripleEMACrossStrategy,
         "trimacross": TRIMACrossStrategy,
+        "vidya": VIDYAStrategy,
+        "kama": KAMAStrategy,
+        "frama": FRAMAStrategy,
     }
     return strategies.get(strategy_name.lower())
 

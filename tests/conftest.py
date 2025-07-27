@@ -389,7 +389,7 @@ def forecast_data():
 def mock_container(mock_data_fetcher):
     """Create a mock container with all dependencies mocked."""
     container = Container()
-    
+
     # Mock all dependencies
     mock_logging_manager = Mock(spec=LoggingManager)
     mock_logging_manager.setup = Mock()
@@ -397,20 +397,20 @@ def mock_container(mock_data_fetcher):
     mock_logging_manager.debug = Mock()
     mock_logging_manager.warning = Mock()
     mock_logging_manager.error = Mock()
-    
+
     mock_database_manager = Mock(spec=DatabaseManager)
-    
+
     # Use the existing mock_data_fetcher
-    
+
     mock_domain_factory = Mock(spec=DomainFactory)
     mock_domain_factory.fetcher = mock_data_fetcher
-    
+
     mock_backtest_runner = Mock(spec=BacktestRunner)
     mock_backtest_runner.data_fetcher = mock_data_fetcher
-    
+
     mock_stock_forecaster = Mock(spec=StockForecaster)
     mock_stock_forecaster.data_fetcher = mock_data_fetcher
-    
+
     # Override container providers with mocks
     container.logging_manager.override(mock_logging_manager)
     container.database_manager.override(mock_database_manager)
@@ -418,10 +418,10 @@ def mock_container(mock_data_fetcher):
     container.domain_factory.override(mock_domain_factory)
     container.backtest_runner.override(Mock(return_value=mock_backtest_runner))
     container.stock_forecaster.override(Mock(return_value=mock_stock_forecaster))
-    
+
     # Wire the container
     container.wire(modules=["stockula.main"])
-    
+
     return container
 
 
