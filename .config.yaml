@@ -4,14 +4,13 @@ data:
   # Data timeframe for analysis
   start_date: "2025-01-01"
   end_date: "2025-07-25"
-
 # Portfolio configuration with allocation tracking
 portfolio:
   name: "Double EMA Portfolio"
   initial_capital: 20000
-  allocation_method: custom  # Using custom allocation percentages
+  allocation_method: custom # Using custom allocation percentages
   rebalance_frequency: monthly
-  max_position_size: 20.0  # No single position > 10%
+  max_position_size: 20.0 # No single position > 10%
   # Portfolio tickers - combines all holdings based on EMA portfolio allocations
   tickers:
     # Broad-Market Core holdings (hold-only) - 35% allocation, $1,167 per ticker

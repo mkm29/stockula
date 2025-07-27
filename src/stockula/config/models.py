@@ -336,6 +336,31 @@ class TechnicalAnalysisConfig(BaseModel):
     atr_period: int = Field(default=14, description="ATR period")
 
 
+class LoggingConfig(BaseModel):
+    """Configuration for logging and debug output."""
+
+    enabled: bool = Field(default=False, description="Enable verbose logging output")
+    level: str = Field(
+        default="INFO", description="Logging level (DEBUG, INFO, WARNING, ERROR)"
+    )
+    show_allocation_details: bool = Field(
+        default=True,
+        description="Show detailed allocation calculations when logging enabled",
+    )
+    show_price_fetching: bool = Field(
+        default=True, description="Show price fetching details when logging enabled"
+    )
+    log_to_file: bool = Field(default=False, description="Enable logging to file")
+    log_file: str = Field(default="stockula.log", description="Log file path")
+    max_log_size: int = Field(
+        default=10_485_760,  # 10MB
+        description="Maximum log file size in bytes before rotation",
+    )
+    backup_count: int = Field(
+        default=3, description="Number of backup log files to keep"
+    )
+
+
 class StockulaConfig(BaseModel):
     """Main configuration model for Stockula."""
 
@@ -353,4 +378,7 @@ class StockulaConfig(BaseModel):
             "results_dir": "./results",
         },
         description="Output configuration",
+    )
+    logging: LoggingConfig = Field(
+        default_factory=LoggingConfig, description="Logging configuration"
     )

@@ -3,24 +3,21 @@
 data:
   start_date: "2025-01-01"
   end_date: "2025-07-25"
-
 # Portfolio configuration with automatic allocation
 portfolio:
   name: "Auto-Allocated EMA Portfolio"
   initial_capital: 20000
   allocation_method: auto
   auto_allocate: true
-  allow_fractional_shares: false  # Use integer shares only
-  capital_utilization_target: 0.95  # Deploy 95% of capital
+  allow_fractional_shares: false # Use integer shares only
+  capital_utilization_target: 0.99 # Deploy 99% of capital
   rebalance_frequency: monthly
-  max_position_size: 20.0  # Allow larger positions since we have fewer stocks
-  
+  max_position_size: 20.0 # Allow larger positions since we have fewer stocks
   # Category-based allocation ratios (must sum to 1.0)
   category_ratios:
-    INDEX: 0.35        # 35% in broad-market index funds
-    MOMENTUM: 0.475    # 47.5% in momentum stocks  
+    INDEX: 0.35 # 35% in broad-market index funds
+    MOMENTUM: 0.475 # 47.5% in momentum stocks  
     SPECULATIVE: 0.175 # 17.5% in speculative plays
-  
   # Portfolio tickers - only symbol and category required for auto-allocation
   tickers:
     # Broad-Market Core holdings (hold-only)
@@ -36,7 +33,6 @@ portfolio:
       category: INDEX
     - symbol: FXAIX
       category: INDEX
-      
     # Momentum / Large-Cap Growth (tradeable)
     - symbol: NVDA
       category: MOMENTUM
@@ -68,7 +64,6 @@ portfolio:
     - symbol: PLTR
       category: MOMENTUM
       sector: Technology
-      
     # Speculative High-Beta (tradeable)
     - symbol: LIDR
       category: SPECULATIVE
@@ -82,7 +77,6 @@ portfolio:
     - symbol: IONQ
       category: SPECULATIVE
       sector: Technology
-
 backtest:
   strategies:
     - name: TripleEMACross
@@ -92,10 +86,16 @@ backtest:
         slow_period: 28
   # Hold-only categories will not be backtested
   hold_only_categories: ["INDEX", "BOND"]
-
 performance:
   risk_free_rate: 0.0442
-
 forecast:
   forecast_length: 28
   model_list: "fast"
+# Logging configuration - enable for verbose output  
+logging:
+  enabled: false # Set to true for detailed allocation and price fetching info
+  level: INFO # Logging level: DEBUG, INFO, WARNING, ERROR
+  log_to_file: false # Set to true to also log to file
+  log_file: "stockula.log" # Log file name
+  show_allocation_details: true
+  show_price_fetching: true

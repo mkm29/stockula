@@ -3,6 +3,8 @@
 import argparse
 import json
 import sys
+import logging
+from logging.handlers import RotatingFileHandler
 from datetime import datetime, timedelta
 from typing import Dict, Any, List
 import pandas as pd
@@ -21,6 +23,92 @@ from .backtesting import (
 from .forecasting import StockForecaster
 from .config import load_config, StockulaConfig
 from .domain import DomainFactory, Category
+
+# Create logger
+logger = logging.getLogger(__name__)
+
+
+def setup_logging(config: StockulaConfig) -> None:
+    """Configure logging based on configuration."""
+    # Clear any existing handlers to avoid duplicates
+    root_logger = logging.getLogger()
+    for handler in root_logger.handlers[:]:
+        root_logger.removeHandler(handler)
+
+    # List to store all handlers
+    handlers = []
+
+    # Create console handler
+    console_handler = logging.StreamHandler(sys.stdout)
+
+    # Create formatters
+    if config.logging.enabled:
+        # Detailed format when logging is enabled
+        detailed_formatter = logging.Formatter(
+            fmt="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+            datefmt="%Y-%m-%d %H:%M:%S",
+        )
+        simple_formatter = logging.Formatter(
+            fmt="%(asctime)s - %(levelname)s - %(message)s", datefmt="%H:%M:%S"
+        )
+        log_level = getattr(logging, config.logging.level.upper(), logging.INFO)
+
+        # Use simple formatter for console, detailed for file
+        console_handler.setFormatter(simple_formatter)
+
+        # Add file handler if requested
+        if config.logging.log_to_file:
+            file_handler = RotatingFileHandler(
+                filename=config.logging.log_file,
+                maxBytes=config.logging.max_log_size,
+                backupCount=config.logging.backup_count,
+                encoding="utf-8",
+            )
+            file_handler.setFormatter(detailed_formatter)
+            file_handler.setLevel(log_level)
+            handlers.append(file_handler)
+    else:
+        # Simple format when logging is disabled (only warnings/errors)
+        formatter = logging.Formatter(fmt="%(levelname)s: %(message)s")
+        console_handler.setFormatter(formatter)
+        log_level = logging.WARNING
+
+    # Set level on console handler and add to handlers
+    console_handler.setLevel(log_level)
+    handlers.append(console_handler)
+
+    # Configure root logger
+    root_logger.setLevel(log_level)
+    for handler in handlers:
+        root_logger.addHandler(handler)
+
+    # Configure stockula loggers with proper hierarchy
+    stockula_logger = logging.getLogger("stockula")
+    stockula_logger.setLevel(log_level)
+    stockula_logger.propagate = True  # Propagate to root logger
+
+    # Log startup message if enabled
+    if config.logging.enabled:
+        logger.info(f"Logging initialized - Level: {config.logging.level}")
+        if config.logging.log_to_file:
+            logger.info(f"Logging to file: {config.logging.log_file}")
+
+    # Reduce noise from third-party libraries
+    third_party_level = (
+        logging.CRITICAL
+        if not config.logging.enabled
+        else (logging.WARNING if log_level != logging.DEBUG else logging.INFO)
+    )
+
+    for lib_name in [
+        "yfinance",
+        "urllib3",
+        "requests",
+        "apscheduler",
+        "peewee",
+        "backtesting",
+    ]:
+        logging.getLogger(lib_name).setLevel(third_party_level)
 
 
 def get_strategy_class(strategy_name: str):
@@ -305,7 +393,16 @@ def main():
             print(f"Using configuration from: {args.config}")
         else:
             # Check for default files
-            default_files = ["stockula.yaml", "stockula.yml"]
+            default_files = [
+                ".config.yaml",
+                ".config.yml",
+                "config.yaml",
+                "config.yml",
+                ".stockula.yaml",
+                ".stockula.yml",
+                "stockula.yaml",
+                "stockula.yml",
+            ]
             found_config = None
             for filename in default_files:
                 if Path(filename).exists():
@@ -326,6 +423,9 @@ def main():
         print(f"Error loading configuration: {e}")
         sys.exit(1)
 
+    # Set up logging based on configuration
+    setup_logging(config)
+
     # Override ticker if provided
     if args.ticker:
         from .config import TickerConfig
@@ -344,11 +444,11 @@ def main():
     factory = DomainFactory()
     portfolio = factory.create_portfolio(config)
 
-    print("\nPortfolio Summary:")
-    print(f"  Name: {portfolio.name}")
-    print(f"  Initial Capital: ${portfolio.initial_capital:,.2f}")
-    print(f"  Total Assets: {len(portfolio.get_all_assets())}")
-    print(f"  Allocation Method: {portfolio.allocation_method}")
+    logger.info("\nPortfolio Summary:")
+    logger.info(f"  Name: {portfolio.name}")
+    logger.info(f"  Initial Capital: ${portfolio.initial_capital:,.2f}")
+    logger.info(f"  Total Assets: {len(portfolio.get_all_assets())}")
+    logger.info(f"  Allocation Method: {portfolio.allocation_method}")
 
     # Get portfolio value at start of backtest period
     fetcher = DataFetcher()
@@ -356,7 +456,7 @@ def main():
 
     # Get prices at the start date if backtesting
     if args.mode in ["all", "backtest"] and config.data.start_date:
-        print(f"\nFetching prices at start date ({config.data.start_date})...")
+        logger.debug(f"\nFetching prices at start date ({config.data.start_date})...")
         start_date_str = config.data.start_date.strftime("%Y-%m-%d")
         # Fetch one day of data at the start date to get opening prices
         start_prices = {}
@@ -378,20 +478,22 @@ def main():
                     if not data.empty:
                         start_prices[symbol] = data["Close"].iloc[0]
             except Exception as e:
-                print(f"  Warning: Could not get start price for {symbol}: {e}")
+                logger.warning(f"Could not get start price for {symbol}: {e}")
 
         initial_portfolio_value = portfolio.get_portfolio_value(start_prices)
-        print(f"\nPortfolio Value at Start Date: ${initial_portfolio_value:,.2f}")
+        logger.info(f"\nPortfolio Value at Start Date: ${initial_portfolio_value:,.2f}")
     else:
-        print("\nFetching current prices...")
+        logger.debug("\nFetching current prices...")
         current_prices = fetcher.get_current_prices(symbols)
         initial_portfolio_value = portfolio.get_portfolio_value(current_prices)
-        print(f"\nCurrent Portfolio Value: ${initial_portfolio_value:,.2f}")
+        logger.info(f"\nCurrent Portfolio Value: ${initial_portfolio_value:,.2f}")
 
-    print(f"Initial Capital: ${portfolio.initial_capital:,.2f}")
+    # Calculate returns (always needed, not just for logging)
     initial_return = initial_portfolio_value - portfolio.initial_capital
     initial_return_pct = (initial_return / portfolio.initial_capital) * 100
-    print(
+
+    logger.info(f"Initial Capital: ${portfolio.initial_capital:,.2f}")
+    logger.info(
         f"Return Since Inception: ${initial_return:,.2f} ({initial_return_pct:+.2f}%)"
     )
 
@@ -412,8 +514,8 @@ def main():
         try:
             hold_only_categories.add(Category[category_name])
         except KeyError:
-            print(
-                f"Warning: Unknown category '{category_name}' in hold_only_categories"
+            logger.warning(
+                f"Unknown category '{category_name}' in hold_only_categories"
             )
 
     tradeable_assets = []
@@ -426,15 +528,15 @@ def main():
             tradeable_assets.append(asset)
 
     if hold_only_assets:
-        print("\nHold-only assets (excluded from backtesting):")
+        logger.info("\nHold-only assets (excluded from backtesting):")
         for asset in hold_only_assets:
-            print(f"  {asset.symbol} ({asset.category})")
+            logger.info(f"  {asset.symbol} ({asset.category})")
 
     # Get ticker symbols for processing
     ticker_symbols = [asset.symbol for asset in all_assets]
 
     for ticker in ticker_symbols:
-        print(f"\nProcessing {ticker}...")
+        logger.debug(f"\nProcessing {ticker}...")
 
         # Get the asset to check its category
         asset = next((a for a in all_assets if a.symbol == ticker), None)
@@ -447,7 +549,7 @@ def main():
 
         if args.mode in ["all", "backtest"]:
             if is_hold_only:
-                print(f"  Skipping backtest for {ticker} (hold-only asset)")
+                logger.debug(f"  Skipping backtest for {ticker} (hold-only asset)")
             else:
                 if "backtesting" not in results:
                     results["backtesting"] = []
@@ -469,7 +571,7 @@ def main():
         print("=" * 50)
 
         # Re-fetch current prices to get the most up-to-date values
-        print("\nFetching latest prices...")
+        logger.debug("\nFetching latest prices...")
         final_prices = fetcher.get_current_prices(symbols)
         final_value = portfolio.get_portfolio_value(final_prices)
 
@@ -480,17 +582,6 @@ def main():
 
         period_return = final_value - results["initial_portfolio_value"]
         period_return_pct = (period_return / results["initial_portfolio_value"]) * 100
-
-        print(
-            f"\nReturn During Period: ${period_return:,.2f} ({period_return_pct:+.2f}%)"
-        )
-
-        # Show return relative to initial capital
-        capital_return = final_value - portfolio.initial_capital
-        capital_return_pct = (capital_return / portfolio.initial_capital) * 100
-        print("\nReturn vs Initial Capital:")
-        print(f"  Initial Capital: ${portfolio.initial_capital:,.2f}")
-        print(f"  Total Return: ${capital_return:,.2f} ({capital_return_pct:+.2f}%)")
 
         # Show category breakdown if available
         category_allocations = portfolio.get_allocation_by_category(final_prices)
@@ -503,9 +594,47 @@ def main():
                     f"  {category}: ${data['value']:,.2f} ({data['percentage']:.1f}%)"
                 )
 
+        # Show performance breakdown by category
+        if args.mode in ["all", "backtest"] and config.data.start_date:
+            start_category_allocations = portfolio.get_allocation_by_category(
+                start_prices
+            )
+            final_category_allocations = portfolio.get_allocation_by_category(
+                final_prices
+            )
+
+            print("\nPerformance Breakdown By Category:")
+            for category in final_category_allocations.keys():
+                if category in start_category_allocations:
+                    start_value = start_category_allocations[category]["value"]
+                    final_value = final_category_allocations[category]["value"]
+                    category_return = final_value - start_value
+                    category_return_pct = (
+                        (category_return / start_value) * 100 if start_value > 0 else 0
+                    )
+
+                    print(f"  {category}:")
+                    print(f"    Start Value: ${start_value:,.2f}")
+                    print(f"    Current Value: ${final_value:,.2f}")
+                    print(
+                        f"    Return: ${category_return:,.2f} ({category_return_pct:+.2f}%)"
+                    )
+                    print(
+                        f"    Assets: {', '.join(final_category_allocations[category]['assets'])}"
+                    )
+                else:
+                    # New category added during the period
+                    final_value = final_category_allocations[category]["value"]
+                    print(f"  {category}:")
+                    print(f"    Start Value: $0.00 (new category)")
+                    print(f"    Current Value: ${final_value:,.2f}")
+                    print(
+                        f"    Assets: {', '.join(final_category_allocations[category]['assets'])}"
+                    )
+
         # Show performance breakdown by asset type
         if hold_only_assets and tradeable_assets:
-            print("\nPerformance Breakdown:")
+            print("\nAsset Type Breakdown:")
 
             # Calculate hold-only assets value
             hold_only_value = sum(
@@ -521,7 +650,12 @@ def main():
 
             print(f"  Hold-only Assets: ${hold_only_value:,.2f}")
             print(f"  Tradeable Assets: ${tradeable_value:,.2f}")
-            print(f"  Total Portfolio: ${final_value:,.2f}")
+            print(f"  Total Portfolio: ${hold_only_value + tradeable_value:,.2f}")
+
+        # Show return during period at the very end
+        print(
+            f"\nReturn During Period: ${period_return:,.2f} ({period_return_pct:+.2f}%)"
+        )
 
     # Save results if configured
     if config.output.get("save_results", False):
@@ -534,7 +668,7 @@ def main():
         with open(results_file, "w") as f:
             json.dump(results, f, indent=2, default=str)
 
-        print(f"\nResults saved to {results_file}")
+        logger.info(f"\nResults saved to {results_file}")
 
 
 if __name__ == "__main__":

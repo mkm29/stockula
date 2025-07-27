@@ -1,5 +1,4 @@
 # Example Stockula Configuration with Ticker Objects and Allocation Tracking
-
 # Data fetching configuration
 data:
   start_date: "2024-01-01"
@@ -9,9 +8,9 @@ data:
   tickers:
     - symbol: MSFT
       sector: Technology
-      market_cap: 2800.0  # in billions
+      market_cap: 2800.0 # in billions
       category: large_cap
-      allocation_amount: 15000  # Individual ticker allocation
+      allocation_amount: 15000 # Individual ticker allocation
     - symbol: NVDA
       sector: Technology
       market_cap: 1100.0
@@ -24,32 +23,29 @@ data:
     - symbol: TSLA
       sector: Consumer Cyclical
       category: growth
-      allocation_amount: 5000  # Fixed dollar allocation
-
+      allocation_amount: 5000 # Fixed dollar allocation
 # Portfolio management configuration
 portfolio:
   initial_capital: 100000
-  allocation_method: custom  # Options: equal_weight, market_cap, custom
+  allocation_method: custom # Options: equal_weight, market_cap, custom
   rebalance_frequency: monthly
-  max_position_size: 20.0  # Maximum 20% in any single position
-  stop_loss_pct: 10.0  # Global 10% stop loss
-  
+  max_position_size: 20.0 # Maximum 20% in any single position
+  stop_loss_pct: 10.0 # Global 10% stop loss
   # Portfolio buckets for organized allocation
   buckets:
     - name: core_holdings
       description: "Long-term core positions"
-      allocation_amount: 50000  # $50k allocation
+      allocation_amount: 50000 # $50k allocation
       tickers:
         - symbol: SPY
-          allocation_amount: 20000  # $20k allocation
+          allocation_amount: 20000 # $20k allocation
         - symbol: QQQ
           allocation_amount: 15000
         - symbol: VTI
           allocation_amount: 15000
-    
     - name: growth_stocks
       description: "High growth technology stocks"
-      allocation_amount: 30000  # $30k allocation
+      allocation_amount: 30000 # $30k allocation
       tickers:
         - symbol: NVDA
           category: ai_leader
@@ -59,10 +55,9 @@ portfolio:
           category: tech_giant
         - symbol: META
           category: social_media
-    
     - name: value_plays
       description: "Undervalued opportunities"
-      allocation_amount: 20000  # Fixed $20k allocation
+      allocation_amount: 20000 # Fixed $20k allocation
       tickers:
         - symbol: BAC
           sector: Financial
@@ -70,11 +65,10 @@ portfolio:
           sector: Communication Services
         - symbol: CVX
           sector: Energy
-
 # Backtesting configuration
 backtest:
   initial_cash: 100000
-  commission: 0.001  # 0.1% commission
+  commission: 0.001 # 0.1% commission
   strategies:
     - name: DoubleEMACross
       parameters:
@@ -87,20 +81,17 @@ backtest:
         fast_period: 9
         slow_period: 21
         atr_multiple: 1.5
-
 # Forecasting configuration
 forecast:
   forecast_length: 30
   model_list: "fast"
   prediction_interval: 0.95
-
 # Technical analysis configuration
 technical_analysis:
   indicators: [sma, ema, rsi, macd, bbands, atr]
   sma_periods: [20, 50, 200]
   ema_periods: [12, 26]
   rsi_period: 14
-
 # Output configuration
 output:
   format: "console"

@@ -1,10 +1,14 @@
 """Portfolio domain model for managing asset allocations."""
 
+import logging
 from typing import List, Dict, Optional, Tuple
 from functools import lru_cache
 from dataclasses import dataclass, field, InitVar
 from .asset import Asset
 from .ticker import Ticker
+
+# Create logger
+logger = logging.getLogger(__name__)
 
 
 # Cached function for allocation calculations
@@ -283,7 +287,7 @@ class Portfolio:
         required_capital = self.get_portfolio_value(validation_prices)
 
         if required_capital == 0:
-            print("Warning: Could not fetch prices for portfolio validation")
+            logger.warning("Could not fetch prices for portfolio validation")
             return
 
         if self._initial_capital < required_capital:
@@ -296,8 +300,8 @@ class Portfolio:
         # Warn if capital is significantly higher than needed (optional)
         excess_ratio = (self._initial_capital - required_capital) / required_capital
         if excess_ratio > 0.5:  # More than 50% excess
-            print(
-                f"Warning: Initial capital (${self._initial_capital:,.2f}) significantly "
+            logger.warning(
+                f"Initial capital (${self._initial_capital:,.2f}) significantly "
                 f"exceeds required capital (${required_capital:,.2f}). "
                 f"Consider adjusting asset quantities or initial capital."
             )
@@ -323,7 +327,7 @@ class Portfolio:
             prices = fetcher.get_current_prices(self.symbols)
 
         if not prices:
-            print("Warning: Could not fetch prices for allocation validation")
+            logger.warning("Could not fetch prices for allocation validation")
             return
 
         # Check max position size constraint
@@ -342,8 +346,8 @@ class Portfolio:
             data["percentage"] for data in self.get_asset_allocations(prices).values()
         )
         if total_allocation > 100.1:  # 0.1% tolerance for rounding
-            print(
-                f"Warning: Total allocation ({total_allocation:.1f}%) exceeds 100%. "
+            logger.warning(
+                f"Total allocation ({total_allocation:.1f}%) exceeds 100%. "
                 f"This may indicate overleveraging."
             )
 
@@ -351,8 +355,8 @@ class Portfolio:
         portfolio_value = self.get_portfolio_value(prices)
         utilization_ratio = portfolio_value / self._initial_capital
         if utilization_ratio < 0.5:  # Less than 50% utilization
-            print(
-                f"Warning: Low capital utilization ({utilization_ratio:.1%}). "
+            logger.warning(
+                f"Low capital utilization ({utilization_ratio:.1%}). "
                 f"Portfolio value (${portfolio_value:,.2f}) is much lower than "
                 f"initial capital (${self._initial_capital:,.2f})."
             )

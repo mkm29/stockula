@@ -5,11 +5,11 @@ This document provides comprehensive examples and implementation details for usi
 ## Table of Contents
 
 1. [Domain Model Usage Example](#domain-model-usage-example)
-2. [Private Methods Implementation](#private-methods-implementation)
-3. [Read-Only Properties Guide](#read-only-properties-guide)
-4. [Best Practices](#best-practices)
+1. [Private Methods Implementation](#private-methods-implementation)
+1. [Read-Only Properties Guide](#read-only-properties-guide)
+1. [Best Practices](#best-practices)
 
----
+______________________________________________________________________
 
 ## Domain Model Usage Example
 
@@ -137,7 +137,7 @@ for category in portfolio.categories:
         print(f"    - {asset}")
 ```
 
----
+______________________________________________________________________
 
 ## Private Methods Implementation
 
@@ -196,23 +196,27 @@ except AttributeError as e:
 ### Methods Made Private
 
 #### 1. Portfolio Class (`src/stockula/domain/portfolio.py`)
+
 - **`_calculate_allocations()`** - Internal method for calculating dollar allocations
   - Only used internally by `get_asset_percentage()`, `get_all_asset_percentages()`, and `validate_allocations()`
   - Not intended for direct external use
 
 #### 2. DomainFactory Class (`src/stockula/domain/factory.py`)
+
 - **`_create_ticker()`** - Internal helper for creating ticker instances
-- **`_create_asset()`** - Internal helper for creating asset instances  
+- **`_create_asset()`** - Internal helper for creating asset instances
 - **`_create_portfolio_bucket()`** - Internal helper for creating bucket instances
   - These are all internal implementation details only called by `create_portfolio()`
   - External code should only use the public `create_portfolio()` method
 
 #### 3. TickerRegistry Class (`src/stockula/domain/ticker.py`)
+
 - **`_clear()`** - Internal method for clearing the registry
   - Primarily useful for testing, not for production use
   - Making it private prevents accidental clearing of the singleton registry
 
 #### 4. DataConfig Class (`src/stockula/config/models.py`)
+
 - **`_get_ticker_symbols()`** - Internal helper method
   - Not used anywhere in the codebase currently
   - If needed in the future, it should remain an internal detail
@@ -220,30 +224,34 @@ except AttributeError as e:
 ### Methods That Should Remain Public
 
 #### 1. PortfolioBucket.calculate_allocation()
+
 - Called by Portfolio class, so it needs to be public
 - Part of the public API between Portfolio and PortfolioBucket
 
 #### 2. Pydantic Validators
+
 - All `@field_validator` and `@model_validator` methods must remain public
 - Pydantic framework requires access to these methods
 - Examples: `validate_allocations()`, `validate_periods()`, `validate_thresholds()`
 
 #### 3. Asset.calculate_allocation() and calculate_percentage()
+
 - These are part of the public API
 - Used by Portfolio and potentially by external code
 
 #### 4. TickerRegistry public methods
+
 - `get_or_create()`, `get()`, `all()` - Core public API
 - `__len__()`, `__contains__()` - Python special methods must be public
 
 ### Benefits of These Changes
 
 1. **Better Encapsulation**: Internal implementation details are hidden
-2. **Clearer API**: Public methods represent the intended interface
-3. **Reduced Coupling**: External code can't depend on internal details
-4. **Easier Refactoring**: Internal methods can be changed without breaking external code
+1. **Clearer API**: Public methods represent the intended interface
+1. **Reduced Coupling**: External code can't depend on internal details
+1. **Easier Refactoring**: Internal methods can be changed without breaking external code
 
----
+______________________________________________________________________
 
 ## Read-Only Properties Guide
 
@@ -274,12 +282,14 @@ class PortfolioBucket:
 ### Changes Made
 
 #### 1. PortfolioBucket Class (`src/stockula/domain/portfolio.py`)
+
 - Converted `allocation_pct` and `allocation_amount` to read-only properties
 - Used `InitVar` for initialization parameters
 - Private attributes: `_allocation_pct` and `_allocation_amount`
 - Added `@property` decorators for read-only access
 
 #### 2. Asset Class (`src/stockula/domain/asset.py`)
+
 - Converted `allocation_amount` to read-only property
 - Used `InitVar` for initialization parameter
 - Private attribute: `_allocation_amount`
@@ -288,9 +298,9 @@ class PortfolioBucket:
 ### Benefits
 
 1. **Immutability**: Allocation values cannot be changed after object creation
-2. **Data Integrity**: Prevents accidental modification of critical financial data
-3. **Clear API**: Properties clearly indicate read-only intent
-4. **Validation**: Values are validated once during initialization
+1. **Data Integrity**: Prevents accidental modification of critical financial data
+1. **Clear API**: Properties clearly indicate read-only intent
+1. **Validation**: Values are validated once during initialization
 
 ### Testing Read-Only Properties
 
@@ -320,6 +330,7 @@ except AttributeError as e:
 ```
 
 Expected output:
+
 ```
 ✓ allocation_pct is read-only: property 'allocation_pct' of 'PortfolioBucket' object has no setter
 ✓ allocation_amount is read-only: property 'allocation_amount' of 'Asset' object has no setter
@@ -333,30 +344,35 @@ Expected output:
 
 This separation allows configuration to be easily modified before creating domain objects, while domain objects remain immutable during use.
 
----
+______________________________________________________________________
 
 ## Best Practices
 
 ### 1. Use Private Methods for Internal Logic
+
 - Prefix internal methods with `_` to indicate they're not part of the public API
 - Keep public methods focused on the main use cases
 - Document the intended use of private methods
 
 ### 2. Implement Read-Only Properties for Critical Data
+
 - Use `@property` decorators for allocation amounts and percentages
 - Combine with `InitVar` in dataclasses for clean initialization
 - Store actual values in private attributes (prefixed with `_`)
 
 ### 3. Leverage the Singleton Pattern for Registries
+
 - Use `TickerRegistry` to ensure ticker objects are unique across the application
 - Access tickers through the registry rather than creating new instances
 
 ### 4. Separate Configuration from Domain Logic
+
 - Keep configuration models mutable for flexibility
 - Convert to immutable domain objects after validation
 - Use factory pattern to bridge between the two
 
 ### 5. Validate Early and Often
+
 - Implement validation in configuration models using Pydantic
 - Add business logic validation in domain models
 - Provide clear error messages for invalid states
