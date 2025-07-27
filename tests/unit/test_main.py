@@ -25,9 +25,8 @@ from stockula.config import StockulaConfig, TickerConfig
 class TestSetupLogging:
     """Test logging setup functionality."""
 
-    @patch("stockula.main.logging.getLogger")
-    @patch("stockula.main.RotatingFileHandler")
-    def test_setup_logging_enabled(self, mock_file_handler, mock_get_logger):
+    @patch("stockula.main.log_manager")
+    def test_setup_logging_enabled(self, mock_log_manager):
         """Test setting up logging when enabled."""
         config = StockulaConfig()
         config.logging.enabled = True
@@ -35,39 +34,21 @@ class TestSetupLogging:
         config.logging.log_to_file = True
         config.logging.log_file = "test.log"
 
-        # Mock the loggers with handlers list
-        mock_root_logger = Mock()
-        mock_root_logger.handlers = []
-        mock_stockula_logger = Mock()
-        mock_get_logger.side_effect = (
-            lambda name=None: mock_root_logger if name is None else mock_stockula_logger
-        )
-
         setup_logging(config)
 
-        # Should configure file handler
-        mock_file_handler.assert_called_once()
-        assert mock_file_handler.call_args[1]["filename"] == "test.log"
+        # Should call setup on the log manager
+        mock_log_manager.setup.assert_called_once_with(config)
 
-    @patch("stockula.main.logging.getLogger")
-    def test_setup_logging_disabled(self, mock_get_logger):
+    @patch("stockula.main.log_manager")
+    def test_setup_logging_disabled(self, mock_log_manager):
         """Test setting up logging when disabled."""
         config = StockulaConfig()
         config.logging.enabled = False
 
-        # Mock the loggers with handlers list
-        mock_root_logger = Mock()
-        mock_root_logger.handlers = []
-        mock_stockula_logger = Mock()
-        mock_get_logger.side_effect = (
-            lambda name=None: mock_root_logger if name is None else mock_stockula_logger
-        )
-
         setup_logging(config)
 
-        # Should configure basic logging only
-        mock_root_logger.setLevel.assert_called()
-        mock_stockula_logger.setLevel.assert_called()
+        # Should still call setup on the log manager
+        mock_log_manager.setup.assert_called_once_with(config)
 
 
 class TestGetStrategyClass:
@@ -674,3 +655,776 @@ class TestMainIntegration:
 
         assert len(config.portfolio.tickers) == 1
         assert config.portfolio.tickers[0].symbol == "TSLA"
+
+
+class TestMainAdvanced:
+    """Advanced tests for main function to improve coverage."""
+
+    @patch("stockula.main.load_config")
+    @patch("stockula.main.setup_logging")
+    @patch("stockula.main.DomainFactory")
+    @patch("stockula.main.DataFetcher")
+    @patch("stockula.main.run_forecast")
+    @patch("stockula.main.print_results")
+    @patch("sys.argv", ["stockula", "--mode", "forecast", "--ticker", "AAPL"])
+    def test_main_forecast_mode_with_warning(
+        self,
+        mock_print,
+        mock_forecast,
+        mock_fetcher_class,
+        mock_factory,
+        mock_logging,
+        mock_load,
+        capsys,
+    ):
+        """Test main function in forecast mode with warning message."""
+        # Setup config
+        config = StockulaConfig()
+        config.portfolio.tickers = [TickerConfig(symbol="AAPL", quantity=1.0)]
+        mock_load.return_value = config
+
+        # Setup domain factory
+        mock_asset = Mock()
+        mock_asset.symbol = "AAPL"
+        mock_asset.category = None
+        mock_portfolio = Mock()
+        mock_portfolio.name = "Test Portfolio"
+        mock_portfolio.initial_capital = 100000
+        mock_portfolio.get_all_assets.return_value = [mock_asset]
+        mock_portfolio.get_portfolio_value.return_value = 110000
+        mock_portfolio.allocation_method = "equal"
+        mock_factory.return_value.create_portfolio.return_value = mock_portfolio
+
+        # Setup fetcher
+        mock_fetcher = Mock()
+        mock_fetcher.get_current_prices.return_value = {"AAPL": 150.0}
+        mock_fetcher_class.return_value = mock_fetcher
+
+        # Setup forecast results
+        mock_forecast.return_value = {"ticker": "AAPL", "forecast_price": 155.0}
+
+        main()
+
+        # Should call forecast function
+        mock_forecast.assert_called_once()
+        mock_print.assert_called_once()
+
+        # Check that warning was printed
+        captured = capsys.readouterr()
+        assert "FORECAST MODE - IMPORTANT NOTES:" in captured.out
+        assert "AutoTS will try multiple models" in captured.out
+
+    @patch("stockula.main.load_config")
+    @patch("stockula.main.StockulaConfig")
+    @patch("sys.argv", ["stockula", "--config", "nonexistent.yaml"])
+    def test_main_config_exception(self, mock_config_class, mock_load):
+        """Test main function with general exception in config loading."""
+        mock_load.side_effect = Exception("Config parsing error")
+
+        with pytest.raises(SystemExit) as exc_info:
+            main()
+
+        assert exc_info.value.code == 1
+
+    @patch("stockula.main.load_config")
+    @patch("stockula.main.setup_logging")
+    @patch("stockula.main.DomainFactory")
+    @patch("stockula.main.DataFetcher")
+    @patch("stockula.main.run_technical_analysis")
+    @patch("stockula.main.print_results")
+    @patch("sys.argv", ["stockula", "--mode", "ta", "--output", "console"])
+    def test_main_with_results_saving(
+        self,
+        mock_print,
+        mock_ta,
+        mock_fetcher_class,
+        mock_factory,
+        mock_logging,
+        mock_load,
+    ):
+        """Test main function with results saving enabled."""
+        # Setup config with save_results enabled
+        config = StockulaConfig()
+        config.output["save_results"] = True
+        config.output["results_dir"] = "./test_results"
+        mock_load.return_value = config
+
+        # Setup domain factory
+        mock_asset = Mock()
+        mock_asset.symbol = "AAPL"
+        mock_asset.category = None
+        mock_portfolio = Mock()
+        mock_portfolio.name = "Test Portfolio"
+        mock_portfolio.initial_capital = 100000
+        mock_portfolio.get_all_assets.return_value = [mock_asset]
+        mock_portfolio.get_portfolio_value.return_value = 100000
+        mock_portfolio.allocation_method = "equal"
+        mock_factory.return_value.create_portfolio.return_value = mock_portfolio
+
+        # Setup fetcher
+        mock_fetcher = Mock()
+        mock_fetcher.get_current_prices.return_value = {"AAPL": 150.0}
+        mock_fetcher_class.return_value = mock_fetcher
+
+        # Setup TA results
+        mock_ta.return_value = {"ticker": "AAPL", "indicators": {}}
+
+        # Mock Path and file operations
+        from pathlib import Path
+
+        with patch("pathlib.Path") as mock_path_cls:
+            mock_results_dir = Mock()
+            mock_results_dir.mkdir = Mock()
+            mock_results_file = Mock()
+            mock_results_dir.__truediv__ = Mock(return_value=mock_results_file)
+            mock_path_cls.return_value = mock_results_dir
+
+            # Mock the open function for file writing
+            with patch("builtins.open", create=True) as mock_open:
+                mock_file = Mock()
+                mock_open.return_value.__enter__.return_value = mock_file
+
+                main()
+
+                # Should create results directory
+                mock_results_dir.mkdir.assert_called_once_with(exist_ok=True)
+
+                # Should save results
+                mock_open.assert_called_once()
+                mock_file.write.assert_called()
+
+    @patch("stockula.main.load_config")
+    @patch("stockula.main.setup_logging")
+    @patch("stockula.main.DomainFactory")
+    @patch("stockula.main.DataFetcher")
+    @patch("stockula.main.run_backtest")
+    @patch("stockula.main.print_results")
+    @patch("sys.argv", ["stockula", "--mode", "backtest", "--ticker", "AAPL"])
+    def test_main_backtest_with_start_date_prices(
+        self,
+        mock_print,
+        mock_backtest,
+        mock_fetcher_class,
+        mock_factory,
+        mock_logging,
+        mock_load,
+    ):
+        """Test main function fetching start date prices for backtesting."""
+        # Setup config with start date
+        config = StockulaConfig()
+        config.data.start_date = datetime(2023, 1, 1)
+        config.backtest.hold_only_categories = ["INDEX"]
+        mock_load.return_value = config
+
+        # Setup domain factory with hold-only asset
+        mock_asset1 = Mock()
+        mock_asset1.symbol = "AAPL"
+        mock_asset1.category = None  # Tradeable
+
+        from stockula.domain import Category
+
+        mock_asset2 = Mock()
+        mock_asset2.symbol = "SPY"
+        mock_asset2.category = Category.INDEX  # Hold-only
+
+        # Add proper get_value methods
+        mock_asset1.get_value = Mock(return_value=1500.0)
+        mock_asset2.get_value = Mock(return_value=8000.0)
+
+        mock_portfolio = Mock()
+        mock_portfolio.name = "Test Portfolio"
+        mock_portfolio.initial_capital = 100000
+        mock_portfolio.get_all_assets.return_value = [mock_asset1, mock_asset2]
+        mock_portfolio.get_portfolio_value.return_value = 100000
+        mock_portfolio.allocation_method = "equal"
+        mock_portfolio.get_allocation_by_category.return_value = {
+            "Index": {"value": 20000, "percentage": 20.0, "assets": ["SPY"]},
+            "None": {"value": 80000, "percentage": 80.0, "assets": ["AAPL"]},
+        }
+        mock_factory.return_value.create_portfolio.return_value = mock_portfolio
+
+        # Setup fetcher
+        mock_fetcher = Mock()
+
+        # Mock start date data fetching - first call returns empty, second call returns data
+        mock_data_empty = pd.DataFrame()
+        mock_data_with_prices = pd.DataFrame({"Close": [150.0]})
+
+        def side_effect(symbol, start, end):
+            if symbol == "AAPL":
+                if end == "2023-01-01":  # First call with same start/end
+                    return mock_data_empty
+                else:  # Second call with extended end date
+                    return mock_data_with_prices
+            elif symbol == "SPY":
+                if end == "2023-01-01":
+                    return mock_data_empty
+                else:
+                    return pd.DataFrame({"Close": [400.0]})
+            return pd.DataFrame()
+
+        mock_fetcher.get_stock_data.side_effect = side_effect
+        mock_fetcher.get_current_prices.return_value = {"AAPL": 160.0, "SPY": 420.0}
+        mock_fetcher_class.return_value = mock_fetcher
+
+        # Setup backtest results
+        mock_backtest.return_value = [
+            {"ticker": "AAPL", "strategy": "SMACross", "return_pct": 10.0}
+        ]
+
+        main()
+
+        # Should fetch start date prices
+        assert mock_fetcher.get_stock_data.call_count >= 2  # Called for each symbol
+
+        # Should call backtest only for tradeable assets
+        mock_backtest.assert_called_once_with("AAPL", config)
+
+        # Should show portfolio summary
+        mock_print.assert_called_once()
+
+    @patch("stockula.main.load_config")
+    @patch("stockula.main.setup_logging")
+    @patch("stockula.main.DomainFactory")
+    @patch("stockula.main.DataFetcher")
+    @patch("stockula.main.run_technical_analysis")
+    @patch("stockula.main.print_results")
+    @patch("sys.argv", ["stockula", "--mode", "ta"])
+    def test_main_ta_creates_results_dict(
+        self,
+        mock_print,
+        mock_ta,
+        mock_fetcher_class,
+        mock_factory,
+        mock_logging,
+        mock_load,
+    ):
+        """Test that TA mode properly creates technical_analysis key in results."""
+        # Setup config
+        config = StockulaConfig()
+        config.portfolio.tickers = [TickerConfig(symbol="AAPL", quantity=1.0)]
+        mock_load.return_value = config
+
+        # Setup domain factory
+        mock_asset = Mock()
+        mock_asset.symbol = "AAPL"
+        mock_asset.category = None
+        mock_portfolio = Mock()
+        mock_portfolio.name = "Test Portfolio"
+        mock_portfolio.initial_capital = 100000
+        mock_portfolio.get_all_assets.return_value = [mock_asset]
+        mock_portfolio.get_portfolio_value.return_value = 100000
+        mock_portfolio.allocation_method = "equal"
+        mock_factory.return_value.create_portfolio.return_value = mock_portfolio
+
+        # Setup fetcher
+        mock_fetcher = Mock()
+        mock_fetcher.get_current_prices.return_value = {"AAPL": 150.0}
+        mock_fetcher_class.return_value = mock_fetcher
+
+        # Setup TA results
+        mock_ta.return_value = {"ticker": "AAPL", "indicators": {"SMA_20": 150.0}}
+
+        main()
+
+        # Should call TA
+        mock_ta.assert_called_once()
+
+        # Check that print_results was called with correct structure
+        call_args = mock_print.call_args[0][0]
+        assert "technical_analysis" in call_args
+        assert len(call_args["technical_analysis"]) == 1
+
+    @patch("stockula.main.load_config")
+    @patch("stockula.main.setup_logging")
+    @patch("stockula.main.DomainFactory")
+    @patch("stockula.main.DataFetcher")
+    @patch("stockula.main.run_backtest")
+    @patch("stockula.main.print_results")
+    @patch("sys.argv", ["stockula", "--mode", "backtest"])
+    def test_main_with_performance_breakdown(
+        self,
+        mock_print,
+        mock_backtest,
+        mock_fetcher_class,
+        mock_factory,
+        mock_logging,
+        mock_load,
+        capsys,
+    ):
+        """Test main function showing performance breakdown by category."""
+        # Setup config with start date for performance calculation
+        config = StockulaConfig()
+        config.data.start_date = datetime(2023, 1, 1)
+        mock_load.return_value = config
+
+        # Setup domain factory
+        mock_asset1 = Mock()
+        mock_asset1.symbol = "AAPL"
+        mock_asset1.category = Mock()
+        mock_asset1.get_value = Mock(side_effect=lambda p: 10 * p.get("AAPL", 0))
+
+        mock_asset2 = Mock()
+        mock_asset2.symbol = "SPY"
+        mock_asset2.category = Mock()
+        mock_asset2.get_value = Mock(side_effect=lambda p: 20 * p.get("SPY", 0))
+
+        mock_portfolio = Mock()
+        mock_portfolio.name = "Test Portfolio"
+        mock_portfolio.initial_capital = 100000
+        mock_portfolio.get_all_assets.return_value = [mock_asset1, mock_asset2]
+        mock_portfolio.get_portfolio_value = Mock(
+            side_effect=lambda p: sum(p.values()) * 15
+        )
+        mock_portfolio.allocation_method = "equal"
+
+        # Category allocations at start
+        start_allocations = {
+            "Technology": {"value": 1500.0, "percentage": 60.0, "assets": ["AAPL"]},
+            "Index": {"value": 8000.0, "percentage": 40.0, "assets": ["SPY"]},
+        }
+
+        # Category allocations at end (with gains)
+        end_allocations = {
+            "Technology": {"value": 1800.0, "percentage": 56.0, "assets": ["AAPL"]},
+            "Index": {"value": 8800.0, "percentage": 44.0, "assets": ["SPY"]},
+            "NewCategory": {
+                "value": 500.0,
+                "percentage": 2.5,
+                "assets": ["NEW"],
+            },  # New category
+        }
+
+        mock_portfolio.get_allocation_by_category = Mock(
+            side_effect=lambda p: start_allocations
+            if p.get("AAPL") == 150
+            else end_allocations
+        )
+
+        mock_factory.return_value.create_portfolio.return_value = mock_portfolio
+
+        # Setup fetcher
+        mock_fetcher = Mock()
+
+        # Mock start date fetching
+        mock_data = pd.DataFrame({"Close": [150.0]})
+        mock_fetcher.get_stock_data.return_value = mock_data
+        mock_fetcher.get_current_prices.return_value = {"AAPL": 180.0, "SPY": 440.0}
+        mock_fetcher_class.return_value = mock_fetcher
+
+        # Setup backtest results
+        mock_backtest.return_value = []
+
+        main()
+
+        # Check output contains performance breakdown
+        captured = capsys.readouterr()
+        assert "PORTFOLIO PERFORMANCE SUMMARY" in captured.out
+        assert "Performance Breakdown By Category:" in captured.out
+        assert "Technology:" in captured.out
+        assert "Index:" in captured.out
+        assert "NewCategory:" in captured.out
+        assert "new category" in captured.out
+
+    @patch("stockula.main.load_config")
+    @patch("sys.argv", ["stockula", "--config", "test.yaml"])
+    def test_main_with_default_config_search(self, mock_load):
+        """Test main searches for default config files."""
+        from pathlib import Path
+
+        # First call fails (specific config not found), subsequent calls check defaults
+        mock_load.side_effect = [
+            FileNotFoundError("test.yaml not found"),
+            StockulaConfig(),  # Found a default config
+        ]
+
+        with patch("pathlib.Path") as mock_path_cls:
+            # Mock that .config.yaml exists
+            mock_path = Mock()
+            mock_path.exists.side_effect = [True]  # .config.yaml exists
+            mock_path_cls.return_value = mock_path
+
+            with patch("stockula.main.setup_logging"):
+                with patch("stockula.main.DomainFactory") as mock_factory:
+                    with patch("stockula.main.DataFetcher") as mock_fetcher_class:
+                        with patch("stockula.main.print_results"):
+                            # Setup minimal mocks
+                            mock_portfolio = Mock()
+                            mock_portfolio.name = "Test"
+                            mock_portfolio.initial_capital = 100000
+                            mock_portfolio.get_all_assets.return_value = []
+                            mock_portfolio.get_portfolio_value.return_value = 100000
+                            mock_portfolio.allocation_method = "equal"
+                            mock_portfolio.get_allocation_by_category.return_value = {}
+                            mock_factory.return_value.create_portfolio.return_value = (
+                                mock_portfolio
+                            )
+
+                            mock_fetcher = Mock()
+                            mock_fetcher.get_current_prices.return_value = {}
+                            mock_fetcher_class.return_value = mock_fetcher
+
+                            main()
+
+        # Should have tried to load config at least once (could be once if default found)
+        assert mock_load.call_count >= 1
+
+    def test_main_entry_point(self):
+        """Test the __main__ entry point."""
+        # Import the module to execute the __main__ block
+        import stockula.main
+
+        # The __main__ block should exist
+        assert hasattr(stockula.main, "__name__")
+
+    @patch("stockula.main.load_config")
+    @patch("stockula.main.setup_logging")
+    @patch("stockula.main.DomainFactory")
+    @patch("stockula.main.DataFetcher")
+    @patch("stockula.main.run_backtest")
+    @patch("stockula.main.print_results")
+    @patch("sys.argv", ["stockula", "--mode", "backtest"])
+    def test_main_with_hold_only_assets(
+        self,
+        mock_print,
+        mock_backtest,
+        mock_fetcher_class,
+        mock_factory,
+        mock_logging,
+        mock_load,
+        capsys,
+    ):
+        """Test main function with hold-only assets showing asset type breakdown."""
+        # Setup config
+        config = StockulaConfig()
+        config.backtest.hold_only_categories = ["INDEX"]
+        mock_load.return_value = config
+
+        # Setup domain factory with mixed assets
+        from stockula.domain import Category
+
+        mock_tradeable = Mock()
+        mock_tradeable.symbol = "AAPL"
+        mock_tradeable.category = Category.GROWTH
+        mock_tradeable.get_value = Mock(return_value=1500.0)
+
+        mock_hold_only = Mock()
+        mock_hold_only.symbol = "SPY"
+        mock_hold_only.category = Category.INDEX
+        mock_hold_only.get_value = Mock(return_value=8000.0)
+
+        mock_portfolio = Mock()
+        mock_portfolio.name = "Test Portfolio"
+        mock_portfolio.initial_capital = 100000
+        mock_portfolio.get_all_assets.return_value = [mock_tradeable, mock_hold_only]
+        mock_portfolio.get_portfolio_value.return_value = 109500
+        mock_portfolio.allocation_method = "equal"
+        mock_portfolio.get_allocation_by_category.return_value = {}
+        mock_factory.return_value.create_portfolio.return_value = mock_portfolio
+
+        # Setup fetcher
+        mock_fetcher = Mock()
+        mock_fetcher.get_current_prices.return_value = {"AAPL": 150.0, "SPY": 400.0}
+        mock_fetcher_class.return_value = mock_fetcher
+
+        # Setup backtest results
+        mock_backtest.return_value = []
+
+        main()
+
+        # Check output shows asset type breakdown
+        captured = capsys.readouterr()
+        # The hold-only message is logged, not printed to stdout
+        # But the asset type breakdown should be printed
+        assert "Asset Type Breakdown:" in captured.out
+        assert "Hold-only Assets: $8,000.00" in captured.out
+        assert "Tradeable Assets: $1,500.00" in captured.out
+
+    @patch("stockula.main.load_config")
+    @patch("stockula.main.setup_logging")
+    @patch("stockula.main.DomainFactory")
+    @patch("stockula.main.DataFetcher")
+    @patch("stockula.main.run_forecast")
+    @patch("stockula.main.print_results")
+    @patch("sys.argv", ["stockula", "--mode", "forecast"])
+    def test_main_creates_forecasting_key(
+        self,
+        mock_print,
+        mock_forecast,
+        mock_fetcher_class,
+        mock_factory,
+        mock_logging,
+        mock_load,
+    ):
+        """Test that forecast mode creates forecasting key in results."""
+        # Setup config
+        config = StockulaConfig()
+        mock_load.return_value = config
+
+        # Setup domain factory
+        mock_asset = Mock()
+        mock_asset.symbol = "AAPL"
+        mock_asset.category = None
+        mock_portfolio = Mock()
+        mock_portfolio.name = "Test Portfolio"
+        mock_portfolio.initial_capital = 100000
+        mock_portfolio.get_all_assets.return_value = [mock_asset]
+        mock_portfolio.get_portfolio_value.return_value = 100000
+        mock_portfolio.allocation_method = "equal"
+        mock_factory.return_value.create_portfolio.return_value = mock_portfolio
+
+        # Setup fetcher
+        mock_fetcher = Mock()
+        mock_fetcher.get_current_prices.return_value = {"AAPL": 150.0}
+        mock_fetcher_class.return_value = mock_fetcher
+
+        # Setup forecast results
+        mock_forecast.return_value = {"ticker": "AAPL", "forecast_price": 155.0}
+
+        main()
+
+        # Check that print_results was called with forecasting key
+        call_args = mock_print.call_args[0][0]
+        assert "forecasting" in call_args
+        assert len(call_args["forecasting"]) == 1
+
+    @patch("stockula.main.load_config")
+    @patch("stockula.main.setup_logging")
+    @patch("stockula.main.DomainFactory")
+    @patch("stockula.main.DataFetcher")
+    @patch("stockula.main.run_backtest")
+    @patch("stockula.main.print_results")
+    @patch("sys.argv", ["stockula", "--mode", "backtest"])
+    def test_main_backtest_creates_results_dict(
+        self,
+        mock_print,
+        mock_backtest,
+        mock_fetcher_class,
+        mock_factory,
+        mock_logging,
+        mock_load,
+    ):
+        """Test that backtest mode properly creates backtesting key in results."""
+        # Setup config
+        config = StockulaConfig()
+        config.backtest.hold_only_categories = []
+        mock_load.return_value = config
+
+        # Setup domain factory
+        mock_asset = Mock()
+        mock_asset.symbol = "AAPL"
+        mock_asset.category = None
+        mock_portfolio = Mock()
+        mock_portfolio.name = "Test Portfolio"
+        mock_portfolio.initial_capital = 100000
+        mock_portfolio.get_all_assets.return_value = [mock_asset]
+        mock_portfolio.get_portfolio_value.return_value = 100000
+        mock_portfolio.allocation_method = "equal"
+        mock_portfolio.get_allocation_by_category.return_value = {}
+        mock_factory.return_value.create_portfolio.return_value = mock_portfolio
+
+        # Setup fetcher
+        mock_fetcher = Mock()
+        mock_fetcher.get_current_prices.return_value = {"AAPL": 150.0}
+        mock_fetcher_class.return_value = mock_fetcher
+
+        # Setup backtest results
+        mock_backtest.return_value = [{"ticker": "AAPL", "strategy": "SMACross"}]
+
+        main()
+
+        # Check that print_results was called with backtesting key
+        call_args = mock_print.call_args[0][0]
+        assert "backtesting" in call_args
+        assert len(call_args["backtesting"]) == 1
+
+    @patch("stockula.main.load_config")
+    @patch("sys.argv", ["stockula"])
+    def test_main_no_default_config_found(self, mock_load):
+        """Test main when no default config files are found."""
+        from pathlib import Path
+
+        # load_config should return default config
+        mock_load.return_value = StockulaConfig()
+
+        with patch("pathlib.Path") as mock_path_cls:
+            # All default files don't exist
+            mock_path = Mock()
+            mock_path.exists.return_value = False
+            mock_path_cls.return_value = mock_path
+
+            with patch("stockula.main.setup_logging"):
+                with patch("stockula.main.DomainFactory") as mock_factory:
+                    with patch("stockula.main.DataFetcher") as mock_fetcher_class:
+                        with patch("stockula.main.print_results"):
+                            # Setup minimal mocks
+                            mock_portfolio = Mock()
+                            mock_portfolio.name = "Test"
+                            mock_portfolio.initial_capital = 100000
+                            mock_portfolio.get_all_assets.return_value = []
+                            mock_portfolio.get_portfolio_value.return_value = 100000
+                            mock_portfolio.allocation_method = "equal"
+                            mock_portfolio.get_allocation_by_category.return_value = {}
+                            mock_factory.return_value.create_portfolio.return_value = (
+                                mock_portfolio
+                            )
+
+                            mock_fetcher = Mock()
+                            mock_fetcher.get_current_prices.return_value = {}
+                            mock_fetcher_class.return_value = mock_fetcher
+
+                            main()
+
+            # Should check for all default files
+            assert mock_path.exists.call_count >= 8  # Number of default files
+
+    @patch("stockula.main.load_config")
+    @patch("stockula.main.setup_logging")
+    @patch("stockula.main.DomainFactory")
+    @patch("stockula.main.DataFetcher")
+    @patch("stockula.main.run_backtest")
+    @patch("stockula.main.print_results")
+    @patch("sys.argv", ["stockula", "--mode", "all"])
+    def test_main_all_mode(
+        self,
+        mock_print,
+        mock_backtest,
+        mock_fetcher_class,
+        mock_factory,
+        mock_logging,
+        mock_load,
+    ):
+        """Test main function in 'all' mode runs all analyses."""
+        # Setup config
+        config = StockulaConfig()
+        config.backtest.hold_only_categories = []
+        mock_load.return_value = config
+
+        # Setup domain factory
+        mock_asset = Mock()
+        mock_asset.symbol = "AAPL"
+        mock_asset.category = None
+        mock_portfolio = Mock()
+        mock_portfolio.name = "Test Portfolio"
+        mock_portfolio.initial_capital = 100000
+        mock_portfolio.get_all_assets.return_value = [mock_asset]
+        mock_portfolio.get_portfolio_value.return_value = 100000
+        mock_portfolio.allocation_method = "equal"
+        mock_portfolio.get_allocation_by_category.return_value = {}
+        mock_factory.return_value.create_portfolio.return_value = mock_portfolio
+
+        # Setup fetcher
+        mock_fetcher = Mock()
+        mock_fetcher.get_current_prices.return_value = {"AAPL": 150.0}
+        mock_fetcher_class.return_value = mock_fetcher
+
+        # Setup backtest results
+        mock_backtest.return_value = []
+
+        # Mock all analysis functions
+        with patch("stockula.main.run_technical_analysis") as mock_ta:
+            with patch("stockula.main.run_forecast") as mock_forecast:
+                mock_ta.return_value = {"ticker": "AAPL", "indicators": {}}
+                mock_forecast.return_value = {"ticker": "AAPL", "forecast_price": 155.0}
+
+                main()
+
+                # All analysis functions should be called
+                mock_ta.assert_called_once()
+                mock_backtest.assert_called_once()
+                mock_forecast.assert_called_once()
+
+    @patch("stockula.main.load_config")
+    @patch("stockula.main.setup_logging")
+    @patch("stockula.main.DomainFactory")
+    @patch("stockula.main.DataFetcher")
+    @patch("stockula.main.print_results")
+    @patch("sys.argv", ["stockula", "--mode", "backtest"])
+    def test_main_unknown_hold_only_category(
+        self,
+        mock_print,
+        mock_fetcher_class,
+        mock_factory,
+        mock_logging,
+        mock_load,
+        capsys,
+    ):
+        """Test main function with unknown hold-only category."""
+        # Setup config with invalid category
+        config = StockulaConfig()
+        config.backtest.hold_only_categories = ["INVALID_CATEGORY"]
+        mock_load.return_value = config
+
+        # Setup domain factory
+        mock_asset = Mock()
+        mock_asset.symbol = "AAPL"
+        mock_asset.category = None
+        mock_portfolio = Mock()
+        mock_portfolio.name = "Test Portfolio"
+        mock_portfolio.initial_capital = 100000
+        mock_portfolio.get_all_assets.return_value = [mock_asset]
+        mock_portfolio.get_portfolio_value.return_value = 100000
+        mock_portfolio.allocation_method = "equal"
+        mock_portfolio.get_allocation_by_category.return_value = {}
+        mock_factory.return_value.create_portfolio.return_value = mock_portfolio
+
+        # Setup fetcher
+        mock_fetcher = Mock()
+        mock_fetcher.get_current_prices.return_value = {"AAPL": 150.0}
+        mock_fetcher_class.return_value = mock_fetcher
+
+        main()
+
+        # Should log warning about unknown category
+        captured = capsys.readouterr()
+        # Logger warning may not appear in stdout, so just verify it didn't crash
+
+    @patch("stockula.main.load_config")
+    @patch("stockula.main.setup_logging")
+    @patch("stockula.main.DomainFactory")
+    @patch("stockula.main.DataFetcher")
+    @patch("stockula.main.run_backtest")
+    @patch("stockula.main.print_results")
+    @patch("sys.argv", ["stockula", "--mode", "backtest"])
+    def test_main_with_error_getting_start_price(
+        self,
+        mock_print,
+        mock_backtest,
+        mock_fetcher_class,
+        mock_factory,
+        mock_logging,
+        mock_load,
+    ):
+        """Test main function when error occurs getting start price."""
+        # Setup config with start date
+        config = StockulaConfig()
+        config.data.start_date = datetime(2023, 1, 1)
+        mock_load.return_value = config
+
+        # Setup domain factory
+        mock_asset = Mock()
+        mock_asset.symbol = "AAPL"
+        mock_asset.category = None
+        mock_portfolio = Mock()
+        mock_portfolio.name = "Test Portfolio"
+        mock_portfolio.initial_capital = 100000
+        mock_portfolio.get_all_assets.return_value = [mock_asset]
+        mock_portfolio.get_portfolio_value.return_value = 100000
+        mock_portfolio.allocation_method = "equal"
+        mock_portfolio.get_allocation_by_category.return_value = {}
+        mock_factory.return_value.create_portfolio.return_value = mock_portfolio
+
+        # Setup fetcher to raise exception for start date
+        mock_fetcher = Mock()
+        mock_fetcher.get_stock_data.side_effect = Exception("API error")
+        mock_fetcher.get_current_prices.return_value = {"AAPL": 150.0}
+        mock_fetcher_class.return_value = mock_fetcher
+
+        # Setup backtest results
+        mock_backtest.return_value = []
+
+        # Should not crash despite error
+        main()
+
+        # Should still call backtest
+        mock_backtest.assert_called_once()

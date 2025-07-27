@@ -3,8 +3,6 @@
 import argparse
 import json
 import sys
-import logging
-from logging.handlers import RotatingFileHandler
 from datetime import datetime, timedelta
 from typing import Dict, Any, List
 import pandas as pd
@@ -23,92 +21,16 @@ from .backtesting import (
 from .forecasting import StockForecaster
 from .config import load_config, StockulaConfig
 from .domain import DomainFactory, Category
+from .utils import LoggingManager
 
-# Create logger
-logger = logging.getLogger(__name__)
+# Create logging manager instance
+log_manager = LoggingManager("stockula.main")
 
 
 def setup_logging(config: StockulaConfig) -> None:
     """Configure logging based on configuration."""
-    # Clear any existing handlers to avoid duplicates
-    root_logger = logging.getLogger()
-    for handler in root_logger.handlers[:]:
-        root_logger.removeHandler(handler)
-
-    # List to store all handlers
-    handlers = []
-
-    # Create console handler
-    console_handler = logging.StreamHandler(sys.stdout)
-
-    # Create formatters
-    if config.logging.enabled:
-        # Detailed format when logging is enabled
-        detailed_formatter = logging.Formatter(
-            fmt="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-            datefmt="%Y-%m-%d %H:%M:%S",
-        )
-        simple_formatter = logging.Formatter(
-            fmt="%(asctime)s - %(levelname)s - %(message)s", datefmt="%H:%M:%S"
-        )
-        log_level = getattr(logging, config.logging.level.upper(), logging.INFO)
-
-        # Use simple formatter for console, detailed for file
-        console_handler.setFormatter(simple_formatter)
-
-        # Add file handler if requested
-        if config.logging.log_to_file:
-            file_handler = RotatingFileHandler(
-                filename=config.logging.log_file,
-                maxBytes=config.logging.max_log_size,
-                backupCount=config.logging.backup_count,
-                encoding="utf-8",
-            )
-            file_handler.setFormatter(detailed_formatter)
-            file_handler.setLevel(log_level)
-            handlers.append(file_handler)
-    else:
-        # Simple format when logging is disabled (only warnings/errors)
-        formatter = logging.Formatter(fmt="%(levelname)s: %(message)s")
-        console_handler.setFormatter(formatter)
-        log_level = logging.WARNING
-
-    # Set level on console handler and add to handlers
-    console_handler.setLevel(log_level)
-    handlers.append(console_handler)
-
-    # Configure root logger
-    root_logger.setLevel(log_level)
-    for handler in handlers:
-        root_logger.addHandler(handler)
-
-    # Configure stockula loggers with proper hierarchy
-    stockula_logger = logging.getLogger("stockula")
-    stockula_logger.setLevel(log_level)
-    stockula_logger.propagate = True  # Propagate to root logger
-
-    # Log startup message if enabled
-    if config.logging.enabled:
-        logger.info(f"Logging initialized - Level: {config.logging.level}")
-        if config.logging.log_to_file:
-            logger.info(f"Logging to file: {config.logging.log_file}")
-
-    # Reduce noise from third-party libraries
-    third_party_level = (
-        logging.CRITICAL
-        if not config.logging.enabled
-        else (logging.WARNING if log_level != logging.DEBUG else logging.INFO)
-    )
-
-    for lib_name in [
-        "yfinance",
-        "urllib3",
-        "requests",
-        "apscheduler",
-        "peewee",
-        "backtesting",
-    ]:
-        logging.getLogger(lib_name).setLevel(third_party_level)
+    # Use the logging manager to set up logging
+    log_manager.setup(config)
 
 
 def get_strategy_class(strategy_name: str):
@@ -252,7 +174,9 @@ def run_forecast(ticker: str, config: StockulaConfig) -> Dict[str, Any]:
     Returns:
         Dictionary with forecast results
     """
-    logger.info(f"\nForecasting {ticker} for {config.forecast.forecast_length} days...")
+    log_manager.info(
+        f"\nForecasting {ticker} for {config.forecast.forecast_length} days..."
+    )
 
     forecaster = StockForecaster(
         forecast_length=config.forecast.forecast_length,
@@ -278,7 +202,9 @@ def run_forecast(ticker: str, config: StockulaConfig) -> Dict[str, Any]:
 
         model_info = forecaster.get_best_model()
 
-        logger.info(f"Forecast completed for {ticker} using {model_info['model_name']}")
+        log_manager.info(
+            f"Forecast completed for {ticker} using {model_info['model_name']}"
+        )
 
         return {
             "ticker": ticker,
@@ -291,10 +217,10 @@ def run_forecast(ticker: str, config: StockulaConfig) -> Dict[str, Any]:
             "model_params": model_info.get("model_params", {}),
         }
     except KeyboardInterrupt:
-        logger.warning(f"Forecast for {ticker} interrupted by user")
+        log_manager.warning(f"Forecast for {ticker} interrupted by user")
         return {"ticker": ticker, "error": "Interrupted by user"}
     except Exception as e:
-        logger.error(f"Error forecasting {ticker}: {e}")
+        log_manager.error(f"Error forecasting {ticker}: {e}")
         return {"ticker": ticker, "error": str(e)}
 
 
@@ -333,12 +259,13 @@ def print_results(results: Dict[str, Any], output_format: str = "console"):
         if "backtesting" in results:
             print("\n=== Backtesting Results ===")
             for backtest in results["backtesting"]:
-                print(f"\n{backtest['ticker']} - {backtest['strategy']}:")
-                print(f"  Parameters: {backtest['parameters']}")
-                print(f"  Return: {backtest['return_pct']:.2f}%")
-                print(f"  Sharpe Ratio: {backtest['sharpe_ratio']:.2f}")
-                print(f"  Max Drawdown: {backtest['max_drawdown_pct']:.2f}%")
-                print(f"  Number of Trades: {backtest['num_trades']}")
+                print(f"""
+{backtest["ticker"]} - {backtest["strategy"]}:
+  Parameters: {backtest["parameters"]}
+  Return: {backtest["return_pct"]:.2f}%
+  Sharpe Ratio: {backtest["sharpe_ratio"]:.2f}
+  Max Drawdown: {backtest["max_drawdown_pct"]:.2f}%
+  Number of Trades: {backtest["num_trades"]}""")
                 if backtest.get("win_rate") is not None:
                     print(f"  Win Rate: {backtest['win_rate']:.2f}%")
                 elif backtest["num_trades"] == 0:
@@ -350,15 +277,12 @@ def print_results(results: Dict[str, Any], output_format: str = "console"):
                 if "error" in forecast:
                     print(f"\n{forecast['ticker']}: Error - {forecast['error']}")
                 else:
-                    print(f"\n{forecast['ticker']}:")
-                    print(f"  Current Price: ${forecast['current_price']:.2f}")
-                    print(
-                        f"  {forecast['forecast_length']}-Day Forecast: ${forecast['forecast_price']:.2f}"
-                    )
-                    print(
-                        f"  Confidence Range: ${forecast['lower_bound']:.2f} - ${forecast['upper_bound']:.2f}"
-                    )
-                    print(f"  Best Model: {forecast['best_model']}")
+                    print(f"""
+{forecast["ticker"]}:
+  Current Price: ${forecast["current_price"]:.2f}
+  {forecast["forecast_length"]}-Day Forecast: ${forecast["forecast_price"]:.2f}
+  Confidence Range: ${forecast["lower_bound"]:.2f} - ${forecast["upper_bound"]:.2f}
+  Best Model: {forecast["best_model"]}""")
 
 
 def main():
@@ -451,11 +375,11 @@ def main():
     factory = DomainFactory()
     portfolio = factory.create_portfolio(config)
 
-    logger.info("\nPortfolio Summary:")
-    logger.info(f"  Name: {portfolio.name}")
-    logger.info(f"  Initial Capital: ${portfolio.initial_capital:,.2f}")
-    logger.info(f"  Total Assets: {len(portfolio.get_all_assets())}")
-    logger.info(f"  Allocation Method: {portfolio.allocation_method}")
+    log_manager.info("\nPortfolio Summary:")
+    log_manager.info(f"  Name: {portfolio.name}")
+    log_manager.info(f"  Initial Capital: ${portfolio.initial_capital:,.2f}")
+    log_manager.info(f"  Total Assets: {len(portfolio.get_all_assets())}")
+    log_manager.info(f"  Allocation Method: {portfolio.allocation_method}")
 
     # Get portfolio value at start of backtest period
     fetcher = DataFetcher()
@@ -463,7 +387,9 @@ def main():
 
     # Get prices at the start date if backtesting
     if args.mode in ["all", "backtest"] and config.data.start_date:
-        logger.debug(f"\nFetching prices at start date ({config.data.start_date})...")
+        log_manager.debug(
+            f"\nFetching prices at start date ({config.data.start_date})..."
+        )
         start_date_str = config.data.start_date.strftime("%Y-%m-%d")
         # Fetch one day of data at the start date to get opening prices
         start_prices = {}
@@ -485,22 +411,24 @@ def main():
                     if not data.empty:
                         start_prices[symbol] = data["Close"].iloc[0]
             except Exception as e:
-                logger.warning(f"Could not get start price for {symbol}: {e}")
+                log_manager.warning(f"Could not get start price for {symbol}: {e}")
 
         initial_portfolio_value = portfolio.get_portfolio_value(start_prices)
-        logger.info(f"\nPortfolio Value at Start Date: ${initial_portfolio_value:,.2f}")
+        log_manager.info(
+            f"\nPortfolio Value at Start Date: ${initial_portfolio_value:,.2f}"
+        )
     else:
-        logger.debug("\nFetching current prices...")
+        log_manager.debug("\nFetching current prices...")
         current_prices = fetcher.get_current_prices(symbols)
         initial_portfolio_value = portfolio.get_portfolio_value(current_prices)
-        logger.info(f"\nCurrent Portfolio Value: ${initial_portfolio_value:,.2f}")
+        log_manager.info(f"\nCurrent Portfolio Value: ${initial_portfolio_value:,.2f}")
 
     # Calculate returns (always needed, not just for logging)
     initial_return = initial_portfolio_value - portfolio.initial_capital
     initial_return_pct = (initial_return / portfolio.initial_capital) * 100
 
-    logger.info(f"Initial Capital: ${portfolio.initial_capital:,.2f}")
-    logger.info(
+    log_manager.info(f"Initial Capital: ${portfolio.initial_capital:,.2f}")
+    log_manager.info(
         f"Return Since Inception: ${initial_return:,.2f} ({initial_return_pct:+.2f}%)"
     )
 
@@ -521,7 +449,7 @@ def main():
         try:
             hold_only_categories.add(Category[category_name])
         except KeyError:
-            logger.warning(
+            log_manager.warning(
                 f"Unknown category '{category_name}' in hold_only_categories"
             )
 
@@ -535,15 +463,15 @@ def main():
             tradeable_assets.append(asset)
 
     if hold_only_assets:
-        logger.info("\nHold-only assets (excluded from backtesting):")
+        log_manager.info("\nHold-only assets (excluded from backtesting):")
         for asset in hold_only_assets:
-            logger.info(f"  {asset.symbol} ({asset.category})")
+            log_manager.info(f"  {asset.symbol} ({asset.category})")
 
     # Get ticker symbols for processing
     ticker_symbols = [asset.symbol for asset in all_assets]
 
     for ticker in ticker_symbols:
-        logger.debug(f"\nProcessing {ticker}...")
+        log_manager.debug(f"\nProcessing {ticker}...")
 
         # Get the asset to check its category
         asset = next((a for a in all_assets if a.symbol == ticker), None)
@@ -556,7 +484,7 @@ def main():
 
         if args.mode in ["all", "backtest"]:
             if is_hold_only:
-                logger.debug(f"  Skipping backtest for {ticker} (hold-only asset)")
+                log_manager.debug(f"  Skipping backtest for {ticker} (hold-only asset)")
             else:
                 if "backtesting" not in results:
                     results["backtesting"] = []
@@ -568,14 +496,15 @@ def main():
 
             # Show warning about forecast mode
             if args.mode == "forecast" and ticker == config.portfolio.tickers[0].symbol:
-                print("\n" + "=" * 60)
-                print("FORECAST MODE - IMPORTANT NOTES:")
-                print("=" * 60)
-                print("• AutoTS will try multiple models to find the best fit")
-                print("• This process may take several minutes per ticker")
-                print("• Press Ctrl+C at any time to cancel")
-                print("• Enable logging for more detailed progress information")
-                print("=" * 60)
+                print(f"""
+{"=" * 60}
+FORECAST MODE - IMPORTANT NOTES:
+{"=" * 60}
+• AutoTS will try multiple models to find the best fit
+• This process may take several minutes per ticker
+• Press Ctrl+C at any time to cancel
+• Enable logging for more detailed progress information
+{"=" * 60}""")
 
             forecast_result = run_forecast(ticker, config)
             results["forecasting"].append(forecast_result)
@@ -586,19 +515,19 @@ def main():
 
     # Show final portfolio summary after backtesting
     if args.mode in ["all", "backtest"]:
-        print("\n" + "=" * 50)
-        print("PORTFOLIO PERFORMANCE SUMMARY")
-        print("=" * 50)
+        print(f"""
+{"=" * 50}
+PORTFOLIO PERFORMANCE SUMMARY
+{"=" * 50}""")
 
         # Re-fetch current prices to get the most up-to-date values
-        logger.debug("\nFetching latest prices...")
+        log_manager.debug("\nFetching latest prices...")
         final_prices = fetcher.get_current_prices(symbols)
         final_value = portfolio.get_portfolio_value(final_prices)
 
-        print(
-            f"\nPortfolio Value at Start Date: ${results['initial_portfolio_value']:,.2f}"
-        )
-        print(f"Portfolio Value at End (Current): ${final_value:,.2f}")
+        print(f"""
+Portfolio Value at Start Date: ${results["initial_portfolio_value"]:,.2f}
+Portfolio Value at End (Current): ${final_value:,.2f}""")
 
         period_return = final_value - results["initial_portfolio_value"]
         period_return_pct = (period_return / results["initial_portfolio_value"]) * 100
@@ -633,24 +562,18 @@ def main():
                         (category_return / start_value) * 100 if start_value > 0 else 0
                     )
 
-                    print(f"  {category}:")
-                    print(f"    Start Value: ${start_value:,.2f}")
-                    print(f"    Current Value: ${final_value:,.2f}")
-                    print(
-                        f"    Return: ${category_return:,.2f} ({category_return_pct:+.2f}%)"
-                    )
-                    print(
-                        f"    Assets: {', '.join(final_category_allocations[category]['assets'])}"
-                    )
+                    print(f"""  {category}:
+    Start Value: ${start_value:,.2f}
+    Current Value: ${final_value:,.2f}
+    Return: ${category_return:,.2f} ({category_return_pct:+.2f}%)
+    Assets: {", ".join(final_category_allocations[category]["assets"])}""")
                 else:
                     # New category added during the period
                     final_value = final_category_allocations[category]["value"]
-                    print(f"  {category}:")
-                    print(f"    Start Value: $0.00 (new category)")
-                    print(f"    Current Value: ${final_value:,.2f}")
-                    print(
-                        f"    Assets: {', '.join(final_category_allocations[category]['assets'])}"
-                    )
+                    print(f"""  {category}:
+    Start Value: $0.00 (new category)
+    Current Value: ${final_value:,.2f}
+    Assets: {", ".join(final_category_allocations[category]["assets"])}""")
 
         # Show performance breakdown by asset type
         if hold_only_assets and tradeable_assets:
@@ -668,9 +591,9 @@ def main():
                 for asset in tradeable_assets
             )
 
-            print(f"  Hold-only Assets: ${hold_only_value:,.2f}")
-            print(f"  Tradeable Assets: ${tradeable_value:,.2f}")
-            print(f"  Total Portfolio: ${hold_only_value + tradeable_value:,.2f}")
+            print(f"""  Hold-only Assets: ${hold_only_value:,.2f}
+  Tradeable Assets: ${tradeable_value:,.2f}
+  Total Portfolio: ${hold_only_value + tradeable_value:,.2f}""")
 
         # Show return during period at the very end
         print(
@@ -688,7 +611,7 @@ def main():
         with open(results_file, "w") as f:
             json.dump(results, f, indent=2, default=str)
 
-        logger.info(f"\nResults saved to {results_file}")
+        log_manager.info(f"\nResults saved to {results_file}")
 
 
 if __name__ == "__main__":

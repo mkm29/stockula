@@ -34,8 +34,8 @@ def show_database_stats() -> None:
     fetcher = DataFetcher(use_cache=True)
     stats = fetcher.get_database_stats()
 
-    print("Database Statistics:")
-    print("=" * 40)
+    print(f"""Database Statistics:
+{"=" * 40}""")
     for table, count in stats.items():
         print(f"{table:15}: {count:,} records")
 
@@ -65,20 +65,16 @@ def query_symbol_data(symbol: str) -> None:
     """Query and display data for a specific symbol."""
     db = DatabaseManager()
 
-    print(f"Data for {symbol}:")
-    print("=" * 40)
+    print(f"""Data for {symbol}:
+{"=" * 40}""")
 
     # Stock info
     info = db.get_stock_info(symbol)
     if info:
-        print(f"Name: {info.get('longName', 'N/A')}")
-        print(f"Sector: {info.get('sector', 'N/A')}")
-        print(
-            f"Market Cap: ${info.get('marketCap', 0):,}"
-            if info.get("marketCap")
-            else "Market Cap: N/A"
-        )
-        print(f"Exchange: {info.get('exchange', 'N/A')}")
+        print(f"""Name: {info.get("longName", "N/A")}
+Sector: {info.get("sector", "N/A")}
+{f"Market Cap: ${info.get('marketCap', 0):,}" if info.get("marketCap") else "Market Cap: N/A"}
+Exchange: {info.get("exchange", "N/A")}""")
 
     # Price history
     price_data = db.get_price_history(symbol)
