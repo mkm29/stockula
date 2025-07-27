@@ -2,6 +2,27 @@
 
 Stockula is a comprehensive Python trading platform that provides tools for technical analysis, backtesting, data fetching, and price forecasting. Built with modern Python practices, it integrates popular financial libraries to offer a complete solution for quantitative trading strategy development.
 
+## Requirements
+
+### System Requirements
+
+- **Python**: 3.13 or higher
+- **Operating System**: macOS, Linux, or Windows
+- **Memory**: Minimum 8GB RAM recommended
+- **Storage**: At least 1GB free space for data caching
+
+### Python Dependencies
+
+- **pandas**: Data manipulation and analysis
+- **yfinance**: Yahoo Finance data fetching
+- **finta**: Financial technical analysis indicators
+- **backtesting**: Strategy backtesting framework
+- **autots**: Automated time series forecasting
+- **matplotlib**: Plotting and visualization
+- **pydantic**: Data validation and settings management
+- **pydantic-settings**: Configuration management with environment variable support
+- **pyyaml**: YAML file parsing
+
 ## Features
 
 - **📊 Technical Analysis**: Calculate popular indicators (SMA, EMA, RSI, MACD, Bollinger Bands, etc.) using the finta library
@@ -10,6 +31,138 @@ Stockula is a comprehensive Python trading platform that provides tools for tech
 - **🗄️ SQLite Database**: Automatic caching of all yfinance data with robust lookup capabilities
 - **🔮 Price Forecasting**: Automated time series forecasting using AutoTS
 - **🚀 Fast Package Management**: Uses uv for lightning-fast dependency management
+
+## Architecture Overview
+
+```mermaid
+graph TB
+    subgraph "User Interface"
+        CLI[CLI main.py]
+        Config[Configuration<br/>.config.yaml]
+    end
+    
+    subgraph "Core Domain"
+        Factory[Domain Factory]
+        Portfolio[Portfolio]
+        Asset[Asset]
+        Ticker[Ticker]
+        Category[Category]
+    end
+    
+    subgraph "Data Layer"
+        Fetcher[Data Fetcher<br/>yfinance wrapper]
+        DB[(SQLite Database<br/>stockula.db)]
+        Cache[Cache Manager]
+    end
+    
+    subgraph "Analysis Modules"
+        TA[Technical Analysis<br/>finta]
+        BT[Backtesting<br/>strategies]
+        FC[Forecasting<br/>AutoTS]
+    end
+    
+    subgraph "Configuration"
+        Models[Config Models<br/>Pydantic]
+        Logging[Logging Config]
+    end
+    
+    CLI --> Config
+    Config --> Models
+    Models --> Factory
+    Factory --> Portfolio
+    Portfolio --> Asset
+    Asset --> Ticker
+    Asset --> Category
+    
+    CLI --> TA
+    CLI --> BT
+    CLI --> FC
+    
+    TA --> Fetcher
+    BT --> Fetcher
+    FC --> Fetcher
+    
+    Fetcher --> DB
+    Fetcher --> Cache
+    Cache --> DB
+    
+    Models --> Logging
+    Logging --> CLI
+    
+    style CLI fill:#2196F3,stroke:#1976D2,color:#fff
+    style Config fill:#4CAF50,stroke:#388E3C,color:#fff
+    style DB fill:#FF9800,stroke:#F57C00,color:#fff
+    style Portfolio fill:#9C27B0,stroke:#7B1FA2,color:#fff
+    style Factory fill:#9C27B0,stroke:#7B1FA2,color:#fff
+```
+
+### Data Flow
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant CLI
+    participant Config
+    participant Factory
+    participant Portfolio
+    participant Fetcher
+    participant DB
+    participant Analysis
+    
+    User->>CLI: Run command
+    CLI->>Config: Load .config.yaml
+    Config->>Factory: Create domain objects
+    Factory->>Portfolio: Build portfolio
+    Portfolio->>Fetcher: Request prices
+    Fetcher->>DB: Check cache
+    alt Cache hit
+        DB-->>Fetcher: Return cached data
+    else Cache miss
+        Fetcher->>yfinance: Fetch from API
+        yfinance-->>Fetcher: Return data
+        Fetcher->>DB: Store in cache
+    end
+    Fetcher-->>Portfolio: Return prices
+    Portfolio->>Analysis: Run analysis
+    Analysis-->>CLI: Return results
+    CLI-->>User: Display output
+```
+
+## Module Structure
+
+```text
+src/stockula/
+├── __init__.py           # Main package exports
+├── main.py               # CLI demo application
+├── config/               # Configuration management
+│   ├── __init__.py
+│   ├── models.py        # Pydantic models
+│   └── settings.py      # Config loading
+├── domain/               # Domain models
+│   ├── __init__.py
+│   ├── portfolio.py     # Portfolio management
+│   ├── asset.py         # Asset representation
+│   ├── ticker.py        # Ticker & registry
+│   ├── category.py      # Category enum
+│   └── factory.py       # Domain object factory
+├── data/                 # Data fetching module
+│   ├── __init__.py
+│   └── fetcher.py       # yfinance wrapper with SQLite caching
+├── database/             # SQLite database management
+│   ├── __init__.py
+│   ├── manager.py       # Database operations
+│   └── cli.py           # Command-line interface
+├── technical_analysis/   # Technical indicators
+│   ├── __init__.py
+│   └── indicators.py    # finta wrapper
+├── backtesting/         # Strategy backtesting
+│   ├── __init__.py
+│   ├── strategies.py    # Pre-built strategies
+│   └── runner.py        # Backtest execution
+└── forecasting/         # Price prediction
+    ├── __init__.py
+    └── forecaster.py    # AutoTS wrapper
+```
 
 ## Installation
 
@@ -244,138 +397,6 @@ predictions = forecaster.forecast_from_symbol("AAPL")
 # Get forecast with confidence intervals
 print(f"30-day forecast: ${predictions['forecast'].iloc[-1]:.2f}")
 print(f"Confidence interval: ${predictions['lower_bound'].iloc[-1]:.2f} - ${predictions['upper_bound'].iloc[-1]:.2f}")
-```
-
-## Architecture Overview
-
-```mermaid
-graph TB
-    subgraph "User Interface"
-        CLI[CLI main.py]
-        Config[Configuration<br/>.config.yaml]
-    end
-    
-    subgraph "Core Domain"
-        Factory[Domain Factory]
-        Portfolio[Portfolio]
-        Asset[Asset]
-        Ticker[Ticker]
-        Category[Category]
-    end
-    
-    subgraph "Data Layer"
-        Fetcher[Data Fetcher<br/>yfinance wrapper]
-        DB[(SQLite Database<br/>stockula.db)]
-        Cache[Cache Manager]
-    end
-    
-    subgraph "Analysis Modules"
-        TA[Technical Analysis<br/>finta]
-        BT[Backtesting<br/>strategies]
-        FC[Forecasting<br/>AutoTS]
-    end
-    
-    subgraph "Configuration"
-        Models[Config Models<br/>Pydantic]
-        Logging[Logging Config]
-    end
-    
-    CLI --> Config
-    Config --> Models
-    Models --> Factory
-    Factory --> Portfolio
-    Portfolio --> Asset
-    Asset --> Ticker
-    Asset --> Category
-    
-    CLI --> TA
-    CLI --> BT
-    CLI --> FC
-    
-    TA --> Fetcher
-    BT --> Fetcher
-    FC --> Fetcher
-    
-    Fetcher --> DB
-    Fetcher --> Cache
-    Cache --> DB
-    
-    Models --> Logging
-    Logging --> CLI
-    
-    style CLI fill:#2196F3,stroke:#1976D2,color:#fff
-    style Config fill:#4CAF50,stroke:#388E3C,color:#fff
-    style DB fill:#FF9800,stroke:#F57C00,color:#fff
-    style Portfolio fill:#9C27B0,stroke:#7B1FA2,color:#fff
-    style Factory fill:#9C27B0,stroke:#7B1FA2,color:#fff
-```
-
-### Data Flow
-
-```mermaid
-sequenceDiagram
-    participant User
-    participant CLI
-    participant Config
-    participant Factory
-    participant Portfolio
-    participant Fetcher
-    participant DB
-    participant Analysis
-    
-    User->>CLI: Run command
-    CLI->>Config: Load .config.yaml
-    Config->>Factory: Create domain objects
-    Factory->>Portfolio: Build portfolio
-    Portfolio->>Fetcher: Request prices
-    Fetcher->>DB: Check cache
-    alt Cache hit
-        DB-->>Fetcher: Return cached data
-    else Cache miss
-        Fetcher->>yfinance: Fetch from API
-        yfinance-->>Fetcher: Return data
-        Fetcher->>DB: Store in cache
-    end
-    Fetcher-->>Portfolio: Return prices
-    Portfolio->>Analysis: Run analysis
-    Analysis-->>CLI: Return results
-    CLI-->>User: Display output
-```
-
-## Module Structure
-
-```text
-src/stockula/
-├── __init__.py           # Main package exports
-├── main.py               # CLI demo application
-├── config/               # Configuration management
-│   ├── __init__.py
-│   ├── models.py        # Pydantic models
-│   └── settings.py      # Config loading
-├── domain/               # Domain models
-│   ├── __init__.py
-│   ├── portfolio.py     # Portfolio management
-│   ├── asset.py         # Asset representation
-│   ├── ticker.py        # Ticker & registry
-│   ├── category.py      # Category enum
-│   └── factory.py       # Domain object factory
-├── data/                 # Data fetching module
-│   ├── __init__.py
-│   └── fetcher.py       # yfinance wrapper with SQLite caching
-├── database/             # SQLite database management
-│   ├── __init__.py
-│   ├── manager.py       # Database operations
-│   └── cli.py           # Command-line interface
-├── technical_analysis/   # Technical indicators
-│   ├── __init__.py
-│   └── indicators.py    # finta wrapper
-├── backtesting/         # Strategy backtesting
-│   ├── __init__.py
-│   ├── strategies.py    # Pre-built strategies
-│   └── runner.py        # Backtest execution
-└── forecasting/         # Price prediction
-    ├── __init__.py
-    └── forecaster.py    # AutoTS wrapper
 ```
 
 ## Important Notes
@@ -635,18 +656,6 @@ config = StockulaConfig(
     backtest=BacktestConfig(initial_cash=50000)
 )
 ```
-
-## Dependencies
-
-- **pandas**: Data manipulation and analysis
-- **yfinance**: Yahoo Finance data fetching
-- **finta**: Financial technical analysis indicators
-- **backtesting**: Strategy backtesting framework
-- **autots**: Automated time series forecasting
-- **matplotlib**: Plotting and visualization
-- **pydantic**: Data validation and settings management
-- **pydantic-settings**: Configuration management with environment variable support
-- **pyyaml**: YAML file parsing
 
 ## License
 
