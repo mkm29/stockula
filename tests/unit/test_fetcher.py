@@ -653,12 +653,12 @@ class TestDataFetcherCurrentPrices:
         mock_ticker.info = {"longName": "Test Company"}  # No price fields
 
         with patch("yfinance.Ticker", return_value=mock_ticker):
-            with patch("builtins.print") as mock_print:
+            with patch("stockula.data.fetcher.console.print") as mock_console_print:
                 fetcher = DataFetcher(use_cache=False)
-                prices = fetcher.get_current_prices(["TEST"])
+                prices = fetcher.get_current_prices(["TEST"], show_progress=False)
 
-                mock_print.assert_called_with(
-                    "Warning: Could not get current price for TEST"
+                mock_console_print.assert_called_with(
+                    "[yellow]Warning: Could not get current price for TEST[/yellow]"
                 )
                 assert prices == {}
 
@@ -668,12 +668,12 @@ class TestDataFetcherCurrentPrices:
         mock_ticker.history.side_effect = Exception("API error")
 
         with patch("yfinance.Ticker", return_value=mock_ticker):
-            with patch("builtins.print") as mock_print:
+            with patch("stockula.data.fetcher.console.print") as mock_console_print:
                 fetcher = DataFetcher(use_cache=False)
-                prices = fetcher.get_current_prices(["TEST"])
+                prices = fetcher.get_current_prices(["TEST"], show_progress=False)
 
-                mock_print.assert_called_with(
-                    "Error fetching price for TEST: API error"
+                mock_console_print.assert_called_with(
+                    "[red]Error fetching price for TEST: API error[/red]"
                 )
                 assert prices == {}
 
@@ -686,7 +686,9 @@ class TestDataFetcherCurrentPrices:
 
         with patch("yfinance.Ticker", return_value=mock_ticker):
             fetcher = DataFetcher(use_cache=False)
-            prices = fetcher.get_current_prices("TEST")  # Single string instead of list
+            prices = fetcher.get_current_prices(
+                "TEST", show_progress=False
+            )  # Single string instead of list
 
             assert prices == {"TEST": 150.50}
 
@@ -979,3 +981,176 @@ class TestDataFetcherUtilityMethods:
         # Test with cache disabled and injected db manager
         fetcher = DataFetcher(use_cache=False, database_manager=mock_db)
         assert fetcher.db is None
+
+
+class TestDataFetcherTreasuryRates:
+    """Test Treasury rate fetching functionality."""
+
+    def test_treasury_tickers(self):
+        """Test Treasury ticker mappings."""
+        fetcher = DataFetcher(use_cache=False)
+        assert fetcher.TREASURY_TICKERS["3_month"] == "^IRX"
+        assert fetcher.TREASURY_TICKERS["13_week"] == "^IRX"
+        assert fetcher.TREASURY_TICKERS["tbill_etf"] == "BIL"
+
+    @patch("yfinance.Ticker")
+    def test_get_treasury_rate_from_yfinance(self, mock_ticker):
+        """Test fetching single Treasury rate from yfinance."""
+        # Mock yfinance response
+        mock_ticker_obj = Mock()
+        mock_data = pd.DataFrame({"Close": [5.25]}, index=[datetime(2024, 1, 15)])
+        mock_ticker_obj.history.return_value = mock_data
+        mock_ticker.return_value = mock_ticker_obj
+
+        fetcher = DataFetcher(use_cache=False)
+        rate = fetcher.get_treasury_rate("2024-01-15", "3_month")
+
+        assert rate == 0.0525  # Should convert from percentage to decimal
+        mock_ticker.assert_called_once_with("^IRX")
+
+    def test_get_treasury_rate_from_cache(self):
+        """Test fetching Treasury rate from cache."""
+        # Setup mock to return cached data
+        mock_db = Mock()
+        mock_db.get_price_history.return_value = pd.DataFrame(
+            {"Close": [5.25]}, index=[datetime(2024, 1, 1)]
+        )
+
+        with patch("stockula.data.fetcher.DatabaseManager", return_value=mock_db):
+            fetcher = DataFetcher(use_cache=True)
+            rate = fetcher.get_treasury_rate("2024-01-01", "3_month")
+
+            assert rate == 5.25  # From Close price
+            mock_db.get_price_history.assert_called_once()
+
+    @patch("yfinance.Ticker")
+    def test_get_treasury_rates_range(self, mock_ticker):
+        """Test fetching Treasury rates for date range."""
+        # Mock yfinance response
+        mock_ticker_obj = Mock()
+        dates = pd.date_range(start="2024-01-01", end="2024-01-10", freq="D")
+        mock_data = pd.DataFrame(
+            {
+                "Close": [5.25, 5.26, 5.27, 5.28, 5.29, 5.30, 5.29, 5.28, 5.27, 5.26],
+            },
+            index=dates,
+        )
+        mock_ticker_obj.history.return_value = mock_data
+        mock_ticker.return_value = mock_ticker_obj
+
+        fetcher = DataFetcher(use_cache=False)
+        rates = fetcher.get_treasury_rates(
+            "2024-01-01", "2024-01-10", "3_month", force_refresh=True
+        )
+
+        assert len(rates) == 10
+        assert rates.iloc[0] == 0.0525  # Should convert to decimal
+        assert rates.iloc[-1] == 0.0526
+
+    def test_get_average_treasury_rate(self):
+        """Test calculating average Treasury rate."""
+        # Mock get_treasury_rates to return known values
+        fetcher = DataFetcher(use_cache=False)
+        test_rates = pd.Series([0.0525, 0.0526, 0.0527, 0.0528, 0.0529])
+        fetcher.get_treasury_rates = Mock(return_value=test_rates)
+
+        avg_rate = fetcher.get_average_treasury_rate(
+            "2024-01-01", "2024-01-05", "3_month"
+        )
+
+        assert avg_rate == pytest.approx(0.0527, rel=1e-4)
+
+    def test_get_average_treasury_rate_empty(self):
+        """Test average rate when no data available."""
+        # Mock get_treasury_rates to return empty series
+        fetcher = DataFetcher(use_cache=False)
+        fetcher.get_treasury_rates = Mock(return_value=pd.Series(dtype=float))
+
+        avg_rate = fetcher.get_average_treasury_rate(
+            "2024-01-01", "2024-01-05", "3_month"
+        )
+
+        assert avg_rate is None
+
+    @patch("yfinance.Ticker")
+    def test_get_current_treasury_rate(self, mock_ticker):
+        """Test getting current Treasury rate."""
+        # Mock yfinance response
+        mock_ticker_obj = Mock()
+        mock_data = pd.DataFrame({"Close": [5.42]}, index=[datetime.now()])
+        mock_ticker_obj.history.return_value = mock_data
+        mock_ticker.return_value = mock_ticker_obj
+
+        fetcher = DataFetcher(use_cache=False)
+        rate = fetcher.get_current_treasury_rate("3_month")
+
+        assert rate == 0.0542
+
+    @patch("yfinance.Ticker")
+    def test_treasury_rate_caching_behavior(self, mock_ticker):
+        """Test that rates are cached after fetching."""
+        # Mock yfinance response
+        mock_ticker_obj = Mock()
+        mock_data = pd.DataFrame({"Close": [5.25]}, index=[datetime(2024, 1, 15)])
+        mock_ticker_obj.history.return_value = mock_data
+        mock_ticker.return_value = mock_ticker_obj
+
+        # Mock database
+        mock_db = Mock()
+        mock_db.get_price_history.return_value = pd.DataFrame()
+
+        with patch("stockula.data.fetcher.DatabaseManager", return_value=mock_db):
+            fetcher = DataFetcher(use_cache=True)
+            rate = fetcher.get_treasury_rate(
+                "2024-01-15", "3_month", force_refresh=True
+            )
+
+            # Verify caching was called
+            mock_db.store_stock_info.assert_called_once()
+            mock_db.store_price_history.assert_called_once()
+
+            # Verify the stored data
+            stored_df = mock_db.store_price_history.call_args[0][1]
+            assert stored_df.iloc[0]["Close"] == 0.0525
+
+    @patch("yfinance.Ticker")
+    def test_treasury_rate_error_handling(self, mock_ticker):
+        """Test error handling when yfinance fails."""
+        # Mock yfinance to raise exception
+        mock_ticker.side_effect = Exception("Network error")
+
+        fetcher = DataFetcher(use_cache=False)
+        rate = fetcher.get_treasury_rate("2024-01-15", "3_month", force_refresh=True)
+
+        assert rate is None
+
+    def test_treasury_percentage_vs_decimal_conversion(self):
+        """Test conversion between percentage and decimal formats."""
+        # Create fetcher with mocked methods
+        fetcher = DataFetcher(use_cache=False)
+        fetcher._fetch_rate_from_yfinance = Mock(return_value=0.0525)
+
+        # Test as_decimal=True (default)
+        rate_decimal = fetcher.get_treasury_rate("2024-01-15", "3_month")
+        assert rate_decimal == 0.0525
+
+        # Test as_decimal=False
+        rate_percent = fetcher.get_treasury_rate(
+            "2024-01-15", "3_month", as_decimal=False
+        )
+        assert rate_percent == 5.25
+
+    def test_different_treasury_duration_types(self):
+        """Test different Treasury duration types."""
+        # Mock the fetch method
+        fetcher = DataFetcher(use_cache=False)
+        fetcher._fetch_rate_from_yfinance = Mock(return_value=0.05)
+
+        # Test different durations
+        for duration in ["3_month", "13_week", "1_year", "tbill_etf", "sgov"]:
+            rate = fetcher.get_treasury_rate("2024-01-15", duration)
+            assert rate == 0.05
+
+        # Test invalid duration (should default to 3_month)
+        rate = fetcher.get_treasury_rate("2024-01-15", "invalid_duration")
+        assert rate == 0.05

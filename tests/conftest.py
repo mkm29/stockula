@@ -26,7 +26,7 @@ from stockula.forecasting import StockForecaster
 # ===== Configuration Fixtures =====
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def sample_ticker_config():
     """Create a sample ticker configuration."""
     return TickerConfig(
@@ -38,7 +38,7 @@ def sample_ticker_config():
     )
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def sample_ticker_configs():
     """Create multiple ticker configurations for testing."""
     return [
@@ -49,7 +49,7 @@ def sample_ticker_configs():
     ]
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def sample_portfolio_config(sample_ticker_configs):
     """Create a sample portfolio configuration."""
     return PortfolioConfig(
@@ -62,7 +62,7 @@ def sample_portfolio_config(sample_ticker_configs):
     )
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def dynamic_allocation_config():
     """Create a portfolio config with dynamic allocation."""
     return PortfolioConfig(
@@ -78,7 +78,7 @@ def dynamic_allocation_config():
     )
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def auto_allocation_config():
     """Create a portfolio config with auto allocation."""
     return PortfolioConfig(
@@ -99,13 +99,13 @@ def auto_allocation_config():
     )
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def sample_data_config():
     """Create a sample data configuration."""
     return DataConfig(start_date="2023-01-01", end_date="2023-12-31", interval="1d")
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def sample_stockula_config(sample_portfolio_config, sample_data_config):
     """Create a complete Stockula configuration."""
     return StockulaConfig(
@@ -121,7 +121,7 @@ def sample_stockula_config(sample_portfolio_config, sample_data_config):
 # ===== Domain Model Fixtures =====
 
 
-@pytest.fixture
+@pytest.fixture(scope="module")
 def sample_ticker():
     """Create a sample ticker."""
     # Import the wrapper function from domain
@@ -135,13 +135,13 @@ def sample_ticker():
     )
 
 
-@pytest.fixture
+@pytest.fixture(scope="function")
 def sample_asset(sample_ticker):
     """Create a sample asset."""
     return Asset(ticker=sample_ticker, quantity=10.0, category=Category.MOMENTUM)
 
 
-@pytest.fixture
+@pytest.fixture(scope="function")
 def sample_portfolio():
     """Create a sample portfolio."""
     return Portfolio(
@@ -151,7 +151,7 @@ def sample_portfolio():
     )
 
 
-@pytest.fixture
+@pytest.fixture(scope="function")
 def populated_portfolio(sample_portfolio, sample_ticker_configs, mock_data_fetcher):
     """Create a portfolio with multiple assets."""
     factory = DomainFactory(fetcher=mock_data_fetcher)
@@ -169,7 +169,7 @@ def populated_portfolio(sample_portfolio, sample_ticker_configs, mock_data_fetch
 # ===== Data Fixtures =====
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def sample_ohlcv_data():
     """Create sample OHLCV data for testing."""
     dates = pd.date_range(start="2023-01-01", end="2023-01-31", freq="D")
@@ -186,7 +186,7 @@ def sample_ohlcv_data():
     return data
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def sample_prices():
     """Create a sample price dictionary."""
     return {
@@ -199,7 +199,7 @@ def sample_prices():
     }
 
 
-@pytest.fixture
+@pytest.fixture(scope="module")
 def mock_yfinance_ticker():
     """Create a mock yfinance Ticker object."""
     mock_ticker = Mock()
@@ -240,7 +240,7 @@ def mock_yfinance_ticker():
     return mock_ticker
 
 
-@pytest.fixture
+@pytest.fixture(scope="function")
 def mock_data_fetcher(mock_yfinance_ticker, sample_prices):
     """Create a mock DataFetcher."""
     with patch("stockula.data.fetcher.yf.Ticker") as mock_yf_ticker:
@@ -251,7 +251,7 @@ def mock_data_fetcher(mock_yfinance_ticker, sample_prices):
         # Mock get_current_prices to return our sample prices
         original_get_current_prices = fetcher.get_current_prices
 
-        def mock_get_current_prices(symbols):
+        def mock_get_current_prices(symbols, show_progress=True):
             if isinstance(symbols, str):
                 symbols = [symbols]
             return {s: sample_prices.get(s, 100.0) for s in symbols}
@@ -264,13 +264,13 @@ def mock_data_fetcher(mock_yfinance_ticker, sample_prices):
 # ===== Database Fixtures =====
 
 
-@pytest.fixture
+@pytest.fixture(scope="function")
 def temp_db_path(tmp_path):
     """Create a temporary database path."""
     return str(tmp_path / "test_stockula.db")
 
 
-@pytest.fixture
+@pytest.fixture(scope="function")
 def test_database(temp_db_path):
     """Create a test database instance."""
     db = DatabaseManager(temp_db_path)
@@ -278,7 +278,7 @@ def test_database(temp_db_path):
     # Cleanup is automatic with tmp_path
 
 
-@pytest.fixture
+@pytest.fixture(scope="function")
 def populated_database(test_database, sample_ohlcv_data):
     """Create a database with sample data."""
     # Add stock info
@@ -300,7 +300,7 @@ def populated_database(test_database, sample_ohlcv_data):
 # ===== File System Fixtures =====
 
 
-@pytest.fixture
+@pytest.fixture(scope="function")
 def temp_config_file(tmp_path, sample_stockula_config):
     """Create a temporary config file."""
     import yaml
@@ -324,7 +324,7 @@ def temp_config_file(tmp_path, sample_stockula_config):
     return str(config_path)
 
 
-@pytest.fixture
+@pytest.fixture(scope="function")
 def mock_env_variables(monkeypatch):
     """Set up mock environment variables."""
     monkeypatch.setenv("STOCKULA_CONFIG_FILE", "test_config.yaml")
@@ -335,7 +335,7 @@ def mock_env_variables(monkeypatch):
 # ===== Strategy Testing Fixtures =====
 
 
-@pytest.fixture
+@pytest.fixture(scope="module")
 def backtest_data():
     """Create data suitable for backtesting."""
     # Create 100 days of data with some trend
@@ -364,7 +364,7 @@ def backtest_data():
     return data
 
 
-@pytest.fixture
+@pytest.fixture(scope="function")
 def forecast_data():
     """Create data suitable for forecasting."""
     # Create 365 days of historical data with seasonality
@@ -385,7 +385,7 @@ def forecast_data():
 # ===== Container Fixtures =====
 
 
-@pytest.fixture
+@pytest.fixture(scope="function")
 def mock_container(mock_data_fetcher):
     """Create a mock container with all dependencies mocked."""
     container = Container()
@@ -428,7 +428,7 @@ def mock_container(mock_data_fetcher):
 # ===== Cleanup Fixtures =====
 
 
-@pytest.fixture(autouse=True)
+@pytest.fixture(scope="function", autouse=True)
 def cleanup_singleton():
     """Clean up singleton instances between tests."""
     from stockula.domain.ticker import TickerRegistry

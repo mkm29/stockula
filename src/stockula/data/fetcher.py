@@ -2,13 +2,32 @@
 
 import yfinance as yf
 import pandas as pd
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Union
 from datetime import datetime, timedelta
+from rich.console import Console
+from rich.progress import (
+    Progress,
+    BarColumn,
+    TextColumn,
+    TimeRemainingColumn,
+    SpinnerColumn,
+)
 from ..database import DatabaseManager
+
+console = Console()
 
 
 class DataFetcher:
     """Fetch financial data using yfinance with SQLite caching."""
+
+    # Treasury ETF tickers that track short-term rates
+    TREASURY_TICKERS = {
+        "3_month": "^IRX",  # 3-Month Treasury Bill
+        "13_week": "^IRX",  # Same as 3-month
+        "1_year": "^FVX",  # 5-Year Treasury (closest proxy)
+        "tbill_etf": "BIL",  # SPDR Bloomberg Barclays 1-3 Month T-Bill ETF
+        "sgov": "SGOV",  # iShares 0-3 Month Treasury Bond ETF
+    }
 
     def __init__(
         self,
@@ -125,11 +144,14 @@ class DataFetcher:
 
         return data
 
-    def get_current_prices(self, symbols: List[str] | str) -> Dict[str, float]:
+    def get_current_prices(
+        self, symbols: List[str] | str, show_progress: bool = True
+    ) -> Dict[str, float]:
         """Get current prices for multiple symbols.
 
         Args:
             symbols: List of stock ticker symbols or single symbol string
+            show_progress: Whether to show progress bars for multiple symbols
 
         Returns:
             Dictionary mapping symbols to their current prices
@@ -139,24 +161,72 @@ class DataFetcher:
             symbols = [symbols]
 
         prices = {}
-        for symbol in symbols:
-            try:
-                ticker = yf.Ticker(symbol)
-                # Get the most recent price
-                history = ticker.history(period="1d")
-                if not history.empty:
-                    prices[symbol] = history["Close"].iloc[-1]
-                else:
-                    # Fallback to info if history is not available
-                    info = ticker.info
-                    if "currentPrice" in info:
-                        prices[symbol] = info["currentPrice"]
-                    elif "regularMarketPrice" in info:
-                        prices[symbol] = info["regularMarketPrice"]
+
+        # Show progress bar only for multiple symbols
+        if show_progress and len(symbols) > 1:
+            with Progress(
+                SpinnerColumn(),
+                TextColumn("[progress.description]{task.description}"),
+                BarColumn(),
+                TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
+                TimeRemainingColumn(),
+                console=console,
+                transient=True,
+            ) as progress:
+                task = progress.add_task(
+                    f"[magenta]Fetching current prices for {len(symbols)} symbols...",
+                    total=len(symbols),
+                )
+
+                for symbol in symbols:
+                    progress.update(
+                        task, description=f"[magenta]Fetching price for {symbol}..."
+                    )
+                    try:
+                        ticker = yf.Ticker(symbol)
+                        # Get the most recent price
+                        history = ticker.history(period="1d")
+                        if not history.empty:
+                            prices[symbol] = history["Close"].iloc[-1]
+                        else:
+                            # Fallback to info if history is not available
+                            info = ticker.info
+                            if "currentPrice" in info:
+                                prices[symbol] = info["currentPrice"]
+                            elif "regularMarketPrice" in info:
+                                prices[symbol] = info["regularMarketPrice"]
+                            else:
+                                console.print(
+                                    f"[yellow]Warning: Could not get current price for {symbol}[/yellow]"
+                                )
+                    except Exception as e:
+                        console.print(
+                            f"[red]Error fetching price for {symbol}: {e}[/red]"
+                        )
+
+                    progress.advance(task)
+        else:
+            # No progress bar for single symbol or when disabled
+            for symbol in symbols:
+                try:
+                    ticker = yf.Ticker(symbol)
+                    # Get the most recent price
+                    history = ticker.history(period="1d")
+                    if not history.empty:
+                        prices[symbol] = history["Close"].iloc[-1]
                     else:
-                        print(f"Warning: Could not get current price for {symbol}")
-            except Exception as e:
-                print(f"Error fetching price for {symbol}: {e}")
+                        # Fallback to info if history is not available
+                        info = ticker.info
+                        if "currentPrice" in info:
+                            prices[symbol] = info["currentPrice"]
+                        elif "regularMarketPrice" in info:
+                            prices[symbol] = info["regularMarketPrice"]
+                        else:
+                            console.print(
+                                f"[yellow]Warning: Could not get current price for {symbol}[/yellow]"
+                            )
+                except Exception as e:
+                    console.print(f"[red]Error fetching price for {symbol}: {e}[/red]")
 
         return prices
 
@@ -436,3 +506,280 @@ class DataFetcher:
         """
         self.use_cache = True
         self.db = DatabaseManager(db_path)
+
+    def get_treasury_rate(
+        self,
+        date: Union[str, datetime],
+        duration: str = "3_month",
+        as_decimal: bool = True,
+        force_refresh: bool = False,
+    ) -> Optional[float]:
+        """Get Treasury rate for a specific date.
+
+        Args:
+            date: Date to get rate for (YYYY-MM-DD or datetime)
+            duration: Treasury duration ('3_month', '13_week', '1_year')
+            as_decimal: Return as decimal (0.05) vs percentage (5.0)
+            force_refresh: Force fetch from yfinance even if cached
+
+        Returns:
+            Treasury rate or None if not available
+        """
+        if isinstance(date, str):
+            date = pd.to_datetime(date)
+
+        # Get ticker for requested duration
+        ticker = self.TREASURY_TICKERS.get(duration, self.TREASURY_TICKERS["3_month"])
+
+        # Try to get cached data first
+        if self.use_cache and self.db and not force_refresh:
+            cached_data = self._get_cached_rate(ticker, date)
+            if cached_data is not None:
+                return cached_data if as_decimal else cached_data * 100
+
+        # Fetch from yfinance
+        rate = self._fetch_rate_from_yfinance(ticker, date)
+
+        if rate is not None:
+            # Cache the result
+            if self.use_cache and self.db:
+                self._cache_rate(ticker, date, rate)
+
+            return rate if as_decimal else rate * 100
+
+        return None
+
+    def get_average_treasury_rate(
+        self,
+        start_date: Union[str, datetime],
+        end_date: Union[str, datetime],
+        duration: str = "3_month",
+        as_decimal: bool = True,
+    ) -> Optional[float]:
+        """Get average Treasury rate for a date range.
+
+        Args:
+            start_date: Start date (YYYY-MM-DD or datetime)
+            end_date: End date (YYYY-MM-DD or datetime)
+            duration: Treasury duration ('3_month', '13_week', '1_year')
+            as_decimal: Return as decimal (0.05) vs percentage (5.0)
+
+        Returns:
+            Average Treasury rate or None if not available
+        """
+        rates = self.get_treasury_rates(start_date, end_date, duration, as_decimal)
+
+        if rates.empty:
+            return None
+
+        return rates.mean()
+
+    def get_treasury_rates(
+        self,
+        start_date: Union[str, datetime],
+        end_date: Union[str, datetime],
+        duration: str = "3_month",
+        as_decimal: bool = True,
+        force_refresh: bool = False,
+    ) -> pd.Series:
+        """Get Treasury rates for a date range.
+
+        Args:
+            start_date: Start date (YYYY-MM-DD or datetime)
+            end_date: End date (YYYY-MM-DD or datetime)
+            duration: Treasury duration ('3_month', '13_week', '1_year')
+            as_decimal: Return as decimal (0.05) vs percentage (5.0)
+            force_refresh: Force fetch from yfinance even if cached
+
+        Returns:
+            Series of Treasury rates indexed by date
+        """
+        if isinstance(start_date, str):
+            start_date = pd.to_datetime(start_date)
+        if isinstance(end_date, str):
+            end_date = pd.to_datetime(end_date)
+
+        ticker = self.TREASURY_TICKERS.get(duration, self.TREASURY_TICKERS["3_month"])
+
+        # Try cache first
+        if self.use_cache and self.db and not force_refresh:
+            cached_data = self._get_cached_rates(ticker, start_date, end_date)
+            if not cached_data.empty:
+                return cached_data if as_decimal else cached_data * 100
+
+        # Fetch from yfinance with progress indication
+        rates = self._fetch_rates_from_yfinance(
+            ticker, start_date, end_date, show_progress=True
+        )
+
+        # Cache the results
+        if self.use_cache and self.db and not rates.empty:
+            self._cache_rates(ticker, rates)
+
+        return rates if as_decimal else rates * 100
+
+    def _fetch_rate_from_yfinance(self, ticker: str, date: datetime) -> Optional[float]:
+        """Fetch single Treasury rate from yfinance."""
+        # Fetch a few days around the target date
+        start_date = date - timedelta(days=5)
+        end_date = date + timedelta(days=1)
+
+        try:
+            ticker_obj = yf.Ticker(ticker)
+            data = ticker_obj.history(start=start_date, end=end_date)
+
+            if data.empty:
+                return None
+
+            # Find closest date
+            closest_idx = data.index.get_indexer([date], method="nearest")[0]
+            if closest_idx >= 0:
+                # Convert percentage to decimal (^IRX returns as percentage)
+                rate = data.iloc[closest_idx]["Close"]
+                if ticker == "^IRX":  # Treasury bill indices are in percentage
+                    rate = rate / 100.0
+                return rate
+
+        except Exception as e:
+            print(f"Error fetching Treasury rate for {ticker} on {date}: {e}")
+
+        return None
+
+    def _fetch_rates_from_yfinance(
+        self,
+        ticker: str,
+        start_date: datetime,
+        end_date: datetime,
+        show_progress: bool = False,
+    ) -> pd.Series:
+        """Fetch Treasury rates from yfinance for date range."""
+        try:
+            if show_progress:
+                with Progress(
+                    SpinnerColumn(),
+                    TextColumn("[progress.description]{task.description}"),
+                    console=console,
+                    transient=True,
+                ) as progress:
+                    task = progress.add_task(
+                        f"[yellow]Fetching Treasury rates ({ticker}) from {start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d')}...",
+                        total=None,
+                    )
+
+                    ticker_obj = yf.Ticker(ticker)
+                    data = ticker_obj.history(start=start_date, end=end_date)
+
+                    progress.update(
+                        task, description="[yellow]Processing Treasury rate data..."
+                    )
+            else:
+                ticker_obj = yf.Ticker(ticker)
+                data = ticker_obj.history(start=start_date, end=end_date)
+
+            if data.empty:
+                return pd.Series(dtype=float)
+
+            # Use Close prices as rates
+            rates = data["Close"].copy()
+
+            # Convert percentage to decimal for Treasury indices
+            if ticker == "^IRX":  # Treasury bill indices are in percentage
+                rates = rates / 100.0
+
+            return rates
+
+        except Exception as e:
+            console.print(f"[red]Error fetching Treasury rates for {ticker}: {e}[/red]")
+            return pd.Series(dtype=float)
+
+    def _get_cached_rate(self, ticker: str, date: datetime) -> Optional[float]:
+        """Get cached Treasury rate from database."""
+        if not self.db:
+            return None
+
+        # Format date for query
+        date_str = date.strftime("%Y-%m-%d")
+
+        # Use the existing price history table for Treasury data
+        data = self.db.get_price_history(ticker, start_date=date_str, end_date=date_str)
+
+        if not data.empty:
+            return data.iloc[0]["Close"]
+
+        return None
+
+    def _get_cached_rates(
+        self, ticker: str, start_date: datetime, end_date: datetime
+    ) -> pd.Series:
+        """Get cached Treasury rates from database."""
+        if not self.db:
+            return pd.Series(dtype=float)
+
+        # Format dates for query
+        start_str = start_date.strftime("%Y-%m-%d")
+        end_str = end_date.strftime("%Y-%m-%d")
+
+        # Use the existing price history table for Treasury data
+        data = self.db.get_price_history(ticker, start_date=start_str, end_date=end_str)
+
+        if not data.empty:
+            return data["Close"]
+
+        return pd.Series(dtype=float)
+
+    def _cache_rate(self, ticker: str, date: datetime, rate: float) -> None:
+        """Cache Treasury rate in database."""
+        if not self.db:
+            return
+
+        # Create DataFrame for storing
+        df = pd.DataFrame(
+            {
+                "Open": [rate],
+                "High": [rate],
+                "Low": [rate],
+                "Close": [rate],
+                "Volume": [0],
+            },
+            index=[date],
+        )
+
+        # Store as stock info (Treasury ticker)
+        self.db.store_stock_info(ticker, {"longName": f"Treasury Rate {ticker}"})
+
+        # Store rate data
+        self.db.store_price_history(ticker, df)
+
+    def _cache_rates(self, ticker: str, rates: pd.Series) -> None:
+        """Cache Treasury rates in database."""
+        if not self.db or rates.empty:
+            return
+
+        # Create DataFrame for storing
+        df = pd.DataFrame(
+            {
+                "Open": rates,
+                "High": rates,
+                "Low": rates,
+                "Close": rates,
+                "Volume": 0,
+            }
+        )
+
+        # Store as stock info (Treasury ticker)
+        self.db.store_stock_info(ticker, {"longName": f"Treasury Rate {ticker}"})
+
+        # Store rate data
+        self.db.store_price_history(ticker, df)
+
+    def get_current_treasury_rate(self, duration: str = "3_month") -> Optional[float]:
+        """Get the most recent Treasury rate.
+
+        Args:
+            duration: Treasury duration ('3_month', '13_week', '1_year')
+
+        Returns:
+            Most recent Treasury rate as decimal or None
+        """
+        today = datetime.now()
+        return self.get_treasury_rate(today, duration=duration)

@@ -19,8 +19,6 @@ from stockula.main import (
 )
 from stockula.config import StockulaConfig, TickerConfig
 from stockula.config.models import (
-    BacktestResult,
-    StrategyBacktestSummary,
     PortfolioBacktestResults,
 )
 
@@ -388,6 +386,11 @@ class TestPrintResults:
                     "max_drawdown_pct": -8.3,
                     "num_trades": 42,
                     "win_rate": 55.0,
+                    "initial_cash": 10000,
+                    "start_date": "2023-01-01",
+                    "end_date": "2023-12-31",
+                    "trading_days": 252,
+                    "calendar_days": 365,
                 }
             ],
             "forecasting": [
@@ -406,13 +409,23 @@ class TestPrintResults:
         print_results(results, "console")
 
         captured = capsys.readouterr()
+        # Check for Rich-formatted output
         assert "Technical Analysis Results" in captured.out
         assert "AAPL" in captured.out
-        assert "SMA_20: 150.50" in captured.out
+        assert (
+            "SMA_20" in captured.out and "150.50" in captured.out
+        )  # Rich table format
         assert "Backtesting Results" in captured.out
-        assert "Return: 15.50%" in captured.out
+        # Check for portfolio information display
+        assert "Portfolio Information:" in captured.out
+        assert "Initial Capital: $10,000" in captured.out
+        assert "Start Date: 2023-01-01" in captured.out
+        assert "End Date: 2023-12-31" in captured.out
+        assert "Trading Days: 252" in captured.out
+        assert "Calendar Days: 365" in captured.out
+        assert "+15.50" in captured.out  # Rich formatting shows + sign
         assert "Forecasting Results" in captured.out
-        assert "30-Day Forecast: $155.00" in captured.out
+        assert "$155.00" in captured.out  # Rich formatting with $ sign
 
     def test_print_results_json_format(self, capsys):
         """Test printing results in JSON format."""
@@ -435,7 +448,10 @@ class TestPrintResults:
         print_results(results, "console")
 
         captured = capsys.readouterr()
-        assert "INVALID: Error - No data available" in captured.out
+        # Rich format shows error message (error might be split across table cells)
+        assert "INVALID" in captured.out and (
+            "No data" in captured.out and "available" in captured.out
+        )
 
     def test_print_results_backtest_no_trades(self, capsys):
         """Test printing backtest results with no trades."""
@@ -450,6 +466,11 @@ class TestPrintResults:
                     "max_drawdown_pct": 0.0,
                     "num_trades": 0,
                     "win_rate": None,
+                    "initial_cash": 5000,
+                    "start_date": "2023-06-01",
+                    "end_date": "2023-06-30",
+                    "trading_days": 22,
+                    "calendar_days": 29,
                 }
             ]
         }
@@ -457,7 +478,15 @@ class TestPrintResults:
         print_results(results, "console")
 
         captured = capsys.readouterr()
-        assert "Win Rate: N/A (no trades)" in captured.out
+        # Check portfolio information is displayed
+        assert "Portfolio Information:" in captured.out
+        assert "Initial Capital: $5,000" in captured.out
+        assert "Start Date: 2023-06-01" in captured.out
+        assert "End Date: 2023-06-30" in captured.out
+        assert "Trading Days: 22" in captured.out
+        assert "Calendar Days: 29" in captured.out
+        # Rich format shows N/A for None win rate
+        assert "N/A" in captured.out
 
 
 class TestMainFunction:
@@ -540,6 +569,11 @@ class TestMainFunction:
         config.data.end_date = datetime(2025, 7, 25)
         config.portfolio.tickers = [TickerConfig(symbol="AAPL", quantity=1.0)]
 
+        # Add backtest strategies
+        from stockula.config.models import StrategyConfig
+
+        config.backtest.strategies = [StrategyConfig(name="smacross")]
+
         # Setup container
         container = Mock()
         container.stockula_config.return_value = config
@@ -568,7 +602,17 @@ class TestMainFunction:
         mock_fetcher = Mock()
         mock_fetcher.get_current_prices.return_value = {"AAPL": 150.0}
         container.data_fetcher.return_value = mock_fetcher
-        container.backtest_runner.return_value = Mock()
+
+        # Setup backtest runner to return proper results
+        mock_backtest_runner = Mock()
+        mock_backtest_runner.run_from_symbol.return_value = {
+            "Return [%]": 10.5,
+            "Sharpe Ratio": 1.2,
+            "Max. Drawdown [%]": -8.5,
+            "# Trades": 10,
+            "Win Rate [%]": 60.0,
+        }
+        container.backtest_runner.return_value = mock_backtest_runner
         container.stock_forecaster.return_value = Mock()
 
         # Setup backtest results with strategy
@@ -592,8 +636,8 @@ class TestMainFunction:
 
         main()
 
-        # Should call backtest function once for the single AAPL ticker in our config
-        assert mock_backtest.call_count == 1
+        # Should call backtest runner's run_from_symbol method once for the single AAPL ticker in our config
+        mock_backtest_runner.run_from_symbol.assert_called_once()
         mock_print.assert_called_once()
 
     @patch("stockula.config.settings.load_yaml_config")
@@ -828,6 +872,11 @@ class TestMainAdvanced:
         config.data.end_date = datetime(2023, 12, 31)
         config.backtest.hold_only_categories = ["INDEX"]
 
+        # Add backtest strategies
+        from stockula.config.models import StrategyConfig
+
+        config.backtest.strategies = [StrategyConfig(name="smacross")]
+
         # Create mock container
         mock_container = Mock()
         mock_create_container.return_value = mock_container
@@ -896,6 +945,13 @@ class TestMainAdvanced:
 
         # Mock backtest runner
         mock_runner = Mock()
+        mock_runner.run_from_symbol.return_value = {
+            "Return [%]": 18.0,
+            "Sharpe Ratio": 1.4,
+            "Max. Drawdown [%]": -5.5,
+            "# Trades": 12,
+            "Win Rate [%]": 75.0,
+        }
         mock_container.backtest_runner.return_value = mock_runner
 
         # Setup backtest results
@@ -918,9 +974,7 @@ class TestMainAdvanced:
         assert mock_fetcher.get_stock_data.call_count >= 2  # Called for each symbol
 
         # Should call backtest only for tradeable assets
-        mock_backtest.assert_called_once_with(
-            "AAPL", config, backtest_runner=mock_runner
-        )
+        mock_runner.run_from_symbol.assert_called()
 
         # Should show portfolio summary
         mock_print.assert_called_once()
@@ -1080,6 +1134,13 @@ class TestMainAdvanced:
 
         # Setup backtest runner
         mock_runner = Mock()
+        mock_runner.run_from_symbol.return_value = {
+            "Return [%]": 5.0,
+            "Sharpe Ratio": 0.8,
+            "Max. Drawdown [%]": -4.0,
+            "# Trades": 3,
+            "Win Rate [%]": 33.0,
+        }
         mock_container.backtest_runner.return_value = mock_runner
 
         # Mock run_backtest function to return empty results
@@ -1138,6 +1199,11 @@ class TestMainAdvanced:
         config.data.end_date = datetime(2025, 7, 25)
         config.backtest.hold_only_categories = ["INDEX"]
 
+        # Add backtest strategies
+        from stockula.config.models import StrategyConfig
+
+        config.backtest.strategies = [StrategyConfig(name="smacross")]
+
         # Create mock container
         mock_container = Mock()
         mock_create_container.return_value = mock_container
@@ -1176,6 +1242,13 @@ class TestMainAdvanced:
 
         # Setup backtest runner
         mock_runner = Mock()
+        mock_runner.run_from_symbol.return_value = {
+            "Return [%]": 12.0,
+            "Sharpe Ratio": 1.15,
+            "Max. Drawdown [%]": -7.0,
+            "# Trades": 9,
+            "Win Rate [%]": 65.0,
+        }
         mock_container.backtest_runner.return_value = mock_runner
 
         # Mock save_detailed_report to return a path
@@ -1202,8 +1275,8 @@ class TestMainAdvanced:
 
         # Check output shows strategy summary
         captured = capsys.readouterr()
-        # The new output format shows strategy summaries
-        assert "STRATEGY: SMACROSS" in captured.out
+        # The new output format shows strategy summaries (Rich tables)
+        assert "SMACROSS" in captured.out or "smacross" in captured.out
         assert "Portfolio Value at Start Date:" in captured.out
         assert "Strategy Performance:" in captured.out
 
@@ -1284,6 +1357,11 @@ class TestMainAdvanced:
         config.data.end_date = datetime(2025, 7, 25)
         config.backtest.hold_only_categories = []
 
+        # Add backtest strategies
+        from stockula.config.models import StrategyConfig
+
+        config.backtest.strategies = [StrategyConfig(name="smacross")]
+
         # Setup container
         container = Mock()
         container.stockula_config.return_value = config
@@ -1311,7 +1389,17 @@ class TestMainAdvanced:
         mock_fetcher = Mock()
         mock_fetcher.get_current_prices.return_value = {"AAPL": 150.0}
         container.data_fetcher.return_value = mock_fetcher
-        container.backtest_runner.return_value = Mock()
+
+        # Setup backtest runner to return proper results
+        mock_backtest_runner = Mock()
+        mock_backtest_runner.run_from_symbol.return_value = {
+            "Return [%]": 15.0,
+            "Sharpe Ratio": 1.3,
+            "Max. Drawdown [%]": -7.5,
+            "# Trades": 10,
+            "Win Rate [%]": 70.0,
+        }
+        container.backtest_runner.return_value = mock_backtest_runner
         container.stock_forecaster.return_value = Mock()
 
         # Mock save_detailed_report to return a path
@@ -1339,6 +1427,8 @@ class TestMainAdvanced:
         call_args = mock_print.call_args[0][0]
         assert "backtesting" in call_args
         assert len(call_args["backtesting"]) == 1  # One ticker configured in mock
+        # Should call backtest runner's run_from_symbol method
+        mock_backtest_runner.run_from_symbol.assert_called()
 
     @patch("stockula.main.log_manager")
     @patch("stockula.main.create_container")
@@ -1412,7 +1502,14 @@ class TestMainAdvanced:
         """Test main function in 'all' mode runs all analyses."""
         # Setup config
         config = StockulaConfig()
+        config.data.start_date = datetime(2023, 1, 1)
+        config.data.end_date = datetime(2023, 12, 31)
         config.backtest.hold_only_categories = []
+
+        # Add backtest strategies
+        from stockula.config.models import StrategyConfig
+
+        config.backtest.strategies = [StrategyConfig(name="smacross")]
 
         # Setup container
         container = Mock()
@@ -1439,7 +1536,17 @@ class TestMainAdvanced:
         mock_fetcher = Mock()
         mock_fetcher.get_current_prices.return_value = {"AAPL": 150.0}
         container.data_fetcher.return_value = mock_fetcher
-        container.backtest_runner.return_value = Mock()
+
+        # Setup backtest runner to return proper results
+        mock_backtest_runner = Mock()
+        mock_backtest_runner.run_from_symbol.return_value = {
+            "Return [%]": 10.0,
+            "Sharpe Ratio": 1.1,
+            "Max. Drawdown [%]": -6.0,
+            "# Trades": 8,
+            "Win Rate [%]": 55.0,
+        }
+        container.backtest_runner.return_value = mock_backtest_runner
         container.stock_forecaster.return_value = Mock()
 
         # Setup backtest results
@@ -1455,7 +1562,7 @@ class TestMainAdvanced:
 
                 # All analysis functions should be called for each ticker (1 ticker configured)
                 assert mock_ta.call_count == 1
-                assert mock_backtest.call_count == 1
+                mock_backtest_runner.run_from_symbol.assert_called()
                 assert mock_forecast.call_count == 1
 
     @patch("stockula.main.create_container")
@@ -1526,6 +1633,12 @@ class TestMainAdvanced:
         # Setup config with start date
         config = StockulaConfig()
         config.data.start_date = datetime(2023, 1, 1)
+        config.data.end_date = datetime(2023, 12, 31)
+
+        # Add backtest strategies
+        from stockula.config.models import StrategyConfig
+
+        config.backtest.strategies = [StrategyConfig(name="smacross")]
 
         # Setup container
         container = Mock()
@@ -1553,7 +1666,17 @@ class TestMainAdvanced:
         mock_fetcher.get_stock_data.side_effect = Exception("API error")
         mock_fetcher.get_current_prices.return_value = {"AAPL": 150.0}
         container.data_fetcher.return_value = mock_fetcher
-        container.backtest_runner.return_value = Mock()
+
+        # Setup backtest runner to return proper results
+        mock_backtest_runner = Mock()
+        mock_backtest_runner.run_from_symbol.return_value = {
+            "Return [%]": 8.0,
+            "Sharpe Ratio": 0.9,
+            "Max. Drawdown [%]": -9.0,
+            "# Trades": 6,
+            "Win Rate [%]": 50.0,
+        }
+        container.backtest_runner.return_value = mock_backtest_runner
         container.stock_forecaster.return_value = Mock()
 
         # Setup backtest results
@@ -1563,7 +1686,7 @@ class TestMainAdvanced:
         main()
 
         # Should still call backtest for each ticker (1 ticker configured)
-        assert mock_backtest.call_count == 1
+        mock_backtest_runner.run_from_symbol.assert_called()
 
 
 class TestMainEntryPoint:

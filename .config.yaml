@@ -13,7 +13,7 @@ portfolio:
   allow_fractional_shares: false # Use integer shares only
   capital_utilization_target: 1.0 # Deploy all capital
   rebalance_frequency: monthly
-  max_position_size: 20.0 # Allow larger positions since we have fewer stocks
+  max_position_size: 10.0 # Allow larger positions since we have fewer stocks
   # Category-based allocation ratios (must sum to 1.0)
   category_ratios:
     INDEX: 0.35 # 35% in broad-market index funds
@@ -80,10 +80,15 @@ portfolio:
       sector: Technology
 backtest:
   # Broker configuration for realistic commission calculation
+  # Available presets:
+  # - robinhood: $0 commission, $0 SEC fee, TAF ($0.000166/share on sells only, waived for ≤50 shares)
+  # - interactive_brokers: Tiered per-share pricing ($0.005/share, $1 minimum)
+  # - td_ameritrade: $0 commission, SEC fee ($0.0000229)
+  # - etrade: $0 commission, SEC fee ($0.0000229)
+  # - fidelity: $0 commission, SEC fee ($0.0000229)
+  # - schwab: $0 commission, SEC fee ($0.0000229)
   broker_config:
-    # Using Robinhood preset - zero commission with regulatory fees
     name: "robinhood"
-    
     # Note: Robinhood configuration as of 2024-2025:
     # - $0 commission on stocks and ETFs
     # - $0 SEC fee (as of May 14, 2024)
@@ -92,15 +97,14 @@ backtest:
     # - Maximum TAF is $8.30 per trade
     # - Options: $0.50 per contract ($0.35 with Gold subscription)
     # - Index options have additional exchange fees
-    
   strategies:
     - name: vidya
-    - name: kama
-    - name: tripleemacross
+    - name: smacross
+    - name: doubleemacross
+    - name: vama
+    - name: er
   # Hold-only categories will not be backtested
   hold_only_categories: ["INDEX", "BOND"]
-performance:
-  risk_free_rate: 0.0442
 forecast:
   forecast_length: 28
   model_list: "fast"

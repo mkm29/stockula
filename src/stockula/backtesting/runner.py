@@ -2,7 +2,8 @@
 
 from backtesting import Backtest
 import pandas as pd
-from typing import Type, Dict, Any, Optional, TYPE_CHECKING, Callable
+import numpy as np
+from typing import Type, Dict, Any, Optional, TYPE_CHECKING, Callable, Union
 
 if TYPE_CHECKING:
     from ..interfaces import IDataFetcher
@@ -19,6 +20,9 @@ class BacktestRunner:
         margin: float = 1.0,
         data_fetcher: Optional["IDataFetcher"] = None,
         broker_config: Optional["BrokerConfig"] = None,
+        risk_free_rate: Optional[Union[float, pd.Series]] = None,
+        trade_on_close: bool = True,
+        exclusive_orders: bool = True,
     ):
         """Initialize backtest runner.
 
@@ -28,12 +32,20 @@ class BacktestRunner:
             margin: Margin requirement for leveraged trading
             data_fetcher: Injected data fetcher instance
             broker_config: Broker-specific fee configuration
+            risk_free_rate: Risk-free rate (float for static, pd.Series for dynamic)
+            trade_on_close: Execute trades on close prices (more realistic)
+            exclusive_orders: Whether orders are exclusive (prevents margin issues)
         """
         self.cash = cash
         self.margin = margin
+        self.trade_on_close = trade_on_close
+        self.exclusive_orders = exclusive_orders
         self.results = None
         self.data_fetcher = data_fetcher
         self.broker_config = broker_config
+        self.risk_free_rate = risk_free_rate
+        self._equity_curve = None
+        self._treasury_rates = None
 
         # If broker_config is provided, use it to create commission function
         if broker_config:
@@ -123,7 +135,7 @@ class BacktestRunner:
             **kwargs: Additional parameters for the strategy
 
         Returns:
-            Backtest results dictionary
+            Backtest results dictionary with enhanced metrics if dynamic rates provided
         """
         # Validate data sufficiency for strategies with period requirements
         if hasattr(strategy, "slow_period") and hasattr(
@@ -141,15 +153,69 @@ class BacktestRunner:
                     f"but only {total_days} days available."
                 )
 
+        # Store treasury rates if dynamic rates provided
+        if isinstance(self.risk_free_rate, pd.Series):
+            self._treasury_rates = self.risk_free_rate
+
         bt = Backtest(
             data,
             strategy,
             cash=self.cash,
             commission=self.commission,
             margin=self.margin,
+            trade_on_close=self.trade_on_close,
+            exclusive_orders=self.exclusive_orders,
         )
 
+        # Run backtest with static risk-free rate
         self.results = bt.run(**kwargs)
+
+        # Store equity curve for dynamic metrics calculation
+        # The results object has an _equity_curve attribute
+        self._equity_curve = getattr(self.results, "_equity_curve", None)
+
+        # Add portfolio information to results (only if results is a dict, not a mock)
+        if hasattr(self.results, "__setitem__"):
+            self.results["Initial Cash"] = self.cash
+
+            # Safely extract dates from index
+            if len(data) > 0:
+                try:
+                    # Check if index has datetime-like objects with strftime method
+                    if hasattr(data.index[0], "strftime"):
+                        self.results["Start Date"] = data.index[0].strftime("%Y-%m-%d")
+                        self.results["End Date"] = data.index[-1].strftime("%Y-%m-%d")
+
+                        # Calculate trading period in days
+                        trading_days = len(data)
+                        calendar_days = (data.index[-1] - data.index[0]).days
+                        self.results["Trading Days"] = trading_days
+                        self.results["Calendar Days"] = calendar_days
+                    elif hasattr(data.index[0], "date"):
+                        # Pandas datetime index
+                        self.results["Start Date"] = (
+                            data.index[0].date().strftime("%Y-%m-%d")
+                        )
+                        self.results["End Date"] = (
+                            data.index[-1].date().strftime("%Y-%m-%d")
+                        )
+
+                        # Calculate trading period in days
+                        trading_days = len(data)
+                        calendar_days = (data.index[-1] - data.index[0]).days
+                        self.results["Trading Days"] = trading_days
+                        self.results["Calendar Days"] = calendar_days
+                except (AttributeError, TypeError):
+                    # If date extraction fails, just set trading days
+                    self.results["Trading Days"] = len(data)
+
+        # If dynamic rates provided, enhance results with dynamic metrics
+        if (
+            isinstance(self.risk_free_rate, pd.Series)
+            and self._equity_curve is not None
+        ):
+            self._enhance_results_with_dynamic_metrics()
+
         return self.results
 
     def optimize(
@@ -171,6 +237,8 @@ class BacktestRunner:
             cash=self.cash,
             commission=self.commission,
             margin=self.margin,
+            trade_on_close=self.trade_on_close,
+            exclusive_orders=self.exclusive_orders,
         )
 
         return bt.optimize(**param_ranges)
@@ -181,6 +249,8 @@ class BacktestRunner:
         strategy: Type,
         start_date: Optional[str] = None,
         end_date: Optional[str] = None,
+        treasury_duration: str = "3_month",
+        use_dynamic_risk_free_rate: bool = True,
         **kwargs,
     ) -> Dict[str, Any]:
         """Run backtest by fetching data for a symbol.
@@ -190,18 +260,43 @@ class BacktestRunner:
             strategy: Strategy class to test
             start_date: Start date for data (YYYY-MM-DD)
             end_date: End date for data (YYYY-MM-DD)
+            treasury_duration: Treasury duration to use ('3_month', '13_week', etc.)
+            use_dynamic_risk_free_rate: Whether to automatically fetch dynamic T-bill rates
             **kwargs: Additional parameters for the strategy
 
         Returns:
-            Backtest results
+            Backtest results with dynamic risk-free rate metrics by default
         """
         if not self.data_fetcher:
             raise ValueError(
                 "Data fetcher not configured. Ensure DI container is properly set up."
             )
 
-        data = self.data_fetcher.get_stock_data(symbol, start_date, end_date)
-        return self.run(data, strategy, **kwargs)
+        # Fetch stock data
+        stock_data = self.data_fetcher.get_stock_data(symbol, start_date, end_date)
+
+        # Automatically fetch dynamic Treasury rates if enabled and not already provided
+        if use_dynamic_risk_free_rate and not isinstance(
+            self.risk_free_rate, pd.Series
+        ):
+            # Determine date range from stock data if not provided
+            if start_date is None and hasattr(stock_data.index[0], "strftime"):
+                start_date = stock_data.index[0].strftime("%Y-%m-%d")
+            if end_date is None and hasattr(stock_data.index[-1], "strftime"):
+                end_date = stock_data.index[-1].strftime("%Y-%m-%d")
+
+            # Only fetch Treasury rates if we have valid dates
+            if start_date and end_date:
+                # Fetch Treasury rates for the same period
+                treasury_rates = self.data_fetcher.get_treasury_rates(
+                    start_date, end_date, treasury_duration
+                )
+
+                # Set dynamic risk-free rates
+                if not treasury_rates.empty:
+                    self.risk_free_rate = treasury_rates
+
+        return self.run(stock_data, strategy, **kwargs)
 
     def get_stats(self) -> pd.Series:
         """Get detailed statistics from last backtest.
@@ -222,3 +317,136 @@ class BacktestRunner:
         if self.results is None:
             raise ValueError("No backtest results available. Run a backtest first.")
         self.results.plot(**kwargs)
+
+    def _enhance_results_with_dynamic_metrics(self):
+        """Enhance backtest results with dynamic risk-free rate metrics."""
+        from .metrics import enhance_backtest_metrics
+
+        if self._equity_curve is None or self._treasury_rates is None:
+            return
+
+        # Get the equity curve as a Series with appropriate index
+        if isinstance(self._equity_curve, np.ndarray):
+            # Handle multi-dimensional arrays - extract the equity values
+            if self._equity_curve.ndim > 1:
+                # For multi-dimensional arrays, take the first column (equity values)
+                equity_values = (
+                    self._equity_curve[:, 0]
+                    if self._equity_curve.shape[1] > 0
+                    else self._equity_curve.flatten()
+                )
+            else:
+                equity_values = self._equity_curve
+
+            # Create date index based on treasury rates index
+            equity_series = pd.Series(
+                equity_values,
+                index=self._treasury_rates.index[: len(equity_values)],
+            )
+        else:
+            # Convert whatever type to pandas Series
+            if isinstance(self._equity_curve, pd.DataFrame):
+                # It's a DataFrame - extract the first column (equity values)
+                equity_series = pd.Series(
+                    self._equity_curve.iloc[:, 0], index=self._equity_curve.index
+                )
+            elif isinstance(self._equity_curve, pd.Series):
+                # It's already a Series
+                equity_series = self._equity_curve
+            elif hasattr(self._equity_curve, "values") and hasattr(
+                self._equity_curve, "index"
+            ):
+                # It's some other pandas object - try to convert
+                if hasattr(self._equity_curve, "iloc"):
+                    # Has iloc, probably DataFrame-like
+                    equity_series = pd.Series(
+                        self._equity_curve.iloc[:, 0], index=self._equity_curve.index
+                    )
+                else:
+                    # Try direct conversion
+                    equity_series = pd.Series(
+                        self._equity_curve.values, index=self._equity_curve.index
+                    )
+            elif hasattr(self._equity_curve, "__len__"):
+                # It's array-like, convert to Series with treasury rates index
+                try:
+                    equity_series = pd.Series(
+                        list(self._equity_curve),
+                        index=self._treasury_rates.index[: len(self._equity_curve)],
+                    )
+                except Exception as e:
+                    print(
+                        f"Warning: Could not convert equity curve to pandas Series. Type: {type(self._equity_curve)}, Error: {e}"
+                    )
+                    return
+            else:
+                # Unknown type, skip dynamic metrics
+                print(f"Warning: Unknown equity curve type: {type(self._equity_curve)}")
+                return
+
+        # Ensure it's definitely a pandas Series
+        if not isinstance(equity_series, pd.Series):
+            print(
+                f"Warning: Could not convert equity curve to pandas Series. Type: {type(equity_series)}"
+            )
+            return
+
+        # Enhance results with dynamic metrics
+        try:
+            enhanced_stats = enhance_backtest_metrics(
+                self.results, equity_series, self._treasury_rates
+            )
+        except Exception as e:
+            print(f"Warning: Could not calculate dynamic metrics: {e}")
+            return
+
+        # Update results with enhanced metrics
+        for key, value in enhanced_stats.items():
+            if key not in self.results:
+                self.results[key] = value
+
+    def run_with_dynamic_risk_free_rate(
+        self,
+        symbol: str,
+        strategy: Type,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
+        treasury_duration: str = "3_month",
+        **kwargs,
+    ) -> Dict[str, Any]:
+        """Run backtest with dynamic Treasury rates for risk-free rate calculation.
+
+        Args:
+            symbol: Stock symbol to test
+            strategy: Strategy class to test
+            start_date: Start date for data (YYYY-MM-DD)
+            end_date: End date for data (YYYY-MM-DD)
+            treasury_duration: Treasury duration to use ('3_month', '13_week', etc.)
+            **kwargs: Additional parameters for the strategy
+
+        Returns:
+            Backtest results with enhanced dynamic metrics
+        """
+        if not self.data_fetcher:
+            raise ValueError(
+                "Data fetcher not configured. Ensure DI container is properly set up."
+            )
+
+        # Fetch stock data
+        stock_data = self.data_fetcher.get_stock_data(symbol, start_date, end_date)
+
+        # Fetch Treasury rates for the same period
+        if start_date is None:
+            start_date = stock_data.index[0].strftime("%Y-%m-%d")
+        if end_date is None:
+            end_date = stock_data.index[-1].strftime("%Y-%m-%d")
+
+        treasury_rates = self.data_fetcher.get_treasury_rates(
+            start_date, end_date, treasury_duration
+        )
+
+        # Set dynamic risk-free rates
+        self.risk_free_rate = treasury_rates
+
+        # Run backtest
+        return self.run(stock_data, strategy, **kwargs)

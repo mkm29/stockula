@@ -6,6 +6,8 @@ from typing import Dict, List, Optional, Any, Tuple
 from datetime import datetime
 import json
 from pathlib import Path
+from alembic import command
+from alembic.config import Config
 
 
 class DatabaseManager:
@@ -18,7 +20,49 @@ class DatabaseManager:
             db_path: Path to SQLite database file
         """
         self.db_path = Path(db_path)
+        self._run_migrations()
         self._init_database()
+
+    def _run_migrations(self) -> None:
+        """Run Alembic migrations to ensure database schema is up to date."""
+        import os
+
+        # Skip migrations in test environment
+        if os.environ.get("PYTEST_CURRENT_TEST"):
+            return
+
+        # Find alembic.ini file relative to the project root
+        project_root = Path(__file__).parents[3]  # Navigate up to project root
+        alembic_ini_path = project_root / "alembic.ini"
+
+        if not alembic_ini_path.exists():
+            # If we're in a different environment, try to find alembic.ini
+            # by looking for it in common locations
+            possible_paths = [
+                Path.cwd() / "alembic.ini",
+                Path(__file__).parent.parent.parent / "alembic.ini",
+            ]
+            for path in possible_paths:
+                if path.exists():
+                    alembic_ini_path = path
+                    break
+            else:
+                # Skip migrations if alembic.ini not found
+                # This allows the database to work without migrations during development
+                return
+
+        # Configure Alembic
+        alembic_cfg = Config(str(alembic_ini_path))
+
+        # Override the database URL to use our db_path
+        alembic_cfg.set_main_option("sqlalchemy.url", f"sqlite:///{self.db_path}")
+
+        # Run migrations
+        try:
+            command.upgrade(alembic_cfg, "head")
+        except Exception as e:
+            # Log the error but don't fail - allow fallback to legacy schema creation
+            print(f"Warning: Could not run migrations: {e}")
 
     def _init_database(self) -> None:
         """Initialize database and create tables if they don't exist."""
@@ -554,42 +598,6 @@ class DatabaseManager:
             count = cursor.fetchone()[0]
             return count > 0
 
-    def cleanup_old_data(self, days_to_keep: int = 365) -> None:
-        """Clean up old data to keep database size manageable.
-
-        Args:
-            days_to_keep: Number of days of data to keep
-        """
-        cutoff_date = (datetime.now() - pd.Timedelta(days=days_to_keep)).strftime(
-            "%Y-%m-%d"
-        )
-
-        with self.get_connection() as conn:
-            # Clean up old price history
-            conn.execute("DELETE FROM price_history WHERE date < ?", (cutoff_date,))
-
-            # Clean up old dividends
-            conn.execute("DELETE FROM dividends WHERE date < ?", (cutoff_date,))
-
-            # Clean up old splits
-            conn.execute("DELETE FROM splits WHERE date < ?", (cutoff_date,))
-
-            # Clean up old options (they expire anyway)
-            conn.execute(
-                "DELETE FROM options_calls WHERE expiration_date < ?", (cutoff_date,)
-            )
-            conn.execute(
-                "DELETE FROM options_puts WHERE expiration_date < ?", (cutoff_date,)
-            )
-
-            # Vacuum to reclaim space
-            # Commit the transaction before VACUUM
-            conn.commit()
-
-        # VACUUM must run outside a transaction
-        with self.get_connection() as conn:
-            conn.execute("VACUUM")
-
     def get_database_stats(self) -> Dict[str, int]:
         """Get database statistics.
 
@@ -625,7 +633,18 @@ class DatabaseManager:
     # Backward compatibility aliases for tests
     @property
     def conn(self):
-        """Get database connection (deprecated - use get_connection())."""
+        """Get database connection (deprecated - use get_connection()).
+
+        Note: This property returns a raw connection that must be manually closed.
+        Prefer using get_connection() with a context manager instead.
+        """
+        import warnings
+
+        warnings.warn(
+            "The 'conn' property is deprecated. Use 'get_connection()' context manager instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         return sqlite3.connect(self.db_path)
 
     def add_stock(

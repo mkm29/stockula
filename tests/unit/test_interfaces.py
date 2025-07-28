@@ -57,6 +57,7 @@ class TestIDataFetcher:
         param_names = list(sig.parameters.keys())
         assert "self" in param_names
         assert "symbols" in param_names
+        assert "show_progress" in param_names
 
     def test_cannot_instantiate_directly(self):
         """Test that IDataFetcher cannot be instantiated directly."""
@@ -290,7 +291,7 @@ class TestInterfaceUsage:
             ):
                 return pd.DataFrame()
 
-            def get_current_prices(self, symbols):
+            def get_current_prices(self, symbols, show_progress=True):
                 return {}
 
             def get_info(self, symbol, force_refresh=False):

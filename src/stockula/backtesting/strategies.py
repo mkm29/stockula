@@ -2042,3 +2042,343 @@ class FRAMAStrategy(BaseStrategy):
         start_dt = end_dt - timedelta(days=required_calendar_days)
 
         return start_dt.strftime("%Y-%m-%d")
+
+
+class VAMAStrategy(BaseStrategy):
+    """Volume Adjusted Moving Average (VAMA) Strategy.
+
+    VAMA calculates a volume-weighted moving average by adjusting the
+    traditional moving average based on volume. It places more weight
+    on periods with higher volume, making it more responsive to
+    volume-driven price movements.
+
+    Formula:
+    Volume Price = Volume * Price
+    Volume Sum = Rolling mean of Volume over period
+    Volume Ratio = Volume Price / Volume Sum
+    Cumulative Sum = Rolling sum of (Volume Ratio * Price) over period
+    Cumulative Divisor = Rolling sum of Volume Ratio over period
+    VAMA = Cumulative Sum / Cumulative Divisor
+    """
+
+    # VAMA calculation period
+    vama_period = 8
+
+    # Slow VAMA for crossover signals
+    slow_vama_period = 21
+
+    # ATR-based stop loss
+    atr_period = 14
+    atr_multiple = 1.5
+
+    # Minimum required data buffer
+    min_trading_days_buffer = 20
+
+    def init(self):
+        """Initialize VAMA and ATR indicators."""
+
+        # Validate we have enough data
+        total_data_points = len(self.data)
+        required_data_points = self.slow_vama_period + self.min_trading_days_buffer
+
+        if total_data_points < required_data_points:
+            import warnings
+
+            warnings.warn(
+                f"Insufficient data for VAMAStrategy: "
+                f"Have {total_data_points} days, need at least {required_data_points} days "
+                f"({self.slow_vama_period} for slow VAMA + {self.min_trading_days_buffer} buffer). "
+                f"Strategy may not generate any signals."
+            )
+
+        def vama(prices, volumes, period=8):
+            """Calculate Volume Adjusted Moving Average (VAMA)."""
+            prices = pd.Series(prices)
+            volumes = pd.Series(volumes)
+
+            # Calculate volume * price
+            vp = volumes * prices
+
+            # Calculate rolling mean of volume
+            volsum = volumes.rolling(window=period).mean()
+
+            # Calculate volume ratio
+            vol_ratio = pd.Series(0.0, index=prices.index)
+            mask = volsum != 0
+            vol_ratio[mask] = vp[mask] / volsum[mask]
+
+            # Calculate cumulative sum and divisor
+            cum_sum = (vol_ratio * prices).rolling(window=period).sum()
+            cum_div = vol_ratio.rolling(window=period).sum()
+
+            # Calculate VAMA
+            vama_values = pd.Series(0.0, index=prices.index)
+            div_mask = cum_div != 0
+            vama_values[div_mask] = cum_sum[div_mask] / cum_div[div_mask]
+
+            return vama_values
+
+        def atr(high, low, close, period=14):
+            """Calculate Average True Range."""
+            high = pd.Series(high)
+            low = pd.Series(low)
+            close = pd.Series(close)
+
+            tr1 = high - low
+            tr2 = abs(high - close.shift())
+            tr3 = abs(low - close.shift())
+
+            tr = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
+            atr = tr.rolling(window=period).mean()
+            return atr
+
+        # Initialize VAMAs for fast and slow periods
+        self.vama_fast = self.I(
+            vama, self.data.Close, self.data.Volume, self.vama_period
+        )
+        self.vama_slow = self.I(
+            vama, self.data.Close, self.data.Volume, self.slow_vama_period
+        )
+
+        # Initialize ATR for stop loss calculation
+        self.atr = self.I(
+            atr, self.data.High, self.data.Low, self.data.Close, self.atr_period
+        )
+
+    def next(self):
+        """Execute VAMA crossover trading logic."""
+        # Skip if we dont have enough data
+        if len(self.data) < self.slow_vama_period:
+            return
+
+        # Buy signal: Fast VAMA crosses above Slow VAMA
+        if crossover(self.vama_fast, self.vama_slow):
+            if not self.position:
+                self.buy()
+
+        # Sell signal: Fast VAMA crosses below Slow VAMA
+        elif crossover(self.vama_slow, self.vama_fast):
+            if self.position:
+                self.position.close()
+
+        # Check stop loss if we have a position
+        elif self.position and self.trades:
+            # Get the most recent trade entry price
+            current_trade = self.trades[-1]
+            stop_loss_price = current_trade.entry_price - (
+                self.atr_multiple * self.atr[-1]
+            )
+
+            if self.data.Close[-1] <= stop_loss_price:
+                self.position.close()
+
+    @classmethod
+    def get_min_required_days(cls):
+        """Calculate minimum required trading days for this strategy."""
+        return cls.slow_vama_period + cls.min_trading_days_buffer
+
+    @classmethod
+    def get_recommended_start_date(cls, end_date: str) -> str:
+        """Calculate recommended start date given an end date.
+
+        Args:
+            end_date: End date in YYYY-MM-DD format
+
+        Returns:
+            Recommended start date as string
+        """
+        # Convert to trading days (approximately 252 trading days per year)
+        required_trading_days = cls.get_min_required_days()
+        # Add 20% buffer for weekends/holidays
+        required_calendar_days = int(required_trading_days * 1.4)
+
+        end_dt = datetime.strptime(end_date, "%Y-%m-%d")
+        start_dt = end_dt - timedelta(days=required_calendar_days)
+
+        return start_dt.strftime("%Y-%m-%d")
+
+
+class KaufmanEfficiencyStrategy(BaseStrategy):
+    """Kaufman Efficiency Ratio (ER) Strategy.
+
+    The Efficiency Ratio measures the price change relative to the
+    volatility over a period. Higher efficiency indicates strong trending
+    markets, while lower efficiency indicates ranging/noisy markets.
+
+    Formula:
+    Direction = abs(Close - Close[n periods ago])
+    Volatility = Sum of abs(Close - Previous Close) over n periods
+    ER = Direction / Volatility
+
+    Trading Logic:
+    - Buy when ER is above upper threshold (trending up strongly)
+    - Sell when ER is below lower threshold (losing trend strength)
+    """
+
+    # Efficiency Ratio calculation period
+    er_period = 10
+
+    # ER thresholds for trading signals
+    er_upper_threshold = 0.5  # Enter long positions
+    er_lower_threshold = 0.3  # Exit positions
+
+    # Additional trend confirmation
+    use_price_trend = True
+    price_trend_period = 5
+
+    # ATR-based stop loss
+    atr_period = 14
+    atr_multiple = 1.8
+
+    # Minimum required data buffer
+    min_trading_days_buffer = 20
+
+    def init(self):
+        """Initialize ER indicator and price trend confirmation."""
+
+        # Validate we have enough data
+        total_data_points = len(self.data)
+        required_data_points = (
+            max(self.er_period, self.price_trend_period) + self.min_trading_days_buffer
+        )
+
+        if total_data_points < required_data_points:
+            import warnings
+
+            warnings.warn(
+                f"Insufficient data for KaufmanEfficiencyStrategy: "
+                f"Have {total_data_points} days, need at least {required_data_points} days "
+                f"(max({self.er_period}, {self.price_trend_period})={max(self.er_period, self.price_trend_period)} + {self.min_trading_days_buffer} buffer). "
+                f"Strategy may not generate any signals."
+            )
+
+        def efficiency_ratio(prices, period=10):
+            """Calculate Kaufman Efficiency Ratio (ER)."""
+            prices = pd.Series(prices)
+
+            # Calculate absolute price change over period
+            change = abs(prices - prices.shift(period))
+
+            # Calculate volatility (sum of absolute daily changes)
+            volatility = prices.diff().abs().rolling(window=period).sum()
+
+            # Calculate Efficiency Ratio
+            er = pd.Series(0.0, index=prices.index)
+            mask = volatility != 0
+            er[mask] = change[mask] / volatility[mask]
+
+            return er
+
+        def simple_trend(prices, period=5):
+            """Simple price trend indicator - returns 1 for up, -1 for down."""
+            prices = pd.Series(prices)
+            trend = pd.Series(0, index=prices.index)
+
+            for i in range(period, len(prices)):
+                if prices.iloc[i] > prices.iloc[i - period]:
+                    trend.iloc[i] = 1
+                elif prices.iloc[i] < prices.iloc[i - period]:
+                    trend.iloc[i] = -1
+
+            return trend
+
+        def atr(high, low, close, period=14):
+            """Calculate Average True Range."""
+            high = pd.Series(high)
+            low = pd.Series(low)
+            close = pd.Series(close)
+
+            tr1 = high - low
+            tr2 = abs(high - close.shift())
+            tr3 = abs(low - close.shift())
+
+            tr = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
+            atr = tr.rolling(window=period).mean()
+            return atr
+
+        # Initialize Efficiency Ratio
+        self.er = self.I(efficiency_ratio, self.data.Close, self.er_period)
+
+        # Initialize price trend if enabled
+        if self.use_price_trend:
+            self.price_trend = self.I(
+                simple_trend, self.data.Close, self.price_trend_period
+            )
+
+        # Initialize ATR for stop loss calculation
+        self.atr = self.I(
+            atr, self.data.High, self.data.Low, self.data.Close, self.atr_period
+        )
+
+    def next(self):
+        """Execute Efficiency Ratio trading logic."""
+        # Skip if we dont have enough data
+        min_data_needed = (
+            max(self.er_period, self.price_trend_period)
+            if self.use_price_trend
+            else self.er_period
+        )
+        if len(self.data) < min_data_needed:
+            return
+
+        current_er = self.er[-1]
+
+        # Check for valid ER value
+        if pd.isna(current_er):
+            return
+
+        # Buy signal: High efficiency (strong trend) + optional price trend confirmation
+        if current_er > self.er_upper_threshold:
+            # Additional trend confirmation if enabled
+            trend_confirmed = True
+            if self.use_price_trend and hasattr(self, "price_trend"):
+                trend_confirmed = self.price_trend[-1] == 1
+
+            if trend_confirmed and not self.position:
+                self.buy()
+
+        # Sell signal: Low efficiency (weak trend)
+        elif current_er < self.er_lower_threshold:
+            if self.position:
+                self.position.close()
+
+        # Check stop loss if we have a position
+        elif self.position and self.trades:
+            # Get the most recent trade entry price
+            current_trade = self.trades[-1]
+            stop_loss_price = current_trade.entry_price - (
+                self.atr_multiple * self.atr[-1]
+            )
+
+            if self.data.Close[-1] <= stop_loss_price:
+                self.position.close()
+
+    @classmethod
+    def get_min_required_days(cls):
+        """Calculate minimum required trading days for this strategy."""
+        min_period = (
+            max(cls.er_period, cls.price_trend_period)
+            if cls.use_price_trend
+            else cls.er_period
+        )
+        return min_period + cls.min_trading_days_buffer
+
+    @classmethod
+    def get_recommended_start_date(cls, end_date: str) -> str:
+        """Calculate recommended start date given an end date.
+
+        Args:
+            end_date: End date in YYYY-MM-DD format
+
+        Returns:
+            Recommended start date as string
+        """
+        # Convert to trading days (approximately 252 trading days per year)
+        required_trading_days = cls.get_min_required_days()
+        # Add 20% buffer for weekends/holidays
+        required_calendar_days = int(required_trading_days * 1.4)
+
+        end_dt = datetime.strptime(end_date, "%Y-%m-%d")
+        start_dt = end_dt - timedelta(days=required_calendar_days)
+
+        return start_dt.strftime("%Y-%m-%d")

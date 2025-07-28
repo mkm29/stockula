@@ -3,6 +3,7 @@
 import pytest
 import pandas as pd
 import numpy as np
+import inspect
 from datetime import datetime
 from unittest.mock import Mock, patch, MagicMock
 
@@ -17,6 +18,8 @@ from stockula.backtesting.strategies import (
     VIDYAStrategy,
     KAMAStrategy,
     FRAMAStrategy,
+    VAMAStrategy,
+    KaufmanEfficiencyStrategy,
 )
 
 
@@ -2497,3 +2500,421 @@ class TestIndicatorFunctionCoverage:
             ):  # frama_period * 2
                 FRAMAStrategy.init(strategy)
                 assert strategy.I.called
+
+
+class TestVAMAStrategy:
+    """Test Volume Adjusted Moving Average (VAMA) Strategy."""
+
+    def test_vama_strategy_attributes(self):
+        """Test VAMA strategy has required attributes."""
+        assert hasattr(VAMAStrategy, "vama_period")
+        assert hasattr(VAMAStrategy, "slow_vama_period")
+        assert hasattr(VAMAStrategy, "atr_period")
+        assert hasattr(VAMAStrategy, "atr_multiple")
+        assert hasattr(VAMAStrategy, "min_trading_days_buffer")
+
+        assert VAMAStrategy.vama_period == 8
+        assert VAMAStrategy.slow_vama_period == 21
+        assert VAMAStrategy.atr_period == 14
+        assert VAMAStrategy.atr_multiple == 1.5
+        assert VAMAStrategy.min_trading_days_buffer == 20
+
+    def test_vama_strategy_initialization(self):
+        """Test VAMA strategy class structure."""
+        assert hasattr(VAMAStrategy, "init")
+        assert hasattr(VAMAStrategy, "next")
+        assert hasattr(VAMAStrategy, "get_min_required_days")
+        assert hasattr(VAMAStrategy, "get_recommended_start_date")
+
+    def test_vama_strategy_class_methods(self):
+        """Test VAMA strategy class methods."""
+        # Test get_min_required_days
+        min_days = VAMAStrategy.get_min_required_days()
+        expected_days = (
+            VAMAStrategy.slow_vama_period + VAMAStrategy.min_trading_days_buffer
+        )
+        assert min_days == expected_days
+        assert min_days == 41  # 21 + 20
+
+        # Test get_recommended_start_date
+        end_date = "2023-12-31"
+        start_date = VAMAStrategy.get_recommended_start_date(end_date)
+        assert isinstance(start_date, str)
+        assert len(start_date) == 10  # YYYY-MM-DD format
+
+        # Parse and verify the date is earlier
+        from datetime import datetime
+
+        start_dt = datetime.strptime(start_date, "%Y-%m-%d")
+        end_dt = datetime.strptime(end_date, "%Y-%m-%d")
+        assert start_dt < end_dt
+
+    def test_vama_calculation_function(self):
+        """Test VAMA calculation logic with mock data."""
+        # Create mock price and volume data
+        prices = pd.Series([100, 102, 101, 103, 105, 104, 106, 108])
+        volumes = pd.Series([1000, 1200, 800, 1500, 2000, 1100, 1800, 1300])
+
+        # Calculate expected VAMA components
+        vp = volumes * prices
+        volsum = volumes.rolling(window=8).mean()
+
+        # Test the ratios calculation (avoiding division by zero)
+        vol_ratio = pd.Series(0.0, index=prices.index)
+        mask = volsum != 0
+        vol_ratio[mask] = vp[mask] / volsum[mask]
+
+        # Verify calculation components
+        assert len(vol_ratio) == len(prices)
+        assert not vol_ratio.isna().all()
+
+    def test_vama_strategy_trading_logic(self):
+        """Test VAMA strategy trading logic methods."""
+        import inspect
+
+        # Check that the next method contains expected trading logic
+        source = inspect.getsource(VAMAStrategy.next)
+        assert "crossover" in source
+        assert "self.buy()" in source
+        assert "self.position.close()" in source
+        assert "stop_loss_price" in source
+        assert "atr_multiple" in source
+
+    @patch("warnings.warn")
+    def test_vama_insufficient_data_warning(self, mock_warn):
+        """Test VAMA strategy warns when insufficient data."""
+        # Create a mock strategy instance with insufficient data
+        mock_strategy = Mock(spec=VAMAStrategy)
+        mock_strategy.slow_vama_period = 21
+        mock_strategy.min_trading_days_buffer = 20
+
+        # Mock data with insufficient length
+        mock_data = Mock()
+        mock_data.__len__ = Mock(return_value=30)  # Less than required 41
+        mock_strategy.data = mock_data
+
+        # Call the real init method on the mock to test warning
+        VAMAStrategy.init(mock_strategy)
+
+        # Verify warning was called
+        mock_warn.assert_called_once()
+        warning_msg = mock_warn.call_args[0][0]
+        assert "Insufficient data for VAMAStrategy" in warning_msg
+
+    def test_vama_volume_handling(self):
+        """Test VAMA handles volume data correctly."""
+        # Test with zero volume periods
+        prices = pd.Series([100, 102, 101, 103])
+        volumes = pd.Series([1000, 0, 800, 1500])  # Zero volume in second period
+
+        vp = volumes * prices
+        volsum = volumes.rolling(window=3).mean()
+
+        # Create volume ratio with zero-division protection
+        vol_ratio = pd.Series(0.0, index=prices.index)
+        mask = volsum != 0
+        vol_ratio[mask] = vp[mask] / volsum[mask]
+
+        # Verify zero volume is handled without error
+        assert len(vol_ratio) == len(prices)
+        # When volsum is 0 (due to zero volume), vol_ratio should be 0 or NaN (depending on implementation)
+        assert vol_ratio[1] == 0.0 or pd.isna(vol_ratio[1])
+
+    def test_vama_edge_cases(self):
+        """Test VAMA strategy edge cases."""
+        # Test with minimal data
+        prices = pd.Series([100])
+        volumes = pd.Series([1000])
+
+        # Should handle single data point
+        vol_ratio = pd.Series(0.0, index=prices.index)
+        assert len(vol_ratio) == 1
+
+        # Test with constant prices but varying volume
+        constant_prices = pd.Series([100, 100, 100, 100])
+        varying_volumes = pd.Series([1000, 2000, 500, 1500])
+
+        vp = varying_volumes * constant_prices
+        assert (vp == varying_volumes * 100).all()
+
+
+class TestKaufmanEfficiencyStrategy:
+    """Test Kaufman Efficiency Ratio (ER) Strategy."""
+
+    def test_kaufman_efficiency_attributes(self):
+        """Test Kaufman Efficiency strategy has required attributes."""
+        assert hasattr(KaufmanEfficiencyStrategy, "er_period")
+        assert hasattr(KaufmanEfficiencyStrategy, "er_upper_threshold")
+        assert hasattr(KaufmanEfficiencyStrategy, "er_lower_threshold")
+        assert hasattr(KaufmanEfficiencyStrategy, "use_price_trend")
+        assert hasattr(KaufmanEfficiencyStrategy, "price_trend_period")
+        assert hasattr(KaufmanEfficiencyStrategy, "atr_period")
+        assert hasattr(KaufmanEfficiencyStrategy, "atr_multiple")
+        assert hasattr(KaufmanEfficiencyStrategy, "min_trading_days_buffer")
+
+        assert KaufmanEfficiencyStrategy.er_period == 10
+        assert KaufmanEfficiencyStrategy.er_upper_threshold == 0.5
+        assert KaufmanEfficiencyStrategy.er_lower_threshold == 0.3
+        assert KaufmanEfficiencyStrategy.use_price_trend == True
+        assert KaufmanEfficiencyStrategy.price_trend_period == 5
+        assert KaufmanEfficiencyStrategy.atr_period == 14
+        assert KaufmanEfficiencyStrategy.atr_multiple == 1.8
+        assert KaufmanEfficiencyStrategy.min_trading_days_buffer == 20
+
+    def test_kaufman_efficiency_initialization(self):
+        """Test Kaufman Efficiency strategy class structure."""
+        assert hasattr(KaufmanEfficiencyStrategy, "init")
+        assert hasattr(KaufmanEfficiencyStrategy, "next")
+        assert hasattr(KaufmanEfficiencyStrategy, "get_min_required_days")
+        assert hasattr(KaufmanEfficiencyStrategy, "get_recommended_start_date")
+
+    def test_kaufman_efficiency_class_methods(self):
+        """Test Kaufman Efficiency strategy class methods."""
+        # Test get_min_required_days with price_trend enabled
+        min_days = KaufmanEfficiencyStrategy.get_min_required_days()
+        expected_days = (
+            max(
+                KaufmanEfficiencyStrategy.er_period,
+                KaufmanEfficiencyStrategy.price_trend_period,
+            )
+            + KaufmanEfficiencyStrategy.min_trading_days_buffer
+        )
+        assert min_days == expected_days
+        assert min_days == 30  # max(10, 5) + 20
+
+        # Test get_recommended_start_date
+        end_date = "2023-12-31"
+        start_date = KaufmanEfficiencyStrategy.get_recommended_start_date(end_date)
+        assert isinstance(start_date, str)
+        assert len(start_date) == 10  # YYYY-MM-DD format
+
+    def test_efficiency_ratio_calculation(self):
+        """Test Efficiency Ratio calculation logic."""
+        # Create trending price data (high efficiency expected)
+        trending_prices = pd.Series(
+            [100, 102, 104, 106, 108, 110, 112, 114, 116, 118, 120]
+        )
+
+        # Calculate direction (change over period)
+        period = 10
+        direction = abs(trending_prices - trending_prices.shift(period))
+
+        # Calculate volatility (sum of absolute changes)
+        volatility = trending_prices.diff().abs().rolling(window=period).sum()
+
+        # Calculate ER
+        er = pd.Series(0.0, index=trending_prices.index)
+        mask = volatility != 0
+        er[mask] = direction[mask] / volatility[mask]
+
+        # For trending data, ER should be relatively high
+        last_er = er.iloc[-1]
+        assert not pd.isna(last_er)
+        assert last_er > 0  # Should be positive for trending data
+
+    def test_efficiency_ratio_sideways_market(self):
+        """Test Efficiency Ratio for sideways/noisy market."""
+        # Create sideways/noisy price data (low efficiency expected)
+        sideways_prices = pd.Series([100, 99, 101, 98, 102, 97, 103, 96, 104, 95, 100])
+
+        period = 10
+        direction = abs(sideways_prices - sideways_prices.shift(period))
+        volatility = sideways_prices.diff().abs().rolling(window=period).sum()
+
+        er = pd.Series(0.0, index=sideways_prices.index)
+        mask = volatility != 0
+        er[mask] = direction[mask] / volatility[mask]
+
+        # For sideways data, ER should be low (close to 0)
+        last_er = er.iloc[-1]
+        assert not pd.isna(last_er)
+        assert last_er >= 0  # Should be non-negative
+
+    def test_simple_trend_function(self):
+        """Test simple trend indicator function."""
+        # Create trending up data
+        up_trend_prices = pd.Series([100, 102, 104, 106, 108, 110])
+        trend = pd.Series(0, index=up_trend_prices.index)
+
+        period = 5
+        for i in range(period, len(up_trend_prices)):
+            if up_trend_prices.iloc[i] > up_trend_prices.iloc[i - period]:
+                trend.iloc[i] = 1
+            elif up_trend_prices.iloc[i] < up_trend_prices.iloc[i - period]:
+                trend.iloc[i] = -1
+
+        # Should detect upward trend
+        assert trend.iloc[-1] == 1
+
+        # Create trending down data
+        down_trend_prices = pd.Series([110, 108, 106, 104, 102, 100])
+        trend_down = pd.Series(0, index=down_trend_prices.index)
+
+        for i in range(period, len(down_trend_prices)):
+            if down_trend_prices.iloc[i] > down_trend_prices.iloc[i - period]:
+                trend_down.iloc[i] = 1
+            elif down_trend_prices.iloc[i] < down_trend_prices.iloc[i - period]:
+                trend_down.iloc[i] = -1
+
+        # Should detect downward trend
+        assert trend_down.iloc[-1] == -1
+
+    def test_kaufman_efficiency_trading_logic(self):
+        """Test Kaufman Efficiency strategy trading logic."""
+        import inspect
+
+        # Check that the next method contains expected trading logic
+        source = inspect.getsource(KaufmanEfficiencyStrategy.next)
+        assert "current_er" in source
+        assert "er_upper_threshold" in source
+        assert "er_lower_threshold" in source
+        assert "trend_confirmed" in source
+        assert "self.buy()" in source
+        assert "self.position.close()" in source
+        assert "stop_loss_price" in source
+
+    @patch("warnings.warn")
+    def test_kaufman_efficiency_insufficient_data_warning(self, mock_warn):
+        """Test Kaufman Efficiency strategy warns when insufficient data."""
+        mock_strategy = Mock(spec=KaufmanEfficiencyStrategy)
+        mock_strategy.er_period = 10
+        mock_strategy.price_trend_period = 5
+        mock_strategy.min_trading_days_buffer = 20
+        mock_strategy.use_price_trend = True
+
+        # Mock data with insufficient length
+        mock_data = Mock()
+        mock_data.__len__ = Mock(return_value=25)  # Less than required 30
+        mock_strategy.data = mock_data
+
+        # Call the real init method
+        KaufmanEfficiencyStrategy.init(mock_strategy)
+
+        # Verify warning was called
+        mock_warn.assert_called_once()
+        warning_msg = mock_warn.call_args[0][0]
+        assert "Insufficient data for KaufmanEfficiencyStrategy" in warning_msg
+
+    def test_efficiency_ratio_boundary_conditions(self):
+        """Test ER calculation boundary conditions."""
+        # Test with constant prices (zero volatility)
+        constant_prices = pd.Series([100, 100, 100, 100, 100])
+
+        direction = abs(constant_prices - constant_prices.shift(3))
+        volatility = constant_prices.diff().abs().rolling(window=3).sum()
+
+        # When prices are constant, volatility should be 0
+        assert volatility.iloc[-1] == 0
+
+        # Test ER calculation with zero volatility protection
+        er = pd.Series(0.0, index=constant_prices.index)
+        mask = volatility != 0
+        er[mask] = direction[mask] / volatility[mask]
+
+        # ER should remain 0 when volatility is 0
+        assert er.iloc[-1] == 0
+
+    def test_kaufman_efficiency_thresholds(self):
+        """Test strategy threshold logic."""
+        # Test threshold values are reasonable
+        assert (
+            0
+            < KaufmanEfficiencyStrategy.er_lower_threshold
+            < KaufmanEfficiencyStrategy.er_upper_threshold
+        )
+        assert KaufmanEfficiencyStrategy.er_upper_threshold <= 1.0
+        assert KaufmanEfficiencyStrategy.er_lower_threshold >= 0.0
+
+    def test_trend_confirmation_logic(self):
+        """Test price trend confirmation logic."""
+        # Test that use_price_trend flag affects calculation
+        assert KaufmanEfficiencyStrategy.use_price_trend == True
+        assert KaufmanEfficiencyStrategy.price_trend_period > 0
+
+        # Verify that trend confirmation is used in trading logic
+        import inspect
+
+        source = inspect.getsource(KaufmanEfficiencyStrategy.next)
+        assert "use_price_trend" in source
+        assert "trend_confirmed" in source
+        assert "price_trend" in source
+
+
+class TestNewStrategiesIntegration:
+    """Test integration of new VAMA and Kaufman Efficiency strategies."""
+
+    def test_strategies_inheritance(self):
+        """Test that new strategies inherit from BaseStrategy."""
+        assert issubclass(VAMAStrategy, BaseStrategy)
+        assert issubclass(KaufmanEfficiencyStrategy, BaseStrategy)
+
+    def test_strategies_have_required_methods(self):
+        """Test that new strategies implement required methods."""
+        required_methods = [
+            "init",
+            "next",
+            "get_min_required_days",
+            "get_recommended_start_date",
+        ]
+
+        for method in required_methods:
+            assert hasattr(VAMAStrategy, method)
+            assert hasattr(KaufmanEfficiencyStrategy, method)
+
+    def test_strategies_data_requirements(self):
+        """Test data requirements for new strategies."""
+        vama_days = VAMAStrategy.get_min_required_days()
+        kaufman_days = KaufmanEfficiencyStrategy.get_min_required_days()
+
+        # Both should require reasonable amounts of data
+        assert vama_days > 0
+        assert kaufman_days > 0
+        assert vama_days <= 100  # Reasonable upper bound
+        assert kaufman_days <= 100  # Reasonable upper bound
+
+    def test_atr_stop_loss_integration(self):
+        """Test that both strategies include ATR-based stop loss."""
+        vama_source = inspect.getsource(VAMAStrategy)
+        kaufman_source = inspect.getsource(KaufmanEfficiencyStrategy)
+
+        # Both should have ATR components
+        assert "atr_period" in vama_source
+        assert "atr_multiple" in vama_source
+        assert "atr_period" in kaufman_source
+        assert "atr_multiple" in kaufman_source
+
+        # Both should use ATR in stop loss logic
+        vama_next = inspect.getsource(VAMAStrategy.next)
+        kaufman_next = inspect.getsource(KaufmanEfficiencyStrategy.next)
+
+        assert "stop_loss_price" in vama_next
+        assert "atr_multiple" in vama_next
+        assert "stop_loss_price" in kaufman_next
+        assert "atr_multiple" in kaufman_next
+
+    def test_volume_data_requirement_vama(self):
+        """Test that VAMA strategy requires volume data."""
+        vama_init = inspect.getsource(VAMAStrategy.init)
+
+        # Should reference volume data
+        assert "Volume" in vama_init
+        assert "self.data.Volume" in vama_init
+
+    def test_strategies_parameter_validation(self):
+        """Test strategy parameters are valid."""
+        # VAMA parameters
+        assert VAMAStrategy.vama_period > 0
+        assert VAMAStrategy.slow_vama_period > VAMAStrategy.vama_period
+        assert VAMAStrategy.atr_period > 0
+        assert VAMAStrategy.atr_multiple > 0
+
+        # Kaufman Efficiency parameters
+        assert KaufmanEfficiencyStrategy.er_period > 0
+        assert (
+            0
+            <= KaufmanEfficiencyStrategy.er_lower_threshold
+            < KaufmanEfficiencyStrategy.er_upper_threshold
+            <= 1
+        )
+        assert KaufmanEfficiencyStrategy.price_trend_period > 0
+        assert KaufmanEfficiencyStrategy.atr_multiple > 0

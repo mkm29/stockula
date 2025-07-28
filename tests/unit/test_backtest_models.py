@@ -1,6 +1,5 @@
 """Unit tests for backtest data models."""
 
-import pytest
 from datetime import datetime
 from stockula.config.models import (
     BacktestResult,

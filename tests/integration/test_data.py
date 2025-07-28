@@ -121,7 +121,9 @@ class TestDataFetcher:
 
         with patch("yfinance.Ticker", return_value=mock_ticker):
             fetcher = DataFetcher(use_cache=False)
-            prices = fetcher.get_current_prices(["AAPL", "GOOGL", "MSFT"])
+            prices = fetcher.get_current_prices(
+                ["AAPL", "GOOGL", "MSFT"], show_progress=False
+            )
 
             assert isinstance(prices, dict)
             assert len(prices) == 3
@@ -132,7 +134,7 @@ class TestDataFetcher:
         """Test fetching current price for single symbol."""
         with patch("yfinance.Ticker", return_value=mock_yfinance_ticker):
             fetcher = DataFetcher(use_cache=False)
-            prices = fetcher.get_current_prices("AAPL")
+            prices = fetcher.get_current_prices("AAPL", show_progress=False)
 
             assert isinstance(prices, dict)
             assert "AAPL" in prices
@@ -147,7 +149,9 @@ class TestDataFetcher:
 
         with patch("yfinance.Ticker", return_value=mock_ticker):
             fetcher = DataFetcher(use_cache=False)
-            prices = fetcher.get_current_prices(["AAPL", "INVALID"])
+            prices = fetcher.get_current_prices(
+                ["AAPL", "INVALID"], show_progress=False
+            )
 
             assert isinstance(prices, dict)
             # Should handle missing prices gracefully

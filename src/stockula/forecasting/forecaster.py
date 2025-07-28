@@ -9,6 +9,10 @@ from contextlib import contextmanager
 from io import StringIO
 from autots import AutoTS
 from typing import Optional, Dict, Any, TYPE_CHECKING
+from rich.console import Console
+from rich.progress import Progress, SpinnerColumn, TextColumn
+
+console = Console()
 
 if TYPE_CHECKING:
     from ..interfaces import IDataFetcher
@@ -137,33 +141,51 @@ class StockForecaster:
         logger.info("This may take a few minutes. Press Ctrl+C to cancel.")
 
         try:
-            with suppress_autots_output():
-                # Initialize AutoTS with minimal verbosity
-                self.model = AutoTS(
-                    forecast_length=self.forecast_length,
-                    frequency=self.frequency,
-                    prediction_interval=self.prediction_interval,
-                    ensemble=ensemble,
-                    model_list=model_list,
-                    max_generations=max_generations,
-                    num_validations=self.num_validations,
-                    validation_method=self.validation_method,
-                    verbose=0,  # Minimal verbosity
-                    no_negatives=True,  # Stock prices can't be negative
-                    drop_most_recent=0,  # Don't drop recent data
-                    n_jobs="auto",  # Use available cores
+            with Progress(
+                SpinnerColumn(),
+                TextColumn("[progress.description]{task.description}"),
+                console=console,
+                transient=False,
+            ) as progress:
+                task = progress.add_task(
+                    "[orange3]Initializing AutoTS model...", total=None
                 )
 
-                # Fit the model
-                logger.debug(
-                    f"Fitting AutoTS with parameters: model_list={model_list}, max_generations={max_generations}"
-                )
-                self.model = self.model.fit(
-                    data_for_model,
-                    date_col="date",  # Using 'date' column
-                    value_col=target_column,
-                    id_col=None,  # Single series
-                )
+                with suppress_autots_output():
+                    # Initialize AutoTS with minimal verbosity
+                    self.model = AutoTS(
+                        forecast_length=self.forecast_length,
+                        frequency=self.frequency,
+                        prediction_interval=self.prediction_interval,
+                        ensemble=ensemble,
+                        model_list=model_list,
+                        max_generations=max_generations,
+                        num_validations=self.num_validations,
+                        validation_method=self.validation_method,
+                        verbose=0,  # Minimal verbosity
+                        no_negatives=True,  # Stock prices can't be negative
+                        drop_most_recent=0,  # Don't drop recent data
+                        n_jobs="auto",  # Use available cores
+                    )
+
+                    # Fit the model
+                    progress.update(
+                        task,
+                        description=f"[orange3]Training {model_list} models with {max_generations} generations...",
+                    )
+                    logger.debug(
+                        f"Fitting AutoTS with parameters: model_list={model_list}, max_generations={max_generations}"
+                    )
+                    self.model = self.model.fit(
+                        data_for_model,
+                        date_col="date",  # Using 'date' column
+                        value_col=target_column,
+                        id_col=None,  # Single series
+                    )
+
+                    progress.update(
+                        task, description="[orange3]Model training completed!"
+                    )
 
             logger.info("Model fitting completed successfully.")
 

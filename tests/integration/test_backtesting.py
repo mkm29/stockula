@@ -4,7 +4,7 @@ import pytest
 import pandas as pd
 import numpy as np
 from datetime import datetime
-from unittest.mock import patch, Mock
+from unittest.mock import Mock
 
 from stockula.backtesting import (
     BacktestRunner,

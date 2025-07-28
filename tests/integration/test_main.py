@@ -257,6 +257,11 @@ class TestPrintResults:
                     "max_drawdown_pct": -10.0,
                     "num_trades": 25,
                     "win_rate": 60.0,
+                    "initial_cash": 10000,
+                    "start_date": "2023-01-01",
+                    "end_date": "2023-12-31",
+                    "trading_days": 252,
+                    "calendar_days": 365,
                 }
             ]
         }
@@ -266,8 +271,17 @@ class TestPrintResults:
             output = mock_stdout.getvalue()
 
             assert "Backtesting Results" in output
-            assert "Return: 15.50%" in output
-            assert "Win Rate: 60.00%" in output
+            # Check for portfolio information display
+            assert "Portfolio Information:" in output
+            assert "Initial Capital: $10,000" in output
+            assert "Start Date: 2023-01-01" in output
+            assert "End Date: 2023-12-31" in output
+            assert "Trading Days: 252" in output
+            assert "Calendar Days: 365" in output
+            # Check for backtest result details (these are in table format now)
+            assert "AAPL" in output
+            assert "15.5" in output  # Return percentage in table
+            assert "60.0" in output  # Win rate in table
 
     def test_print_results_forecasting(self):
         """Test printing forecast results."""

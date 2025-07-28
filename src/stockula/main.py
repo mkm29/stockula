@@ -7,6 +7,16 @@ from pathlib import Path
 from typing import Dict, Any, List, Optional
 import pandas as pd
 from dependency_injector.wiring import inject, Provide
+from rich.console import Console
+from rich.progress import (
+    Progress,
+    BarColumn,
+    TextColumn,
+    TimeRemainingColumn,
+    SpinnerColumn,
+)
+from rich.table import Table
+from rich.panel import Panel
 
 from .container import create_container, Container
 from .technical_analysis import TechnicalIndicators
@@ -35,8 +45,9 @@ from .interfaces import (
     ILoggingManager,
 )
 
-# Global logging manager instance
+# Global logging manager and console instances
 log_manager: Optional[ILoggingManager] = None
+console = Console()
 
 
 @inject
@@ -71,6 +82,7 @@ def run_technical_analysis(
     ticker: str,
     config: StockulaConfig,
     data_fetcher: IDataFetcher = Provide[Container.data_fetcher],
+    show_progress: bool = True,
 ) -> Dict[str, Any]:
     """Run technical analysis for a ticker.
 
@@ -78,6 +90,7 @@ def run_technical_analysis(
         ticker: Stock symbol
         config: Configuration object
         data_fetcher: Injected data fetcher
+        show_progress: Whether to show progress bars
 
     Returns:
         Dictionary with indicator results
@@ -93,33 +106,129 @@ def run_technical_analysis(
 
     ta = TechnicalIndicators(data)
     results = {"ticker": ticker, "indicators": {}}
-
     ta_config = config.technical_analysis
 
+    # Count total indicators to calculate
+    total_indicators = 0
     if "sma" in ta_config.indicators:
-        for period in ta_config.sma_periods:
-            results["indicators"][f"SMA_{period}"] = ta.sma(period).iloc[-1]
-
+        total_indicators += len(ta_config.sma_periods)
     if "ema" in ta_config.indicators:
-        for period in ta_config.ema_periods:
-            results["indicators"][f"EMA_{period}"] = ta.ema(period).iloc[-1]
-
+        total_indicators += len(ta_config.ema_periods)
     if "rsi" in ta_config.indicators:
-        results["indicators"]["RSI"] = ta.rsi(ta_config.rsi_period).iloc[-1]
-
+        total_indicators += 1
     if "macd" in ta_config.indicators:
-        macd_data = ta.macd(**ta_config.macd_params)
-        results["indicators"]["MACD"] = macd_data.iloc[-1].to_dict()
-
+        total_indicators += 1
     if "bbands" in ta_config.indicators:
-        bbands_data = ta.bbands(**ta_config.bbands_params)
-        results["indicators"]["BBands"] = bbands_data.iloc[-1].to_dict()
-
+        total_indicators += 1
     if "atr" in ta_config.indicators:
-        results["indicators"]["ATR"] = ta.atr(ta_config.atr_period).iloc[-1]
-
+        total_indicators += 1
     if "adx" in ta_config.indicators:
-        results["indicators"]["ADX"] = ta.adx(14).iloc[-1]
+        total_indicators += 1
+
+    if show_progress and total_indicators > 0:
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            BarColumn(),
+            TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
+            TimeRemainingColumn(),
+            console=console,
+            transient=True,  # Remove progress bar when done
+        ) as progress:
+            task = progress.add_task(
+                f"[cyan]Computing {total_indicators} technical indicators for {ticker}...",
+                total=total_indicators,
+            )
+
+            current_step = 0
+
+            if "sma" in ta_config.indicators:
+                for period in ta_config.sma_periods:
+                    progress.update(
+                        task,
+                        description=f"[cyan]Computing SMA({period}) for {ticker}...",
+                    )
+                    results["indicators"][f"SMA_{period}"] = ta.sma(period).iloc[-1]
+                    current_step += 1
+                    progress.advance(task)
+
+            if "ema" in ta_config.indicators:
+                for period in ta_config.ema_periods:
+                    progress.update(
+                        task,
+                        description=f"[cyan]Computing EMA({period}) for {ticker}...",
+                    )
+                    results["indicators"][f"EMA_{period}"] = ta.ema(period).iloc[-1]
+                    current_step += 1
+                    progress.advance(task)
+
+            if "rsi" in ta_config.indicators:
+                progress.update(
+                    task, description=f"[cyan]Computing RSI for {ticker}..."
+                )
+                results["indicators"]["RSI"] = ta.rsi(ta_config.rsi_period).iloc[-1]
+                current_step += 1
+                progress.advance(task)
+
+            if "macd" in ta_config.indicators:
+                progress.update(
+                    task, description=f"[cyan]Computing MACD for {ticker}..."
+                )
+                macd_data = ta.macd(**ta_config.macd_params)
+                results["indicators"]["MACD"] = macd_data.iloc[-1].to_dict()
+                current_step += 1
+                progress.advance(task)
+
+            if "bbands" in ta_config.indicators:
+                progress.update(
+                    task, description=f"[cyan]Computing Bollinger Bands for {ticker}..."
+                )
+                bbands_data = ta.bbands(**ta_config.bbands_params)
+                results["indicators"]["BBands"] = bbands_data.iloc[-1].to_dict()
+                current_step += 1
+                progress.advance(task)
+
+            if "atr" in ta_config.indicators:
+                progress.update(
+                    task, description=f"[cyan]Computing ATR for {ticker}..."
+                )
+                results["indicators"]["ATR"] = ta.atr(ta_config.atr_period).iloc[-1]
+                current_step += 1
+                progress.advance(task)
+
+            if "adx" in ta_config.indicators:
+                progress.update(
+                    task, description=f"[cyan]Computing ADX for {ticker}..."
+                )
+                results["indicators"]["ADX"] = ta.adx(14).iloc[-1]
+                current_step += 1
+                progress.advance(task)
+    else:
+        # Run without progress bars (for single indicators or when disabled)
+        if "sma" in ta_config.indicators:
+            for period in ta_config.sma_periods:
+                results["indicators"][f"SMA_{period}"] = ta.sma(period).iloc[-1]
+
+        if "ema" in ta_config.indicators:
+            for period in ta_config.ema_periods:
+                results["indicators"][f"EMA_{period}"] = ta.ema(period).iloc[-1]
+
+        if "rsi" in ta_config.indicators:
+            results["indicators"]["RSI"] = ta.rsi(ta_config.rsi_period).iloc[-1]
+
+        if "macd" in ta_config.indicators:
+            macd_data = ta.macd(**ta_config.macd_params)
+            results["indicators"]["MACD"] = macd_data.iloc[-1].to_dict()
+
+        if "bbands" in ta_config.indicators:
+            bbands_data = ta.bbands(**ta_config.bbands_params)
+            results["indicators"]["BBands"] = bbands_data.iloc[-1].to_dict()
+
+        if "atr" in ta_config.indicators:
+            results["indicators"]["ATR"] = ta.atr(ta_config.atr_period).iloc[-1]
+
+        if "adx" in ta_config.indicators:
+            results["indicators"]["ADX"] = ta.adx(14).iloc[-1]
 
     return results
 
@@ -173,18 +282,30 @@ def run_backtest(
             if pd.isna(win_rate):
                 win_rate = None if backtest_result["# Trades"] == 0 else 0
 
-            results.append(
-                {
-                    "ticker": ticker,
-                    "strategy": strategy_config.name,
-                    "parameters": strategy_config.parameters,
-                    "return_pct": backtest_result["Return [%]"],
-                    "sharpe_ratio": backtest_result["Sharpe Ratio"],
-                    "max_drawdown_pct": backtest_result["Max. Drawdown [%]"],
-                    "num_trades": backtest_result["# Trades"],
-                    "win_rate": win_rate,
-                }
-            )
+            result_entry = {
+                "ticker": ticker,
+                "strategy": strategy_config.name,
+                "parameters": strategy_config.parameters,
+                "return_pct": backtest_result["Return [%]"],
+                "sharpe_ratio": backtest_result["Sharpe Ratio"],
+                "max_drawdown_pct": backtest_result["Max. Drawdown [%]"],
+                "num_trades": backtest_result["# Trades"],
+                "win_rate": win_rate,
+            }
+
+            # Add portfolio information from the raw backtest result
+            if "Initial Cash" in backtest_result:
+                result_entry["initial_cash"] = backtest_result["Initial Cash"]
+            if "Start Date" in backtest_result:
+                result_entry["start_date"] = backtest_result["Start Date"]
+            if "End Date" in backtest_result:
+                result_entry["end_date"] = backtest_result["End Date"]
+            if "Trading Days" in backtest_result:
+                result_entry["trading_days"] = backtest_result["Trading Days"]
+            if "Calendar Days" in backtest_result:
+                result_entry["calendar_days"] = backtest_result["Calendar Days"]
+
+            results.append(result_entry)
         except Exception as e:
             print(f"Error backtesting {strategy_config.name} on {ticker}: {e}")
 
@@ -465,68 +586,207 @@ def print_results(results: Dict[str, Any], output_format: str = "console"):
         output_format: Output format (console, json)
     """
     if output_format == "json":
-        print(json.dumps(results, indent=2, default=str))
+        console.print_json(json.dumps(results, indent=2, default=str))
     else:
-        # Console output
+        # Console output with Rich formatting
 
         if "technical_analysis" in results:
-            print("\n=== Technical Analysis Results ===")
+            console.print(
+                "\n[bold blue]Technical Analysis Results[/bold blue]", style="bold"
+            )
+
             for ta_result in results["technical_analysis"]:
-                print(f"\n{ta_result['ticker']}:")
+                table = Table(title=f"Technical Analysis - {ta_result['ticker']}")
+                table.add_column("Indicator", style="cyan", no_wrap=True)
+                table.add_column("Value", style="magenta")
+
                 for indicator, value in ta_result["indicators"].items():
                     if isinstance(value, dict):
-                        print(f"  {indicator}:")
                         for k, v in value.items():
-                            print(
-                                f"    {k}: {v:.2f}"
-                                if isinstance(v, (int, float))
-                                else f"    {k}: {v}"
+                            formatted_value = (
+                                f"{v:.2f}" if isinstance(v, (int, float)) else str(v)
                             )
+                            table.add_row(f"{indicator} - {k}", formatted_value)
                     else:
-                        print(
-                            f"  {indicator}: {value:.2f}"
+                        formatted_value = (
+                            f"{value:.2f}"
                             if isinstance(value, (int, float))
-                            else f"  {indicator}: {value}"
+                            else str(value)
                         )
+                        table.add_row(indicator, formatted_value)
+
+                console.print(table)
 
         if "backtesting" in results:
             # Check if we have multiple strategies
             strategies = set(b["strategy"] for b in results["backtesting"])
+
+            # Display general portfolio information
+            console.print("\n[bold green]=== Backtesting Results ===[/bold green]")
+
+            # Create portfolio information panel
+            portfolio_info = []
+
+            # Extract portfolio info from results metadata
+            if "portfolio" in results:
+                portfolio_data = results["portfolio"]
+                if "initial_capital" in portfolio_data:
+                    portfolio_info.append(
+                        f"[cyan]Initial Capital:[/cyan] ${portfolio_data['initial_capital']:,.2f}"
+                    )
+                if "start" in portfolio_data and portfolio_data["start"]:
+                    portfolio_info.append(
+                        f"[cyan]Start Date:[/cyan] {portfolio_data['start']}"
+                    )
+                if "end" in portfolio_data and portfolio_data["end"]:
+                    portfolio_info.append(
+                        f"[cyan]End Date:[/cyan] {portfolio_data['end']}"
+                    )
+
+            # If portfolio info not in metadata, try to extract from backtest results
+            if not portfolio_info and results.get("backtesting"):
+                # Get portfolio information from the first backtest result
+                first_backtest = (
+                    results["backtesting"][0] if results["backtesting"] else {}
+                )
+
+                if "initial_cash" in first_backtest:
+                    portfolio_info.append(
+                        f"[cyan]Initial Capital:[/cyan] ${first_backtest['initial_cash']:,.2f}"
+                    )
+                if "start_date" in first_backtest:
+                    portfolio_info.append(
+                        f"[cyan]Start Date:[/cyan] {first_backtest['start_date']}"
+                    )
+                if "end_date" in first_backtest:
+                    portfolio_info.append(
+                        f"[cyan]End Date:[/cyan] {first_backtest['end_date']}"
+                    )
+                if "trading_days" in first_backtest:
+                    portfolio_info.append(
+                        f"[cyan]Trading Days:[/cyan] {first_backtest['trading_days']:,}"
+                    )
+                if "calendar_days" in first_backtest:
+                    portfolio_info.append(
+                        f"[cyan]Calendar Days:[/cyan] {first_backtest['calendar_days']:,}"
+                    )
+
+                # Fallback: Look for cash/initial capital in other locations
+                if not portfolio_info:
+                    initial_capital = results.get("initial_capital")
+                    if initial_capital:
+                        portfolio_info.append(
+                            f"[cyan]Initial Capital:[/cyan] ${initial_capital:,.2f}"
+                        )
+
+                    # Add date information if available
+                    start_date = results.get("start_date") or results.get("start")
+                    end_date = results.get("end_date") or results.get("end")
+                    if start_date:
+                        portfolio_info.append(f"[cyan]Start Date:[/cyan] {start_date}")
+                    if end_date:
+                        portfolio_info.append(f"[cyan]End Date:[/cyan] {end_date}")
+
+            # Display portfolio information if available
+            if portfolio_info:
+                console.print("[bold blue]Portfolio Information:[/bold blue]")
+                for info in portfolio_info:
+                    console.print(f"  {info}")
+                console.print()  # Add blank line
+
             if len(strategies) > 1:
                 # For multiple strategies, only show a brief message
-                print("\n=== Backtesting Results ===")
-                print(
-                    f"Running {len(strategies)} strategies across {len(set(b['ticker'] for b in results['backtesting']))} stocks..."
+                console.print(
+                    f"Running [bold]{len(strategies)}[/bold] strategies across [bold]{len(set(b['ticker'] for b in results['backtesting']))}[/bold] stocks..."
                 )
-                print("Detailed results will be shown per strategy below.")
+                console.print("Detailed results will be shown per strategy below.")
             else:
-                # For single strategy, show the detailed results as before
-                print("\n=== Backtesting Results ===")
+                # For single strategy, show the detailed results in a table
+                table = Table(title="Backtest Results")
+                table.add_column("Ticker", style="cyan", no_wrap=True)
+                table.add_column("Strategy", style="yellow")
+                table.add_column("Return %", style="green", justify="right")
+                table.add_column("Sharpe Ratio", style="blue", justify="right")
+                table.add_column("Max Drawdown %", style="red", justify="right")
+                table.add_column("Trades", style="white", justify="right")
+                table.add_column("Win Rate %", style="magenta", justify="right")
+
                 for backtest in results["backtesting"]:
-                    print(f"""
-{backtest["ticker"]} - {backtest["strategy"]}:
-  Parameters: {backtest["parameters"]}
-  Return: {backtest["return_pct"]:.2f}%
-  Sharpe Ratio: {backtest["sharpe_ratio"]:.2f}
-  Max Drawdown: {backtest["max_drawdown_pct"]:.2f}%
-  Number of Trades: {backtest["num_trades"]}""")
-                    if backtest.get("win_rate") is not None:
-                        print(f"  Win Rate: {backtest['win_rate']:.2f}%")
-                    elif backtest["num_trades"] == 0:
-                        print("  Win Rate: N/A (no trades)")
+                    win_rate_str = (
+                        "N/A"
+                        if backtest["num_trades"] == 0
+                        else f"{backtest.get('win_rate', 0):.1f}"
+                    )
+                    if backtest.get("win_rate") is None and backtest["num_trades"] > 0:
+                        win_rate_str = "0.0"
+
+                    # Color code return percentage
+                    return_pct = backtest["return_pct"]
+                    return_color = (
+                        "green"
+                        if return_pct > 0
+                        else "red"
+                        if return_pct < 0
+                        else "white"
+                    )
+                    return_str = f"[{return_color}]{return_pct:+.2f}[/{return_color}]"
+
+                    table.add_row(
+                        backtest["ticker"],
+                        backtest["strategy"].upper(),
+                        return_str,
+                        f"{backtest['sharpe_ratio']:.2f}",
+                        f"{backtest['max_drawdown_pct']:.2f}",
+                        str(backtest["num_trades"]),
+                        win_rate_str,
+                    )
+
+                console.print(table)
 
         if "forecasting" in results:
-            print("\n=== Forecasting Results ===")
+            console.print("\n[bold purple]=== Forecasting Results ===[/bold purple]")
+
+            table = Table(title="Price Forecasts")
+            table.add_column("Ticker", style="cyan", no_wrap=True)
+            table.add_column("Current Price", style="white", justify="right")
+            table.add_column("Forecast Price", style="green", justify="right")
+            table.add_column("Confidence Range", style="yellow", justify="center")
+            table.add_column("Best Model", style="blue")
+
             for forecast in results["forecasting"]:
                 if "error" in forecast:
-                    print(f"\n{forecast['ticker']}: Error - {forecast['error']}")
+                    table.add_row(
+                        forecast["ticker"],
+                        "[red]Error[/red]",
+                        "[red]Error[/red]",
+                        "[red]Error[/red]",
+                        f"[red]{forecast['error']}[/red]",
+                    )
                 else:
-                    print(f"""
-{forecast["ticker"]}:
-  Current Price: ${forecast["current_price"]:.2f}
-  {forecast["forecast_length"]}-Day Forecast: ${forecast["forecast_price"]:.2f}
-  Confidence Range: ${forecast["lower_bound"]:.2f} - ${forecast["upper_bound"]:.2f}
-  Best Model: {forecast["best_model"]}""")
+                    current_price = forecast["current_price"]
+                    forecast_price = forecast["forecast_price"]
+
+                    # Color code forecast based on direction
+                    forecast_color = (
+                        "green"
+                        if forecast_price > current_price
+                        else "red"
+                        if forecast_price < current_price
+                        else "white"
+                    )
+                    forecast_str = (
+                        f"[{forecast_color}]${forecast_price:.2f}[/{forecast_color}]"
+                    )
+
+                    table.add_row(
+                        forecast["ticker"],
+                        f"${current_price:.2f}",
+                        forecast_str,
+                        f"${forecast['lower_bound']:.2f} - ${forecast['upper_bound']:.2f}",
+                        forecast["best_model"],
+                    )
+
+            console.print(table)
 
 
 def main():
@@ -585,11 +845,17 @@ def main():
     factory = container.domain_factory()
     portfolio = factory.create_portfolio(config)
 
-    log_manager.info("\nPortfolio Summary:")
-    log_manager.info(f"  Name: {portfolio.name}")
-    log_manager.info(f"  Initial Capital: ${portfolio.initial_capital:,.2f}")
-    log_manager.info(f"  Total Assets: {len(portfolio.get_all_assets())}")
-    log_manager.info(f"  Allocation Method: {portfolio.allocation_method}")
+    # Display portfolio summary with Rich
+    portfolio_table = Table(title="Portfolio Summary")
+    portfolio_table.add_column("Property", style="cyan", no_wrap=True)
+    portfolio_table.add_column("Value", style="white")
+
+    portfolio_table.add_row("Name", portfolio.name)
+    portfolio_table.add_row("Initial Capital", f"${portfolio.initial_capital:,.2f}")
+    portfolio_table.add_row("Total Assets", str(len(portfolio.get_all_assets())))
+    portfolio_table.add_row("Allocation Method", portfolio.allocation_method)
+
+    console.print(portfolio_table)
 
     # Get portfolio value at start of backtest period
     fetcher = container.data_fetcher()
@@ -629,9 +895,17 @@ def main():
         )
     else:
         log_manager.debug("\nFetching current prices...")
-        current_prices = fetcher.get_current_prices(symbols)
+        current_prices = fetcher.get_current_prices(symbols, show_progress=True)
         initial_portfolio_value = portfolio.get_portfolio_value(current_prices)
-        log_manager.info(f"\nCurrent Portfolio Value: ${initial_portfolio_value:,.2f}")
+
+        # Show portfolio value in a nice table
+        portfolio_value_table = Table(title="Current Portfolio Value")
+        portfolio_value_table.add_column("Metric", style="cyan", no_wrap=True)
+        portfolio_value_table.add_column("Value", style="green")
+        portfolio_value_table.add_row(
+            "Current Portfolio Value", f"${initial_portfolio_value:,.2f}"
+        )
+        console.print(portfolio_value_table)
 
     # Calculate returns (always needed, not just for logging)
     initial_return = initial_portfolio_value - portfolio.initial_capital
@@ -680,54 +954,177 @@ def main():
     # Get ticker symbols for processing
     ticker_symbols = [asset.symbol for asset in all_assets]
 
-    for ticker in ticker_symbols:
-        log_manager.debug(f"\nProcessing {ticker}...")
+    # Determine what operations will be performed
+    will_backtest = args.mode in ["all", "backtest"]
+    will_forecast = args.mode in ["all", "forecast"]
 
-        # Get the asset to check its category
-        asset = next((a for a in all_assets if a.symbol == ticker), None)
-        is_hold_only = asset and asset.category in hold_only_categories
-
-        if args.mode in ["all", "ta"]:
-            if "technical_analysis" not in results:
-                results["technical_analysis"] = []
-            results["technical_analysis"].append(
-                run_technical_analysis(
-                    ticker, config, data_fetcher=container.data_fetcher()
-                )
-            )
-
-        if args.mode in ["all", "backtest"]:
-            if is_hold_only:
-                log_manager.debug(f"  Skipping backtest for {ticker} (hold-only asset)")
-            else:
-                if "backtesting" not in results:
-                    results["backtesting"] = []
-                results["backtesting"].extend(
-                    run_backtest(
-                        ticker, config, backtest_runner=container.backtest_runner()
+    # Create appropriate progress display
+    if will_backtest or will_forecast:
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            BarColumn(),
+            TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
+            TimeRemainingColumn(),
+            console=console,
+        ) as progress:
+            # Show forecast warning if needed
+            if will_forecast:
+                console.print(
+                    Panel.fit(
+                        "[bold yellow]FORECAST MODE - IMPORTANT NOTES:[/bold yellow]\n"
+                        "• AutoTS will try multiple models to find the best fit\n"
+                        "• This process may take several minutes per ticker\n"
+                        "• Press Ctrl+C at any time to cancel\n"
+                        "• Enable logging for more detailed progress information",
+                        border_style="yellow",
                     )
                 )
 
-        if args.mode in ["all", "forecast"]:
-            if "forecasting" not in results:
-                results["forecasting"] = []
+            # Create progress tasks
+            if will_backtest:
+                # Count tradeable assets for backtesting
+                tradeable_count = len(
+                    [a for a in all_assets if a.category not in hold_only_categories]
+                )
+                if tradeable_count > 0:
+                    backtest_task = progress.add_task(
+                        f"[green]Backtesting {len(config.backtest.strategies)} strategies across {tradeable_count} stocks...",
+                        total=tradeable_count * len(config.backtest.strategies),
+                    )
+                else:
+                    backtest_task = None
 
-            # Show warning about forecast mode
-            if args.mode == "forecast" and ticker == config.portfolio.tickers[0].symbol:
-                print(f"""
-{"=" * 60}
-FORECAST MODE - IMPORTANT NOTES:
-{"=" * 60}
-• AutoTS will try multiple models to find the best fit
-• This process may take several minutes per ticker
-• Press Ctrl+C at any time to cancel
-• Enable logging for more detailed progress information
-{"=" * 60}""")
+            if will_forecast:
+                forecast_task = progress.add_task(
+                    f"[blue]Forecasting {len(ticker_symbols)} tickers...",
+                    total=len(ticker_symbols),
+                )
 
-            forecast_result = run_forecast(
-                ticker, config, stock_forecaster=container.stock_forecaster()
-            )
-            results["forecasting"].append(forecast_result)
+            # Process each ticker with progress tracking
+            for ticker_idx, ticker in enumerate(ticker_symbols):
+                log_manager.debug(f"\nProcessing {ticker}...")
+
+                # Get the asset to check its category
+                asset = next((a for a in all_assets if a.symbol == ticker), None)
+                is_hold_only = asset and asset.category in hold_only_categories
+
+                if args.mode in ["all", "ta"]:
+                    if "technical_analysis" not in results:
+                        results["technical_analysis"] = []
+                    # Show progress for TA when it's the only operation or when running all
+                    show_ta_progress = (
+                        args.mode == "ta" or not will_backtest and not will_forecast
+                    )
+                    results["technical_analysis"].append(
+                        run_technical_analysis(
+                            ticker,
+                            config,
+                            data_fetcher=container.data_fetcher(),
+                            show_progress=show_ta_progress,
+                        )
+                    )
+
+                if will_backtest and not is_hold_only:
+                    if "backtesting" not in results:
+                        results["backtesting"] = []
+
+                    # Update progress for each strategy
+                    for strategy_idx, strategy_config in enumerate(
+                        config.backtest.strategies
+                    ):
+                        progress.update(
+                            backtest_task,
+                            description=f"[green]Backtesting {strategy_config.name.upper()} on {ticker}...",
+                        )
+
+                        # Run single strategy backtest
+                        strategy_class = get_strategy_class(strategy_config.name)
+                        if strategy_class:
+                            # Set strategy parameters if provided
+                            if strategy_config.parameters:
+                                for key, value in strategy_config.parameters.items():
+                                    setattr(strategy_class, key, value)
+
+                            try:
+                                runner = container.backtest_runner()
+                                backtest_result = runner.run_from_symbol(
+                                    ticker,
+                                    strategy_class,
+                                    start_date=config.data.start_date.strftime(
+                                        "%Y-%m-%d"
+                                    )
+                                    if config.data.start_date
+                                    else None,
+                                    end_date=config.data.end_date.strftime("%Y-%m-%d")
+                                    if config.data.end_date
+                                    else None,
+                                )
+
+                                # Handle NaN values for win rate when there are no trades
+                                win_rate = backtest_result.get("Win Rate [%]", 0)
+                                if pd.isna(win_rate):
+                                    win_rate = (
+                                        None if backtest_result["# Trades"] == 0 else 0
+                                    )
+
+                                results["backtesting"].append(
+                                    {
+                                        "ticker": ticker,
+                                        "strategy": strategy_config.name,
+                                        "parameters": strategy_config.parameters,
+                                        "return_pct": backtest_result["Return [%]"],
+                                        "sharpe_ratio": backtest_result["Sharpe Ratio"],
+                                        "max_drawdown_pct": backtest_result[
+                                            "Max. Drawdown [%]"
+                                        ],
+                                        "num_trades": backtest_result["# Trades"],
+                                        "win_rate": win_rate,
+                                    }
+                                )
+                            except Exception as e:
+                                console.print(
+                                    f"[red]Error backtesting {strategy_config.name} on {ticker}: {e}[/red]"
+                                )
+
+                        # Advance progress
+                        if backtest_task is not None:
+                            progress.advance(backtest_task)
+
+                if will_forecast:
+                    if "forecasting" not in results:
+                        results["forecasting"] = []
+
+                    progress.update(
+                        forecast_task, description=f"[blue]Forecasting {ticker}..."
+                    )
+
+                    forecast_result = run_forecast(
+                        ticker, config, stock_forecaster=container.stock_forecaster()
+                    )
+                    results["forecasting"].append(forecast_result)
+                    progress.advance(forecast_task)
+    else:
+        # No progress bars needed for TA only
+        for ticker in ticker_symbols:
+            log_manager.debug(f"\nProcessing {ticker}...")
+
+            # Get the asset to check its category
+            asset = next((a for a in all_assets if a.symbol == ticker), None)
+            is_hold_only = asset and asset.category in hold_only_categories
+
+            if args.mode in ["all", "ta"]:
+                if "technical_analysis" not in results:
+                    results["technical_analysis"] = []
+                # Always show progress for standalone TA mode
+                results["technical_analysis"].append(
+                    run_technical_analysis(
+                        ticker,
+                        config,
+                        data_fetcher=container.data_fetcher(),
+                        show_progress=True,
+                    )
+                )
 
     # Output results
     output_format = args.output or config.output.get("format", "console")
@@ -745,7 +1142,7 @@ FORECAST MODE - IMPORTANT NOTES:
 
         # Only proceed if we have results
         if not strategy_results:
-            print("\nNo backtesting results to display.")
+            console.print("\n[red]No backtesting results to display.[/red]")
             return
 
         # Create structured backtest results
@@ -789,34 +1186,50 @@ FORECAST MODE - IMPORTANT NOTES:
             else:
                 broker_info = f"Commission: {config.backtest.commission * 100:.1f}%"
 
-            print(f"""
-{"=" * 60}
-STRATEGY: {strategy_summary.strategy_name.upper()}
-{"=" * 60}
+            # Create rich panel for strategy summary
+            period_return = (
+                strategy_summary.final_portfolio_value
+                - strategy_summary.initial_portfolio_value
+            )
+            period_return_color = (
+                "green"
+                if period_return > 0
+                else "red"
+                if period_return < 0
+                else "white"
+            )
 
-Parameters: {strategy_summary.parameters if strategy_summary.parameters else "Default"}
-{broker_info}
+            summary_content = f"""[bold]Parameters:[/bold] {strategy_summary.parameters if strategy_summary.parameters else "Default"}
+[bold]{broker_info}[/bold]
 
-Portfolio Value at Start Date: ${strategy_summary.initial_portfolio_value:,.2f}
-Portfolio Value at End (Backtest): ${strategy_summary.final_portfolio_value:,.2f}
+[bold]Portfolio Value at Start Date:[/bold] ${strategy_summary.initial_portfolio_value:,.2f}
+[bold]Portfolio Value at End (Backtest):[/bold] ${strategy_summary.final_portfolio_value:,.2f}
 
-Strategy Performance:
-  Average Return: {strategy_summary.average_return_pct:+.2f}%
-  Winning Stocks: {strategy_summary.winning_stocks}
-  Losing Stocks: {strategy_summary.losing_stocks}
+[bold]Strategy Performance:[/bold]
+  Average Return: [{period_return_color}]{strategy_summary.average_return_pct:+.2f}%[/{period_return_color}]
+  Winning Stocks: [green]{strategy_summary.winning_stocks}[/green]
+  Losing Stocks: [red]{strategy_summary.losing_stocks}[/red]
   Total Trades: {strategy_summary.total_trades}
 
-Return During Period: ${strategy_summary.final_portfolio_value - strategy_summary.initial_portfolio_value:,.2f} ({strategy_summary.total_return_pct:+.2f}%)
+[bold]Return During Period:[/bold] [{period_return_color}]${period_return:,.2f} ({strategy_summary.total_return_pct:+.2f}%)[/{period_return_color}]
 
-Detailed report saved to: {save_detailed_report(strategy_summary.strategy_name, [r.model_dump() for r in strategy_summary.detailed_results], results, config)}
-""")
+[bold]Detailed report saved to:[/bold] {save_detailed_report(strategy_summary.strategy_name, [r.model_dump() for r in strategy_summary.detailed_results], results, config)}"""
+
+            console.print(
+                Panel(
+                    summary_content,
+                    title=f"[bold white]STRATEGY: {strategy_summary.strategy_name.upper()}[/bold white]",
+                    border_style="blue",
+                    padding=(1, 2),
+                )
+            )
 
         # Exit after showing strategy summaries
         return
 
         # Re-fetch current prices to get the most up-to-date values
         log_manager.debug("\nFetching latest prices...")
-        final_prices = fetcher.get_current_prices(symbols)
+        final_prices = fetcher.get_current_prices(symbols, show_progress=True)
         final_value = portfolio.get_portfolio_value(final_prices)
 
         print(f"""

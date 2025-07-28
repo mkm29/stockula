@@ -21,7 +21,9 @@ class IDataFetcher(ABC):
         pass
 
     @abstractmethod
-    def get_current_prices(self, symbols: List[str] | str) -> Dict[str, float]:
+    def get_current_prices(
+        self, symbols: List[str] | str, show_progress: bool = True
+    ) -> Dict[str, float]:
         """Get current prices for symbols."""
         pass
 
