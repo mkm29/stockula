@@ -35,7 +35,7 @@ class TestIDataFetcher:
 
     def test_get_stock_data_signature(self):
         """Test get_stock_data method signature."""
-        method = getattr(IDataFetcher, "get_stock_data")
+        method = IDataFetcher.get_stock_data
         sig = inspect.signature(method)
 
         # Check parameter names
@@ -52,7 +52,7 @@ class TestIDataFetcher:
 
     def test_get_current_prices_signature(self):
         """Test get_current_prices method signature."""
-        method = getattr(IDataFetcher, "get_current_prices")
+        method = IDataFetcher.get_current_prices
         sig = inspect.signature(method)
 
         param_names = list(sig.parameters.keys())
@@ -108,7 +108,7 @@ class TestIStockForecaster:
 
     def test_forecast_method_signature(self):
         """Test forecast method signature."""
-        method = getattr(IStockForecaster, "forecast")
+        method = IStockForecaster.forecast
         sig = inspect.signature(method)
 
         param_names = list(sig.parameters.keys())
@@ -132,7 +132,7 @@ class TestIBacktestRunner:
 
     def test_run_method_signature(self):
         """Test run method signature."""
-        method = getattr(IBacktestRunner, "run")
+        method = IBacktestRunner.run
         sig = inspect.signature(method)
 
         param_names = list(sig.parameters.keys())
@@ -157,7 +157,7 @@ class TestIDomainFactory:
 
     def test_create_portfolio_signature(self):
         """Test create_portfolio method signature."""
-        method = getattr(IDomainFactory, "create_portfolio")
+        method = IDomainFactory.create_portfolio
         sig = inspect.signature(method)
 
         param_names = list(sig.parameters.keys())

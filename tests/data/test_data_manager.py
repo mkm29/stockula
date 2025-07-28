@@ -6,12 +6,12 @@ and better coverage of edge cases in calculations.
 """
 
 import pickle
-import pandas as pd
-import numpy as np
-from pathlib import Path
-from typing import Dict, List, Optional
-from datetime import datetime, timedelta
 import warnings
+from datetime import datetime, timedelta
+from pathlib import Path
+
+import numpy as np
+import pandas as pd
 
 try:
     import yfinance as yf
@@ -24,7 +24,7 @@ except ImportError:
 class TestDataManager:
     """Manages test data for financial strategies and analysis modules."""
 
-    def __init__(self, data_dir: Optional[Path] = None):
+    def __init__(self, data_dir: Path | None = None):
         """Initialize the test data manager.
 
         Args:
@@ -38,11 +38,11 @@ class TestDataManager:
 
     def fetch_and_save_data(
         self,
-        tickers: List[str],
+        tickers: list[str],
         period: str = "2y",
         interval: str = "1d",
         force_refresh: bool = False,
-    ) -> Dict[str, pd.DataFrame]:
+    ) -> dict[str, pd.DataFrame]:
         """Fetch real market data and save to pickle files.
 
         Args:
@@ -101,7 +101,7 @@ class TestDataManager:
 
     def load_data(
         self, ticker: str, period: str = "2y", interval: str = "1d"
-    ) -> Optional[pd.DataFrame]:
+    ) -> pd.DataFrame | None:
         """Load test data from pickle file.
 
         Args:
@@ -131,7 +131,7 @@ class TestDataManager:
         offset: int = 0,
         period: str = "2y",
         interval: str = "1d",
-    ) -> Optional[pd.DataFrame]:
+    ) -> pd.DataFrame | None:
         """Get a subset of test data for specific testing needs.
 
         Args:
@@ -211,7 +211,7 @@ class TestDataManager:
 test_data_manager = TestDataManager()
 
 
-def setup_test_data(force_refresh: bool = False) -> Dict[str, pd.DataFrame]:
+def setup_test_data(force_refresh: bool = False) -> dict[str, pd.DataFrame]:
     """Set up test data for all modules.
 
     Args:

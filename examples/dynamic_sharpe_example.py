@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Example of using dynamic Treasury rates for Sharpe ratio calculation."""
 
-from stockula import DataFetcher, BacktestRunner, SMACrossStrategy
+from stockula import BacktestRunner, DataFetcher, SMACrossStrategy
 
 
 def main():

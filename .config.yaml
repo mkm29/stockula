@@ -1,9 +1,9 @@
 # Stockula Configuration - Auto-Allocation Example
 # Only requires initial capital and category ratios - automatically determines optimal quantities
 data:
-  start_date: "2024-01-01"
+  start_date: "2023-01-01"  # Extended to get more historical data
   end_date: "2025-07-25"
-  use_cache: false # Disabled due to database foreign key issues
+  use_cache: true # Database caching enabled
 # Portfolio configuration with automatic allocation
 portfolio:
   name: "Auto-Allocated EMA Portfolio"

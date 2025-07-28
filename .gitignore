@@ -246,3 +246,7 @@ autots_cache/
 
 # sqlite database files
 # stockula.db
+
+# Test data
+tests/data/
+*.db

@@ -1,7 +1,7 @@
 """Pydantic models for configuration."""
 
 from datetime import date, datetime
-from typing import Any, Dict, List, Optional, Union
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -11,21 +11,21 @@ class BacktestResult(BaseModel):
 
     ticker: str = Field(description="Asset ticker symbol")
     strategy: str = Field(description="Strategy name")
-    parameters: Dict[str, Any] = Field(
+    parameters: dict[str, Any] = Field(
         default_factory=dict, description="Strategy parameters used"
     )
     return_pct: float = Field(description="Return percentage")
     sharpe_ratio: float = Field(description="Sharpe ratio")
     max_drawdown_pct: float = Field(description="Maximum drawdown percentage")
     num_trades: int = Field(description="Number of trades executed")
-    win_rate: Optional[float] = Field(default=None, description="Win rate percentage")
+    win_rate: float | None = Field(default=None, description="Win rate percentage")
 
 
 class StrategyBacktestSummary(BaseModel):
     """Summary of backtest results for a single strategy across all assets."""
 
     strategy_name: str = Field(description="Strategy name")
-    parameters: Dict[str, Any] = Field(
+    parameters: dict[str, Any] = Field(
         default_factory=dict, description="Strategy parameters"
     )
     initial_portfolio_value: float = Field(description="Initial portfolio value")
@@ -38,7 +38,7 @@ class StrategyBacktestSummary(BaseModel):
     losing_stocks: int = Field(description="Number of stocks with negative returns")
     average_return_pct: float = Field(description="Average return across all assets")
     average_sharpe_ratio: float = Field(description="Average Sharpe ratio")
-    detailed_results: List[BacktestResult] = Field(
+    detailed_results: list[BacktestResult] = Field(
         default_factory=list, description="Per-asset results"
     )
 
@@ -48,9 +48,9 @@ class PortfolioBacktestResults(BaseModel):
 
     initial_portfolio_value: float = Field(description="Initial portfolio value")
     initial_capital: float = Field(description="Initial capital")
-    date_range: Dict[str, str] = Field(description="Backtest date range")
-    broker_config: Dict[str, Any] = Field(description="Broker configuration used")
-    strategy_summaries: List[StrategyBacktestSummary] = Field(
+    date_range: dict[str, str] = Field(description="Backtest date range")
+    broker_config: dict[str, Any] = Field(description="Broker configuration used")
+    strategy_summaries: list[StrategyBacktestSummary] = Field(
         default_factory=list, description="Summary results for each strategy"
     )
     timestamp: datetime = Field(
@@ -62,32 +62,32 @@ class TickerConfig(BaseModel):
     """Configuration for individual ticker/asset."""
 
     symbol: str = Field(description="Stock ticker symbol (e.g., AAPL)")
-    quantity: Optional[float] = Field(
+    quantity: float | None = Field(
         default=None,
         gt=0,
         description="Number of shares to hold (required if not using dynamic allocation)",
     )
-    allocation_pct: Optional[float] = Field(
+    allocation_pct: float | None = Field(
         default=None,
         ge=0,
         le=100,
         description="Percentage of portfolio to allocate to this asset (for dynamic allocation)",
     )
-    allocation_amount: Optional[float] = Field(
+    allocation_amount: float | None = Field(
         default=None,
         ge=0,
         description="Fixed dollar amount to allocate to this asset (for dynamic allocation)",
     )
     # Optional market data fields that can be populated
-    market_cap: Optional[float] = Field(
+    market_cap: float | None = Field(
         default=None, description="Market capitalization in billions"
     )
-    price_range: Optional[Dict[str, float]] = Field(
+    price_range: dict[str, float] | None = Field(
         default=None,
         description="Price range with 'open', 'high', 'low', 'close' keys",
     )
-    sector: Optional[str] = Field(default=None, description="Market sector")
-    category: Optional[str] = Field(
+    sector: str | None = Field(default=None, description="Market sector")
+    category: str | None = Field(
         default=None,
         description="Category for classification (e.g., 'TECHNOLOGY', 'GROWTH', 'LARGE_CAP')",
     )
@@ -131,7 +131,7 @@ class PortfolioConfig(BaseModel):
         default=False,
         description="Automatically allocate based on category ratios and initial capital only",
     )
-    category_ratios: Optional[Dict[str, float]] = Field(
+    category_ratios: dict[str, float] | None = Field(
         default=None,
         description="Target allocation ratios by category (e.g., {'INDEX': 0.35, 'MOMENTUM': 0.475, 'SPECULATIVE': 0.175})",
     )
@@ -145,11 +145,11 @@ class PortfolioConfig(BaseModel):
         le=1.0,
         description="Target percentage of initial capital to deploy (0.5-1.0)",
     )
-    rebalance_frequency: Optional[str] = Field(
+    rebalance_frequency: str | None = Field(
         default="monthly",
         description="Rebalancing frequency: 'daily', 'weekly', 'monthly', 'quarterly', 'yearly', 'never'",
     )
-    tickers: List[TickerConfig] = Field(
+    tickers: list[TickerConfig] = Field(
         default_factory=lambda: [
             TickerConfig(symbol="AAPL", quantity=10),
             TickerConfig(symbol="GOOGL", quantity=5),
@@ -158,13 +158,13 @@ class PortfolioConfig(BaseModel):
         description="List of ticker configurations in the portfolio",
     )
     # Risk management
-    max_position_size: Optional[float] = Field(
+    max_position_size: float | None = Field(
         default=None,
         ge=0,
         le=100,
         description="Maximum position size as percentage of portfolio (0-100)",
     )
-    stop_loss_pct: Optional[float] = Field(
+    stop_loss_pct: float | None = Field(
         default=None,
         ge=0,
         le=100,
@@ -225,10 +225,10 @@ class PortfolioConfig(BaseModel):
 class DataConfig(BaseModel):
     """Configuration for data fetching."""
 
-    start_date: Optional[Union[str, date]] = Field(
+    start_date: str | date | None = Field(
         default=None, description="Start date for historical data (YYYY-MM-DD)"
     )
-    end_date: Optional[Union[str, date]] = Field(
+    end_date: str | date | None = Field(
         default=None, description="End date for historical data (YYYY-MM-DD)"
     )
     interval: str = Field(
@@ -256,7 +256,7 @@ class StrategyConfig(BaseModel):
     """Base configuration for trading strategies."""
 
     name: str = Field(description="Strategy name")
-    parameters: Dict[str, Any] = Field(
+    parameters: dict[str, Any] = Field(
         default_factory=dict, description="Strategy-specific parameters"
     )
 
@@ -321,17 +321,17 @@ class BrokerConfig(BaseModel):
         default="percentage",
         description="Commission type: 'percentage', 'fixed', 'tiered', 'per_share'",
     )
-    commission_value: Union[float, Dict[str, float]] = Field(
+    commission_value: float | dict[str, float] = Field(
         default=0.002,
         description="Commission value (float for simple types, dict for tiered)",
     )
-    min_commission: Optional[float] = Field(
+    min_commission: float | None = Field(
         default=None, description="Minimum commission per trade"
     )
-    max_commission: Optional[float] = Field(
+    max_commission: float | None = Field(
         default=None, description="Maximum commission per trade"
     )
-    per_share_commission: Optional[float] = Field(
+    per_share_commission: float | None = Field(
         default=None, description="Commission per share (for per_share type)"
     )
     regulatory_fees: float = Field(
@@ -411,22 +411,22 @@ class BacktestConfig(BaseModel):
         le=1,
         description="Commission per trade (0.002 = 0.2%) - deprecated, use broker_config",
     )
-    broker_config: Optional[BrokerConfig] = Field(
+    broker_config: BrokerConfig | None = Field(
         default=None, description="Broker-specific fee configuration"
     )
     margin: float = Field(
         default=1.0, ge=0, description="Margin requirement for leveraged trading"
     )
-    strategies: List[StrategyConfig] = Field(
+    strategies: list[StrategyConfig] = Field(
         default_factory=list, description="List of strategies to backtest"
     )
     optimize: bool = Field(
         default=False, description="Whether to optimize strategy parameters"
     )
-    optimization_params: Optional[Dict[str, Any]] = Field(
+    optimization_params: dict[str, Any] | None = Field(
         default=None, description="Parameter ranges for optimization"
     )
-    hold_only_categories: List[str] = Field(
+    hold_only_categories: list[str] = Field(
         default=["INDEX", "BOND"],
         description="Categories of assets to exclude from backtesting (buy-and-hold only)",
     )
@@ -478,22 +478,22 @@ class ForecastConfig(BaseModel):
 class TechnicalAnalysisConfig(BaseModel):
     """Configuration for technical analysis indicators."""
 
-    indicators: List[str] = Field(
+    indicators: list[str] = Field(
         default=["sma", "ema", "rsi", "macd", "bbands", "atr"],
         description="List of indicators to calculate",
     )
-    sma_periods: List[int] = Field(
+    sma_periods: list[int] = Field(
         default=[20, 50, 200], description="SMA periods to calculate"
     )
-    ema_periods: List[int] = Field(
+    ema_periods: list[int] = Field(
         default=[12, 26], description="EMA periods to calculate"
     )
     rsi_period: int = Field(default=14, description="RSI period")
-    macd_params: Dict[str, int] = Field(
+    macd_params: dict[str, int] = Field(
         default={"period_fast": 12, "period_slow": 26, "signal": 9},
         description="MACD parameters",
     )
-    bbands_params: Dict[str, int] = Field(
+    bbands_params: dict[str, int] = Field(
         default={"period": 20, "std": 2}, description="Bollinger Bands parameters"
     )
     atr_period: int = Field(default=14, description="ATR period")
@@ -534,7 +534,7 @@ class StockulaConfig(BaseModel):
     technical_analysis: TechnicalAnalysisConfig = Field(
         default_factory=TechnicalAnalysisConfig
     )
-    output: Dict[str, Any] = Field(
+    output: dict[str, Any] = Field(
         default_factory=lambda: {
             "format": "console",
             "save_results": False,

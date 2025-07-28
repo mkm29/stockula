@@ -1,16 +1,16 @@
 """Stockula - Financial trading and analysis library"""
 
-from .data import DataFetcher
-from .technical_analysis import TechnicalIndicators
 from .backtesting import (
-    BaseStrategy,
-    SMACrossStrategy,
-    RSIStrategy,
-    MACDStrategy,
     BacktestRunner,
+    BaseStrategy,
+    MACDStrategy,
+    RSIStrategy,
+    SMACrossStrategy,
 )
-from .forecasting import StockForecaster
 from .config import StockulaConfig, load_config
+from .data import DataFetcher
+from .forecasting import StockForecaster
+from .technical_analysis import TechnicalIndicators
 
 __version__ = "0.1.0"
 

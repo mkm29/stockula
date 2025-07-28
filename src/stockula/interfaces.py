@@ -1,7 +1,7 @@
 """Interfaces/protocols for dependency injection."""
 
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import pandas as pd
 
@@ -13,8 +13,8 @@ class IDataFetcher(ABC):
     def get_stock_data(
         self,
         symbol: str,
-        start: Optional[str] = None,
-        end: Optional[str] = None,
+        start: str | None = None,
+        end: str | None = None,
         interval: str = "1d",
         force_refresh: bool = False,
     ) -> pd.DataFrame:
@@ -23,13 +23,13 @@ class IDataFetcher(ABC):
 
     @abstractmethod
     def get_current_prices(
-        self, symbols: List[str] | str, show_progress: bool = True
-    ) -> Dict[str, float]:
+        self, symbols: list[str] | str, show_progress: bool = True
+    ) -> dict[str, float]:
         """Get current prices for symbols."""
         pass
 
     @abstractmethod
-    def get_info(self, symbol: str, force_refresh: bool = False) -> Dict[str, Any]:
+    def get_info(self, symbol: str, force_refresh: bool = False) -> dict[str, Any]:
         """Get stock information."""
         pass
 
@@ -41,8 +41,8 @@ class IDatabaseManager(ABC):
     def get_price_history(
         self,
         symbol: str,
-        start_date: Optional[str] = None,
-        end_date: Optional[str] = None,
+        start_date: str | None = None,
+        end_date: str | None = None,
         interval: str = "1d",
     ) -> pd.DataFrame:
         """Get price history from database."""
@@ -123,7 +123,7 @@ class IBacktestRunner(ABC):
     """Interface for backtesting operations."""
 
     @abstractmethod
-    def run(self, data: pd.DataFrame, strategy) -> Dict[str, Any]:
+    def run(self, data: pd.DataFrame, strategy) -> dict[str, Any]:
         """Run backtest with given data and strategy."""
         pass
 
@@ -132,9 +132,9 @@ class IBacktestRunner(ABC):
         self,
         symbol: str,
         strategy,
-        start: Optional[str] = None,
-        end: Optional[str] = None,
-    ) -> Dict[str, Any]:
+        start: str | None = None,
+        end: str | None = None,
+    ) -> dict[str, Any]:
         """Run backtest for a symbol."""
         pass
 
@@ -144,7 +144,7 @@ class IStockForecaster(ABC):
 
     @abstractmethod
     def forecast(
-        self, data: pd.DataFrame, forecast_length: Optional[int] = None
+        self, data: pd.DataFrame, forecast_length: int | None = None
     ) -> pd.DataFrame:
         """Generate forecast from data."""
         pass
@@ -153,9 +153,9 @@ class IStockForecaster(ABC):
     def forecast_from_symbol(
         self,
         symbol: str,
-        forecast_length: Optional[int] = None,
-        start: Optional[str] = None,
-        end: Optional[str] = None,
+        forecast_length: int | None = None,
+        start: str | None = None,
+        end: str | None = None,
     ) -> pd.DataFrame:
         """Generate forecast for a symbol."""
         pass
@@ -170,6 +170,6 @@ class IDomainFactory(ABC):
         pass
 
     @abstractmethod
-    def create_asset(self, ticker_data: Dict[str, Any]) -> Any:
+    def create_asset(self, ticker_data: dict[str, Any]) -> Any:
         """Create asset from ticker data."""
         pass

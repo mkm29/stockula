@@ -304,7 +304,7 @@ class TestStrategyDataRequirements:
 
         for strategy in strategies_with_method:
             if hasattr(strategy, "get_min_required_days"):
-                assert callable(getattr(strategy, "get_min_required_days"))
+                assert callable(strategy.get_min_required_days)
                 min_days = strategy.get_min_required_days()
                 assert isinstance(min_days, int)
                 assert min_days > 0
@@ -326,7 +326,7 @@ class TestStrategyDataRequirements:
 
         for strategy in strategies_with_method:
             if hasattr(strategy, "get_recommended_start_date"):
-                assert callable(getattr(strategy, "get_recommended_start_date"))
+                assert callable(strategy.get_recommended_start_date)
                 recommended = strategy.get_recommended_start_date(
                     target_date.strftime("%Y-%m-%d")
                 )
@@ -533,8 +533,8 @@ class TestStrategyConsistency:
         for strategy in all_strategies:
             assert hasattr(strategy, "init")
             assert hasattr(strategy, "next")
-            assert callable(getattr(strategy, "init"))
-            assert callable(getattr(strategy, "next"))
+            assert callable(strategy.init)
+            assert callable(strategy.next)
 
 
 class TestStrategyEdgeCases:

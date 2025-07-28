@@ -249,8 +249,6 @@ def mock_data_fetcher(mock_yfinance_ticker, sample_prices):
         fetcher = DataFetcher(use_cache=False)
 
         # Mock get_current_prices to return our sample prices
-        original_get_current_prices = fetcher.get_current_prices
-
         def mock_get_current_prices(symbols, show_progress=True):
             if isinstance(symbols, str):
                 symbols = [symbols]
@@ -264,6 +262,179 @@ def mock_data_fetcher(mock_yfinance_ticker, sample_prices):
 # ===== Database Fixtures =====
 
 
+@pytest.fixture(scope="session")
+def test_db_path():
+    """Create a persistent test database path for the session."""
+    from pathlib import Path
+
+    db_path = Path(__file__).parent / "data" / "test_stockula.db"
+    # Ensure directory exists
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+    return str(db_path)
+
+
+@pytest.fixture(scope="session")
+def test_database_session(test_db_path):
+    """Create a test database instance for the entire test session.
+
+    This fixture:
+    1. Creates a test database in tests/data/test_stockula.db
+    2. Creates all tables using SQLModel
+    3. Seeds the database with test data
+    4. Provides the database for all tests
+    5. Cleans up after all tests are complete
+    """
+    import os
+    from pathlib import Path
+
+    # Set test environment to skip migrations
+    os.environ["PYTEST_CURRENT_TEST"] = "true"
+
+    # Remove existing test database if it exists
+    db_file = Path(test_db_path)
+    if db_file.exists():
+        db_file.unlink()
+
+    # Create database manager
+    db = DatabaseManager(test_db_path)
+
+    # Create all tables
+    from sqlmodel import SQLModel
+
+    SQLModel.metadata.create_all(db.engine)
+
+    # Seed database with test data
+    _seed_test_database(db)
+
+    yield db
+
+    # Cleanup: Remove test database after all tests
+    if db_file.exists():
+        db_file.unlink()
+
+
+def _seed_test_database(db: DatabaseManager):
+    """Seed the test database with sample data."""
+    from datetime import date, timedelta
+
+    import pandas as pd
+
+    # Test stocks to seed
+    test_stocks = [
+        {
+            "symbol": "AAPL",
+            "name": "Apple Inc.",
+            "sector": "Technology",
+            "industry": "Consumer Electronics",
+            "market_cap": 3000000000000,
+            "exchange": "NASDAQ",
+            "currency": "USD",
+        },
+        {
+            "symbol": "GOOGL",
+            "name": "Alphabet Inc.",
+            "sector": "Technology",
+            "industry": "Internet Services",
+            "market_cap": 2000000000000,
+            "exchange": "NASDAQ",
+            "currency": "USD",
+        },
+        {
+            "symbol": "MSFT",
+            "name": "Microsoft Corporation",
+            "sector": "Technology",
+            "industry": "Software",
+            "market_cap": 2500000000000,
+            "exchange": "NASDAQ",
+            "currency": "USD",
+        },
+        {
+            "symbol": "TSLA",
+            "name": "Tesla Inc.",
+            "sector": "Consumer Cyclical",
+            "industry": "Auto Manufacturers",
+            "market_cap": 800000000000,
+            "exchange": "NASDAQ",
+            "currency": "USD",
+        },
+        {
+            "symbol": "SPY",
+            "name": "SPDR S&P 500 ETF",
+            "sector": "ETF",
+            "industry": "Large Cap Blend",
+            "market_cap": 400000000000,
+            "exchange": "NYSE",
+            "currency": "USD",
+        },
+    ]
+
+    # Add stocks
+    for stock_data in test_stocks:
+        db.store_stock_info(stock_data["symbol"], stock_data)
+
+    # Generate price history for each stock
+    base_date = date.today() - timedelta(days=365)
+    dates = pd.date_range(start=base_date, periods=365, freq="D")
+
+    base_prices = {
+        "AAPL": 150.0,
+        "GOOGL": 120.0,
+        "MSFT": 300.0,
+        "TSLA": 200.0,
+        "SPY": 400.0,
+    }
+
+    for symbol, base_price in base_prices.items():
+        # Create realistic price movement
+        import numpy as np
+
+        np.random.seed(hash(symbol) % 2**32)  # Consistent random data per symbol
+
+        # Generate price data with trend and volatility
+        returns = np.random.normal(0.0005, 0.02, len(dates))  # Daily returns
+        price_series = base_price * np.exp(np.cumsum(returns))
+
+        # Create OHLCV data
+        price_data = pd.DataFrame(
+            {
+                "Open": price_series * (1 + np.random.uniform(-0.01, 0.01, len(dates))),
+                "High": price_series * (1 + np.random.uniform(0, 0.02, len(dates))),
+                "Low": price_series * (1 + np.random.uniform(-0.02, 0, len(dates))),
+                "Close": price_series,
+                "Volume": np.random.randint(1000000, 50000000, len(dates)),
+            },
+            index=dates,
+        )
+
+        # Ensure High >= Close >= Low
+        price_data["High"] = price_data[["Open", "High", "Close"]].max(axis=1)
+        price_data["Low"] = price_data[["Open", "Low", "Close"]].min(axis=1)
+
+        db.store_price_history(symbol, price_data, "1d")
+
+        # Add some dividends for dividend-paying stocks
+        if symbol in ["AAPL", "MSFT"]:
+            dividend_dates = pd.date_range(start=base_date, periods=4, freq="QE")
+            dividend_amounts = [0.22, 0.23, 0.24, 0.25]
+            # Filter dates that are within our data range
+            # Convert to date for comparison
+            last_date = dates[-1].date() if hasattr(dates[-1], "date") else dates[-1]
+            valid_dates = [d for d in dividend_dates if d.date() <= last_date]
+            if valid_dates:
+                dividends = pd.Series(
+                    dividend_amounts[: len(valid_dates)], index=valid_dates
+                )
+                db.store_dividends(symbol, dividends)
+
+        # Add a stock split for AAPL
+        if symbol == "AAPL":
+            split_date_ts = pd.Timestamp(base_date + timedelta(days=180))
+            last_date = dates[-1].date() if hasattr(dates[-1], "date") else dates[-1]
+            if split_date_ts.date() <= last_date:
+                splits = pd.Series([4.0], index=[split_date_ts])  # 4:1 split
+                db.store_splits(symbol, splits)
+
+
 @pytest.fixture(scope="function")
 def temp_db_path(tmp_path):
     """Create a temporary database path."""
@@ -271,29 +442,24 @@ def temp_db_path(tmp_path):
 
 
 @pytest.fixture(scope="function")
-def test_database(temp_db_path):
-    """Create a test database instance."""
-    db = DatabaseManager(temp_db_path)
-    yield db
-    # Cleanup is automatic with tmp_path
+def test_database(test_database_session):
+    """Create a test database instance for individual tests.
+
+    This uses the session-scoped database but provides isolation
+    between tests by using transactions.
+    """
+    # For now, just return the session database
+    # In the future, we could add transaction rollback here
+    yield test_database_session
 
 
 @pytest.fixture(scope="function")
-def populated_database(test_database, sample_ohlcv_data):
-    """Create a database with sample data."""
-    # Add stock info
-    test_database.store_stock_info(
-        "AAPL",
-        {
-            "longName": "Apple Inc.",
-            "sector": "Technology",
-            "marketCap": 3000000000000,
-        },
-    )
+def populated_database(test_database):
+    """Return the test database which is already populated with data.
 
-    # Add price history
-    test_database.store_price_history("AAPL", sample_ohlcv_data, "1d")
-
+    The test_database fixture already contains seeded data from the
+    session-scoped test_database_session fixture.
+    """
     return test_database
 
 

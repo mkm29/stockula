@@ -4,7 +4,7 @@ import argparse
 import json
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import pandas as pd
 from dependency_injector.wiring import Provide, inject
@@ -44,7 +44,7 @@ from .interfaces import IBacktestRunner, IDataFetcher, ILoggingManager, IStockFo
 from .technical_analysis import TechnicalIndicators
 
 # Global logging manager and console instances
-log_manager: Optional[ILoggingManager] = None
+log_manager: ILoggingManager | None = None
 console = Console()
 
 
@@ -83,7 +83,7 @@ def run_technical_analysis(
     config: StockulaConfig,
     data_fetcher: IDataFetcher = Provide[Container.data_fetcher],
     show_progress: bool = True,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Run technical analysis for a ticker.
 
     Args:
@@ -238,7 +238,7 @@ def run_backtest(
     ticker: str,
     config: StockulaConfig,
     backtest_runner: IBacktestRunner = Provide[Container.backtest_runner],
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     """Run backtesting for a ticker.
 
     Args:
@@ -317,7 +317,7 @@ def run_forecast(
     ticker: str,
     config: StockulaConfig,
     stock_forecaster: IStockForecaster = Provide[Container.stock_forecaster],
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Run forecasting for a ticker.
 
     Args:
@@ -374,10 +374,10 @@ def run_forecast(
 
 def save_detailed_report(
     strategy_name: str,
-    strategy_results: List[Dict],
-    results: Dict[str, Any],
+    strategy_results: list[dict],
+    results: dict[str, Any],
     config: StockulaConfig,
-    portfolio_results: Optional[PortfolioBacktestResults] = None,
+    portfolio_results: PortfolioBacktestResults | None = None,
 ) -> str:
     """Save detailed strategy report to file.
 
@@ -469,9 +469,9 @@ def save_detailed_report(
 
 
 def create_portfolio_backtest_results(
-    results: Dict[str, Any],
+    results: dict[str, Any],
     config: StockulaConfig,
-    strategy_results: Dict[str, List[Dict]],
+    strategy_results: dict[str, list[dict]],
 ) -> PortfolioBacktestResults:
     """Create structured backtest results.
 
@@ -579,7 +579,7 @@ def create_portfolio_backtest_results(
 
 
 def print_results(
-    results: Dict[str, Any], output_format: str = "console", config=None, container=None
+    results: dict[str, Any], output_format: str = "console", config=None, container=None
 ):
     """Print results in specified format.
 
@@ -1234,43 +1234,7 @@ def main():
             results, config, strategy_results
         )
 
-        # Show ticker-level results table first
-        console.print("\n[bold green]Ticker-Level Backtest Results[/bold green]")
-
-        # Create table for ticker-level results
-        table = Table(title="Ticker-Level Backtest Results")
-        table.add_column("Ticker", style="cyan", no_wrap=True)
-        table.add_column("Strategy", style="yellow", no_wrap=True)
-        table.add_column("Return", style="green", justify="right")
-        table.add_column("Sharpe Ratio", style="blue", justify="right")
-        table.add_column("Max Drawdown", style="red", justify="right")
-        table.add_column("Trades", style="white", justify="right")
-        table.add_column("Win Rate", style="magenta", justify="right")
-
-        # Add rows for each backtest result
-        for backtest in results["backtesting"]:
-            return_str = f"{backtest['return_pct']:+.2f}%"
-            sharpe_str = f"{backtest['sharpe_ratio']:.2f}"
-            drawdown_str = f"{backtest['max_drawdown_pct']:.2f}%"
-            trades_str = str(backtest["num_trades"])
-
-            if backtest["win_rate"] is None:
-                win_rate_str = "N/A"
-            else:
-                win_rate_str = f"{backtest['win_rate']:.1f}%"
-
-            table.add_row(
-                backtest["ticker"],
-                backtest["strategy"].upper(),
-                return_str,
-                sharpe_str,
-                drawdown_str,
-                trades_str,
-                win_rate_str,
-            )
-
-        console.print(table)
-        console.print()  # Add blank line
+        # Ticker-level results already shown in print_results() above
 
         # Show summary for each strategy using structured data
         for strategy_summary in portfolio_backtest_results.strategy_summaries:
@@ -1321,28 +1285,43 @@ def main():
                 else "white"
             )
 
-            summary_content = f"""[bold]Parameters:[/bold] {strategy_summary.parameters if strategy_summary.parameters else "Default"}
-[bold]{broker_info}[/bold]
+            # Format dates
+            start_date = (
+                config.data.start_date.strftime("%Y-%m-%d")
+                if config.data.start_date
+                else "N/A"
+            )
+            end_date = (
+                config.data.end_date.strftime("%Y-%m-%d")
+                if config.data.end_date
+                else "N/A"
+            )
 
-[bold]Portfolio Value at Start Date:[/bold] ${strategy_summary.initial_portfolio_value:,.2f}
-[bold]Portfolio Value at End (Backtest):[/bold] ${strategy_summary.final_portfolio_value:,.2f}
+            summary_content = f"""Start: {start_date}
+End:   {end_date}
 
-[bold]Strategy Performance:[/bold]
+Parameters: {strategy_summary.parameters if strategy_summary.parameters else "Default"}
+{broker_info}
+
+$P_1$: ${strategy_summary.initial_portfolio_value:,.2f}
+$P_2$: ${strategy_summary.final_portfolio_value:,.2f}
+
+Strategy Performance:
   Average Return: [{period_return_color}]{strategy_summary.average_return_pct:+.2f}%[/{period_return_color}]
-  Winning Stocks: [green]{strategy_summary.winning_stocks}[/green]
-  Losing Stocks: [red]{strategy_summary.losing_stocks}[/red]
+  Winning Stocks: {strategy_summary.winning_stocks}
+  Losing Stocks: {strategy_summary.losing_stocks}
   Total Trades: {strategy_summary.total_trades}
 
-[bold]Return During Period:[/bold] [{period_return_color}]${period_return:,.2f} ({strategy_summary.total_return_pct:+.2f}%)[/{period_return_color}]
+Return During Period: [{period_return_color}]${period_return:,.2f} ({strategy_summary.total_return_pct:+.2f}%)[/{period_return_color}]
 
-[bold]Detailed report saved to:[/bold] {save_detailed_report(strategy_summary.strategy_name, [r.model_dump() for r in strategy_summary.detailed_results], results, config)}"""
+Detailed report saved to: {save_detailed_report(strategy_summary.strategy_name, [r.model_dump() for r in strategy_summary.detailed_results], results, config)}"""
 
             console.print(
                 Panel(
                     summary_content,
-                    title=f"[bold white]STRATEGY: {strategy_summary.strategy_name.upper()}[/bold white]",
-                    border_style="blue",
-                    padding=(1, 2),
+                    title=f" STRATEGY: {strategy_summary.strategy_name.upper()} ",
+                    border_style="white",
+                    padding=(0, 1),
                 )
             )
 

@@ -3,7 +3,6 @@
 import argparse
 import sys
 from pathlib import Path
-from typing import List
 
 from alembic import command
 from alembic.config import Config
@@ -21,7 +20,7 @@ def fetch_symbol_data(
 
 
 def fetch_portfolio_data(
-    symbols: List[str], start_date: str = None, end_date: str = None
+    symbols: list[str], start_date: str = None, end_date: str = None
 ) -> None:
     """Fetch and store data for a portfolio of symbols."""
     fetcher = DataFetcher(use_cache=True)

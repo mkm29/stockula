@@ -370,7 +370,7 @@ class TestLoggingManagerIntegration:
                     handler.flush()
 
                 # Read the log file
-                with open(tmp_file.name, "r") as f:
+                with open(tmp_file.name) as f:
                     log_content = f.read()
 
                 assert "Test info message" in log_content

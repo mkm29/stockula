@@ -1,9 +1,9 @@
 """Database manager using SQLModel for type-safe database operations."""
 
 from contextlib import contextmanager
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 import pandas as pd
 from sqlalchemy import event
@@ -93,7 +93,7 @@ class DatabaseManager:
         with Session(self.engine) as session:
             yield session
 
-    def store_stock_info(self, symbol: str, info: Dict[str, Any]) -> None:
+    def store_stock_info(self, symbol: str, info: dict[str, Any]) -> None:
         """Store basic stock information.
 
         Args:
@@ -113,7 +113,7 @@ class DatabaseManager:
             stock.market_cap = info.get("marketCap")
             stock.exchange = info.get("exchange", "")
             stock.currency = info.get("currency", "")
-            stock.updated_at = datetime.now(timezone.utc)
+            stock.updated_at = datetime.now(UTC)
 
             session.add(stock)
 
@@ -123,7 +123,7 @@ class DatabaseManager:
                 stock_info = StockInfo(symbol=symbol)
 
             stock_info.set_info(info)
-            stock_info.updated_at = datetime.now(timezone.utc)
+            stock_info.updated_at = datetime.now(UTC)
 
             session.add(stock_info)
             session.commit()
@@ -328,8 +328,8 @@ class DatabaseManager:
     def get_price_history(
         self,
         symbol: str,
-        start_date: Optional[str] = None,
-        end_date: Optional[str] = None,
+        start_date: str | None = None,
+        end_date: str | None = None,
         interval: str = "1d",
     ) -> pd.DataFrame:
         """Retrieve historical price data.
@@ -381,7 +381,7 @@ class DatabaseManager:
             df = df.set_index("date")
             return df
 
-    def get_stock_info(self, symbol: str) -> Optional[Dict[str, Any]]:
+    def get_stock_info(self, symbol: str) -> dict[str, Any] | None:
         """Retrieve stock information.
 
         Args:
@@ -399,8 +399,8 @@ class DatabaseManager:
     def get_dividends(
         self,
         symbol: str,
-        start_date: Optional[str] = None,
-        end_date: Optional[str] = None,
+        start_date: str | None = None,
+        end_date: str | None = None,
     ) -> pd.Series:
         """Retrieve dividend data.
 
@@ -436,8 +436,8 @@ class DatabaseManager:
     def get_splits(
         self,
         symbol: str,
-        start_date: Optional[str] = None,
-        end_date: Optional[str] = None,
+        start_date: str | None = None,
+        end_date: str | None = None,
     ) -> pd.Series:
         """Retrieve stock split data.
 
@@ -472,7 +472,7 @@ class DatabaseManager:
 
     def get_options_chain(
         self, symbol: str, expiration_date: str
-    ) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    ) -> tuple[pd.DataFrame, pd.DataFrame]:
         """Retrieve options chain data.
 
         Args:
@@ -544,7 +544,7 @@ class DatabaseManager:
 
             return pd.DataFrame(calls_data), pd.DataFrame(puts_data)
 
-    def get_all_symbols(self) -> List[str]:
+    def get_all_symbols(self) -> list[str]:
         """Get all symbols in the database.
 
         Returns:
@@ -555,7 +555,7 @@ class DatabaseManager:
             results = session.exec(stmt).all()
             return list(results)
 
-    def get_latest_price(self, symbol: str) -> Optional[float]:
+    def get_latest_price(self, symbol: str) -> float | None:
         """Get the latest price for a symbol.
 
         Args:
@@ -605,7 +605,7 @@ class DatabaseManager:
             result = session.exec(stmt).first()
             return result is not None
 
-    def get_database_stats(self) -> Dict[str, int]:
+    def get_database_stats(self) -> dict[str, int]:
         """Get database statistics.
 
         Returns:
@@ -623,7 +623,7 @@ class DatabaseManager:
             }
         return stats
 
-    def get_latest_price_date(self, symbol: str) -> Optional[datetime]:
+    def get_latest_price_date(self, symbol: str) -> datetime | None:
         """Get latest price date for a symbol."""
         with self.get_session() as session:
             stmt = (

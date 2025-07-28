@@ -1,7 +1,7 @@
 """Data fetching utilities using yfinance."""
 
 from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional, Union
+from typing import Any
 
 import pandas as pd
 import yfinance as yf
@@ -35,7 +35,7 @@ class DataFetcher:
         self,
         use_cache: bool = True,
         db_path: str = "stockula.db",
-        database_manager: Optional[DatabaseManager] = None,
+        database_manager: DatabaseManager | None = None,
     ):
         """Initialize data fetcher.
 
@@ -55,8 +55,8 @@ class DataFetcher:
     def get_stock_data(
         self,
         symbol: str,
-        start: Optional[str] = None,
-        end: Optional[str] = None,
+        start: str | None = None,
+        end: str | None = None,
         interval: str = "1d",
         force_refresh: bool = False,
     ) -> pd.DataFrame:
@@ -121,11 +121,11 @@ class DataFetcher:
 
     def get_multiple_stocks(
         self,
-        symbols: List[str],
-        start: Optional[str] = None,
-        end: Optional[str] = None,
+        symbols: list[str],
+        start: str | None = None,
+        end: str | None = None,
         interval: str = "1d",
-    ) -> Dict[str, pd.DataFrame]:
+    ) -> dict[str, pd.DataFrame]:
         """Fetch data for multiple stocks.
 
         Args:
@@ -147,8 +147,8 @@ class DataFetcher:
         return data
 
     def get_current_prices(
-        self, symbols: List[str] | str, show_progress: bool = True
-    ) -> Dict[str, float]:
+        self, symbols: list[str] | str, show_progress: bool = True
+    ) -> dict[str, float]:
         """Get current prices for multiple symbols.
 
         Args:
@@ -232,7 +232,7 @@ class DataFetcher:
 
         return prices
 
-    def get_info(self, symbol: str, force_refresh: bool = False) -> Dict[str, Any]:
+    def get_info(self, symbol: str, force_refresh: bool = False) -> dict[str, Any]:
         """Get stock information with database caching.
 
         Args:
@@ -274,7 +274,7 @@ class DataFetcher:
     def get_options_chain(
         self,
         symbol: str,
-        expiration_date: Optional[str] = None,
+        expiration_date: str | None = None,
         force_refresh: bool = False,
     ) -> tuple:
         """Get options chain for a stock with database caching.
@@ -322,8 +322,8 @@ class DataFetcher:
     def get_dividends(
         self,
         symbol: str,
-        start: Optional[str] = None,
-        end: Optional[str] = None,
+        start: str | None = None,
+        end: str | None = None,
         force_refresh: bool = False,
     ) -> pd.Series:
         """Get dividend history with database caching.
@@ -363,8 +363,8 @@ class DataFetcher:
     def get_splits(
         self,
         symbol: str,
-        start: Optional[str] = None,
-        end: Optional[str] = None,
+        start: str | None = None,
+        end: str | None = None,
         force_refresh: bool = False,
     ) -> pd.Series:
         """Get stock split history with database caching.
@@ -402,7 +402,7 @@ class DataFetcher:
         return splits
 
     def fetch_and_store_all_data(
-        self, symbol: str, start: Optional[str] = None, end: Optional[str] = None
+        self, symbol: str, start: str | None = None, end: str | None = None
     ) -> None:
         """Fetch and store all available data for a symbol.
 
@@ -463,7 +463,7 @@ class DataFetcher:
         except Exception as e:
             print(f"  ✗ Error fetching options chain: {e}")
 
-    def get_database_stats(self) -> Dict[str, int]:
+    def get_database_stats(self) -> dict[str, int]:
         """Get database statistics.
 
         Returns:
@@ -485,7 +485,7 @@ class DataFetcher:
         self.db.cleanup_old_data(days_to_keep)
         print(f"Cleaned up data older than {days_to_keep} days")
 
-    def get_cached_symbols(self) -> List[str]:
+    def get_cached_symbols(self) -> list[str]:
         """Get all symbols that have cached data.
 
         Returns:
@@ -511,11 +511,11 @@ class DataFetcher:
 
     def get_treasury_rate(
         self,
-        date: Union[str, datetime],
+        date: str | datetime,
         duration: str = "3_month",
         as_decimal: bool = True,
         force_refresh: bool = False,
-    ) -> Optional[float]:
+    ) -> float | None:
         """Get Treasury rate for a specific date.
 
         Args:
@@ -553,11 +553,11 @@ class DataFetcher:
 
     def get_average_treasury_rate(
         self,
-        start_date: Union[str, datetime],
-        end_date: Union[str, datetime],
+        start_date: str | datetime,
+        end_date: str | datetime,
         duration: str = "3_month",
         as_decimal: bool = True,
-    ) -> Optional[float]:
+    ) -> float | None:
         """Get average Treasury rate for a date range.
 
         Args:
@@ -578,8 +578,8 @@ class DataFetcher:
 
     def get_treasury_rates(
         self,
-        start_date: Union[str, datetime],
-        end_date: Union[str, datetime],
+        start_date: str | datetime,
+        end_date: str | datetime,
         duration: str = "3_month",
         as_decimal: bool = True,
         force_refresh: bool = False,
@@ -620,7 +620,7 @@ class DataFetcher:
 
         return rates if as_decimal else rates * 100
 
-    def _fetch_rate_from_yfinance(self, ticker: str, date: datetime) -> Optional[float]:
+    def _fetch_rate_from_yfinance(self, ticker: str, date: datetime) -> float | None:
         """Fetch single Treasury rate from yfinance."""
         # Fetch a few days around the target date
         start_date = date - timedelta(days=5)
@@ -694,7 +694,7 @@ class DataFetcher:
             console.print(f"[red]Error fetching Treasury rates for {ticker}: {e}[/red]")
             return pd.Series(dtype=float)
 
-    def _get_cached_rate(self, ticker: str, date: datetime) -> Optional[float]:
+    def _get_cached_rate(self, ticker: str, date: datetime) -> float | None:
         """Get cached Treasury rate from database."""
         if not self.db:
             return None
@@ -774,7 +774,7 @@ class DataFetcher:
         # Store rate data
         self.db.store_price_history(ticker, df)
 
-    def get_current_treasury_rate(self, duration: str = "3_month") -> Optional[float]:
+    def get_current_treasury_rate(self, duration: str = "3_month") -> float | None:
         """Get the most recent Treasury rate.
 
         Args:

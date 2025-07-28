@@ -2,6 +2,7 @@
 """Example of fetching Treasury Bill rates for backtesting."""
 
 from datetime import datetime
+
 from stockula import DataFetcher
 
 

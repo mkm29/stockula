@@ -6,7 +6,7 @@ import sys
 import warnings
 from contextlib import contextmanager
 from io import StringIO
-from typing import TYPE_CHECKING, Any, Dict, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 import pandas as pd
 from autots import AutoTS
@@ -93,7 +93,7 @@ class StockForecaster:
         self,
         data: pd.DataFrame,
         target_column: str = "Close",
-        date_col: Optional[str] = None,
+        date_col: str | None = None,
         model_list: str = "fast",
         ensemble: str = "auto",
         max_generations: int = 5,
@@ -251,8 +251,8 @@ class StockForecaster:
     def forecast_from_symbol(
         self,
         symbol: str,
-        start_date: Optional[str] = None,
-        end_date: Optional[str] = None,
+        start_date: str | None = None,
+        end_date: str | None = None,
         target_column: str = "Close",
         **kwargs,
     ) -> pd.DataFrame:
@@ -282,7 +282,7 @@ class StockForecaster:
         logger.info(f"Fetched {len(data)} data points for {symbol}")
         return self.fit_predict(data, target_column, **kwargs)
 
-    def get_best_model(self) -> Dict[str, Any]:
+    def get_best_model(self) -> dict[str, Any]:
         """Get information about the best model found.
 
         Returns:
@@ -302,7 +302,7 @@ class StockForecaster:
         return model_info
 
     def plot_forecast(
-        self, historical_data: Optional[pd.DataFrame] = None, n_historical: int = 100
+        self, historical_data: pd.DataFrame | None = None, n_historical: int = 100
     ):
         """Plot forecast with historical data.
 

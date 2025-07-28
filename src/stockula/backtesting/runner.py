@@ -1,6 +1,7 @@
 """Backtesting runner and utilities."""
 
-from typing import TYPE_CHECKING, Any, Callable, Dict, Optional, Type, Union
+from collections.abc import Callable
+from typing import TYPE_CHECKING, Any, Optional
 
 import numpy as np
 import pandas as pd
@@ -21,7 +22,7 @@ class BacktestRunner:
         margin: float = 1.0,
         data_fetcher: Optional["IDataFetcher"] = None,
         broker_config: Optional["BrokerConfig"] = None,
-        risk_free_rate: Optional[Union[float, pd.Series]] = None,
+        risk_free_rate: float | pd.Series | None = None,
         trade_on_close: bool = True,
         exclusive_orders: bool = True,
     ):
@@ -127,7 +128,7 @@ class BacktestRunner:
 
         return commission_func
 
-    def run(self, data: pd.DataFrame, strategy: Type, **kwargs) -> Dict[str, Any]:
+    def run(self, data: pd.DataFrame, strategy: type, **kwargs) -> dict[str, Any]:
         """Run backtest with given data and strategy.
 
         Args:
@@ -220,8 +221,8 @@ class BacktestRunner:
         return self.results
 
     def optimize(
-        self, data: pd.DataFrame, strategy: Type, **param_ranges
-    ) -> Dict[str, Any]:
+        self, data: pd.DataFrame, strategy: type, **param_ranges
+    ) -> dict[str, Any]:
         """Optimize strategy parameters.
 
         Args:
@@ -247,13 +248,13 @@ class BacktestRunner:
     def run_from_symbol(
         self,
         symbol: str,
-        strategy: Type,
-        start_date: Optional[str] = None,
-        end_date: Optional[str] = None,
+        strategy: type,
+        start_date: str | None = None,
+        end_date: str | None = None,
         treasury_duration: str = "3_month",
         use_dynamic_risk_free_rate: bool = True,
         **kwargs,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Run backtest by fetching data for a symbol.
 
         Args:
@@ -409,12 +410,12 @@ class BacktestRunner:
     def run_with_dynamic_risk_free_rate(
         self,
         symbol: str,
-        strategy: Type,
-        start_date: Optional[str] = None,
-        end_date: Optional[str] = None,
+        strategy: type,
+        start_date: str | None = None,
+        end_date: str | None = None,
         treasury_duration: str = "3_month",
         **kwargs,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Run backtest with dynamic Treasury rates for risk-free rate calculation.
 
         Args:

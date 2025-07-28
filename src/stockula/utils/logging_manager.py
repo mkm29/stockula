@@ -3,7 +3,6 @@
 import logging
 import sys
 from logging.handlers import RotatingFileHandler
-from typing import List
 
 from ..config import StockulaConfig
 
@@ -19,7 +18,7 @@ class LoggingManager:
         """
         self.name = name
         self.logger = logging.getLogger(name)
-        self.handlers: List[logging.Handler] = []
+        self.handlers: list[logging.Handler] = []
         self._is_configured = False
 
     def setup(self, config: StockulaConfig) -> None:

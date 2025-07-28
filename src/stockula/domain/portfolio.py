@@ -3,7 +3,7 @@
 import logging
 from dataclasses import InitVar, dataclass, field
 from functools import lru_cache
-from typing import TYPE_CHECKING, Dict, List, Optional, Tuple
+from typing import TYPE_CHECKING, Optional
 
 from .asset import Asset
 from .category import Category
@@ -19,9 +19,9 @@ logger = logging.getLogger(__name__)
 # Cached function for allocation calculations
 @lru_cache(maxsize=128)
 def _calculate_allocations_cached(
-    assets_tuple: Tuple[Tuple[str, float, float], ...],  # (symbol, quantity, price)
+    assets_tuple: tuple[tuple[str, float, float], ...],  # (symbol, quantity, price)
     total_value: float,
-) -> Dict[str, Dict[str, float]]:
+) -> dict[str, dict[str, float]]:
     """Cached calculation of asset allocations."""
     allocations = {}
     for symbol, quantity, price in assets_tuple:
@@ -42,13 +42,13 @@ class Portfolio:
     name: InitVar[str] = "Main Portfolio"
     initial_capital: InitVar[float]
     allocation_method: InitVar[str] = "equal_weight"  # equal_weight, market_cap, custom
-    rebalance_frequency: Optional[str] = "monthly"
-    max_position_size: Optional[float] = None  # Max % per position
-    stop_loss_pct: Optional[float] = None  # Global stop loss %
+    rebalance_frequency: str | None = "monthly"
+    max_position_size: float | None = None  # Max % per position
+    stop_loss_pct: float | None = None  # Global stop loss %
     _name: str = field(init=False, repr=False)
     _initial_capital: float = field(init=False, repr=False)
     _allocation_method: str = field(init=False, repr=False)
-    assets: List[Asset] = field(default_factory=list)
+    assets: list[Asset] = field(default_factory=list)
 
     def __post_init__(self, name: str, initial_capital: float, allocation_method: str):
         """Validate portfolio constraints and set private attributes."""
@@ -90,14 +90,14 @@ class Portfolio:
             )
         self.assets.append(asset)
 
-    def get_asset(self, symbol: str) -> Optional[Asset]:
+    def get_asset(self, symbol: str) -> Asset | None:
         """Get asset by symbol."""
         for asset in self.assets:
             if asset.symbol == symbol:
                 return asset
         return None
 
-    def get_all_assets(self) -> List[Asset]:
+    def get_all_assets(self) -> list[Asset]:
         """Get all assets in the portfolio."""
         return self.assets.copy()
 
@@ -109,21 +109,21 @@ class Portfolio:
         """Get number of assets in the portfolio."""
         return len(self.assets)
 
-    def get_all_tickers(self) -> List[Ticker]:
+    def get_all_tickers(self) -> list[Ticker]:
         """Get unique tickers across all assets."""
         tickers = set()
         for asset in self.assets:
             tickers.add(asset.ticker)
         return list(tickers)
 
-    def get_asset_by_symbol(self, symbol: str) -> Optional[Asset]:
+    def get_asset_by_symbol(self, symbol: str) -> Asset | None:
         """Find asset by ticker symbol.
 
         Delegates to inherited get_asset method.
         """
         return self.get_asset(symbol)
 
-    def get_assets_by_category(self, category: Category) -> List[Asset]:
+    def get_assets_by_category(self, category: Category) -> list[Asset]:
         """Get all assets belonging to a specific category.
 
         Args:
@@ -134,7 +134,7 @@ class Portfolio:
         """
         return [asset for asset in self.assets if asset.category == category]
 
-    def get_portfolio_value(self, prices: Dict[str, float]) -> float:
+    def get_portfolio_value(self, prices: dict[str, float]) -> float:
         """Calculate total portfolio value based on current prices."""
         total = 0.0
         for asset in self.assets:
@@ -143,8 +143,8 @@ class Portfolio:
         return total
 
     def get_asset_allocations(
-        self, prices: Dict[str, float]
-    ) -> Dict[str, Dict[str, float]]:
+        self, prices: dict[str, float]
+    ) -> dict[str, dict[str, float]]:
         """Calculate current allocation percentages for all assets.
 
         Args:
@@ -165,8 +165,8 @@ class Portfolio:
         return _calculate_allocations_cached(assets_tuple, total_value)
 
     def get_asset_percentage(
-        self, symbol: str, prices: Dict[str, float]
-    ) -> Optional[float]:
+        self, symbol: str, prices: dict[str, float]
+    ) -> float | None:
         """Get the current percentage allocation of an asset by symbol.
 
         Args:
@@ -182,7 +182,7 @@ class Portfolio:
             return allocations[symbol]["percentage"]
         return None
 
-    def get_all_asset_percentages(self, prices: Dict[str, float]) -> Dict[str, float]:
+    def get_all_asset_percentages(self, prices: dict[str, float]) -> dict[str, float]:
         """Get current percentage allocations for all assets.
 
         Args:
@@ -194,7 +194,7 @@ class Portfolio:
         allocations = self.get_asset_allocations(prices)
         return {symbol: data["percentage"] for symbol, data in allocations.items()}
 
-    def get_portfolio_summary(self, prices: Dict[str, float]) -> Dict[str, any]:
+    def get_portfolio_summary(self, prices: dict[str, float]) -> dict[str, any]:
         """Get comprehensive portfolio summary.
 
         Args:
@@ -220,8 +220,8 @@ class Portfolio:
         }
 
     def get_allocation_by_category(
-        self, prices: Dict[str, float]
-    ) -> Dict[str, Dict[str, float]]:
+        self, prices: dict[str, float]
+    ) -> dict[str, dict[str, float]]:
         """Calculate allocations grouped by category.
 
         Args:
@@ -262,7 +262,7 @@ class Portfolio:
         return category_allocations
 
     @property
-    def symbols(self) -> List[str]:
+    def symbols(self) -> list[str]:
         """Get list of all ticker symbols in the portfolio."""
         return [asset.symbol for asset in self.assets]
 
@@ -289,7 +289,7 @@ class Portfolio:
 
     def validate_capital_sufficiency(
         self,
-        validation_prices: Optional[Dict[str, float]] = None,
+        validation_prices: dict[str, float] | None = None,
         fetcher: Optional["IDataFetcher"] = None,
     ) -> None:
         """Validate that initial capital is sufficient to cover the specified asset quantities.
@@ -339,7 +339,7 @@ class Portfolio:
 
     def validate_allocation_constraints(
         self,
-        prices: Optional[Dict[str, float]] = None,
+        prices: dict[str, float] | None = None,
         fetcher: Optional["IDataFetcher"] = None,
     ) -> None:
         """Validate portfolio allocation constraints against risk management rules.

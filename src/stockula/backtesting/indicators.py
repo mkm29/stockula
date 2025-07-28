@@ -4,8 +4,6 @@ This module contains standalone implementations of technical indicators
 that can be tested independently of the backtesting framework.
 """
 
-from typing import Tuple
-
 import numpy as np
 import pandas as pd
 
@@ -61,7 +59,7 @@ def calculate_macd(
     fast_period: int = 12,
     slow_period: int = 26,
     signal_period: int = 9,
-) -> Tuple[pd.Series, pd.Series, pd.Series]:
+) -> tuple[pd.Series, pd.Series, pd.Series]:
     """Calculate MACD (Moving Average Convergence Divergence).
 
     Args:
