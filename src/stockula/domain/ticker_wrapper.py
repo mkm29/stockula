@@ -1,16 +1,17 @@
 """Wrapper for Ticker to provide backward compatibility."""
 
-from typing import Optional, Dict, Any
+from typing import Any
+
 from .ticker import Ticker as _Ticker
 
 
 def Ticker(
     symbol: str,
-    sector: Optional[str] = None,
-    market_cap: Optional[float] = None,
-    category: Optional[str] = None,
-    price_range: Optional[Dict[str, float]] = None,
-    metadata: Optional[Dict[str, Any]] = None,
+    sector: str | None = None,
+    market_cap: float | None = None,
+    category: str | None = None,
+    price_range: dict[str, float] | None = None,
+    metadata: dict[str, Any] | None = None,
 ) -> _Ticker:
     """Create a Ticker with backward-compatible parameter names.
 

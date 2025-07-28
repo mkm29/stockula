@@ -1,16 +1,22 @@
 """Stock price forecasting using AutoTS."""
 
-import pandas as pd
-import warnings
 import logging
 import signal
 import sys
-import os
-from contextlib import contextmanager, redirect_stdout, redirect_stderr
+import warnings
+from contextlib import contextmanager
 from io import StringIO
+from typing import TYPE_CHECKING, Any, Optional
+
+import pandas as pd
 from autots import AutoTS
-from typing import Optional, Dict, Any
-from ..data.fetcher import DataFetcher
+from rich.console import Console
+from rich.progress import Progress, SpinnerColumn, TextColumn
+
+console = Console()
+
+if TYPE_CHECKING:
+    from ..interfaces import IDataFetcher
 
 # Create logger
 logger = logging.getLogger(__name__)
@@ -59,6 +65,8 @@ class StockForecaster:
         prediction_interval: float = 0.9,
         num_validations: int = 2,
         validation_method: str = "backwards",
+        model_list: str = "fast",
+        data_fetcher: Optional["IDataFetcher"] = None,
     ):
         """Initialize forecaster.
 
@@ -68,20 +76,24 @@ class StockForecaster:
             prediction_interval: Confidence interval for predictions (0-1)
             num_validations: Number of validation splits
             validation_method: Validation method ('backwards', 'seasonal', 'similarity')
+            model_list: Default model list to use
+            data_fetcher: Injected data fetcher instance
         """
         self.forecast_length = forecast_length
         self.frequency = frequency
         self.prediction_interval = prediction_interval
         self.num_validations = num_validations
         self.validation_method = validation_method
+        self.model_list = model_list
         self.model = None
         self.prediction = None
+        self.data_fetcher = data_fetcher
 
     def fit(
         self,
         data: pd.DataFrame,
         target_column: str = "Close",
-        date_col: Optional[str] = None,
+        date_col: str | None = None,
         model_list: str = "fast",
         ensemble: str = "auto",
         max_generations: int = 5,
@@ -127,36 +139,54 @@ class StockForecaster:
         logger.info(
             f"Starting AutoTS model fitting for {len(data_for_model)} data points..."
         )
-        logger.info(f"This may take a few minutes. Press Ctrl+C to cancel.")
+        logger.info("This may take a few minutes. Press Ctrl+C to cancel.")
 
         try:
-            with suppress_autots_output():
-                # Initialize AutoTS with minimal verbosity
-                self.model = AutoTS(
-                    forecast_length=self.forecast_length,
-                    frequency=self.frequency,
-                    prediction_interval=self.prediction_interval,
-                    ensemble=ensemble,
-                    model_list=model_list,
-                    max_generations=max_generations,
-                    num_validations=self.num_validations,
-                    validation_method=self.validation_method,
-                    verbose=0,  # Minimal verbosity
-                    no_negatives=True,  # Stock prices can't be negative
-                    drop_most_recent=0,  # Don't drop recent data
-                    n_jobs="auto",  # Use available cores
+            with Progress(
+                SpinnerColumn(),
+                TextColumn("[progress.description]{task.description}"),
+                console=console,
+                transient=False,
+            ) as progress:
+                task = progress.add_task(
+                    "[orange3]Initializing AutoTS model...", total=None
                 )
 
-                # Fit the model
-                logger.debug(
-                    f"Fitting AutoTS with parameters: model_list={model_list}, max_generations={max_generations}"
-                )
-                self.model = self.model.fit(
-                    data_for_model,
-                    date_col="date",  # Using 'date' column
-                    value_col=target_column,
-                    id_col=None,  # Single series
-                )
+                with suppress_autots_output():
+                    # Initialize AutoTS with minimal verbosity
+                    self.model = AutoTS(
+                        forecast_length=self.forecast_length,
+                        frequency=self.frequency,
+                        prediction_interval=self.prediction_interval,
+                        ensemble=ensemble,
+                        model_list=model_list,
+                        max_generations=max_generations,
+                        num_validations=self.num_validations,
+                        validation_method=self.validation_method,
+                        verbose=0,  # Minimal verbosity
+                        no_negatives=True,  # Stock prices can't be negative
+                        drop_most_recent=0,  # Don't drop recent data
+                        n_jobs="auto",  # Use available cores
+                    )
+
+                    # Fit the model
+                    progress.update(
+                        task,
+                        description=f"[orange3]Training {model_list} models with {max_generations} generations...",
+                    )
+                    logger.debug(
+                        f"Fitting AutoTS with parameters: model_list={model_list}, max_generations={max_generations}"
+                    )
+                    self.model = self.model.fit(
+                        data_for_model,
+                        date_col="date",  # Using 'date' column
+                        value_col=target_column,
+                        id_col=None,  # Single series
+                    )
+
+                    progress.update(
+                        task, description="[orange3]Model training completed!"
+                    )
 
             logger.info("Model fitting completed successfully.")
 
@@ -221,8 +251,8 @@ class StockForecaster:
     def forecast_from_symbol(
         self,
         symbol: str,
-        start_date: Optional[str] = None,
-        end_date: Optional[str] = None,
+        start_date: str | None = None,
+        end_date: str | None = None,
         target_column: str = "Close",
         **kwargs,
     ) -> pd.DataFrame:
@@ -239,8 +269,12 @@ class StockForecaster:
             DataFrame with predictions
         """
         logger.info(f"Fetching data for {symbol}...")
-        fetcher = DataFetcher()
-        data = fetcher.get_stock_data(symbol, start_date, end_date)
+        if not self.data_fetcher:
+            raise ValueError(
+                "Data fetcher not configured. Ensure DI container is properly set up."
+            )
+
+        data = self.data_fetcher.get_stock_data(symbol, start_date, end_date)
 
         if data.empty:
             raise ValueError(f"No data available for symbol {symbol}")
@@ -248,7 +282,7 @@ class StockForecaster:
         logger.info(f"Fetched {len(data)} data points for {symbol}")
         return self.fit_predict(data, target_column, **kwargs)
 
-    def get_best_model(self) -> Dict[str, Any]:
+    def get_best_model(self) -> dict[str, Any]:
         """Get information about the best model found.
 
         Returns:
@@ -268,7 +302,7 @@ class StockForecaster:
         return model_info
 
     def plot_forecast(
-        self, historical_data: Optional[pd.DataFrame] = None, n_historical: int = 100
+        self, historical_data: pd.DataFrame | None = None, n_historical: int = 100
     ):
         """Plot forecast with historical data.
 

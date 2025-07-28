@@ -1,12 +1,16 @@
 """Factory for creating domain objects from configuration."""
 
 import logging
-from typing import List, Optional, Dict
+from typing import TYPE_CHECKING, Optional
+
 from ..config import StockulaConfig, TickerConfig
-from .ticker import Ticker, TickerRegistry
 from .asset import Asset
-from .portfolio import Portfolio
 from .category import Category
+from .portfolio import Portfolio
+from .ticker import Ticker, TickerRegistry
+
+if TYPE_CHECKING:
+    from ..interfaces import IDataFetcher
 
 # Create logger
 logger = logging.getLogger(__name__)
@@ -15,9 +19,22 @@ logger = logging.getLogger(__name__)
 class DomainFactory:
     """Factory for creating domain objects from configuration."""
 
-    def __init__(self):
-        """Initialize factory with ticker registry."""
-        self.ticker_registry = TickerRegistry()
+    def __init__(
+        self,
+        config: StockulaConfig | None = None,
+        fetcher: Optional["IDataFetcher"] = None,
+        ticker_registry: TickerRegistry | None = None,
+    ):
+        """Initialize factory with dependencies.
+
+        Args:
+            config: Configuration object
+            fetcher: Data fetcher instance
+            ticker_registry: Ticker registry instance
+        """
+        self.config = config
+        self.fetcher = fetcher
+        self.ticker_registry = ticker_registry or TickerRegistry()
 
     def _create_ticker(self, ticker_config: TickerConfig) -> Ticker:
         """Create or get ticker from configuration (internal method).
@@ -37,7 +54,7 @@ class DomainFactory:
         )
 
     def _create_asset(
-        self, ticker_config: TickerConfig, calculated_quantity: Optional[float] = None
+        self, ticker_config: TickerConfig, calculated_quantity: float | None = None
     ) -> Asset:
         """Create asset from ticker configuration (internal method).
 
@@ -73,8 +90,8 @@ class DomainFactory:
         return Asset(ticker=ticker, quantity=quantity, category=category)
 
     def _calculate_dynamic_quantities(
-        self, config: StockulaConfig, tickers_to_add: List[TickerConfig]
-    ) -> Dict[str, float]:
+        self, config: StockulaConfig, tickers_to_add: list[TickerConfig]
+    ) -> dict[str, float]:
         """Calculate quantities dynamically based on allocation percentages/amounts.
 
         Args:
@@ -84,10 +101,8 @@ class DomainFactory:
         Returns:
             Dictionary mapping ticker symbols to calculated quantities
         """
-        from ..data.fetcher import DataFetcher
-
-        # Fetch prices for calculation - use start date if available for backtesting
-        fetcher = DataFetcher()
+        # Use injected fetcher
+        fetcher = self.fetcher
         symbols = [ticker.symbol for ticker in tickers_to_add]
 
         if config.data.start_date:
@@ -166,8 +181,8 @@ class DomainFactory:
         return calculated_quantities
 
     def _calculate_auto_allocation_quantities(
-        self, config: StockulaConfig, tickers_to_add: List[TickerConfig]
-    ) -> Dict[str, float]:
+        self, config: StockulaConfig, tickers_to_add: list[TickerConfig]
+    ) -> dict[str, float]:
         """Calculate quantities using auto-allocation based on category ratios and capital utilization target.
 
         This method optimizes for maximum capital utilization while respecting category allocation ratios.
@@ -179,13 +194,11 @@ class DomainFactory:
         Returns:
             Dictionary mapping ticker symbols to calculated quantities
         """
-        from ..data.fetcher import DataFetcher
-
         if not config.portfolio.category_ratios:
             raise ValueError("Auto-allocation requires category_ratios to be specified")
 
-        # Fetch prices for calculation - use start date if available for backtesting
-        fetcher = DataFetcher()
+        # Use injected fetcher
+        fetcher = self.fetcher
         symbols = [ticker.symbol for ticker in tickers_to_add]
 
         if config.data.start_date:
@@ -472,7 +485,7 @@ class DomainFactory:
 
         return portfolio
 
-    def get_all_tickers(self) -> List[Ticker]:
+    def get_all_tickers(self) -> list[Ticker]:
         """Get all registered tickers.
 
         Returns:

@@ -1,40 +1,93 @@
 """Pydantic models for configuration."""
 
 from datetime import date, datetime
-from typing import Optional, List, Dict, Any, Union
-from pydantic import BaseModel, Field, field_validator, ConfigDict
+from typing import Any
+
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+
+class BacktestResult(BaseModel):
+    """Individual backtest result for a single asset."""
+
+    ticker: str = Field(description="Asset ticker symbol")
+    strategy: str = Field(description="Strategy name")
+    parameters: dict[str, Any] = Field(
+        default_factory=dict, description="Strategy parameters used"
+    )
+    return_pct: float = Field(description="Return percentage")
+    sharpe_ratio: float = Field(description="Sharpe ratio")
+    max_drawdown_pct: float = Field(description="Maximum drawdown percentage")
+    num_trades: int = Field(description="Number of trades executed")
+    win_rate: float | None = Field(default=None, description="Win rate percentage")
+
+
+class StrategyBacktestSummary(BaseModel):
+    """Summary of backtest results for a single strategy across all assets."""
+
+    strategy_name: str = Field(description="Strategy name")
+    parameters: dict[str, Any] = Field(
+        default_factory=dict, description="Strategy parameters"
+    )
+    initial_portfolio_value: float = Field(description="Initial portfolio value")
+    final_portfolio_value: float = Field(
+        description="Final portfolio value after backtest"
+    )
+    total_return_pct: float = Field(description="Total portfolio return percentage")
+    total_trades: int = Field(description="Total trades across all assets")
+    winning_stocks: int = Field(description="Number of stocks with positive returns")
+    losing_stocks: int = Field(description="Number of stocks with negative returns")
+    average_return_pct: float = Field(description="Average return across all assets")
+    average_sharpe_ratio: float = Field(description="Average Sharpe ratio")
+    detailed_results: list[BacktestResult] = Field(
+        default_factory=list, description="Per-asset results"
+    )
+
+
+class PortfolioBacktestResults(BaseModel):
+    """Complete backtest results for all strategies."""
+
+    initial_portfolio_value: float = Field(description="Initial portfolio value")
+    initial_capital: float = Field(description="Initial capital")
+    date_range: dict[str, str] = Field(description="Backtest date range")
+    broker_config: dict[str, Any] = Field(description="Broker configuration used")
+    strategy_summaries: list[StrategyBacktestSummary] = Field(
+        default_factory=list, description="Summary results for each strategy"
+    )
+    timestamp: datetime = Field(
+        default_factory=datetime.now, description="When backtest was run"
+    )
 
 
 class TickerConfig(BaseModel):
     """Configuration for individual ticker/asset."""
 
     symbol: str = Field(description="Stock ticker symbol (e.g., AAPL)")
-    quantity: Optional[float] = Field(
+    quantity: float | None = Field(
         default=None,
         gt=0,
         description="Number of shares to hold (required if not using dynamic allocation)",
     )
-    allocation_pct: Optional[float] = Field(
+    allocation_pct: float | None = Field(
         default=None,
         ge=0,
         le=100,
         description="Percentage of portfolio to allocate to this asset (for dynamic allocation)",
     )
-    allocation_amount: Optional[float] = Field(
+    allocation_amount: float | None = Field(
         default=None,
         ge=0,
         description="Fixed dollar amount to allocate to this asset (for dynamic allocation)",
     )
     # Optional market data fields that can be populated
-    market_cap: Optional[float] = Field(
+    market_cap: float | None = Field(
         default=None, description="Market capitalization in billions"
     )
-    price_range: Optional[Dict[str, float]] = Field(
+    price_range: dict[str, float] | None = Field(
         default=None,
         description="Price range with 'open', 'high', 'low', 'close' keys",
     )
-    sector: Optional[str] = Field(default=None, description="Market sector")
-    category: Optional[str] = Field(
+    sector: str | None = Field(default=None, description="Market sector")
+    category: str | None = Field(
         default=None,
         description="Category for classification (e.g., 'TECHNOLOGY', 'GROWTH', 'LARGE_CAP')",
     )
@@ -78,7 +131,7 @@ class PortfolioConfig(BaseModel):
         default=False,
         description="Automatically allocate based on category ratios and initial capital only",
     )
-    category_ratios: Optional[Dict[str, float]] = Field(
+    category_ratios: dict[str, float] | None = Field(
         default=None,
         description="Target allocation ratios by category (e.g., {'INDEX': 0.35, 'MOMENTUM': 0.475, 'SPECULATIVE': 0.175})",
     )
@@ -92,11 +145,11 @@ class PortfolioConfig(BaseModel):
         le=1.0,
         description="Target percentage of initial capital to deploy (0.5-1.0)",
     )
-    rebalance_frequency: Optional[str] = Field(
+    rebalance_frequency: str | None = Field(
         default="monthly",
         description="Rebalancing frequency: 'daily', 'weekly', 'monthly', 'quarterly', 'yearly', 'never'",
     )
-    tickers: List[TickerConfig] = Field(
+    tickers: list[TickerConfig] = Field(
         default_factory=lambda: [
             TickerConfig(symbol="AAPL", quantity=10),
             TickerConfig(symbol="GOOGL", quantity=5),
@@ -105,13 +158,13 @@ class PortfolioConfig(BaseModel):
         description="List of ticker configurations in the portfolio",
     )
     # Risk management
-    max_position_size: Optional[float] = Field(
+    max_position_size: float | None = Field(
         default=None,
         ge=0,
         le=100,
         description="Maximum position size as percentage of portfolio (0-100)",
     )
-    stop_loss_pct: Optional[float] = Field(
+    stop_loss_pct: float | None = Field(
         default=None,
         ge=0,
         le=100,
@@ -172,15 +225,21 @@ class PortfolioConfig(BaseModel):
 class DataConfig(BaseModel):
     """Configuration for data fetching."""
 
-    start_date: Optional[Union[str, date]] = Field(
+    start_date: str | date | None = Field(
         default=None, description="Start date for historical data (YYYY-MM-DD)"
     )
-    end_date: Optional[Union[str, date]] = Field(
+    end_date: str | date | None = Field(
         default=None, description="End date for historical data (YYYY-MM-DD)"
     )
     interval: str = Field(
         default="1d",
         description="Data interval (1m, 2m, 5m, 15m, 30m, 60m, 90m, 1h, 1d, 5d, 1wk, 1mo, 3mo)",
+    )
+    use_cache: bool = Field(
+        default=True, description="Use database caching for fetched data"
+    )
+    db_path: str = Field(
+        default="stockula.db", description="Path to SQLite database file for caching"
     )
 
     @field_validator("start_date", "end_date", mode="before")
@@ -197,7 +256,7 @@ class StrategyConfig(BaseModel):
     """Base configuration for trading strategies."""
 
     name: str = Field(description="Strategy name")
-    parameters: Dict[str, Any] = Field(
+    parameters: dict[str, Any] = Field(
         default_factory=dict, description="Strategy-specific parameters"
     )
 
@@ -252,6 +311,94 @@ class MACDConfig(BaseModel):
         return v
 
 
+class BrokerConfig(BaseModel):
+    """Configuration for broker-specific fees and commissions."""
+
+    name: str = Field(
+        default="custom", description="Broker name or 'custom' for custom fee structure"
+    )
+    commission_type: str = Field(
+        default="percentage",
+        description="Commission type: 'percentage', 'fixed', 'tiered', 'per_share'",
+    )
+    commission_value: float | dict[str, float] = Field(
+        default=0.002,
+        description="Commission value (float for simple types, dict for tiered)",
+    )
+    min_commission: float | None = Field(
+        default=None, description="Minimum commission per trade"
+    )
+    max_commission: float | None = Field(
+        default=None, description="Maximum commission per trade"
+    )
+    per_share_commission: float | None = Field(
+        default=None, description="Commission per share (for per_share type)"
+    )
+    regulatory_fees: float = Field(
+        default=0.0, description="Additional regulatory fees (SEC, FINRA) as percentage"
+    )
+    exchange_fees: float = Field(default=0.0, description="Exchange fees per trade")
+
+    @classmethod
+    def from_broker_preset(cls, broker_name: str) -> "BrokerConfig":
+        """Create BrokerConfig from preset broker configurations."""
+        presets = {
+            "interactive_brokers": {
+                "name": "interactive_brokers",
+                "commission_type": "tiered",
+                "commission_value": {
+                    "0": 0.005,  # $0.005 per share for first 500k shares/month
+                    "500000": 0.004,  # $0.004 per share above 500k shares/month
+                },
+                "min_commission": 1.0,
+                "max_commission": None,
+                "per_share_commission": 0.005,
+                "regulatory_fees": 0.0000229,  # SEC fee
+                "exchange_fees": 0.003,  # Exchange fees
+            },
+            "td_ameritrade": {
+                "name": "td_ameritrade",
+                "commission_type": "fixed",
+                "commission_value": 0.0,  # Zero commission
+                "regulatory_fees": 0.0000229,
+                "exchange_fees": 0.0,
+            },
+            "etrade": {
+                "name": "etrade",
+                "commission_type": "fixed",
+                "commission_value": 0.0,  # Zero commission
+                "regulatory_fees": 0.0000229,
+                "exchange_fees": 0.0,
+            },
+            "robinhood": {
+                "name": "robinhood",
+                "commission_type": "fixed",
+                "commission_value": 0.0,  # Zero commission
+                "regulatory_fees": 0.0,  # SEC fee is $0 as of May 14, 2024
+                "exchange_fees": 0.000166,  # TAF (Trading Activity Fee) per share for equity sells
+            },
+            "fidelity": {
+                "name": "fidelity",
+                "commission_type": "fixed",
+                "commission_value": 0.0,  # Zero commission
+                "regulatory_fees": 0.0000229,
+                "exchange_fees": 0.0,
+            },
+            "schwab": {
+                "name": "schwab",
+                "commission_type": "fixed",
+                "commission_value": 0.0,  # Zero commission
+                "regulatory_fees": 0.0000229,
+                "exchange_fees": 0.0,
+            },
+        }
+
+        if broker_name.lower() in presets:
+            return cls(**presets[broker_name.lower()])
+        else:
+            raise ValueError(f"Unknown broker preset: {broker_name}")
+
+
 class BacktestConfig(BaseModel):
     """Configuration for backtesting."""
 
@@ -259,24 +406,40 @@ class BacktestConfig(BaseModel):
         default=10000.0, gt=0, description="Initial cash amount for backtesting"
     )
     commission: float = Field(
-        default=0.002, ge=0, le=1, description="Commission per trade (0.002 = 0.2%)"
+        default=0.002,
+        ge=0,
+        le=1,
+        description="Commission per trade (0.002 = 0.2%) - deprecated, use broker_config",
+    )
+    broker_config: BrokerConfig | None = Field(
+        default=None, description="Broker-specific fee configuration"
     )
     margin: float = Field(
         default=1.0, ge=0, description="Margin requirement for leveraged trading"
     )
-    strategies: List[StrategyConfig] = Field(
+    strategies: list[StrategyConfig] = Field(
         default_factory=list, description="List of strategies to backtest"
     )
     optimize: bool = Field(
         default=False, description="Whether to optimize strategy parameters"
     )
-    optimization_params: Optional[Dict[str, Any]] = Field(
+    optimization_params: dict[str, Any] | None = Field(
         default=None, description="Parameter ranges for optimization"
     )
-    hold_only_categories: List[str] = Field(
+    hold_only_categories: list[str] = Field(
         default=["INDEX", "BOND"],
         description="Categories of assets to exclude from backtesting (buy-and-hold only)",
     )
+
+    def model_post_init(self, __context):
+        """Initialize broker config from commission if not provided."""
+        if self.broker_config is None:
+            # Use legacy commission field for backward compatibility
+            self.broker_config = BrokerConfig(
+                name="legacy",
+                commission_type="percentage",
+                commission_value=self.commission,
+            )
 
 
 class ForecastConfig(BaseModel):
@@ -315,22 +478,22 @@ class ForecastConfig(BaseModel):
 class TechnicalAnalysisConfig(BaseModel):
     """Configuration for technical analysis indicators."""
 
-    indicators: List[str] = Field(
+    indicators: list[str] = Field(
         default=["sma", "ema", "rsi", "macd", "bbands", "atr"],
         description="List of indicators to calculate",
     )
-    sma_periods: List[int] = Field(
+    sma_periods: list[int] = Field(
         default=[20, 50, 200], description="SMA periods to calculate"
     )
-    ema_periods: List[int] = Field(
+    ema_periods: list[int] = Field(
         default=[12, 26], description="EMA periods to calculate"
     )
     rsi_period: int = Field(default=14, description="RSI period")
-    macd_params: Dict[str, int] = Field(
+    macd_params: dict[str, int] = Field(
         default={"period_fast": 12, "period_slow": 26, "signal": 9},
         description="MACD parameters",
     )
-    bbands_params: Dict[str, int] = Field(
+    bbands_params: dict[str, int] = Field(
         default={"period": 20, "std": 2}, description="Bollinger Bands parameters"
     )
     atr_period: int = Field(default=14, description="ATR period")
@@ -371,7 +534,7 @@ class StockulaConfig(BaseModel):
     technical_analysis: TechnicalAnalysisConfig = Field(
         default_factory=TechnicalAnalysisConfig
     )
-    output: Dict[str, Any] = Field(
+    output: dict[str, Any] = Field(
         default_factory=lambda: {
             "format": "console",
             "save_results": False,

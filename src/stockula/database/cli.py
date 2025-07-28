@@ -2,7 +2,11 @@
 
 import argparse
 import sys
-from typing import List
+from pathlib import Path
+
+from alembic import command
+from alembic.config import Config
+
 from ..data.fetcher import DataFetcher
 from .manager import DatabaseManager
 
@@ -16,7 +20,7 @@ def fetch_symbol_data(
 
 
 def fetch_portfolio_data(
-    symbols: List[str], start_date: str = None, end_date: str = None
+    symbols: list[str], start_date: str = None, end_date: str = None
 ) -> None:
     """Fetch and store data for a portfolio of symbols."""
     fetcher = DataFetcher(use_cache=True)
@@ -34,8 +38,8 @@ def show_database_stats() -> None:
     fetcher = DataFetcher(use_cache=True)
     stats = fetcher.get_database_stats()
 
-    print("Database Statistics:")
-    print("=" * 40)
+    print(f"""Database Statistics:
+{"=" * 40}""")
     for table, count in stats.items():
         print(f"{table:15}: {count:,} records")
 
@@ -61,24 +65,70 @@ def cleanup_database(days: int = 365) -> None:
     print("Cleanup completed")
 
 
+def get_alembic_config() -> Config:
+    """Get Alembic configuration."""
+    project_root = Path(__file__).parents[3]
+    alembic_ini_path = project_root / "alembic.ini"
+
+    if not alembic_ini_path.exists():
+        raise FileNotFoundError(f"alembic.ini not found at {alembic_ini_path}")
+
+    return Config(str(alembic_ini_path))
+
+
+def migrate_upgrade(revision: str = "head") -> None:
+    """Run database migrations to the specified revision."""
+    config = get_alembic_config()
+    print(f"Running migrations to {revision}...")
+    command.upgrade(config, revision)
+    print("Migrations completed successfully")
+
+
+def migrate_downgrade(revision: str) -> None:
+    """Downgrade database to the specified revision."""
+    config = get_alembic_config()
+    print(f"Downgrading to {revision}...")
+    command.downgrade(config, revision)
+    print("Downgrade completed successfully")
+
+
+def migrate_create(message: str) -> None:
+    """Create a new migration."""
+    config = get_alembic_config()
+    print(f"Creating new migration: {message}")
+    command.revision(config, autogenerate=True, message=message)
+    print("Migration created successfully")
+
+
+def migrate_history(verbose: bool = False) -> None:
+    """Show migration history."""
+    config = get_alembic_config()
+    if verbose:
+        command.history(config, verbose=True)
+    else:
+        command.history(config)
+
+
+def migrate_current() -> None:
+    """Show current migration revision."""
+    config = get_alembic_config()
+    command.current(config)
+
+
 def query_symbol_data(symbol: str) -> None:
     """Query and display data for a specific symbol."""
     db = DatabaseManager()
 
-    print(f"Data for {symbol}:")
-    print("=" * 40)
+    print(f"""Data for {symbol}:
+{"=" * 40}""")
 
     # Stock info
     info = db.get_stock_info(symbol)
     if info:
-        print(f"Name: {info.get('longName', 'N/A')}")
-        print(f"Sector: {info.get('sector', 'N/A')}")
-        print(
-            f"Market Cap: ${info.get('marketCap', 0):,}"
-            if info.get("marketCap")
-            else "Market Cap: N/A"
-        )
-        print(f"Exchange: {info.get('exchange', 'N/A')}")
+        print(f"""Name: {info.get("longName", "N/A")}
+Sector: {info.get("sector", "N/A")}
+{f"Market Cap: ${info.get('marketCap', 0):,}" if info.get("marketCap") else "Market Cap: N/A"}
+Exchange: {info.get("exchange", "N/A")}""")
 
     # Price history
     price_data = db.get_price_history(symbol)
@@ -134,6 +184,45 @@ def main():
         help="Keep data for this many days (default: 365)",
     )
 
+    # Migration commands
+    migrate_parser = subparsers.add_parser(
+        "migrate", help="Database migration commands"
+    )
+    migrate_subparsers = migrate_parser.add_subparsers(
+        dest="migrate_command", help="Migration commands"
+    )
+
+    # migrate upgrade
+    upgrade_parser = migrate_subparsers.add_parser(
+        "upgrade", help="Upgrade database to a revision"
+    )
+    upgrade_parser.add_argument(
+        "revision", nargs="?", default="head", help="Target revision (default: head)"
+    )
+
+    # migrate downgrade
+    downgrade_parser = migrate_subparsers.add_parser(
+        "downgrade", help="Downgrade database to a revision"
+    )
+    downgrade_parser.add_argument("revision", help="Target revision")
+
+    # migrate create
+    create_parser = migrate_subparsers.add_parser(
+        "create", help="Create a new migration"
+    )
+    create_parser.add_argument("message", help="Migration message")
+
+    # migrate history
+    history_parser = migrate_subparsers.add_parser(
+        "history", help="Show migration history"
+    )
+    history_parser.add_argument(
+        "-v", "--verbose", action="store_true", help="Show verbose output"
+    )
+
+    # migrate current
+    migrate_subparsers.add_parser("current", help="Show current migration revision")
+
     args = parser.parse_args()
 
     if not args.command:
@@ -155,6 +244,22 @@ def main():
 
         elif args.command == "cleanup":
             cleanup_database(args.days)
+
+        elif args.command == "migrate":
+            if not args.migrate_command:
+                migrate_parser.print_help()
+                return
+
+            if args.migrate_command == "upgrade":
+                migrate_upgrade(args.revision)
+            elif args.migrate_command == "downgrade":
+                migrate_downgrade(args.revision)
+            elif args.migrate_command == "create":
+                migrate_create(args.message)
+            elif args.migrate_command == "history":
+                migrate_history(args.verbose)
+            elif args.migrate_command == "current":
+                migrate_current()
 
     except KeyboardInterrupt:
         print("\nOperation cancelled by user")

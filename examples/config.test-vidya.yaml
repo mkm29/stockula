@@ -1,0 +1,22 @@
+# Simple test config for VIDYA strategy
+data:
+  start_date: "2023-01-01"
+  end_date: "2024-06-01"
+  use_cache: false
+portfolio:
+  name: "VIDYA Test Portfolio"
+  initial_capital: 10000
+  allocation_method: equal_weight
+  tickers:
+    - symbol: AAPL
+      quantity: 10.0
+backtest:
+  initial_cash: 10000.0
+  commission: 0.002
+  strategies:
+    - name: vidya
+      parameters:
+        period: 14
+        smoothing_factor: 0.1
+logging:
+  enabled: false

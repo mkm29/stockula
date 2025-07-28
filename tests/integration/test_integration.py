@@ -1,16 +1,14 @@
 """Integration tests for Stockula."""
 
-import pytest
-import tempfile
-from pathlib import Path
-import yaml
 from unittest.mock import patch
 
-from stockula.main import main
+import pytest
+import yaml
+
 from stockula.config import StockulaConfig, load_config
-from stockula.domain import DomainFactory
 from stockula.data.fetcher import DataFetcher
 from stockula.database.manager import DatabaseManager
+from stockula.domain import DomainFactory
 
 
 @pytest.mark.integration
@@ -215,8 +213,8 @@ class TestPerformanceIntegration:
 
     def test_large_dataset_analysis(self, mock_data_fetcher):
         """Test analysis with large dataset."""
-        import pandas as pd
         import numpy as np
+        import pandas as pd
 
         # Create 5 years of daily data
         dates = pd.date_range(start="2019-01-01", end="2023-12-31", freq="D")

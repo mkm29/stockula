@@ -1,0 +1,111 @@
+# Docker ignore file for Stockula project
+# Exclude unnecessary files from Docker build context
+
+# Python cache and artifacts
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# IDEs and editors
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Testing and coverage
+.tox/
+.coverage
+.coverage.*
+.cache
+.pytest_cache/
+htmlcov/
+.nox/
+coverage.xml
+*.cover
+.hypothesis/
+
+# Git
+.git/
+.gitignore
+
+# Documentation build
+docs/_build/
+.readthedocs.yml
+
+# Database files (should be mounted as volumes)
+*.db
+*.sqlite
+*.sqlite3
+
+# Results and logs (should be mounted as volumes)
+results/
+logs/
+*.log
+
+# Jupyter checkpoints
+.ipynb_checkpoints/
+
+# Development tools
+.ruff_cache/
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Environment files
+.env.*
+!.env.example
+
+# Temporary files
+*.tmp
+*.temp
+.tmp/
+.temp/
+
+# OS files
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Docker files (to avoid recursive copying)
+Dockerfile*
+.dockerignore
+docker-compose*.yml
+
+# CI/CD
+.github/
+.gitlab-ci.yml
+.travis.yml
+Jenkinsfile
+
+# Package manager files that are already copied
+uv.lock
+pyproject.toml

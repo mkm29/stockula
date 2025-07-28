@@ -1,9 +1,9 @@
 """Asset domain model representing a position in a portfolio."""
 
-from typing import Optional
-from dataclasses import dataclass, field, InitVar
-from .ticker import Ticker
+from dataclasses import InitVar, dataclass, field
+
 from .category import Category
+from .ticker import Ticker
 
 
 @dataclass
@@ -16,14 +16,12 @@ class Asset:
 
     ticker: InitVar[Ticker]
     quantity: InitVar[float]  # Number of shares
-    category: InitVar[Optional[Category]] = None  # Asset category
+    category: InitVar[Category | None] = None  # Asset category
     _ticker: Ticker = field(init=False, repr=False)
     _quantity: float = field(init=False, repr=False)
-    _category: Optional[Category] = field(init=False, repr=False)
+    _category: Category | None = field(init=False, repr=False)
 
-    def __post_init__(
-        self, ticker: Ticker, quantity: float, category: Optional[Category]
-    ):
+    def __post_init__(self, ticker: Ticker, quantity: float, category: Category | None):
         """Validate constraints and set private attributes."""
         self._ticker = ticker
         if quantity <= 0:
@@ -42,7 +40,7 @@ class Asset:
         return self._quantity
 
     @property
-    def category(self) -> Optional[Category]:  # noqa: F811
+    def category(self) -> Category | None:  # noqa: F811
         """Get asset category (read-only)."""
         return self._category
 

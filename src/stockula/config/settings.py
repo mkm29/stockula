@@ -1,16 +1,18 @@
 """Settings management using pydantic-settings."""
 
-import yaml
 from pathlib import Path
-from typing import Optional, Union, Dict, Any
+from typing import Any
+
+import yaml
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
 from .models import (
+    MACDConfig,
+    RSIConfig,
+    SMACrossConfig,
     StockulaConfig,
     StrategyConfig,
-    SMACrossConfig,
-    RSIConfig,
-    MACDConfig,
 )
 
 
@@ -24,14 +26,14 @@ class Settings(BaseSettings):
         case_sensitive=False,
     )
 
-    config_file: Optional[str] = Field(
+    config_file: str | None = Field(
         default=None, description="Path to YAML configuration file"
     )
     debug: bool = Field(default=False, description="Enable debug mode")
     log_level: str = Field(default="INFO", description="Logging level")
 
 
-def load_yaml_config(config_path: Union[str, Path]) -> Dict[str, Any]:
+def load_yaml_config(config_path: str | Path) -> dict[str, Any]:
     """Load configuration from YAML file.
 
     Args:
@@ -44,11 +46,11 @@ def load_yaml_config(config_path: Union[str, Path]) -> Dict[str, Any]:
     if not config_path.exists():
         raise FileNotFoundError(f"Configuration file not found: {config_path}")
 
-    with open(config_path, "r") as f:
+    with open(config_path) as f:
         return yaml.safe_load(f)
 
 
-def parse_strategy_config(strategy_dict: Dict[str, Any]) -> StrategyConfig:
+def parse_strategy_config(strategy_dict: dict[str, Any]) -> StrategyConfig:
     """Parse strategy configuration from dictionary.
 
     Args:
@@ -74,7 +76,7 @@ def parse_strategy_config(strategy_dict: Dict[str, Any]) -> StrategyConfig:
     return StrategyConfig(name=strategy_dict["name"], parameters=params)
 
 
-def load_config(config_path: Optional[Union[str, Path]] = None) -> StockulaConfig:
+def load_config(config_path: str | Path | None = None) -> StockulaConfig:
     """Load configuration from file or environment.
 
     Args:
@@ -119,7 +121,7 @@ def load_config(config_path: Optional[Union[str, Path]] = None) -> StockulaConfi
     return StockulaConfig(**config_data)
 
 
-def save_config(config: StockulaConfig, config_path: Union[str, Path]) -> None:
+def save_config(config: StockulaConfig, config_path: str | Path) -> None:
     """Save configuration to YAML file.
 
     Args:

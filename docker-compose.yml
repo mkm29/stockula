@@ -1,0 +1,85 @@
+# Docker Compose configuration for Stockula project
+# Provides different services for various use cases
+services:
+  # Development service with all dev dependencies
+  stockula-dev:
+    build:
+      context: .
+      target: development
+    container_name: stockula-dev
+    volumes:
+      - .:/app
+      - stockula-data:/app/data
+      - stockula-results:/app/results
+    ports:
+      - "8888:8888" # Jupyter Lab
+    environment:
+      - PYTHONPATH=/app/src
+      - STOCKULA_ENV=development
+    command: ["uv", "run", "jupyter", "lab", "--ip=0.0.0.0", "--port=8888", "--no-browser", "--allow-root"]
+  # Production CLI service
+  stockula-cli:
+    build:
+      context: .
+      target: cli
+    container_name: stockula-cli
+    volumes:
+      - stockula-data:/app/data
+      - stockula-results:/app/results
+      - ./examples:/app/examples:ro
+    environment:
+      - PYTHONPATH=/app/src
+      - STOCKULA_ENV=production
+    stdin_open: true
+    tty: true
+  # Jupyter service for analysis
+  stockula-jupyter:
+    build:
+      context: .
+      target: jupyter
+    container_name: stockula-jupyter
+    volumes:
+      - stockula-data:/app/data
+      - stockula-results:/app/results
+      - ./notebooks:/app/notebooks
+    ports:
+      - "8889:8888" # Different port to avoid conflicts
+    environment:
+      - PYTHONPATH=/app/src
+      - STOCKULA_ENV=production
+  # Test service for CI/CD
+  stockula-test:
+    build:
+      context: .
+      target: test
+    container_name: stockula-test
+    volumes:
+      - .:/app
+    environment:
+      - PYTHONPATH=/app/src
+      - STOCKULA_ENV=test
+    command: ["uv", "run", "pytest", "tests/", "--verbose"]
+  # API service (placeholder for future implementation)
+  stockula-api:
+    build:
+      context: .
+      target: api
+    container_name: stockula-api
+    volumes:
+      - stockula-data:/app/data
+      - stockula-results:/app/results
+    ports:
+      - "8000:8000"
+    environment:
+      - PYTHONPATH=/app/src
+      - STOCKULA_ENV=production
+# Named volumes for persistent data
+volumes:
+  stockula-data:
+    driver: local
+  stockula-results:
+    driver: local
+# Networks (optional - using default bridge network)
+networks:
+  default:
+    name: stockula-network

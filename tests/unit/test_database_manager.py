@@ -1,13 +1,14 @@
 """Unit tests for database manager module."""
 
-import pytest
+import json
 import sqlite3
-import pandas as pd
-import numpy as np
 from datetime import datetime, timedelta
 from pathlib import Path
-from unittest.mock import Mock, patch, MagicMock, call
-import json
+from unittest.mock import patch
+
+import numpy as np
+import pandas as pd
+import pytest
 
 from stockula.database.manager import DatabaseManager
 
@@ -607,13 +608,14 @@ class TestErrorHandling:
         # Manually insert invalid JSON
         with db_manager.get_connection() as conn:
             conn.execute(
-                "INSERT INTO stocks (symbol, name) VALUES (?, ?)",
+                "INSERT INTO stocks (symbol, name, created_at, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
                 ("TEST", "Test Company"),
             )
             conn.execute(
-                "INSERT INTO stock_info (symbol, info_json) VALUES (?, ?)",
+                "INSERT INTO stock_info (symbol, info_json, created_at, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
                 ("TEST", "{invalid json}"),
             )
+            conn.commit()
 
         # Should handle error gracefully
         with pytest.raises(json.JSONDecodeError):

@@ -1,7 +1,7 @@
 """Ticker domain model with singleton registry."""
 
-from typing import Dict, Optional, Any
-from dataclasses import dataclass, field, InitVar
+from dataclasses import InitVar, dataclass, field
+from typing import Any
 
 
 @dataclass
@@ -9,30 +9,28 @@ class Ticker:
     """Represents a tradable ticker/symbol with metadata."""
 
     symbol_init: InitVar[str]
-    sector_init: InitVar[Optional[str]] = None
-    market_cap_init: InitVar[Optional[float]] = None  # in billions
-    category_init: InitVar[Optional[str]] = (
+    sector_init: InitVar[str | None] = None
+    market_cap_init: InitVar[float | None] = None  # in billions
+    category_init: InitVar[str | None] = (
         None  # momentum, growth, value, speculative, etc.
     )
-    price_range_init: InitVar[Optional[Dict[str, float]]] = (
-        None  # open, high, low, close
-    )
-    metadata_init: InitVar[Dict[str, Any]] = None
+    price_range_init: InitVar[dict[str, float] | None] = None  # open, high, low, close
+    metadata_init: InitVar[dict[str, Any]] = None
     _symbol: str = field(init=False, repr=False)
-    _sector: Optional[str] = field(init=False, repr=False)
-    _market_cap: Optional[float] = field(init=False, repr=False)
-    _category: Optional[str] = field(init=False, repr=False)
-    _price_range: Optional[Dict[str, float]] = field(init=False, repr=False)
-    _metadata: Dict[str, Any] = field(init=False, repr=False)
+    _sector: str | None = field(init=False, repr=False)
+    _market_cap: float | None = field(init=False, repr=False)
+    _category: str | None = field(init=False, repr=False)
+    _price_range: dict[str, float] | None = field(init=False, repr=False)
+    _metadata: dict[str, Any] = field(init=False, repr=False)
 
     def __post_init__(
         self,
         symbol_init: str,
-        sector_init: Optional[str],
-        market_cap_init: Optional[float],
-        category_init: Optional[str],
-        price_range_init: Optional[Dict[str, float]],
-        metadata_init: Optional[Dict[str, Any]],
+        sector_init: str | None,
+        market_cap_init: float | None,
+        category_init: str | None,
+        price_range_init: dict[str, float] | None,
+        metadata_init: dict[str, Any] | None,
     ):
         """Initialize and validate symbol."""
         self._symbol = symbol_init.upper()  # Always store symbols in uppercase
@@ -48,27 +46,27 @@ class Ticker:
         return self._symbol
 
     @property
-    def sector(self) -> Optional[str]:  # noqa: F811
+    def sector(self) -> str | None:  # noqa: F811
         """Get ticker sector (read-only)."""
         return self._sector
 
     @property
-    def market_cap(self) -> Optional[float]:  # noqa: F811
+    def market_cap(self) -> float | None:  # noqa: F811
         """Get market capitalization (read-only)."""
         return self._market_cap
 
     @property
-    def category(self) -> Optional[str]:  # noqa: F811
+    def category(self) -> str | None:  # noqa: F811
         """Get ticker category (read-only)."""
         return self._category
 
     @property
-    def price_range(self) -> Optional[Dict[str, float]]:  # noqa: F811
+    def price_range(self) -> dict[str, float] | None:  # noqa: F811
         """Get price range data (read-only)."""
         return self._price_range
 
     @property
-    def metadata(self) -> Dict[str, Any]:  # noqa: F811
+    def metadata(self) -> dict[str, Any]:  # noqa: F811
         """Get ticker metadata (read-only)."""
         return self._metadata
 
@@ -99,11 +97,11 @@ class Ticker:
     def create(
         cls,
         symbol: str,
-        sector: Optional[str] = None,
-        market_cap: Optional[float] = None,
-        category: Optional[str] = None,
-        price_range: Optional[Dict[str, float]] = None,
-        metadata: Optional[Dict[str, Any]] = None,
+        sector: str | None = None,
+        market_cap: float | None = None,
+        category: str | None = None,
+        price_range: dict[str, float] | None = None,
+        metadata: dict[str, Any] | None = None,
     ) -> "Ticker":
         """Factory method to create Ticker with intuitive parameter names."""
         return cls(
@@ -119,7 +117,7 @@ class Ticker:
 class TickerRegistry:
     """Singleton registry for managing ticker instances."""
 
-    _instances: Dict[type, "TickerRegistry"] = {}
+    _instances: dict[type, "TickerRegistry"] = {}
 
     def __new__(cls):
         """Ensure only one instance exists per class."""
@@ -170,11 +168,11 @@ class TickerRegistry:
 
         return self._tickers[symbol]
 
-    def get(self, symbol: str) -> Optional[Ticker]:
+    def get(self, symbol: str) -> Ticker | None:
         """Get ticker by symbol if it exists."""
         return self._tickers.get(symbol.upper())
 
-    def all(self) -> Dict[str, Ticker]:
+    def all(self) -> dict[str, Ticker]:
         """Get all registered tickers."""
         return self._tickers.copy()
 

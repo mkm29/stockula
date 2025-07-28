@@ -1,15 +1,15 @@
 """Configuration module for Stockula."""
 
 from .models import (
-    DataConfig,
     BacktestConfig,
-    StrategyConfig,
+    DataConfig,
     ForecastConfig,
-    TechnicalAnalysisConfig,
-    StockulaConfig,
-    TickerConfig,
-    PortfolioConfig,
     LoggingConfig,
+    PortfolioConfig,
+    StockulaConfig,
+    StrategyConfig,
+    TechnicalAnalysisConfig,
+    TickerConfig,
 )
 from .settings import Settings, load_config, save_config
 

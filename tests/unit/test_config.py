@@ -1,23 +1,23 @@
 """Tests for configuration models and loading."""
 
-import pytest
 from datetime import date
-from pathlib import Path
+
+import pytest
 import yaml
 
 from stockula.config import (
-    StockulaConfig,
-    PortfolioConfig,
-    TickerConfig,
-    DataConfig,
     BacktestConfig,
+    DataConfig,
     ForecastConfig,
-    TechnicalAnalysisConfig,
     LoggingConfig,
+    PortfolioConfig,
+    StockulaConfig,
+    TechnicalAnalysisConfig,
+    TickerConfig,
     load_config,
     save_config,
 )
-from stockula.config.models import SMACrossConfig, RSIConfig, MACDConfig, StrategyConfig
+from stockula.config.models import MACDConfig, RSIConfig, SMACrossConfig, StrategyConfig
 
 
 class TestTickerConfig:

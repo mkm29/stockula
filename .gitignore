@@ -191,6 +191,8 @@ config.ini
 secrets.json
 .secrets
 api_keys.txt
+# User's personal configuration (use examples/ for templates)
+.config.yaml
 
 # Trading/Financial specific
 trades/
@@ -243,4 +245,8 @@ prophet_cache/
 autots_cache/
 
 # sqlite database files
-stockula.db
+# stockula.db
+
+# Test data
+tests/data/
+*.db

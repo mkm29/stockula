@@ -1,4 +1,4 @@
-# Stockula Examples and Implementation Guide
+# Stockula Data Structures and Implementation Guide
 
 This document provides comprehensive examples and implementation details for using Stockula's domain model structure, showcasing private methods, read-only properties, and best practices.
 
