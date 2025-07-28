@@ -1,17 +1,18 @@
 """Unit tests for database CLI module."""
 
-import pytest
 import argparse
+from unittest.mock import Mock, call, patch
+
 import pandas as pd
-from unittest.mock import Mock, patch, call
+import pytest
 
 from stockula.database.cli import (
-    fetch_symbol_data,
-    fetch_portfolio_data,
-    show_database_stats,
     cleanup_database,
-    query_symbol_data,
+    fetch_portfolio_data,
+    fetch_symbol_data,
     main,
+    query_symbol_data,
+    show_database_stats,
 )
 
 

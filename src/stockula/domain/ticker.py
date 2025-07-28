@@ -1,7 +1,7 @@
 """Ticker domain model with singleton registry."""
 
-from typing import Dict, Optional, Any
-from dataclasses import dataclass, field, InitVar
+from dataclasses import InitVar, dataclass, field
+from typing import Any, Dict, Optional
 
 
 @dataclass

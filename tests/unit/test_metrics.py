@@ -1,7 +1,8 @@
 """Unit tests for backtesting metrics module."""
 
-import pandas as pd
 import numpy as np
+import pandas as pd
+
 from stockula.backtesting.metrics import (
     calculate_dynamic_sharpe_ratio,
     calculate_rolling_sharpe_ratio,

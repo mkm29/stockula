@@ -1,17 +1,19 @@
 """Data fetching utilities using yfinance."""
 
-import yfinance as yf
-import pandas as pd
-from typing import Optional, List, Dict, Any, Union
 from datetime import datetime, timedelta
+from typing import Any, Dict, List, Optional, Union
+
+import pandas as pd
+import yfinance as yf
 from rich.console import Console
 from rich.progress import (
-    Progress,
     BarColumn,
+    Progress,
+    SpinnerColumn,
     TextColumn,
     TimeRemainingColumn,
-    SpinnerColumn,
 )
+
 from ..database import DatabaseManager
 
 console = Console()

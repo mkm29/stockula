@@ -4,48 +4,44 @@ import argparse
 import json
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Dict, Any, List, Optional
+from typing import Any, Dict, List, Optional
+
 import pandas as pd
-from dependency_injector.wiring import inject, Provide
+from dependency_injector.wiring import Provide, inject
 from rich.console import Console
+from rich.panel import Panel
 from rich.progress import (
-    Progress,
     BarColumn,
+    Progress,
+    SpinnerColumn,
     TextColumn,
     TimeRemainingColumn,
-    SpinnerColumn,
 )
 from rich.table import Table
-from rich.panel import Panel
 
-from .container import create_container, Container
-from .technical_analysis import TechnicalIndicators
 from .backtesting import (
-    SMACrossStrategy,
-    RSIStrategy,
-    MACDStrategy,
     DoubleEMACrossStrategy,
-    TripleEMACrossStrategy,
-    TRIMACrossStrategy,
-    VIDYAStrategy,
-    KAMAStrategy,
     FRAMAStrategy,
-    VAMAStrategy,
+    KAMAStrategy,
     KaufmanEfficiencyStrategy,
+    MACDStrategy,
+    RSIStrategy,
+    SMACrossStrategy,
+    TRIMACrossStrategy,
+    TripleEMACrossStrategy,
+    VAMAStrategy,
+    VIDYAStrategy,
 )
 from .config import StockulaConfig
 from .config.models import (
     BacktestResult,
-    StrategyBacktestSummary,
     PortfolioBacktestResults,
+    StrategyBacktestSummary,
 )
+from .container import Container, create_container
 from .domain import Category
-from .interfaces import (
-    IDataFetcher,
-    IBacktestRunner,
-    IStockForecaster,
-    ILoggingManager,
-)
+from .interfaces import IBacktestRunner, IDataFetcher, ILoggingManager, IStockForecaster
+from .technical_analysis import TechnicalIndicators
 
 # Global logging manager and console instances
 log_manager: Optional[ILoggingManager] = None
@@ -394,8 +390,8 @@ def save_detailed_report(
     Returns:
         Path to the saved report file
     """
-    from pathlib import Path
     import json
+    from pathlib import Path
 
     # Create reports directory if it doesn't exist
     reports_dir = Path(config.output.get("results_dir", "./results")) / "reports"
@@ -764,7 +760,7 @@ def print_results(
                             f"${asset_value:,.2f}",
                             f"[{status_color}]{status}[/{status_color}]",
                         )
-                except Exception as e:
+                except Exception:
                     # Fallback if we can't get prices
                     for asset in all_assets:
                         status = (

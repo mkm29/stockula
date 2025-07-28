@@ -1,12 +1,13 @@
 """Portfolio domain model for managing asset allocations."""
 
 import logging
-from typing import List, Dict, Optional, Tuple, TYPE_CHECKING
+from dataclasses import InitVar, dataclass, field
 from functools import lru_cache
-from dataclasses import dataclass, field, InitVar
+from typing import TYPE_CHECKING, Dict, List, Optional, Tuple
+
 from .asset import Asset
-from .ticker import Ticker
 from .category import Category
+from .ticker import Ticker
 
 if TYPE_CHECKING:
     from ..interfaces import IDataFetcher

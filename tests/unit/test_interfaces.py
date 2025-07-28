@@ -2,16 +2,17 @@
 
 import inspect
 from abc import ABC
-import pandas as pd
 from unittest.mock import Mock
 
+import pandas as pd
+
 from stockula.interfaces import (
-    IDataFetcher,
-    IDatabaseManager,
-    IStockForecaster,
     IBacktestRunner,
+    IDatabaseManager,
+    IDataFetcher,
     IDomainFactory,
     ILoggingManager,
+    IStockForecaster,
     ITechnicalIndicators,
 )
 
@@ -217,12 +218,12 @@ class TestInterfaceIntegration:
     def test_all_interfaces_importable(self):
         """Test that all interfaces can be imported."""
         from stockula.interfaces import (
-            IDataFetcher,
-            IDatabaseManager,
-            IStockForecaster,
             IBacktestRunner,
+            IDatabaseManager,
+            IDataFetcher,
             IDomainFactory,
             ILoggingManager,
+            IStockForecaster,
             ITechnicalIndicators,
         )
 

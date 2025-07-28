@@ -1,25 +1,26 @@
 """Tests for backtesting module."""
 
-import pytest
-import pandas as pd
-import numpy as np
 from datetime import datetime
 from unittest.mock import Mock
 
+import numpy as np
+import pandas as pd
+import pytest
+
 from stockula.backtesting import (
     BacktestRunner,
-    SMACrossStrategy,
-    RSIStrategy,
-    MACDStrategy,
     DoubleEMACrossStrategy,
-    TripleEMACrossStrategy,
+    MACDStrategy,
+    RSIStrategy,
+    SMACrossStrategy,
     TRIMACrossStrategy,
+    TripleEMACrossStrategy,
 )
 from stockula.config.models import (
     BacktestResult,
-    StrategyBacktestSummary,
-    PortfolioBacktestResults,
     BrokerConfig,
+    PortfolioBacktestResults,
+    StrategyBacktestSummary,
 )
 
 

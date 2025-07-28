@@ -1,17 +1,18 @@
 """Tests for domain models."""
 
-import pytest
 from unittest.mock import patch
 
+import pytest
+
+from stockula.config import PortfolioConfig, StockulaConfig, TickerConfig
 from stockula.domain import (
-    Ticker,
-    TickerRegistry,
     Asset,
-    Portfolio,
     Category,
     DomainFactory,
+    Portfolio,
+    Ticker,
+    TickerRegistry,
 )
-from stockula.config import StockulaConfig, PortfolioConfig, TickerConfig
 
 
 class TestTicker:

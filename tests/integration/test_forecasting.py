@@ -1,10 +1,11 @@
 """Tests for forecasting module."""
 
-import pytest
-import pandas as pd
-import numpy as np
 from datetime import timedelta
 from unittest.mock import Mock, patch
+
+import numpy as np
+import pandas as pd
+import pytest
 
 from stockula.forecasting import StockForecaster
 

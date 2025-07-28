@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.1.0] - 2025-01-28
 
 ### Added
+
 - Initial release of Stockula trading strategy library
 - Core backtesting framework with 12 trading strategies:
   - Simple Moving Average (SMA) Crossover
@@ -34,11 +35,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Documentation for testing strategy and development practices
 
 ### Infrastructure
+
 - Python 3.13+ support
 - Package management with uv
 - Test coverage configuration excluding framework-dependent code
 - GitHub Actions ready structure
 - Comprehensive .gitignore for Python projects
 
-[unreleased]: https://github.com/mkm29/stockula/compare/v0.1.0...HEAD
 [0.1.0]: https://github.com/mkm29/stockula/releases/tag/v0.1.0
+[unreleased]: https://github.com/mkm29/stockula/compare/v0.1.0...HEAD

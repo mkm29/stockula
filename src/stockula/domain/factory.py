@@ -1,13 +1,13 @@
 """Factory for creating domain objects from configuration."""
 
 import logging
-from typing import List, Optional, Dict, TYPE_CHECKING
+from typing import TYPE_CHECKING, Dict, List, Optional
 
 from ..config import StockulaConfig, TickerConfig
-from .ticker import Ticker, TickerRegistry
 from .asset import Asset
-from .portfolio import Portfolio
 from .category import Category
+from .portfolio import Portfolio
+from .ticker import Ticker, TickerRegistry
 
 if TYPE_CHECKING:
     from ..interfaces import IDataFetcher

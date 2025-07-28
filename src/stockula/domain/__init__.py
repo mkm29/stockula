@@ -1,11 +1,12 @@
 """Domain models for Stockula."""
 
-from .ticker import Ticker as _TickerClass, TickerRegistry
-from .ticker_wrapper import Ticker
 from .asset import Asset
 from .category import Category
-from .portfolio import Portfolio
 from .factory import DomainFactory
+from .portfolio import Portfolio
+from .ticker import Ticker as _TickerClass
+from .ticker import TickerRegistry
+from .ticker_wrapper import Ticker
 
 __all__ = [
     "Ticker",

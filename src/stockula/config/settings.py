@@ -1,16 +1,18 @@
 """Settings management using pydantic-settings."""
 
-import yaml
 from pathlib import Path
-from typing import Optional, Union, Dict, Any
+from typing import Any, Dict, Optional, Union
+
+import yaml
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
 from .models import (
+    MACDConfig,
+    RSIConfig,
+    SMACrossConfig,
     StockulaConfig,
     StrategyConfig,
-    SMACrossConfig,
-    RSIConfig,
-    MACDConfig,
 )
 
 

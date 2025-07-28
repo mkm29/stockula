@@ -1,13 +1,13 @@
 """Tests for logging_manager module."""
 
 import logging
+import os
 import sys
 import tempfile
-import os
 from unittest.mock import Mock, patch
 
+from stockula.config import LoggingConfig, StockulaConfig
 from stockula.utils.logging_manager import LoggingManager
-from stockula.config import StockulaConfig, LoggingConfig
 
 
 class TestLoggingManagerInitialization:

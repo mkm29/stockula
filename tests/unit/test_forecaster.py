@@ -1,20 +1,21 @@
 """Unit tests for forecasting module."""
 
-import pytest
-import pandas as pd
-import numpy as np
-from datetime import timedelta
-from unittest.mock import Mock, patch
-import warnings
 import logging
 import signal
 import sys
+import warnings
+from datetime import timedelta
 from io import StringIO
+from unittest.mock import Mock, patch
+
+import numpy as np
+import pandas as pd
+import pytest
 
 from stockula.forecasting.forecaster import (
     StockForecaster,
-    suppress_autots_output,
     signal_handler,
+    suppress_autots_output,
 )
 
 

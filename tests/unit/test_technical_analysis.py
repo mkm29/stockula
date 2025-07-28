@@ -1,8 +1,8 @@
 """Tests for technical analysis module."""
 
-import pytest
-import pandas as pd
 import numpy as np
+import pandas as pd
+import pytest
 
 from stockula.technical_analysis import TechnicalIndicators
 

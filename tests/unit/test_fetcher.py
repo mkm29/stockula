@@ -1,9 +1,10 @@
 """Unit tests for data fetcher module."""
 
-import pytest
-import pandas as pd
 from datetime import datetime
 from unittest.mock import Mock, patch
+
+import pandas as pd
+import pytest
 import yfinance as yf
 
 from stockula.data.fetcher import DataFetcher

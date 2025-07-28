@@ -1,27 +1,27 @@
 """Shared pytest fixtures for the test suite."""
 
-import pytest
 from datetime import datetime
-import pandas as pd
-import numpy as np
 from unittest.mock import Mock, patch
 
+import numpy as np
+import pandas as pd
+import pytest
+
+from stockula.backtesting import BacktestRunner
 from stockula.config import (
-    StockulaConfig,
-    PortfolioConfig,
-    TickerConfig,
-    DataConfig,
     BacktestConfig,
+    DataConfig,
     ForecastConfig,
+    PortfolioConfig,
+    StockulaConfig,
+    TickerConfig,
 )
-from stockula.domain import Portfolio, Asset, Category, DomainFactory
+from stockula.container import Container
 from stockula.data.fetcher import DataFetcher
 from stockula.database.manager import DatabaseManager
-from stockula.container import Container
-from stockula.utils import LoggingManager
-from stockula.backtesting import BacktestRunner
+from stockula.domain import Asset, Category, DomainFactory, Portfolio
 from stockula.forecasting import StockForecaster
-
+from stockula.utils import LoggingManager
 
 # ===== Configuration Fixtures =====
 

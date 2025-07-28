@@ -1,13 +1,14 @@
 """Backtesting runner and utilities."""
 
-from backtesting import Backtest
-import pandas as pd
+from typing import TYPE_CHECKING, Any, Callable, Dict, Optional, Type, Union
+
 import numpy as np
-from typing import Type, Dict, Any, Optional, TYPE_CHECKING, Callable, Union
+import pandas as pd
+from backtesting import Backtest
 
 if TYPE_CHECKING:
-    from ..interfaces import IDataFetcher
     from ..config.models import BrokerConfig
+    from ..interfaces import IDataFetcher
 
 
 class BacktestRunner:

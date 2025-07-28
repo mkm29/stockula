@@ -4,28 +4,23 @@ This file consolidates all strategy tests, focusing on testable aspects
 while accepting framework constraints of the backtesting.py library.
 """
 
-import pytest
-import pandas as pd
-import numpy as np
-
 # import warnings
 import inspect
 from datetime import datetime
-from unittest.mock import Mock, patch, MagicMock
 
 from stockula.backtesting.strategies import (
     BaseStrategy,
-    SMACrossStrategy,
-    RSIStrategy,
-    MACDStrategy,
     DoubleEMACrossStrategy,
-    TripleEMACrossStrategy,
-    TRIMACrossStrategy,
-    VIDYAStrategy,
-    KAMAStrategy,
     FRAMAStrategy,
-    VAMAStrategy,
+    KAMAStrategy,
     KaufmanEfficiencyStrategy,
+    MACDStrategy,
+    RSIStrategy,
+    SMACrossStrategy,
+    TRIMACrossStrategy,
+    TripleEMACrossStrategy,
+    VAMAStrategy,
+    VIDYAStrategy,
 )
 
 

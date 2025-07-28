@@ -28,6 +28,7 @@ dependencies = [
     "dependency-injector>=4.48.1",
     "alembic==1.16.4",
     "sqlalchemy>=2.0.41",
+    "sqlmodel>=0.0.22",
     "rich>=14.1.0",
 ]
 

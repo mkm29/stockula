@@ -1,17 +1,30 @@
-"""Database manager for storing and retrieving yfinance data."""
+"""Database manager using SQLModel for type-safe database operations."""
 
-import sqlite3
-import pandas as pd
-from typing import Dict, List, Optional, Any, Tuple
-from datetime import datetime
-import json
+from contextlib import contextmanager
+from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple
+
+import pandas as pd
+from sqlalchemy import event
+from sqlmodel import Session, SQLModel, create_engine, select
+
 from alembic import command
 from alembic.config import Config
 
+from .models import (
+    Dividend,
+    OptionsCall,
+    OptionsPut,
+    PriceHistory,
+    Split,
+    Stock,
+    StockInfo,
+)
+
 
 class DatabaseManager:
-    """Manages SQLite database for storing financial data."""
+    """Manages SQLite database using SQLModel for type-safe operations."""
 
     def __init__(self, db_path: str = "stockula.db"):
         """Initialize database manager.
@@ -20,8 +33,23 @@ class DatabaseManager:
             db_path: Path to SQLite database file
         """
         self.db_path = Path(db_path)
+        self.db_url = f"sqlite:///{self.db_path}"
+
+        # Create engine with foreign key support
+        self.engine = create_engine(
+            self.db_url, connect_args={"check_same_thread": False}, echo=False
+        )
+
+        # Enable foreign keys for SQLite
+        @event.listens_for(self.engine, "connect")
+        def set_sqlite_pragma(dbapi_connection, connection_record):
+            cursor = dbapi_connection.cursor()
+            cursor.execute("PRAGMA foreign_keys=ON")
+            cursor.close()
+
         self._run_migrations()
-        self._init_database()
+        # Create tables if they don't exist (for development)
+        SQLModel.metadata.create_all(self.engine)
 
     def _run_migrations(self) -> None:
         """Run Alembic migrations to ensure database schema is up to date."""
@@ -32,12 +60,11 @@ class DatabaseManager:
             return
 
         # Find alembic.ini file relative to the project root
-        project_root = Path(__file__).parents[3]  # Navigate up to project root
+        project_root = Path(__file__).parents[3]
         alembic_ini_path = project_root / "alembic.ini"
 
         if not alembic_ini_path.exists():
-            # If we're in a different environment, try to find alembic.ini
-            # by looking for it in common locations
+            # Try common locations
             possible_paths = [
                 Path.cwd() / "alembic.ini",
                 Path(__file__).parent.parent.parent / "alembic.ini",
@@ -48,156 +75,23 @@ class DatabaseManager:
                     break
             else:
                 # Skip migrations if alembic.ini not found
-                # This allows the database to work without migrations during development
                 return
 
         # Configure Alembic
         alembic_cfg = Config(str(alembic_ini_path))
-
-        # Override the database URL to use our db_path
-        alembic_cfg.set_main_option("sqlalchemy.url", f"sqlite:///{self.db_path}")
+        alembic_cfg.set_main_option("sqlalchemy.url", self.db_url)
 
         # Run migrations
         try:
             command.upgrade(alembic_cfg, "head")
         except Exception as e:
-            # Log the error but don't fail - allow fallback to legacy schema creation
             print(f"Warning: Could not run migrations: {e}")
 
-    def _init_database(self) -> None:
-        """Initialize database and create tables if they don't exist."""
-        with self.get_connection() as conn:
-            # Enable foreign key constraints
-            conn.execute("PRAGMA foreign_keys = ON")
-
-            # Create stocks table for basic metadata
-            conn.execute("""
-                CREATE TABLE IF NOT EXISTS stocks (
-                    symbol TEXT PRIMARY KEY,
-                    name TEXT,
-                    sector TEXT,
-                    industry TEXT,
-                    market_cap REAL,
-                    exchange TEXT,
-                    currency TEXT,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
-            """)
-
-            # Create price_history table for OHLCV data
-            conn.execute("""
-                CREATE TABLE IF NOT EXISTS price_history (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    symbol TEXT NOT NULL,
-                    date DATE NOT NULL,
-                    open_price REAL,
-                    high_price REAL,
-                    low_price REAL,
-                    close_price REAL,
-                    volume INTEGER,
-                    interval TEXT DEFAULT '1d',
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    FOREIGN KEY (symbol) REFERENCES stocks(symbol),
-                    UNIQUE(symbol, date, interval)
-                )
-            """)
-
-            # Create dividends table
-            conn.execute("""
-                CREATE TABLE IF NOT EXISTS dividends (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    symbol TEXT NOT NULL,
-                    date DATE NOT NULL,
-                    amount REAL NOT NULL,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    FOREIGN KEY (symbol) REFERENCES stocks(symbol),
-                    UNIQUE(symbol, date)
-                )
-            """)
-
-            # Create splits table
-            conn.execute("""
-                CREATE TABLE IF NOT EXISTS splits (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    symbol TEXT NOT NULL,
-                    date DATE NOT NULL,
-                    ratio REAL NOT NULL,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    FOREIGN KEY (symbol) REFERENCES stocks(symbol),
-                    UNIQUE(symbol, date)
-                )
-            """)
-
-            # Create options_calls table
-            conn.execute("""
-                CREATE TABLE IF NOT EXISTS options_calls (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    symbol TEXT NOT NULL,
-                    expiration_date DATE NOT NULL,
-                    strike REAL NOT NULL,
-                    last_price REAL,
-                    bid REAL,
-                    ask REAL,
-                    volume INTEGER,
-                    open_interest INTEGER,
-                    implied_volatility REAL,
-                    in_the_money BOOLEAN,
-                    contract_symbol TEXT,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    FOREIGN KEY (symbol) REFERENCES stocks(symbol),
-                    UNIQUE(symbol, expiration_date, strike, contract_symbol)
-                )
-            """)
-
-            # Create options_puts table
-            conn.execute("""
-                CREATE TABLE IF NOT EXISTS options_puts (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    symbol TEXT NOT NULL,
-                    expiration_date DATE NOT NULL,
-                    strike REAL NOT NULL,
-                    last_price REAL,
-                    bid REAL,
-                    ask REAL,
-                    volume INTEGER,
-                    open_interest INTEGER,
-                    implied_volatility REAL,
-                    in_the_money BOOLEAN,
-                    contract_symbol TEXT,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    FOREIGN KEY (symbol) REFERENCES stocks(symbol),
-                    UNIQUE(symbol, expiration_date, strike, contract_symbol)
-                )
-            """)
-
-            # Create stock_info table for raw yfinance info
-            conn.execute("""
-                CREATE TABLE IF NOT EXISTS stock_info (
-                    symbol TEXT PRIMARY KEY,
-                    info_json TEXT NOT NULL,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    FOREIGN KEY (symbol) REFERENCES stocks(symbol)
-                )
-            """)
-
-            # Create indexes for better query performance
-            conn.execute(
-                "CREATE INDEX IF NOT EXISTS idx_price_history_symbol_date ON price_history(symbol, date)"
-            )
-            conn.execute(
-                "CREATE INDEX IF NOT EXISTS idx_dividends_symbol_date ON dividends(symbol, date)"
-            )
-            conn.execute(
-                "CREATE INDEX IF NOT EXISTS idx_splits_symbol_date ON splits(symbol, date)"
-            )
-            conn.execute(
-                "CREATE INDEX IF NOT EXISTS idx_options_calls_symbol_exp ON options_calls(symbol, expiration_date)"
-            )
-            conn.execute(
-                "CREATE INDEX IF NOT EXISTS idx_options_puts_symbol_exp ON options_puts(symbol, expiration_date)"
-            )
+    @contextmanager
+    def get_session(self) -> Session:
+        """Get a database session as context manager."""
+        with Session(self.engine) as session:
+            yield session
 
     def store_stock_info(self, symbol: str, info: Dict[str, Any]) -> None:
         """Store basic stock information.
@@ -206,35 +100,33 @@ class DatabaseManager:
             symbol: Stock ticker symbol
             info: Stock information dictionary from yfinance
         """
-        with self.get_connection() as conn:
-            # Extract key fields for stocks table
-            name = info.get("longName") or info.get("shortName", "")
-            sector = info.get("sector", "")
-            industry = info.get("industry", "")
-            market_cap = info.get("marketCap")
-            exchange = info.get("exchange", "")
-            currency = info.get("currency", "")
+        with self.get_session() as session:
+            # Create or update stock
+            stock = session.get(Stock, symbol)
+            if not stock:
+                stock = Stock(symbol=symbol)
 
-            # Insert or update stocks table
-            conn.execute(
-                """
-                INSERT OR REPLACE INTO stocks 
-                (symbol, name, sector, industry, market_cap, exchange, currency, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-            """,
-                (symbol, name, sector, industry, market_cap, exchange, currency),
-            )
+            # Update fields
+            stock.name = info.get("longName") or info.get("shortName", "")
+            stock.sector = info.get("sector", "")
+            stock.industry = info.get("industry", "")
+            stock.market_cap = info.get("marketCap")
+            stock.exchange = info.get("exchange", "")
+            stock.currency = info.get("currency", "")
+            stock.updated_at = datetime.now(timezone.utc)
+
+            session.add(stock)
 
             # Store full info as JSON
-            info_json = json.dumps(info, default=str)
-            conn.execute(
-                """
-                INSERT OR REPLACE INTO stock_info 
-                (symbol, info_json, updated_at)
-                VALUES (?, ?, CURRENT_TIMESTAMP)
-            """,
-                (symbol, info_json),
-            )
+            stock_info = session.get(StockInfo, symbol)
+            if not stock_info:
+                stock_info = StockInfo(symbol=symbol)
+
+            stock_info.set_info(info)
+            stock_info.updated_at = datetime.now(timezone.utc)
+
+            session.add(stock_info)
+            session.commit()
 
     def store_price_history(
         self, symbol: str, data: pd.DataFrame, interval: str = "1d"
@@ -249,25 +141,37 @@ class DatabaseManager:
         if data.empty:
             return
 
-        with self.get_connection() as conn:
+        with self.get_session() as session:
+            # Ensure stock exists
+            stock = session.get(Stock, symbol)
+            if not stock:
+                stock = Stock(symbol=symbol)
+                session.add(stock)
+
             for date, row in data.iterrows():
-                conn.execute(
-                    """
-                    INSERT OR REPLACE INTO price_history 
-                    (symbol, date, open_price, high_price, low_price, close_price, volume, interval)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                    (
-                        symbol,
-                        date.strftime("%Y-%m-%d"),
-                        row.get("Open"),
-                        row.get("High"),
-                        row.get("Low"),
-                        row.get("Close"),
-                        row.get("Volume"),
-                        interval,
-                    ),
+                # Check if record exists
+                stmt = select(PriceHistory).where(
+                    PriceHistory.symbol == symbol,
+                    PriceHistory.date == date.date(),
+                    PriceHistory.interval == interval,
                 )
+                price_history = session.exec(stmt).first()
+
+                if not price_history:
+                    price_history = PriceHistory(
+                        symbol=symbol, date=date.date(), interval=interval
+                    )
+
+                # Update values
+                price_history.open_price = row.get("Open")
+                price_history.high_price = row.get("High")
+                price_history.low_price = row.get("Low")
+                price_history.close_price = row.get("Close")
+                price_history.volume = row.get("Volume")
+
+                session.add(price_history)
+
+            session.commit()
 
     def store_dividends(self, symbol: str, dividends: pd.Series) -> None:
         """Store dividend data.
@@ -279,15 +183,30 @@ class DatabaseManager:
         if dividends.empty:
             return
 
-        with self.get_connection() as conn:
+        with self.get_session() as session:
+            # Ensure stock exists
+            stock = session.get(Stock, symbol)
+            if not stock:
+                stock = Stock(symbol=symbol)
+                session.add(stock)
+
             for date, amount in dividends.items():
-                conn.execute(
-                    """
-                    INSERT OR REPLACE INTO dividends (symbol, date, amount)
-                    VALUES (?, ?, ?)
-                """,
-                    (symbol, date.strftime("%Y-%m-%d"), float(amount)),
+                # Check if record exists
+                stmt = select(Dividend).where(
+                    Dividend.symbol == symbol, Dividend.date == date.date()
                 )
+                dividend = session.exec(stmt).first()
+
+                if not dividend:
+                    dividend = Dividend(
+                        symbol=symbol, date=date.date(), amount=float(amount)
+                    )
+                else:
+                    dividend.amount = float(amount)
+
+                session.add(dividend)
+
+            session.commit()
 
     def store_splits(self, symbol: str, splits: pd.Series) -> None:
         """Store stock split data.
@@ -299,15 +218,28 @@ class DatabaseManager:
         if splits.empty:
             return
 
-        with self.get_connection() as conn:
+        with self.get_session() as session:
+            # Ensure stock exists
+            stock = session.get(Stock, symbol)
+            if not stock:
+                stock = Stock(symbol=symbol)
+                session.add(stock)
+
             for date, ratio in splits.items():
-                conn.execute(
-                    """
-                    INSERT OR REPLACE INTO splits (symbol, date, ratio)
-                    VALUES (?, ?, ?)
-                """,
-                    (symbol, date.strftime("%Y-%m-%d"), float(ratio)),
+                # Check if record exists
+                stmt = select(Split).where(
+                    Split.symbol == symbol, Split.date == date.date()
                 )
+                split = session.exec(stmt).first()
+
+                if not split:
+                    split = Split(symbol=symbol, date=date.date(), ratio=float(ratio))
+                else:
+                    split.ratio = float(ratio)
+
+                session.add(split)
+
+            session.commit()
 
     def store_options_chain(
         self, symbol: str, calls: pd.DataFrame, puts: pd.DataFrame, expiration_date: str
@@ -320,56 +252,78 @@ class DatabaseManager:
             puts: DataFrame with put options
             expiration_date: Options expiration date
         """
-        with self.get_connection() as conn:
+        expiry_date = datetime.strptime(expiration_date, "%Y-%m-%d").date()
+
+        with self.get_session() as session:
+            # Ensure stock exists
+            stock = session.get(Stock, symbol)
+            if not stock:
+                stock = Stock(symbol=symbol)
+                session.add(stock)
+
             # Store calls
             if not calls.empty:
                 for _, row in calls.iterrows():
-                    conn.execute(
-                        """
-                        INSERT OR REPLACE INTO options_calls 
-                        (symbol, expiration_date, strike, last_price, bid, ask, volume, 
-                         open_interest, implied_volatility, in_the_money, contract_symbol)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    """,
-                        (
-                            symbol,
-                            expiration_date,
-                            row.get("strike"),
-                            row.get("lastPrice"),
-                            row.get("bid"),
-                            row.get("ask"),
-                            row.get("volume"),
-                            row.get("openInterest"),
-                            row.get("impliedVolatility"),
-                            row.get("inTheMoney"),
-                            row.get("contractSymbol"),
-                        ),
+                    # Check if record exists
+                    stmt = select(OptionsCall).where(
+                        OptionsCall.symbol == symbol,
+                        OptionsCall.expiration_date == expiry_date,
+                        OptionsCall.strike == row.get("strike"),
+                        OptionsCall.contract_symbol == row.get("contractSymbol"),
                     )
+                    option = session.exec(stmt).first()
+
+                    if not option:
+                        option = OptionsCall(
+                            symbol=symbol,
+                            expiration_date=expiry_date,
+                            strike=row.get("strike"),
+                        )
+
+                    # Update values
+                    option.last_price = row.get("lastPrice")
+                    option.bid = row.get("bid")
+                    option.ask = row.get("ask")
+                    option.volume = row.get("volume")
+                    option.open_interest = row.get("openInterest")
+                    option.implied_volatility = row.get("impliedVolatility")
+                    option.in_the_money = row.get("inTheMoney")
+                    option.contract_symbol = row.get("contractSymbol")
+
+                    session.add(option)
 
             # Store puts
             if not puts.empty:
                 for _, row in puts.iterrows():
-                    conn.execute(
-                        """
-                        INSERT OR REPLACE INTO options_puts 
-                        (symbol, expiration_date, strike, last_price, bid, ask, volume, 
-                         open_interest, implied_volatility, in_the_money, contract_symbol)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    """,
-                        (
-                            symbol,
-                            expiration_date,
-                            row.get("strike"),
-                            row.get("lastPrice"),
-                            row.get("bid"),
-                            row.get("ask"),
-                            row.get("volume"),
-                            row.get("openInterest"),
-                            row.get("impliedVolatility"),
-                            row.get("inTheMoney"),
-                            row.get("contractSymbol"),
-                        ),
+                    # Check if record exists
+                    stmt = select(OptionsPut).where(
+                        OptionsPut.symbol == symbol,
+                        OptionsPut.expiration_date == expiry_date,
+                        OptionsPut.strike == row.get("strike"),
+                        OptionsPut.contract_symbol == row.get("contractSymbol"),
                     )
+                    option = session.exec(stmt).first()
+
+                    if not option:
+                        option = OptionsPut(
+                            symbol=symbol,
+                            expiration_date=expiry_date,
+                            strike=row.get("strike"),
+                        )
+
+                    # Update values
+                    option.last_price = row.get("lastPrice")
+                    option.bid = row.get("bid")
+                    option.ask = row.get("ask")
+                    option.volume = row.get("volume")
+                    option.open_interest = row.get("openInterest")
+                    option.implied_volatility = row.get("impliedVolatility")
+                    option.in_the_money = row.get("inTheMoney")
+                    option.contract_symbol = row.get("contractSymbol")
+
+                    session.add(option)
+
+            session.commit()
 
     def get_price_history(
         self,
@@ -389,28 +343,42 @@ class DatabaseManager:
         Returns:
             DataFrame with historical price data
         """
-        with self.get_connection() as conn:
-            query = """
-                SELECT date, open_price as Open, high_price as High, low_price as Low, 
-                       close_price as Close, volume as Volume
-                FROM price_history 
-                WHERE symbol = ? AND interval = ?
-            """
-            params = [symbol, interval]
+        with self.get_session() as session:
+            stmt = select(PriceHistory).where(
+                PriceHistory.symbol == symbol, PriceHistory.interval == interval
+            )
 
             if start_date:
-                query += " AND date >= ?"
-                params.append(start_date)
+                start = datetime.strptime(start_date, "%Y-%m-%d").date()
+                stmt = stmt.where(PriceHistory.date >= start)
             if end_date:
-                query += " AND date <= ?"
-                params.append(end_date)
+                end = datetime.strptime(end_date, "%Y-%m-%d").date()
+                stmt = stmt.where(PriceHistory.date <= end)
 
-            query += " ORDER BY date"
+            stmt = stmt.order_by(PriceHistory.date)
 
-            df = pd.read_sql_query(query, conn, params=params)
-            if not df.empty:
-                df["date"] = pd.to_datetime(df["date"])
-                df = df.set_index("date")
+            results = session.exec(stmt).all()
+
+            if not results:
+                return pd.DataFrame()
+
+            # Convert to DataFrame
+            data = []
+            for row in results:
+                data.append(
+                    {
+                        "date": row.date,
+                        "Open": row.open_price,
+                        "High": row.high_price,
+                        "Low": row.low_price,
+                        "Close": row.close_price,
+                        "Volume": row.volume,
+                    }
+                )
+
+            df = pd.DataFrame(data)
+            df["date"] = pd.to_datetime(df["date"])
+            df = df.set_index("date")
             return df
 
     def get_stock_info(self, symbol: str) -> Optional[Dict[str, Any]]:
@@ -422,13 +390,10 @@ class DatabaseManager:
         Returns:
             Stock information dictionary or None if not found
         """
-        with self.get_connection() as conn:
-            cursor = conn.execute(
-                "SELECT info_json FROM stock_info WHERE symbol = ?", (symbol,)
-            )
-            row = cursor.fetchone()
-            if row:
-                return json.loads(row[0])
+        with self.get_session() as session:
+            stock_info = session.get(StockInfo, symbol)
+            if stock_info:
+                return stock_info.info_dict
             return None
 
     def get_dividends(
@@ -447,24 +412,26 @@ class DatabaseManager:
         Returns:
             Series with dividend data
         """
-        with self.get_connection() as conn:
-            query = "SELECT date, amount FROM dividends WHERE symbol = ?"
-            params = [symbol]
+        with self.get_session() as session:
+            stmt = select(Dividend).where(Dividend.symbol == symbol)
 
             if start_date:
-                query += " AND date >= ?"
-                params.append(start_date)
+                start = datetime.strptime(start_date, "%Y-%m-%d").date()
+                stmt = stmt.where(Dividend.date >= start)
             if end_date:
-                query += " AND date <= ?"
-                params.append(end_date)
+                end = datetime.strptime(end_date, "%Y-%m-%d").date()
+                stmt = stmt.where(Dividend.date <= end)
 
-            query += " ORDER BY date"
+            stmt = stmt.order_by(Dividend.date)
 
-            df = pd.read_sql_query(query, conn, params=params)
-            if not df.empty:
-                df["date"] = pd.to_datetime(df["date"])
-                return df.set_index("date")["amount"]
-            return pd.Series(dtype=float)
+            results = session.exec(stmt).all()
+
+            if not results:
+                return pd.Series(dtype=float)
+
+            # Convert to Series
+            data = {pd.to_datetime(row.date): row.amount for row in results}
+            return pd.Series(data)
 
     def get_splits(
         self,
@@ -482,24 +449,26 @@ class DatabaseManager:
         Returns:
             Series with split data
         """
-        with self.get_connection() as conn:
-            query = "SELECT date, ratio FROM splits WHERE symbol = ?"
-            params = [symbol]
+        with self.get_session() as session:
+            stmt = select(Split).where(Split.symbol == symbol)
 
             if start_date:
-                query += " AND date >= ?"
-                params.append(start_date)
+                start = datetime.strptime(start_date, "%Y-%m-%d").date()
+                stmt = stmt.where(Split.date >= start)
             if end_date:
-                query += " AND date <= ?"
-                params.append(end_date)
+                end = datetime.strptime(end_date, "%Y-%m-%d").date()
+                stmt = stmt.where(Split.date <= end)
 
-            query += " ORDER BY date"
+            stmt = stmt.order_by(Split.date)
 
-            df = pd.read_sql_query(query, conn, params=params)
-            if not df.empty:
-                df["date"] = pd.to_datetime(df["date"])
-                return df.set_index("date")["ratio"]
-            return pd.Series(dtype=float)
+            results = session.exec(stmt).all()
+
+            if not results:
+                return pd.Series(dtype=float)
+
+            # Convert to Series
+            data = {pd.to_datetime(row.date): row.ratio for row in results}
+            return pd.Series(data)
 
     def get_options_chain(
         self, symbol: str, expiration_date: str
@@ -513,36 +482,67 @@ class DatabaseManager:
         Returns:
             Tuple of (calls DataFrame, puts DataFrame)
         """
-        with self.get_connection() as conn:
+        expiry_date = datetime.strptime(expiration_date, "%Y-%m-%d").date()
+
+        with self.get_session() as session:
             # Get calls
-            calls_df = pd.read_sql_query(
-                """
-                SELECT strike, last_price as lastPrice, bid, ask, volume, 
-                       open_interest as openInterest, implied_volatility as impliedVolatility,
-                       in_the_money as inTheMoney, contract_symbol as contractSymbol
-                FROM options_calls 
-                WHERE symbol = ? AND expiration_date = ?
-                ORDER BY strike
-            """,
-                conn,
-                params=(symbol, expiration_date),
+            stmt = (
+                select(OptionsCall)
+                .where(
+                    OptionsCall.symbol == symbol,
+                    OptionsCall.expiration_date == expiry_date,
+                )
+                .order_by(OptionsCall.strike)
             )
+
+            calls = session.exec(stmt).all()
 
             # Get puts
-            puts_df = pd.read_sql_query(
-                """
-                SELECT strike, last_price as lastPrice, bid, ask, volume, 
-                       open_interest as openInterest, implied_volatility as impliedVolatility,
-                       in_the_money as inTheMoney, contract_symbol as contractSymbol
-                FROM options_puts 
-                WHERE symbol = ? AND expiration_date = ?
-                ORDER BY strike
-            """,
-                conn,
-                params=(symbol, expiration_date),
+            stmt = (
+                select(OptionsPut)
+                .where(
+                    OptionsPut.symbol == symbol,
+                    OptionsPut.expiration_date == expiry_date,
+                )
+                .order_by(OptionsPut.strike)
             )
 
-            return calls_df, puts_df
+            puts = session.exec(stmt).all()
+
+            # Convert to DataFrames
+            calls_data = []
+            for row in calls:
+                calls_data.append(
+                    {
+                        "strike": row.strike,
+                        "lastPrice": row.last_price,
+                        "bid": row.bid,
+                        "ask": row.ask,
+                        "volume": row.volume,
+                        "openInterest": row.open_interest,
+                        "impliedVolatility": row.implied_volatility,
+                        "inTheMoney": row.in_the_money,
+                        "contractSymbol": row.contract_symbol,
+                    }
+                )
+
+            puts_data = []
+            for row in puts:
+                puts_data.append(
+                    {
+                        "strike": row.strike,
+                        "lastPrice": row.last_price,
+                        "bid": row.bid,
+                        "ask": row.ask,
+                        "volume": row.volume,
+                        "openInterest": row.open_interest,
+                        "impliedVolatility": row.implied_volatility,
+                        "inTheMoney": row.in_the_money,
+                        "contractSymbol": row.contract_symbol,
+                    }
+                )
+
+            return pd.DataFrame(calls_data), pd.DataFrame(puts_data)
 
     def get_all_symbols(self) -> List[str]:
         """Get all symbols in the database.
@@ -550,9 +550,10 @@ class DatabaseManager:
         Returns:
             List of all ticker symbols
         """
-        with self.get_connection() as conn:
-            cursor = conn.execute("SELECT symbol FROM stocks ORDER BY symbol")
-            return [row[0] for row in cursor.fetchall()]
+        with self.get_session() as session:
+            stmt = select(Stock.symbol).order_by(Stock.symbol)
+            results = session.exec(stmt).all()
+            return list(results)
 
     def get_latest_price(self, symbol: str) -> Optional[float]:
         """Get the latest price for a symbol.
@@ -563,18 +564,18 @@ class DatabaseManager:
         Returns:
             Latest close price or None if not found
         """
-        with self.get_connection() as conn:
-            cursor = conn.execute(
-                """
-                SELECT close_price FROM price_history 
-                WHERE symbol = ? 
-                ORDER BY date DESC 
-                LIMIT 1
-            """,
-                (symbol,),
+        with self.get_session() as session:
+            stmt = (
+                select(PriceHistory)
+                .where(PriceHistory.symbol == symbol)
+                .order_by(PriceHistory.date.desc())
+                .limit(1)
             )
-            row = cursor.fetchone()
-            return row[0] if row else None
+
+            result = session.exec(stmt).first()
+            if result:
+                return result.close_price
+            return None
 
     def has_data(self, symbol: str, start_date: str, end_date: str) -> bool:
         """Check if we have data for a symbol in the given date range.
@@ -587,16 +588,22 @@ class DatabaseManager:
         Returns:
             True if we have data in the date range
         """
-        with self.get_connection() as conn:
-            cursor = conn.execute(
-                """
-                SELECT COUNT(*) FROM price_history 
-                WHERE symbol = ? AND date >= ? AND date <= ?
-            """,
-                (symbol, start_date, end_date),
+        start = datetime.strptime(start_date, "%Y-%m-%d").date()
+        end = datetime.strptime(end_date, "%Y-%m-%d").date()
+
+        with self.get_session() as session:
+            stmt = (
+                select(PriceHistory)
+                .where(
+                    PriceHistory.symbol == symbol,
+                    PriceHistory.date >= start,
+                    PriceHistory.date <= end,
+                )
+                .limit(1)
             )
-            count = cursor.fetchone()[0]
-            return count > 0
+
+            result = session.exec(stmt).first()
+            return result is not None
 
     def get_database_stats(self) -> Dict[str, int]:
         """Get database statistics.
@@ -604,49 +611,72 @@ class DatabaseManager:
         Returns:
             Dictionary with table row counts
         """
-        stats = {}
-        tables = [
-            "stocks",
-            "price_history",
-            "dividends",
-            "splits",
-            "options_calls",
-            "options_puts",
-            "stock_info",
-        ]
-
-        with self.get_connection() as conn:
-            for table in tables:
-                cursor = conn.execute(f"SELECT COUNT(*) FROM {table}")
-                stats[table] = cursor.fetchone()[0]
-
+        with self.get_session() as session:
+            stats = {
+                "stocks": session.exec(select(Stock)).all().__len__(),
+                "price_history": session.exec(select(PriceHistory)).all().__len__(),
+                "dividends": session.exec(select(Dividend)).all().__len__(),
+                "splits": session.exec(select(Split)).all().__len__(),
+                "options_calls": session.exec(select(OptionsCall)).all().__len__(),
+                "options_puts": session.exec(select(OptionsPut)).all().__len__(),
+                "stock_info": session.exec(select(StockInfo)).all().__len__(),
+            }
         return stats
 
-    # Context manager support
-    def get_connection(self):
-        """Get a database connection as context manager."""
-        conn = sqlite3.connect(self.db_path)
-        # Enable foreign key constraints for this connection
-        conn.execute("PRAGMA foreign_keys = ON")
-        return conn
+    def get_latest_price_date(self, symbol: str) -> Optional[datetime]:
+        """Get latest price date for a symbol."""
+        with self.get_session() as session:
+            stmt = (
+                select(PriceHistory.date)
+                .where(PriceHistory.symbol == symbol)
+                .order_by(PriceHistory.date.desc())
+                .limit(1)
+            )
 
-    # Backward compatibility aliases for tests
-    @property
-    def conn(self):
-        """Get database connection (deprecated - use get_connection()).
+            result = session.exec(stmt).first()
+            if result:
+                return datetime.combine(result, datetime.min.time())
+            return None
 
-        Note: This property returns a raw connection that must be manually closed.
-        Prefer using get_connection() with a context manager instead.
-        """
-        import warnings
+    def cleanup_old_data(self, days_to_keep: int = 365) -> int:
+        """Clean up old data from database."""
+        from datetime import timedelta
 
-        warnings.warn(
-            "The 'conn' property is deprecated. Use 'get_connection()' context manager instead.",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        return sqlite3.connect(self.db_path)
+        cutoff_date = (datetime.now() - timedelta(days=days_to_keep)).date()
 
+        with self.get_session() as session:
+            # Delete old price history
+            stmt = select(PriceHistory).where(PriceHistory.date < cutoff_date)
+            old_prices = session.exec(stmt).all()
+            deleted_count = len(old_prices)
+
+            for price in old_prices:
+                session.delete(price)
+
+            # Delete old options calls
+            stmt = select(OptionsCall).where(OptionsCall.expiration_date < cutoff_date)
+            old_calls = session.exec(stmt).all()
+            for call in old_calls:
+                session.delete(call)
+
+            # Delete old options puts
+            stmt = select(OptionsPut).where(OptionsPut.expiration_date < cutoff_date)
+            old_puts = session.exec(stmt).all()
+            for put in old_puts:
+                session.delete(put)
+
+            session.commit()
+
+            # VACUUM the database (SQLite specific)
+            from sqlalchemy import text
+
+            with self.engine.connect() as conn:
+                conn.execute(text("VACUUM"))
+                conn.commit()
+
+            return deleted_count
+
+    # Backward compatibility methods
     def add_stock(
         self, symbol: str, name: str, sector: str = "", market_cap: float = None
     ):
@@ -683,108 +713,51 @@ class DatabaseManager:
 
     def bulk_add_price_data(self, price_data_list):
         """Bulk add price data (backward compatibility)."""
-        # Use a single transaction for all operations
-        with self.get_connection() as conn:
-            try:
-                for row in price_data_list:
-                    symbol, date, open_p, high, low, close, volume, interval = row
-                    conn.execute(
-                        """
-                        INSERT OR REPLACE INTO price_history 
-                        (symbol, date, open_price, high_price, low_price, close_price, volume, interval)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                        """,
-                        (
-                            symbol,
-                            date.strftime("%Y-%m-%d")
-                            if hasattr(date, "strftime")
-                            else date,
-                            open_p,
-                            high,
-                            low,
-                            close,
-                            volume,
-                            interval,
-                        ),
-                    )
-                conn.commit()
-            except Exception:
-                conn.rollback()
-                raise
+        # Group by symbol for efficiency
+        from collections import defaultdict
 
-    def add_stock_info(self, symbol: str, info: Dict[str, Any]):
-        """Add stock info (backward compatibility)."""
-        self.store_stock_info(symbol, info)
+        grouped_data = defaultdict(list)
 
-    def add_dividends(self, symbol: str, dividends: pd.Series):
-        """Add dividends (backward compatibility)."""
-        self.store_dividends(symbol, dividends)
-
-    def add_splits(self, symbol: str, splits: pd.Series):
-        """Add splits (backward compatibility)."""
-        self.store_splits(symbol, splits)
-
-    def add_options_data(
-        self, symbol: str, calls: pd.DataFrame, puts: pd.DataFrame, expiry: str
-    ):
-        """Add options data (backward compatibility)."""
-        self.store_options_chain(symbol, calls, puts, expiry)
-
-    def get_latest_price_date(self, symbol: str) -> Optional[datetime]:
-        """Get latest price date for a symbol."""
-        with self.get_connection() as conn:
-            cursor = conn.execute(
-                """
-                SELECT MAX(date) FROM price_history 
-                WHERE symbol = ?
-                """,
-                (symbol,),
+        for row in price_data_list:
+            symbol, date, open_p, high, low, close, volume, interval = row
+            grouped_data[(symbol, interval)].append(
+                {
+                    "date": pd.to_datetime(date),
+                    "Open": open_p,
+                    "High": high,
+                    "Low": low,
+                    "Close": close,
+                    "Volume": volume,
+                }
             )
-            result = cursor.fetchone()
-            if result and result[0]:
-                return datetime.fromisoformat(result[0])
-            return None
 
-    def cleanup_old_data(self, days_to_keep: int = 365) -> int:
-        """Clean up old data from database."""
-        from datetime import timedelta
+        # Store each group
+        for (symbol, interval), data_list in grouped_data.items():
+            df = pd.DataFrame(data_list)
+            df = df.set_index("date")
+            self.store_price_history(symbol, df, interval)
 
-        cutoff_date = (datetime.now() - timedelta(days=days_to_keep)).strftime(
-            "%Y-%m-%d"
+    # Context manager support for backward compatibility
+    @contextmanager
+    def get_connection(self):
+        """Get a database connection (returns raw SQLite connection for compatibility)."""
+        pool_conn = self.engine.raw_connection()
+        try:
+            # Get the underlying SQLite connection
+            sqlite_conn = pool_conn.driver_connection
+            yield sqlite_conn
+        finally:
+            pool_conn.close()
+
+    @property
+    def conn(self):
+        """Get database connection (deprecated)."""
+        import warnings
+
+        warnings.warn(
+            "The 'conn' property is deprecated. Use 'get_session()' context manager instead.",
+            DeprecationWarning,
+            stacklevel=2,
         )
-
-        with self.get_connection() as conn:
-            cursor = conn.execute(
-                """
-                DELETE FROM price_history 
-                WHERE date < ?
-                """,
-                (cutoff_date,),
-            )
-            deleted_rows = cursor.rowcount
-
-            # Also clean up old options data
-            conn.execute(
-                """
-                DELETE FROM options_calls 
-                WHERE expiration_date < ?
-                """,
-                (cutoff_date,),
-            )
-
-            conn.execute(
-                """
-                DELETE FROM options_puts 
-                WHERE expiration_date < ?
-                """,
-                (cutoff_date,),
-            )
-
-            # Commit the transaction before VACUUM
-            conn.commit()
-
-        # VACUUM must run outside a transaction
-        with self.get_connection() as conn:
-            conn.execute("VACUUM")
-
-            return deleted_rows
+        # Return the raw SQLite connection
+        return self.engine.raw_connection().driver_connection

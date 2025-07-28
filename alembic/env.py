@@ -19,9 +19,9 @@ if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
 # Import models metadata for autogenerate support
-from stockula.database.models import Base
+from stockula.database.models import SQLModel
 
-target_metadata = Base.metadata
+target_metadata = SQLModel.metadata
 
 # Override sqlalchemy.url with environment variable if present
 database_url = os.environ.get("DATABASE_URL", config.get_main_option("sqlalchemy.url"))

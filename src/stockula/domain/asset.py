@@ -1,9 +1,10 @@
 """Asset domain model representing a position in a portfolio."""
 
+from dataclasses import InitVar, dataclass, field
 from typing import Optional
-from dataclasses import dataclass, field, InitVar
-from .ticker import Ticker
+
 from .category import Category
+from .ticker import Ticker
 
 
 @dataclass

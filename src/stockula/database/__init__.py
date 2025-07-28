@@ -2,19 +2,17 @@
 
 from .manager import DatabaseManager
 from .models import (
-    Base,
-    Stock,
-    PriceHistory,
     Dividend,
-    Split,
     OptionsCall,
     OptionsPut,
+    PriceHistory,
+    Split,
+    Stock,
     StockInfo,
 )
 
 __all__ = [
     "DatabaseManager",
-    "Base",
     "Stock",
     "PriceHistory",
     "Dividend",

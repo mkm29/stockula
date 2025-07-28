@@ -1,29 +1,28 @@
 """Tests for technical indicators."""
 
-import pytest
-import pandas as pd
-import numpy as np
-from datetime import datetime, timedelta
 import sys
 from pathlib import Path
+
+import numpy as np
+import pandas as pd
 
 # Add src to path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
 
 from stockula.backtesting.indicators import (
-    calculate_sma,
-    calculate_ema,
-    calculate_rsi,
-    calculate_macd,
     calculate_atr,
-    calculate_tema,
-    calculate_trima,
-    calculate_vidya,
-    calculate_kama,
     calculate_efficiency_ratio,
+    calculate_ema,
     calculate_fractal_dimension,
     calculate_frama,
+    calculate_kama,
+    calculate_macd,
+    calculate_rsi,
+    calculate_sma,
+    calculate_tema,
+    calculate_trima,
     calculate_vama,
+    calculate_vidya,
     detect_crossover,
     detect_crossunder,
 )

@@ -1,9 +1,10 @@
 """Unit tests for backtesting runner module."""
 
-import pytest
-import pandas as pd
-import numpy as np
 from unittest.mock import Mock, patch
+
+import numpy as np
+import pandas as pd
+import pytest
 
 from stockula.backtesting.runner import BacktestRunner
 from stockula.backtesting.strategies import SMACrossStrategy

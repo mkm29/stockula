@@ -1,7 +1,8 @@
 """Interfaces/protocols for dependency injection."""
 
 from abc import ABC, abstractmethod
-from typing import Optional, List, Dict, Any
+from typing import Any, Dict, List, Optional
+
 import pandas as pd
 
 

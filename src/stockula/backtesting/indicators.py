@@ -4,9 +4,10 @@ This module contains standalone implementations of technical indicators
 that can be tested independently of the backtesting framework.
 """
 
-import pandas as pd
+from typing import Tuple
+
 import numpy as np
-from typing import Union, Tuple
+import pandas as pd
 
 
 def calculate_sma(prices: pd.Series, period: int) -> pd.Series:

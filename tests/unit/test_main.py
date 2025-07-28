@@ -1,25 +1,24 @@
 """Unit tests for main module."""
 
-import pytest
 import json
 from datetime import datetime
 from unittest.mock import Mock, patch
-import pandas as pd
 
+import pandas as pd
+import pytest
+
+from stockula.config import StockulaConfig, TickerConfig
+from stockula.config.models import PortfolioBacktestResults
 from stockula.main import (
-    setup_logging,
+    create_portfolio_backtest_results,
     get_strategy_class,
-    run_technical_analysis,
+    main,
+    print_results,
     run_backtest,
     run_forecast,
-    print_results,
-    main,
-    create_portfolio_backtest_results,
+    run_technical_analysis,
     save_detailed_report,
-)
-from stockula.config import StockulaConfig, TickerConfig
-from stockula.config.models import (
-    PortfolioBacktestResults,
+    setup_logging,
 )
 
 
@@ -65,7 +64,7 @@ class TestGetStrategyClass:
 
     def test_get_strategy_class_valid(self):
         """Test getting valid strategy classes."""
-        from stockula.backtesting.strategies import SMACrossStrategy, RSIStrategy
+        from stockula.backtesting.strategies import RSIStrategy, SMACrossStrategy
 
         assert get_strategy_class("smacross") == SMACrossStrategy
         assert get_strategy_class("SMACROSS") == SMACrossStrategy

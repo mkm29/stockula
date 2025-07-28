@@ -1,9 +1,10 @@
 """Tests for data fetching module."""
 
-import pytest
 from datetime import datetime, timedelta
 from unittest.mock import Mock, patch
+
 import pandas as pd
+import pytest
 
 from stockula.data.fetcher import DataFetcher
 from stockula.database.manager import DatabaseManager

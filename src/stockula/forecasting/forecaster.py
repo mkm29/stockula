@@ -1,14 +1,15 @@
 """Stock price forecasting using AutoTS."""
 
-import pandas as pd
-import warnings
 import logging
 import signal
 import sys
+import warnings
 from contextlib import contextmanager
 from io import StringIO
+from typing import TYPE_CHECKING, Any, Dict, Optional
+
+import pandas as pd
 from autots import AutoTS
-from typing import Optional, Dict, Any, TYPE_CHECKING
 from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, TextColumn
 

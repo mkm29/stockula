@@ -1,9 +1,10 @@
 """Tests for database module."""
 
-import pytest
 import sqlite3
 from datetime import datetime, timedelta
+
 import pandas as pd
+import pytest
 
 from stockula.database.manager import DatabaseManager
 

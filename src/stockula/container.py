@@ -2,14 +2,14 @@
 
 from dependency_injector import containers, providers
 
-from .utils.logging_manager import LoggingManager
-from .config import StockulaConfig, load_config
-from .database.manager import DatabaseManager
-from .data.fetcher import DataFetcher
-from .domain.factory import DomainFactory
-from .technical_analysis.indicators import TechnicalIndicators
 from .backtesting.runner import BacktestRunner
+from .config import StockulaConfig, load_config
+from .data.fetcher import DataFetcher
+from .database.manager import DatabaseManager
+from .domain.factory import DomainFactory
 from .forecasting.forecaster import StockForecaster
+from .technical_analysis.indicators import TechnicalIndicators
+from .utils.logging_manager import LoggingManager
 
 
 class Container(containers.DeclarativeContainer):

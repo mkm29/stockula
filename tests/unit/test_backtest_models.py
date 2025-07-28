@@ -1,10 +1,11 @@
 """Unit tests for backtest data models."""
 
 from datetime import datetime
+
 from stockula.config.models import (
     BacktestResult,
-    StrategyBacktestSummary,
     PortfolioBacktestResults,
+    StrategyBacktestSummary,
 )
 
 

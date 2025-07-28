@@ -9,7 +9,7 @@ import pickle
 import pandas as pd
 import numpy as np
 from pathlib import Path
-from typing import Dict, List, Optional, Union
+from typing import Dict, List, Optional
 from datetime import datetime, timedelta
 import warnings
 

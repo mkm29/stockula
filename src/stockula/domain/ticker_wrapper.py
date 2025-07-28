@@ -1,6 +1,7 @@
 """Wrapper for Ticker to provide backward compatibility."""
 
-from typing import Optional, Dict, Any
+from typing import Any, Dict, Optional
+
 from .ticker import Ticker as _Ticker
 
 

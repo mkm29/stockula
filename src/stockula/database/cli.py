@@ -2,10 +2,12 @@
 
 import argparse
 import sys
-from typing import List
 from pathlib import Path
+from typing import List
+
 from alembic import command
 from alembic.config import Config
+
 from ..data.fetcher import DataFetcher
 from .manager import DatabaseManager
 

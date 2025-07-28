@@ -1,20 +1,20 @@
 """Tests for main CLI module."""
 
-import sys
 import json
-from unittest.mock import Mock, patch
+import sys
 from io import StringIO
+from unittest.mock import Mock, patch
 
+from stockula.config import StockulaConfig
 from stockula.main import (
-    main,
-    setup_logging,
     get_strategy_class,
-    run_technical_analysis,
+    main,
+    print_results,
     run_backtest,
     run_forecast,
-    print_results,
+    run_technical_analysis,
+    setup_logging,
 )
-from stockula.config import StockulaConfig
 
 
 class TestLoggingSetup:
@@ -66,7 +66,7 @@ class TestStrategyClass:
 
     def test_get_strategy_class_valid(self):
         """Test getting valid strategy classes."""
-        from stockula.backtesting import SMACrossStrategy, RSIStrategy
+        from stockula.backtesting import RSIStrategy, SMACrossStrategy
 
         assert get_strategy_class("smacross") == SMACrossStrategy
         assert get_strategy_class("rsi") == RSIStrategy
