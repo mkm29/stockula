@@ -30,6 +30,8 @@ from .backtesting import (
     VIDYAStrategy,
     KAMAStrategy,
     FRAMAStrategy,
+    VAMAStrategy,
+    KaufmanEfficiencyStrategy,
 )
 from .config import StockulaConfig
 from .config.models import (
@@ -73,6 +75,8 @@ def get_strategy_class(strategy_name: str):
         "vidya": VIDYAStrategy,
         "kama": KAMAStrategy,
         "frama": FRAMAStrategy,
+        "vama": VAMAStrategy,
+        "er": KaufmanEfficiencyStrategy,
     }
     return strategies.get(strategy_name.lower())
 
@@ -578,12 +582,16 @@ def create_portfolio_backtest_results(
     return portfolio_results
 
 
-def print_results(results: Dict[str, Any], output_format: str = "console"):
+def print_results(
+    results: Dict[str, Any], output_format: str = "console", config=None, container=None
+):
     """Print results in specified format.
 
     Args:
         results: Results dictionary
         output_format: Output format (console, json)
+        config: Optional configuration object for portfolio composition
+        container: Optional DI container for fetching data
     """
     if output_format == "json":
         console.print_json(json.dumps(results, indent=2, default=str))
@@ -694,54 +702,134 @@ def print_results(results: Dict[str, Any], output_format: str = "console"):
                     console.print(f"  {info}")
                 console.print()  # Add blank line
 
-            if len(strategies) > 1:
-                # For multiple strategies, only show a brief message
-                console.print(
-                    f"Running [bold]{len(strategies)}[/bold] strategies across [bold]{len(set(b['ticker'] for b in results['backtesting']))}[/bold] stocks..."
-                )
-                console.print("Detailed results will be shown per strategy below.")
-            else:
-                # For single strategy, show the detailed results in a table
-                table = Table(title="Backtest Results")
+            # Display portfolio composition table (only if config and container are provided)
+            if config and container:
+                table = Table(title="Portfolio Composition")
                 table.add_column("Ticker", style="cyan", no_wrap=True)
-                table.add_column("Strategy", style="yellow")
-                table.add_column("Return %", style="green", justify="right")
-                table.add_column("Sharpe Ratio", style="blue", justify="right")
-                table.add_column("Max Drawdown %", style="red", justify="right")
-                table.add_column("Trades", style="white", justify="right")
-                table.add_column("Win Rate %", style="magenta", justify="right")
+                table.add_column("Category", style="yellow")
+                table.add_column("Quantity", style="white", justify="right")
+                table.add_column("Allocation %", style="green", justify="right")
+                table.add_column("Value", style="blue", justify="right")
+                table.add_column("Status", style="magenta")
 
-                for backtest in results["backtesting"]:
-                    win_rate_str = (
-                        "N/A"
-                        if backtest["num_trades"] == 0
-                        else f"{backtest.get('win_rate', 0):.1f}"
-                    )
-                    if backtest.get("win_rate") is None and backtest["num_trades"] > 0:
-                        win_rate_str = "0.0"
+                # Get portfolio composition information
+                portfolio = container.domain_factory().create_portfolio(config)
+                all_assets = portfolio.get_all_assets()
 
-                    # Color code return percentage
-                    return_pct = backtest["return_pct"]
-                    return_color = (
-                        "green"
-                        if return_pct > 0
-                        else "red"
-                        if return_pct < 0
-                        else "white"
-                    )
-                    return_str = f"[{return_color}]{return_pct:+.2f}[/{return_color}]"
+                # Get hold-only categories from config
+                hold_only_category_names = set(config.backtest.hold_only_categories)
+                hold_only_categories = set()
+                for category_name in hold_only_category_names:
+                    try:
+                        hold_only_categories.add(Category[category_name])
+                    except KeyError:
+                        pass  # Skip unknown categories
 
-                    table.add_row(
-                        backtest["ticker"],
-                        backtest["strategy"].upper(),
-                        return_str,
-                        f"{backtest['sharpe_ratio']:.2f}",
-                        f"{backtest['max_drawdown_pct']:.2f}",
-                        str(backtest["num_trades"]),
-                        win_rate_str,
+                # Get current prices for calculation
+                fetcher = container.data_fetcher()
+                symbols = [asset.symbol for asset in all_assets]
+                try:
+                    current_prices = fetcher.get_current_prices(
+                        symbols, show_progress=False
                     )
+                    total_portfolio_value = sum(
+                        asset.quantity * current_prices.get(asset.symbol, 0)
+                        for asset in all_assets
+                    )
+
+                    for asset in all_assets:
+                        current_price = current_prices.get(asset.symbol, 0)
+                        asset_value = asset.quantity * current_price
+                        allocation_pct = (
+                            (asset_value / total_portfolio_value * 100)
+                            if total_portfolio_value > 0
+                            else 0
+                        )
+
+                        # Determine status
+                        status = (
+                            "Hold Only"
+                            if asset.category in hold_only_categories
+                            else "Tradeable"
+                        )
+                        status_color = "yellow" if status == "Hold Only" else "green"
+
+                        table.add_row(
+                            asset.symbol,
+                            asset.category.name
+                            if hasattr(asset.category, "name")
+                            else str(asset.category),
+                            f"{asset.quantity:.2f}",
+                            f"{allocation_pct:.1f}%",
+                            f"${asset_value:,.2f}",
+                            f"[{status_color}]{status}[/{status_color}]",
+                        )
+                except Exception as e:
+                    # Fallback if we can't get prices
+                    for asset in all_assets:
+                        status = (
+                            "Hold Only"
+                            if asset.category in hold_only_categories
+                            else "Tradeable"
+                        )
+                        status_color = "yellow" if status == "Hold Only" else "green"
+
+                        table.add_row(
+                            asset.symbol,
+                            asset.category.name
+                            if hasattr(asset.category, "name")
+                            else str(asset.category),
+                            f"{asset.quantity:.2f}",
+                            "N/A",
+                            "N/A",
+                            f"[{status_color}]{status}[/{status_color}]",
+                        )
 
                 console.print(table)
+                console.print()  # Add blank line
+
+            # Show ticker-level backtest results in a table
+            console.print("\n[bold green]Ticker-Level Backtest Results[/bold green]")
+
+            table = Table(title="Ticker-Level Backtest Results")
+            table.add_column("Ticker", style="cyan", no_wrap=True)
+            table.add_column("Strategy", style="yellow", no_wrap=True)
+            table.add_column("Return", style="green", justify="right")
+            table.add_column("Sharpe Ratio", style="blue", justify="right")
+            table.add_column("Max Drawdown", style="red", justify="right")
+            table.add_column("Trades", style="white", justify="right")
+            table.add_column("Win Rate", style="magenta", justify="right")
+
+            for backtest in results["backtesting"]:
+                return_str = f"{backtest['return_pct']:+.2f}%"
+                sharpe_str = f"{backtest['sharpe_ratio']:.2f}"
+                drawdown_str = f"{backtest['max_drawdown_pct']:.2f}%"
+                trades_str = str(backtest["num_trades"])
+
+                if backtest["win_rate"] is None:
+                    win_rate_str = "N/A"
+                else:
+                    win_rate_str = f"{backtest['win_rate']:.1f}%"
+
+                table.add_row(
+                    backtest["ticker"],
+                    backtest["strategy"].upper(),
+                    return_str,
+                    sharpe_str,
+                    drawdown_str,
+                    trades_str,
+                    win_rate_str,
+                )
+
+            console.print(table)
+            console.print()  # Add blank line
+
+            # Show summary message about strategies and stocks
+            console.print(
+                f"Running [bold]{len(strategies)}[/bold] strategies across [bold]{len(set(b['ticker'] for b in results['backtesting']))}[/bold] stocks..."
+            )
+            if len(strategies) > 1:
+                console.print("Detailed results will be shown per strategy below.")
 
         if "forecasting" in results:
             console.print("\n[bold purple]=== Forecasting Results ===[/bold purple]")
@@ -1128,7 +1216,7 @@ def main():
 
     # Output results
     output_format = args.output or config.output.get("format", "console")
-    print_results(results, output_format)
+    print_results(results, output_format, config, container)
 
     # Show strategy-specific summaries after backtesting
     if args.mode in ["all", "backtest"] and "backtesting" in results:
@@ -1149,6 +1237,44 @@ def main():
         portfolio_backtest_results = create_portfolio_backtest_results(
             results, config, strategy_results
         )
+
+        # Show ticker-level results table first
+        console.print("\n[bold green]Ticker-Level Backtest Results[/bold green]")
+
+        # Create table for ticker-level results
+        table = Table(title="Ticker-Level Backtest Results")
+        table.add_column("Ticker", style="cyan", no_wrap=True)
+        table.add_column("Strategy", style="yellow", no_wrap=True)
+        table.add_column("Return", style="green", justify="right")
+        table.add_column("Sharpe Ratio", style="blue", justify="right")
+        table.add_column("Max Drawdown", style="red", justify="right")
+        table.add_column("Trades", style="white", justify="right")
+        table.add_column("Win Rate", style="magenta", justify="right")
+
+        # Add rows for each backtest result
+        for backtest in results["backtesting"]:
+            return_str = f"{backtest['return_pct']:+.2f}%"
+            sharpe_str = f"{backtest['sharpe_ratio']:.2f}"
+            drawdown_str = f"{backtest['max_drawdown_pct']:.2f}%"
+            trades_str = str(backtest["num_trades"])
+
+            if backtest["win_rate"] is None:
+                win_rate_str = "N/A"
+            else:
+                win_rate_str = f"{backtest['win_rate']:.1f}%"
+
+            table.add_row(
+                backtest["ticker"],
+                backtest["strategy"].upper(),
+                return_str,
+                sharpe_str,
+                drawdown_str,
+                trades_str,
+                win_rate_str,
+            )
+
+        console.print(table)
+        console.print()  # Add blank line
 
         # Show summary for each strategy using structured data
         for strategy_summary in portfolio_backtest_results.strategy_summaries:

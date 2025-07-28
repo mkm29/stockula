@@ -11,6 +11,8 @@ from .strategies import (
     VIDYAStrategy,
     KAMAStrategy,
     FRAMAStrategy,
+    VAMAStrategy,
+    KaufmanEfficiencyStrategy,
 )
 from .runner import BacktestRunner
 from .metrics import (
@@ -31,6 +33,8 @@ __all__ = [
     "VIDYAStrategy",
     "KAMAStrategy",
     "FRAMAStrategy",
+    "VAMAStrategy",
+    "KaufmanEfficiencyStrategy",
     "BacktestRunner",
     "calculate_dynamic_sharpe_ratio",
     "calculate_rolling_sharpe_ratio",

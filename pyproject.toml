@@ -52,3 +52,18 @@ dev-dependencies = [
     "mkdocs>=1.6.1",
     "mkdocs-material>=9.6.16",
 ]
+
+[tool.coverage.run]
+omit = [
+    "src/stockula/backtesting/strategies.py",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+]
