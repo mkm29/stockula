@@ -117,6 +117,7 @@ For comprehensive documentation, visit our [**MkDocs Documentation Site**](https
 - [**Technical Analysis**](https://mkm29.github.io/stockula/user-guide/technical-analysis/) - 40+ indicators and usage
 - [**Backtesting**](https://mkm29.github.io/stockula/user-guide/backtesting/) - Strategy testing with realistic costs
 - [**Forecasting**](https://mkm29.github.io/stockula/user-guide/forecasting/) - AutoTS time series prediction
+- [**Forecasting Models**](docs/FORECASTING_MODELS.md) - Fast & full financial model details
 - [**Rich CLI Features**](https://mkm29.github.io/stockula/user-guide/rich-cli/) - Enhanced command-line interface
 
 ### 🔧 API Reference

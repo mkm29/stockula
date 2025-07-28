@@ -115,6 +115,11 @@ class LoggingManager:
             "apscheduler",
             "peewee",
             "backtesting",
+            "cmdstanpy",
+            "prophet",
+            "prophet.plot",
+            "matplotlib",
+            "matplotlib.font_manager",
         ]:
             logging.getLogger(lib_name).setLevel(third_party_level)
 
@@ -207,6 +212,16 @@ class LoggingManager:
         self.logger.setLevel(log_level)
         for handler in self.handlers:
             handler.setLevel(log_level)
+
+    def set_module_level(self, module_name: str, level: str) -> None:
+        """Set the logging level for a specific module.
+
+        Args:
+            module_name: The module name (e.g., 'cmdstanpy', 'prophet')
+            level: The logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
+        """
+        log_level = getattr(logging, level.upper(), logging.WARNING)
+        logging.getLogger(module_name).setLevel(log_level)
 
     def close(self) -> None:
         """Close all handlers and clean up."""

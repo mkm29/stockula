@@ -457,21 +457,28 @@ class ForecastConfig(BaseModel):
     )
     model_list: str = Field(
         default="fast",
-        description="Model subset to use ('fast', 'default', 'slow', 'parallel')",
+        description="Model subset to use ('fast', 'default', 'slow', 'parallel', 'financial')",
     )
     ensemble: str = Field(
         default="auto",
         description="Ensemble method ('auto', 'simple', 'distance', 'horizontal')",
     )
+    use_financial_models: bool = Field(
+        default=True,
+        description="Use financial-appropriate models to avoid statsmodels warnings",
+    )
     max_generations: int = Field(
-        default=5, ge=1, description="Maximum generations for model search"
+        default=2, ge=1, description="Maximum generations for model search"
     )
     num_validations: int = Field(
-        default=2, ge=1, description="Number of validation splits"
+        default=1, ge=1, description="Number of validation splits"
     )
     validation_method: str = Field(
         default="backwards",
         description="Validation method ('backwards', 'seasonal', 'similarity')",
+    )
+    max_workers: int = Field(
+        default=4, ge=1, le=16, description="Maximum parallel workers for forecasting"
     )
 
 

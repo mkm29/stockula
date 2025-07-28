@@ -39,11 +39,14 @@ class TestSuppressAutoTSOutput:
         original_stderr = sys.stderr
 
         with suppress_autots_output():
-            # stdout and stderr should be redirected
+            # stdout and stderr should be redirected to FilteredOutput
             assert sys.stdout != original_stdout
             assert sys.stderr != original_stderr
-            assert isinstance(sys.stdout, StringIO)
-            assert isinstance(sys.stderr, StringIO)
+            # Check that it's our FilteredOutput wrapper
+            assert hasattr(sys.stdout, "original_stream")
+            assert hasattr(sys.stderr, "original_stream")
+            assert sys.stdout.__class__.__name__ == "FilteredOutput"
+            assert sys.stderr.__class__.__name__ == "FilteredOutput"
 
         # Should be restored
         assert sys.stdout == original_stdout
@@ -53,7 +56,7 @@ class TestSuppressAutoTSOutput:
         logger.setLevel(original_level)
 
     def test_no_suppress_when_debug(self):
-        """Test no suppression in debug mode."""
+        """Test filtering in debug mode."""
         logger = logging.getLogger("stockula.forecasting.forecaster")
         original_level = logger.level
         logger.setLevel(logging.DEBUG)
@@ -62,9 +65,21 @@ class TestSuppressAutoTSOutput:
         original_stderr = sys.stderr
 
         with suppress_autots_output():
-            # Should not redirect in debug mode
-            assert sys.stdout == original_stdout
-            assert sys.stderr == original_stderr
+            # In debug mode, stdout/stderr are wrapped with FilteredOutput
+            assert sys.stdout != original_stdout
+            assert sys.stderr != original_stderr
+
+            # Verify it's FilteredOutput with the original stream preserved
+            assert hasattr(sys.stdout, "original_stream")
+            assert hasattr(sys.stderr, "original_stream")
+            assert sys.stdout.original_stream == original_stdout
+            assert sys.stderr.original_stream == original_stderr
+            assert sys.stdout.__class__.__name__ == "FilteredOutput"
+            assert sys.stderr.__class__.__name__ == "FilteredOutput"
+
+        # Should be restored after context
+        assert sys.stdout == original_stdout
+        assert sys.stderr == original_stderr
 
         # Restore original level
         logger.setLevel(original_level)
@@ -592,10 +607,12 @@ class TestStockForecasterIntegration:
             mock_autots.return_value = mock_instance
 
             with patch("stockula.forecasting.forecaster.signal.signal"):
-                with caplog.at_level(logging.INFO):
+                # Set the specific logger to DEBUG level as well
+                with caplog.at_level(
+                    logging.DEBUG, logger="stockula.forecasting.forecaster"
+                ):
                     forecaster.fit(data)
 
             # Check log messages
-            assert "Starting AutoTS model fitting" in caplog.text
-            assert "5 data points" in caplog.text
-            assert "Model fitting completed successfully" in caplog.text
+            assert "Fitting model on 5 data points" in caplog.text
+            assert "Model fitting completed" in caplog.text
