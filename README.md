@@ -102,13 +102,13 @@ backtest:
 
 ## 📚 Documentation
 
-For comprehensive documentation, visit our [**MkDocs Documentation Site**](https://mkm29.github.io/stockula/):
+For comprehensive documentation, visit our [**MkDocs Documentation Site**](docs/):
 
 ### 🏁 Getting Started
 
-- [**Installation Guide**](https://mkm29.github.io/stockula/getting-started/installation/) - Detailed setup instructions
-- [**Quick Start**](https://mkm29.github.io/stockula/getting-started/quick-start/) - Common workflows and examples
-- [**Configuration**](https://mkm29.github.io/stockula/getting-started/configuration/) - Complete configuration reference
+- [**Installation Guide**](docs/getting-started/installation/) - Detailed setup instructions
+- [**Quick Start**](docs/getting-started/quick-start/) - Common workflows and examples
+- [**Configuration**](docs/getting-started/configuration/) - Complete configuration reference
 
 ### 📖 User Guide
 
@@ -122,20 +122,20 @@ For comprehensive documentation, visit our [**MkDocs Documentation Site**](https
 
 ### 🔧 API Reference
 
-- [**Strategies API**](https://mkm29.github.io/stockula/api/strategies/) - Built-in and custom trading strategies
-- [**Broker Configuration**](https://mkm29.github.io/stockula/api/broker-config/) - Commission structures and fee models
-- [**Data Models**](https://mkm29.github.io/stockula/api/data-models/) - Pydantic models and validation
-- [**Database API**](https://mkm29.github.io/stockula/api/database/) - SQLite operations and CLI
+- [**Strategies API**](docs/api/strategies.md) - Built-in and custom trading strategies
+- [**Broker Configuration**](docs/api/broker-config.md) - Commission structures and fee models
+- [**Data Models**](docs/api/data-models.md) - Pydantic models and validation
+- [**Database API**](docs/api/database.md) - SQLite operations and CLI
 
 ### 🛠️ Development
 
-- [**Contributing**](https://mkm29.github.io/stockula/development/contributing/) - Development setup and guidelines
-- [**Testing**](https://mkm29.github.io/stockula/development/testing/) - Test suite and coverage
-- [**Code Quality**](https://mkm29.github.io/stockula/development/code-quality/) - Linting and formatting
+- [**Contributing**](docs/development/contributing) - Development setup and guidelines
+- [**Testing**](docs/development/testing/) - Test suite and coverage
+- [**Code Quality**](docs/development/code-quality/) - Linting and formatting
 
 ### 🔍 Help
 
-- [**Troubleshooting**](https://mkm29.github.io/stockula/troubleshooting/) - Common issues and solutions
+- [**Troubleshooting**](docs/troubleshooting/) - Common issues and solutions
 
 ## 🏗️ Architecture
 
@@ -273,7 +273,7 @@ graph TB
 
 ## 🔗 Links
 
-- **📖 Full Documentation**: [https://mkm29.github.io/stockula/](https://mkm29.github.io/stockula/)
+- **📖 Full Documentation**: [docs/](docs/)
 - **🐛 Issue Tracker**: [GitHub Issues](https://github.com/mkm29/stockula/issues)
 - **💡 Feature Requests**: [GitHub Discussions](https://github.com/mkm29/stockula/discussions)
 
@@ -283,8 +283,8 @@ MIT License - see [LICENSE](LICENSE) file for details.
 
 ## 🤝 Contributing
 
-Contributions are welcome! Please see our [Contributing Guide](https://mkm29.github.io/stockula/development/contributing/) for development setup and guidelines.
+Contributions are welcome! Please see our [Contributing Guide](docs/development/contributing/) for development setup and guidelines.
 
 ______________________________________________________________________
 
-> **📚 For detailed documentation, examples, and API references, visit [our comprehensive documentation site](https://mkm29.github.io/stockula/).**
+> **📚 For detailed documentation, examples, and API references, visit [our comprehensive documentation site](docs/).**
