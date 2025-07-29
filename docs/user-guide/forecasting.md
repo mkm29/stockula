@@ -10,6 +10,7 @@ The forecasting module offers:
 - **Multiple Models**: Ensemble of forecasting algorithms
 - **Confidence Intervals**: Statistical uncertainty quantification
 - **Model Validation**: Cross-validation and backtesting
+- **Train/Test Evaluation**: Historical accuracy assessment with RMSE, MAE, and MAPE metrics
 - **Performance Optimization**: Configurable speed vs. accuracy trade-offs
 - **Rich Visualization**: Progress tracking and result display
 
@@ -47,6 +48,13 @@ Maximum accuracy with longer computation time:
 ### Basic Forecasting Setup
 
 ```yaml
+# Data configuration with train/test split
+data:
+  train_start_date: "2025-01-01"   # Training data start
+  train_end_date: "2025-03-31"     # Training data end
+  test_start_date: "2025-04-01"    # Test data start (for evaluation)
+  test_end_date: "2025-06-30"      # Test data end
+
 forecast:
   forecast_length: 30           # Days to forecast
   model_list: "fast"            # fast, default, slow
@@ -173,6 +181,21 @@ for asset in portfolio.assets:
 
 ## Rich CLI Output
 
+### Portfolio Value Summary (Forecast Mode)
+
+When running in forecast mode with train/test split, you'll see:
+
+```
+               Portfolio Value               
+┏━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━┳━━━━━━━━━━━━┓
+┃ Metric          ┃ Date       ┃ Value      ┃
+┡━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━╇━━━━━━━━━━━━┩
+│ Portfolio Value │ 2025-04-01 │ $20,000.00 │
+│ Portfolio Value │ 2025-06-30 │ $19,934.32 │
+│ Accuracy        │ 2025-06-30 │ 90.8621%   │
+└─────────────────┴────────────┴────────────┘
+```
+
 ### Forecast Results Table
 
 ```
@@ -186,6 +209,24 @@ for asset in portfolio.assets:
 │ GOOGL  │ $2,750.80     │ $2,825.45 ↑   │ $2,650.30 - $3,010.60│
 │ MSFT   │ $405.60       │ $412.25 ↑     │ $385.40 - $445.80│
 └────────┴───────────────┴────────────────┴──────────────────┘
+```
+
+### Forecast Evaluation Metrics
+
+When train/test dates are configured, you'll also see accuracy metrics:
+
+```
+                         Model Performance on Test Data                         
+┏━━━━━━━━┳━━━━━━━━┳━━━━━━━━┳━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━┓
+┃ Ticker ┃   RMSE ┃    MAE ┃ MAPE % ┃ Train Period       ┃ Test Period         ┃
+┡━━━━━━━━╇━━━━━━━━╇━━━━━━━━╇━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━┩
+│ AAPL   │ $27.26 │ $24.12 │ 12.69% │ 2025-01-02 to      │ 2025-04-01 to       │
+│        │        │        │        │ 2025-03-31         │ 2025-06-30          │
+│ NVDA   │  $8.49 │  $6.75 │  6.68% │ 2025-01-02 to      │ 2025-04-01 to       │
+│        │        │        │        │ 2025-03-31         │ 2025-06-30          │
+│ TSLA   │ $58.38 │ $56.51 │ 22.20% │ 2025-01-02 to      │ 2025-04-01 to       │
+│        │        │        │        │ 2025-03-31         │ 2025-06-30          │
+└────────┴────────┴────────┴────────┴────────────────────┴─────────────────────┘
 ```
 
 ### Progress Tracking
@@ -224,6 +265,38 @@ AutoTS provides detailed progress information:
 │                                                              │
 ╰──────────────────────────────────────────────────────────────╯
 ```
+
+## Train/Test Evaluation
+
+When train/test dates are configured in your config file, Stockula automatically:
+
+1. **Trains models** on historical data from `train_start_date` to `train_end_date`
+2. **Makes predictions** for the period from `test_start_date` to `test_end_date`
+3. **Compares predictions** to actual prices during the test period
+4. **Calculates accuracy metrics**:
+   - **RMSE (Root Mean Square Error)**: Average prediction error in dollars
+   - **MAE (Mean Absolute Error)**: Average absolute error in dollars
+   - **MAPE (Mean Absolute Percentage Error)**: Average percentage error
+   - **Accuracy**: Calculated as 100% - MAPE
+
+### Example Configuration
+
+```yaml
+data:
+  train_start_date: "2025-01-01"   # 3 months of training data
+  train_end_date: "2025-03-31"     
+  test_start_date: "2025-04-01"    # 3 months of test data
+  test_end_date: "2025-06-30"      
+```
+
+### Interpreting Results
+
+- **Accuracy > 95%**: Excellent model performance
+- **Accuracy 90-95%**: Good model performance
+- **Accuracy 85-90%**: Acceptable performance
+- **Accuracy < 85%**: Consider adjusting model parameters
+
+The portfolio-level accuracy shown in the summary is the average of individual stock accuracies, weighted by their portfolio allocation.
 
 ## Forecast Interpretation
 

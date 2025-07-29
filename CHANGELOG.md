@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Forecast Evaluation**: Enhanced forecast mode with train/test split evaluation
+  - Automatic accuracy calculation using RMSE, MAE, and MAPE metrics
+  - Portfolio-level accuracy display showing weighted average performance
+  - Train/test period configuration in data section of config file
+  - Detailed evaluation metrics table showing model performance per ticker
+
+### Changed
+
+- **Forecast Output**: Improved forecast mode display to show:
+  - Portfolio value at test start and end dates
+  - Overall portfolio accuracy percentage
+  - Individual ticker evaluation metrics when train/test dates are configured
+
 ## [0.2.0] - 2025-01-29
 
 ### Added
