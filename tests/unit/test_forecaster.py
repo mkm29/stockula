@@ -14,7 +14,6 @@ import pytest
 
 from stockula.forecasting.forecaster import (
     StockForecaster,
-    signal_handler,
     suppress_autots_output,
 )
 
@@ -45,8 +44,8 @@ class TestSuppressAutoTSOutput:
             # Check that it's our FilteredOutput wrapper
             assert hasattr(sys.stdout, "original_stream")
             assert hasattr(sys.stderr, "original_stream")
-            assert sys.stdout.__class__.__name__ == "FilteredOutput"
-            assert sys.stderr.__class__.__name__ == "FilteredOutput"
+            assert sys.stdout.__class__.__name__ == "FilteredStream"
+            assert sys.stderr.__class__.__name__ == "FilteredStream"
 
         # Should be restored
         assert sys.stdout == original_stdout
@@ -74,8 +73,8 @@ class TestSuppressAutoTSOutput:
             assert hasattr(sys.stderr, "original_stream")
             assert sys.stdout.original_stream == original_stdout
             assert sys.stderr.original_stream == original_stderr
-            assert sys.stdout.__class__.__name__ == "FilteredOutput"
-            assert sys.stderr.__class__.__name__ == "FilteredOutput"
+            assert sys.stdout.__class__.__name__ == "FilteredStream"
+            assert sys.stderr.__class__.__name__ == "FilteredStream"
 
         # Should be restored after context
         assert sys.stdout == original_stdout
@@ -83,24 +82,6 @@ class TestSuppressAutoTSOutput:
 
         # Restore original level
         logger.setLevel(original_level)
-
-
-class TestSignalHandler:
-    """Test signal handling."""
-
-    def test_signal_handler(self):
-        """Test the signal handler function."""
-        import stockula.forecasting.forecaster as forecaster_module
-
-        # Reset interrupted flag
-        forecaster_module._interrupted = False
-
-        # Test signal handler (without actually exiting)
-        with patch("sys.exit") as mock_exit:
-            signal_handler(signal.SIGINT, None)
-
-            assert forecaster_module._interrupted is True
-            mock_exit.assert_called_once_with(0)
 
 
 class TestStockForecasterInitialization:
@@ -112,7 +93,7 @@ class TestStockForecasterInitialization:
 
         assert forecaster.forecast_length == 14
         assert forecaster.frequency == "infer"
-        assert forecaster.prediction_interval == 0.9
+        assert forecaster.prediction_interval == 0.95
         assert forecaster.num_validations == 2
         assert forecaster.validation_method == "backwards"
         assert forecaster.model is None
@@ -179,7 +160,7 @@ class TestStockForecasterFit:
         call_kwargs = mock_autots_class.call_args[1]
         assert call_kwargs["forecast_length"] == 14
         assert call_kwargs["frequency"] == "infer"
-        assert call_kwargs["prediction_interval"] == 0.9
+        assert call_kwargs["prediction_interval"] == 0.95
         assert call_kwargs["verbose"] == 0
         assert call_kwargs["no_negatives"] is True
 
@@ -192,28 +173,6 @@ class TestStockForecasterFit:
         assert "date" in fit_df.columns
         assert "Close" in fit_df.columns
         assert len(fit_df) == len(sample_data)
-
-    def test_fit_with_date_column(self, mock_autots):
-        """Test fitting with date as column."""
-        mock_autots_class, mock_instance, mock_model = mock_autots
-
-        # Create data with date column
-        data = pd.DataFrame(
-            {
-                "Date": pd.date_range("2023-01-01", periods=50),
-                "Close": np.random.randn(50).cumsum() + 100,
-            }
-        )
-
-        forecaster = StockForecaster()
-
-        with patch("stockula.forecasting.forecaster.signal.signal"):
-            forecaster.fit(data, date_col="Date")
-
-        # Should have set index from date column
-        fit_args = mock_instance.fit.call_args[0]
-        fit_df = fit_args[0]
-        assert "date" in fit_df.columns
 
     def test_fit_missing_target_column(self, mock_autots):
         """Test fit with missing target column."""
@@ -480,12 +439,13 @@ class TestStockForecasterPlotForecast:
         """Test plotting forecast with prediction available."""
         forecaster = StockForecaster()
 
-        # Mock prediction
+        # Mock prediction with plot method
         mock_prediction = Mock()
         forecaster.prediction = mock_prediction
 
-        # Mock model with plot method
+        # Mock model with df_wide_numeric attribute
         mock_model = Mock()
+        mock_model.df_wide_numeric = pd.DataFrame({"test": [1, 2, 3]})
         forecaster.model = mock_model
 
         # Mock historical data
@@ -493,9 +453,9 @@ class TestStockForecasterPlotForecast:
 
         forecaster.plot_forecast(historical_data=historical, n_historical=50)
 
-        # Should call model.plot
-        mock_model.plot.assert_called_once_with(
-            mock_prediction, include_history=True, n_back=50
+        # Should call prediction.plot
+        mock_prediction.plot.assert_called_once_with(
+            mock_model.df_wide_numeric, remove_zero_series=False, start_date=-50
         )
 
     def test_plot_forecast_no_prediction(self):

@@ -477,9 +477,6 @@ class ForecastConfig(BaseModel):
         default="backwards",
         description="Validation method ('backwards', 'seasonal', 'similarity')",
     )
-    max_workers: int = Field(
-        default=4, ge=1, le=16, description="Maximum parallel workers for forecasting"
-    )
 
 
 class TechnicalAnalysisConfig(BaseModel):

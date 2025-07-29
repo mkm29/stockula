@@ -375,6 +375,8 @@ def run_forecast(
             "lower_bound": predictions["lower_bound"].iloc[-1],
             "upper_bound": predictions["upper_bound"].iloc[-1],
             "forecast_length": config.forecast.forecast_length,
+            "start_date": predictions.index[0].strftime("%Y-%m-%d"),
+            "end_date": predictions.index[-1].strftime("%Y-%m-%d"),
             "best_model": model_info["model_name"],
             "model_params": model_info.get("model_params", {}),
         }
@@ -844,7 +846,14 @@ def print_results(
         if "forecasting" in results:
             console.print("\n[bold purple]=== Forecasting Results ===[/bold purple]")
 
-            table = Table(title="Price Forecasts")
+            # Get date range from first non-error forecast
+            date_info = ""
+            for forecast in results["forecasting"]:
+                if "error" not in forecast and "start_date" in forecast:
+                    date_info = f" ({forecast['start_date']} to {forecast['end_date']})"
+                    break
+
+            table = Table(title=f"Price Forecasts{date_info}")
             table.add_column("Ticker", style="cyan", no_wrap=True)
             table.add_column("Current Price", style="white", justify="right")
             table.add_column("Forecast Price", style="green", justify="right")
@@ -1191,111 +1200,109 @@ def main():
                 # Note: This section is now handled by parallel forecasting below
                 pass
 
-            # Run parallel forecasting if needed
+            # Run sequential forecasting if needed
             if will_forecast and ticker_symbols:
                 console.print(
-                    "\n[bold blue]Starting parallel forecasting...[/bold blue]"
-                )
-                actual_max_workers = min(
-                    config.forecast.max_workers, len(ticker_symbols)
+                    "\n[bold blue]Starting sequential forecasting...[/bold blue]"
                 )
                 console.print(
-                    f"[dim]Configuration: max_workers={actual_max_workers}, "
-                    f"max_generations={config.forecast.max_generations}, "
+                    f"[dim]Configuration: max_generations={config.forecast.max_generations}, "
                     f"num_validations={config.forecast.num_validations}[/dim]"
                 )
 
-                # Create a separate progress display for parallel forecasting with just a spinner
+                # Create a separate progress display for sequential forecasting
                 with Progress(
                     SpinnerColumn(),
                     TextColumn("[progress.description]{task.description}"),
+                    BarColumn(),
+                    TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
+                    TimeRemainingColumn(),
                     console=console,
                     transient=True,
                 ) as forecast_progress:
-                    forecast_spinner_task = forecast_progress.add_task(
+                    forecast_task = forecast_progress.add_task(
                         f"[blue]Forecasting {len(ticker_symbols)} tickers...",
-                        total=None,  # No total for spinner
+                        total=len(ticker_symbols),
                     )
 
-                    # Progress tracking for parallel forecasting
-                    completed_count = 0
-
-                    def update_parallel_progress(
-                        symbol: str | None, status: str, status_info: dict = None
-                    ):
-                        nonlocal completed_count
-
-                        if status == "status_update" and status_info:
-                            # Periodic status update
-                            active_str = ""
-                            if status_info["active"]:
-                                active_str = (
-                                    f" Active: {', '.join(status_info['active'])}"
-                                )
-
-                            desc = (
-                                f"[blue]Forecasting {status_info['total']} tickers - "
-                            )
-                            desc += f"[green]{status_info['completed_count']} completed[/green], "
-                            desc += f"[yellow]{status_info['active_count']} in progress[/yellow]"
-                            if status_info["error_count"] > 0:
-                                desc += (
-                                    f", [red]{status_info['error_count']} errors[/red]"
-                                )
-                            if active_str:
-                                desc += f" | {active_str}"
-
-                            forecast_progress.update(
-                                forecast_spinner_task,
-                                description=desc,
-                            )
-                        elif status in ["completed", "error"]:
-                            # Individual completion update
-                            completed_count += 1
-                            if status_info:
-                                desc = f"[blue]Forecasting {status_info['total']} tickers - "
-                                desc += f"[green]{status_info['completed_count']} completed[/green]"
-                                if status_info["active_count"] > 0:
-                                    desc += f", [yellow]{status_info['active_count']} in progress[/yellow]"
-                                if status_info["error_count"] > 0:
-                                    desc += f", [red]{status_info['error_count']} errors[/red]"
-                            else:
-                                # Fallback if no status_info
-                                desc = f"[blue]Forecasting {len(ticker_symbols)} tickers ({completed_count} completed)..."
-
-                            forecast_progress.update(
-                                forecast_spinner_task,
-                                description=desc,
-                            )
-
-                    # Run parallel forecasting
+                    # Run sequential forecasting
                     from .forecasting import StockForecaster
 
-                    # Don't use suppress_autots_output at main thread level - it causes issues with threading
-                    forecast_results = StockForecaster.forecast_multiple_parallel(
-                        symbols=ticker_symbols,
-                        start_date=config.data.start_date.strftime("%Y-%m-%d")
-                        if config.data.start_date
-                        else None,
-                        end_date=config.data.end_date.strftime("%Y-%m-%d")
-                        if config.data.end_date
-                        else None,
-                        forecast_length=config.forecast.forecast_length,
-                        model_list=config.forecast.model_list,
-                        ensemble=config.forecast.ensemble,
-                        max_generations=config.forecast.max_generations,
-                        max_workers=actual_max_workers,  # Already calculated above
-                        data_fetcher=container.data_fetcher(),
-                        progress_callback=update_parallel_progress,
-                        status_update_interval=2,  # Update every 2 seconds
-                    )
+                    # Initialize results
+                    results["forecasting"] = []
 
-                    # Convert results to list format
-                    results["forecasting"] = list(forecast_results.values())
+                    # Process each ticker sequentially
+                    for idx, symbol in enumerate(ticker_symbols, 1):
+                        forecast_progress.update(
+                            forecast_task,
+                            description=f"[blue]Forecasting {symbol} ({idx}/{len(ticker_symbols)})...",
+                        )
+
+                        try:
+                            # Use the injected forecaster for single symbol
+                            forecaster = container.stock_forecaster()
+                            predictions = forecaster.forecast_from_symbol(
+                                symbol,
+                                start_date=config.data.start_date.strftime("%Y-%m-%d")
+                                if config.data.start_date
+                                else None,
+                                end_date=config.data.end_date.strftime("%Y-%m-%d")
+                                if config.data.end_date
+                                else None,
+                                model_list=config.forecast.model_list,
+                                ensemble=config.forecast.ensemble,
+                                max_generations=config.forecast.max_generations,
+                            )
+
+                            model_info = forecaster.get_best_model()
+
+                            results["forecasting"].append(
+                                {
+                                    "ticker": symbol,
+                                    "current_price": float(
+                                        predictions["forecast"].iloc[0]
+                                    ),
+                                    "forecast_price": float(
+                                        predictions["forecast"].iloc[-1]
+                                    ),
+                                    "lower_bound": float(
+                                        predictions["lower_bound"].iloc[-1]
+                                    ),
+                                    "upper_bound": float(
+                                        predictions["upper_bound"].iloc[-1]
+                                    ),
+                                    "forecast_length": config.forecast.forecast_length,
+                                    "start_date": predictions.index[0].strftime(
+                                        "%Y-%m-%d"
+                                    ),
+                                    "end_date": predictions.index[-1].strftime(
+                                        "%Y-%m-%d"
+                                    ),
+                                    "best_model": model_info["model_name"],
+                                    "model_params": model_info.get("model_params", {}),
+                                }
+                            )
+
+                        except KeyboardInterrupt:
+                            log_manager.warning(
+                                f"Forecast for {symbol} interrupted by user"
+                            )
+                            results["forecasting"].append(
+                                {"ticker": symbol, "error": "Interrupted by user"}
+                            )
+                            break
+                        except Exception as e:
+                            log_manager.error(f"Error forecasting {symbol}: {e}")
+                            results["forecasting"].append(
+                                {"ticker": symbol, "error": str(e)}
+                            )
+
+                        # Advance progress
+                        forecast_progress.advance(forecast_task)
 
                     # Mark progress as complete
                     forecast_progress.update(
-                        forecast_spinner_task,
+                        forecast_task,
                         description="[green]Forecasting complete!",
                     )
     else:
@@ -1323,12 +1330,29 @@ def main():
     # Show current portfolio value for forecast mode after all processing is complete
     if args.mode == "forecast":
         # Show portfolio value in a nice table
-        portfolio_value_table = Table(title="Current Portfolio Value")
+        portfolio_value_table = Table(title="Portfolio Value")
         portfolio_value_table.add_column("Metric", style="cyan", no_wrap=True)
+        portfolio_value_table.add_column("Date", style="white")
         portfolio_value_table.add_column("Value", style="green")
-        portfolio_value_table.add_row(
-            "Current Portfolio Value", f"${initial_portfolio_value:,.2f}"
+
+        # Add initial capital row with start date
+        start_date = (
+            config.data.start_date.strftime("%Y-%m-%d")
+            if config.data.start_date
+            else "Initial"
         )
+        portfolio_value_table.add_row(
+            "Portfolio Value", start_date, f"${portfolio.initial_capital:,.2f}"
+        )
+
+        # Add current value row
+        from datetime import datetime
+
+        current_date = datetime.now().strftime("%Y-%m-%d")
+        portfolio_value_table.add_row(
+            "Portfolio Value", current_date, f"${initial_portfolio_value:,.2f}"
+        )
+
         console.print(portfolio_value_table)
 
     # Output results

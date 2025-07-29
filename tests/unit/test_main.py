@@ -712,13 +712,11 @@ class TestMainAdvanced:
 
     @patch("stockula.main.create_container")
     @patch("stockula.main.setup_logging")
-    @patch("stockula.forecasting.StockForecaster.forecast_multiple_parallel")
     @patch("stockula.main.print_results")
     @patch("sys.argv", ["stockula", "--mode", "forecast", "--ticker", "AAPL"])
     def test_main_forecast_mode_with_warning(
         self,
         mock_print,
-        mock_forecast_parallel,
         mock_logging,
         mock_container,
         capsys,
@@ -763,18 +761,27 @@ class TestMainAdvanced:
         mock_fetcher.get_current_prices.return_value = {"AAPL": 150.0}
         container.data_fetcher.return_value = mock_fetcher
         container.backtest_runner.return_value = Mock()
-        container.stock_forecaster.return_value = Mock()
-        container.stock_forecaster.return_value = Mock()
 
-        # Setup forecast results - parallel function returns dict
-        mock_forecast_parallel.return_value = {
-            "AAPL": {"ticker": "AAPL", "forecast_price": 155.0}
+        # Setup stock forecaster mock
+        mock_forecaster = Mock()
+        mock_predictions = pd.DataFrame(
+            {
+                "forecast": [150.0, 155.0],
+                "lower_bound": [145.0, 150.0],
+                "upper_bound": [155.0, 160.0],
+            }
+        )
+        mock_forecaster.forecast_from_symbol.return_value = mock_predictions
+        mock_forecaster.get_best_model.return_value = {
+            "model_name": "TestModel",
+            "model_params": {},
         }
+        container.stock_forecaster.return_value = mock_forecaster
 
         main()
 
-        # Should call parallel forecast function
-        mock_forecast_parallel.assert_called_once()
+        # Should call forecast_from_symbol for AAPL
+        mock_forecaster.forecast_from_symbol.assert_called_once()
         mock_print.assert_called_once()
 
         # Check that warning elements are present
@@ -1311,13 +1318,13 @@ class TestMainAdvanced:
 
     @patch("stockula.main.create_container")
     @patch("stockula.main.setup_logging")
-    @patch("stockula.forecasting.StockForecaster.forecast_multiple_parallel")
+    @patch("stockula.forecasting.forecaster.StockForecaster.forecast_multiple_symbols")
     @patch("stockula.main.print_results")
     @patch("sys.argv", ["stockula", "--mode", "forecast"])
     def test_main_creates_forecasting_key(
         self,
         mock_print,
-        mock_forecast_parallel,
+        mock_forecast_symbols,
         mock_logging,
         mock_container,
     ):
@@ -1362,7 +1369,7 @@ class TestMainAdvanced:
         container.stock_forecaster.return_value = Mock()
 
         # Setup parallel forecast results
-        mock_forecast_parallel.return_value = {
+        mock_forecast_symbols.return_value = {
             "AAPL": {
                 "ticker": "AAPL",
                 "current_price": 150.0,
@@ -1605,31 +1612,32 @@ class TestMainAdvanced:
         # Setup backtest results
         mock_backtest.return_value = []
 
-        # Mock all analysis functions
-        with patch(
-            "stockula.forecasting.forecaster.StockForecaster.forecast_multiple_parallel"
-        ) as mock_forecast_parallel:
-            mock_ta.return_value = {"ticker": "AAPL", "indicators": {}}
-            # Mock parallel forecast to return a dictionary
-            mock_forecast_parallel.return_value = {
-                "AAPL": {
-                    "ticker": "AAPL",
-                    "current_price": 150.0,
-                    "forecast_price": 155.0,
-                    "lower_bound": 152.0,
-                    "upper_bound": 158.0,
-                    "forecast_length": 14,
-                    "best_model": "GLS",
-                }
+        # Setup stock forecaster mock
+        mock_forecaster = Mock()
+        mock_predictions = pd.DataFrame(
+            {
+                "forecast": [150.0, 155.0],
+                "lower_bound": [152.0, 158.0],
+                "upper_bound": [152.0, 158.0],
             }
+        )
+        mock_forecaster.forecast_from_symbol.return_value = mock_predictions
+        mock_forecaster.get_best_model.return_value = {
+            "model_name": "GLS",
+            "model_params": {},
+        }
+        container.stock_forecaster.return_value = mock_forecaster
 
-            main()
+        # Mock all analysis functions
+        mock_ta.return_value = {"ticker": "AAPL", "indicators": {}}
 
-            # All analysis functions should be called
-            assert mock_ta.call_count == 1
-            mock_backtest_runner.run_from_symbol.assert_called()
-            # Check that parallel forecast was called
-            mock_forecast_parallel.assert_called_once()
+        main()
+
+        # All analysis functions should be called
+        assert mock_ta.call_count == 1
+        mock_backtest_runner.run_from_symbol.assert_called()
+        # Check that forecast was called
+        mock_forecaster.forecast_from_symbol.assert_called_once()
 
     @patch("stockula.main.create_container")
     @patch("stockula.main.setup_logging")

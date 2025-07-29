@@ -1,5 +1,6 @@
 """Data fetching utilities using yfinance."""
 
+import logging
 from datetime import datetime, timedelta
 from typing import Any
 
@@ -17,6 +18,7 @@ from rich.progress import (
 from ..database import DatabaseManager
 
 console = Console()
+logger = logging.getLogger(__name__)
 
 
 class DataFetcher:
@@ -400,6 +402,138 @@ class DataFetcher:
                 splits = splits[splits.index <= end]
 
         return splits
+
+    def get_stock_data_batch(
+        self,
+        symbols: list[str],
+        start_date: str | None = None,
+        end_date: str | None = None,
+        interval: str = "1d",
+    ) -> dict[str, pd.DataFrame]:
+        """Fetch stock data for multiple symbols efficiently.
+
+        Args:
+            symbols: List of stock symbols
+            start_date: Start date (YYYY-MM-DD)
+            end_date: End date (YYYY-MM-DD)
+            interval: Data interval (1d, 1wk, 1mo)
+
+        Returns:
+            Dictionary mapping symbols to their DataFrames
+        """
+        results = {}
+
+        # Check cache first for each symbol
+        symbols_to_fetch = []
+        for symbol in symbols:
+            if self.use_cache:
+                cached_data = self.get_stock_data(
+                    symbol, start_date, end_date, interval
+                )
+                if not cached_data.empty:
+                    results[symbol] = cached_data
+                    continue
+            symbols_to_fetch.append(symbol)
+
+        # Batch download remaining symbols
+        if symbols_to_fetch:
+            try:
+                # yfinance supports space-separated symbols for batch download
+                batch_str = " ".join(symbols_to_fetch)
+                data = yf.download(
+                    batch_str,
+                    start=start_date,
+                    end=end_date,
+                    interval=interval,
+                    group_by="ticker" if len(symbols_to_fetch) > 1 else None,
+                    auto_adjust=True,
+                    prepost=False,
+                    threads=True,
+                    progress=False,
+                )
+
+                # Handle single vs multiple symbols
+                if len(symbols_to_fetch) == 1:
+                    symbol = symbols_to_fetch[0]
+                    if not data.empty:
+                        results[symbol] = data
+                        # Store in cache
+                        if self.use_cache:
+                            self.db.store_price_history(symbol, data, interval)
+                else:
+                    # Multiple symbols returns multi-level columns
+                    for symbol in symbols_to_fetch:
+                        try:
+                            symbol_data = data[symbol]
+                            if (
+                                not symbol_data.empty
+                                and not symbol_data.isna().all().all()
+                            ):
+                                symbol_data = symbol_data.dropna(how="all")
+                                results[symbol] = symbol_data
+                                # Store in cache
+                                if self.use_cache:
+                                    self.db.store_price_history(
+                                        symbol, symbol_data, interval
+                                    )
+                        except KeyError:
+                            logger.warning(f"No data returned for {symbol}")
+
+            except Exception as e:
+                logger.error(f"Error in batch download: {e}")
+                # Fall back to individual downloads
+                for symbol in symbols_to_fetch:
+                    try:
+                        data = self.get_stock_data(
+                            symbol, start_date, end_date, interval
+                        )
+                        if not data.empty:
+                            results[symbol] = data
+                    except Exception as e:
+                        logger.error(f"Error fetching {symbol}: {e}")
+
+        return results
+
+    def get_current_prices_batch(self, symbols: list[str]) -> dict[str, float]:
+        """Get current prices for multiple symbols efficiently.
+
+        Args:
+            symbols: List of stock symbols
+
+        Returns:
+            Dictionary mapping symbols to their current prices
+        """
+        prices = {}
+
+        # Use Tickers class for batch operations
+        tickers = yf.Tickers(" ".join(symbols))
+
+        for symbol in symbols:
+            try:
+                ticker = tickers.tickers[symbol]
+                # Try fast info first
+                fast_info = ticker.fast_info
+                if hasattr(fast_info, "last_price") and fast_info.last_price:
+                    prices[symbol] = float(fast_info.last_price)
+                else:
+                    # Fallback to regular info
+                    info = ticker.info
+                    price = info.get("regularMarketPrice") or info.get("previousClose")
+                    if price:
+                        prices[symbol] = float(price)
+            except Exception as e:
+                logger.error(f"Error getting price for {symbol}: {e}")
+                # Try individual fetch as fallback
+                try:
+                    individual_prices = self.get_current_prices(
+                        symbol, show_progress=False
+                    )
+                    if symbol in individual_prices:
+                        prices[symbol] = individual_prices[symbol]
+                except:
+                    pass
+
+        return prices
 
     def fetch_and_store_all_data(
         self, symbol: str, start: str | None = None, end: str | None = None
