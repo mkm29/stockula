@@ -267,6 +267,12 @@ def run_backtest(
 
     results = []
 
+    # Check if we should use train/test split for backtesting
+    # Note: This is for backtest parameter optimization, not forecast evaluation
+    use_train_test_split = (
+        False  # Disabled for now since train/test is in forecast config
+    )
+
     for strategy_config in config.backtest.strategies:
         strategy_class = get_strategy_class(strategy_config.name)
         if not strategy_class:
@@ -280,44 +286,109 @@ def run_backtest(
                 setattr(strategy_class, key, value)
 
         try:
-            backtest_result = runner.run_from_symbol(
-                ticker,
-                strategy_class,
-                start_date=config.data.start_date.strftime("%Y-%m-%d")
-                if config.data.start_date
-                else None,
-                end_date=config.data.end_date.strftime("%Y-%m-%d")
-                if config.data.end_date
-                else None,
-            )
+            if use_train_test_split:
+                # Run with train/test split
+                backtest_result = runner.run_with_train_test_split(
+                    ticker,
+                    strategy_class,
+                    train_start_date=config.forecast.train_start_date.strftime(
+                        "%Y-%m-%d"
+                    )
+                    if config.forecast.train_start_date
+                    else None,
+                    train_end_date=config.forecast.train_end_date.strftime("%Y-%m-%d")
+                    if config.forecast.train_end_date
+                    else None,
+                    test_start_date=config.forecast.test_start_date.strftime("%Y-%m-%d")
+                    if config.forecast.test_start_date
+                    else None,
+                    test_end_date=config.forecast.test_end_date.strftime("%Y-%m-%d")
+                    if config.forecast.test_end_date
+                    else None,
+                    optimize_on_train=config.backtest.optimize,
+                    param_ranges=config.backtest.optimization_params
+                    if config.backtest.optimize and config.backtest.optimization_params
+                    else None,
+                )
 
-            # Handle NaN values for win rate when there are no trades
-            win_rate = backtest_result.get("Win Rate [%]", 0)
-            if pd.isna(win_rate):
-                win_rate = None if backtest_result["# Trades"] == 0 else 0
+                # Create result entry with train/test results
+                result_entry = {
+                    "ticker": ticker,
+                    "strategy": strategy_config.name,
+                    "parameters": backtest_result.get(
+                        "optimized_parameters", strategy_config.parameters
+                    ),
+                    "train_period": backtest_result["train_period"],
+                    "test_period": backtest_result["test_period"],
+                    "train_results": backtest_result["train_results"],
+                    "test_results": backtest_result["test_results"],
+                    "performance_degradation": backtest_result.get(
+                        "performance_degradation", {}
+                    ),
+                }
 
-            result_entry = {
-                "ticker": ticker,
-                "strategy": strategy_config.name,
-                "parameters": strategy_config.parameters,
-                "return_pct": backtest_result["Return [%]"],
-                "sharpe_ratio": backtest_result["Sharpe Ratio"],
-                "max_drawdown_pct": backtest_result["Max. Drawdown [%]"],
-                "num_trades": backtest_result["# Trades"],
-                "win_rate": win_rate,
-            }
+                # For backward compatibility, also include test results as top-level metrics
+                result_entry.update(
+                    {
+                        "return_pct": backtest_result["test_results"]["return_pct"],
+                        "sharpe_ratio": backtest_result["test_results"]["sharpe_ratio"],
+                        "max_drawdown_pct": backtest_result["test_results"][
+                            "max_drawdown_pct"
+                        ],
+                        "num_trades": backtest_result["test_results"]["num_trades"],
+                        "win_rate": backtest_result["test_results"]["win_rate"],
+                    }
+                )
 
-            # Add portfolio information from the raw backtest result
-            if "Initial Cash" in backtest_result:
-                result_entry["initial_cash"] = backtest_result["Initial Cash"]
-            if "Start Date" in backtest_result:
-                result_entry["start_date"] = backtest_result["Start Date"]
-            if "End Date" in backtest_result:
-                result_entry["end_date"] = backtest_result["End Date"]
-            if "Trading Days" in backtest_result:
-                result_entry["trading_days"] = backtest_result["Trading Days"]
-            if "Calendar Days" in backtest_result:
-                result_entry["calendar_days"] = backtest_result["Calendar Days"]
+            else:
+                # Run traditional backtest without train/test split
+                # Determine which dates to use for backtesting
+                backtest_start = None
+                backtest_end = None
+
+                # First check if backtest has specific dates
+                if config.backtest.start_date and config.backtest.end_date:
+                    backtest_start = config.backtest.start_date.strftime("%Y-%m-%d")
+                    backtest_end = config.backtest.end_date.strftime("%Y-%m-%d")
+                # Fall back to general data dates
+                elif config.data.start_date and config.data.end_date:
+                    backtest_start = config.data.start_date.strftime("%Y-%m-%d")
+                    backtest_end = config.data.end_date.strftime("%Y-%m-%d")
+
+                backtest_result = runner.run_from_symbol(
+                    ticker,
+                    strategy_class,
+                    start_date=backtest_start,
+                    end_date=backtest_end,
+                )
+
+                # Handle NaN values for win rate when there are no trades
+                win_rate = backtest_result.get("Win Rate [%]", 0)
+                if pd.isna(win_rate):
+                    win_rate = None if backtest_result["# Trades"] == 0 else 0
+
+                result_entry = {
+                    "ticker": ticker,
+                    "strategy": strategy_config.name,
+                    "parameters": strategy_config.parameters,
+                    "return_pct": backtest_result["Return [%]"],
+                    "sharpe_ratio": backtest_result["Sharpe Ratio"],
+                    "max_drawdown_pct": backtest_result["Max. Drawdown [%]"],
+                    "num_trades": backtest_result["# Trades"],
+                    "win_rate": win_rate,
+                }
+
+                # Add portfolio information from the raw backtest result
+                if "Initial Cash" in backtest_result:
+                    result_entry["initial_cash"] = backtest_result["Initial Cash"]
+                if "Start Date" in backtest_result:
+                    result_entry["start_date"] = backtest_result["Start Date"]
+                if "End Date" in backtest_result:
+                    result_entry["end_date"] = backtest_result["End Date"]
+                if "Trading Days" in backtest_result:
+                    result_entry["trading_days"] = backtest_result["Trading Days"]
+                if "Calendar Days" in backtest_result:
+                    result_entry["calendar_days"] = backtest_result["Calendar Days"]
 
             results.append(result_entry)
         except Exception as e:
@@ -347,11 +418,11 @@ def run_forecast_with_evaluation(
     forecaster = stock_forecaster
 
     try:
-        # Use new date fields if available, otherwise fall back to legacy
-        train_start = config.data.train_start_date or config.data.start_date
-        train_end = config.data.train_end_date or config.data.end_date
-        test_start = config.data.test_start_date
-        test_end = config.data.test_end_date
+        # Use forecast date fields if available, otherwise fall back to data dates
+        train_start = config.forecast.train_start_date or config.data.start_date
+        train_end = config.forecast.train_end_date or config.data.end_date
+        test_start = config.forecast.test_start_date
+        test_end = config.forecast.test_end_date
 
         result = forecaster.forecast_from_symbol_with_evaluation(
             ticker,
@@ -657,21 +728,32 @@ def create_portfolio_backtest_results(
     date_start = "N/A"
     date_end = "N/A"
 
-    if config.data.start_date:
+    # First try backtest dates, then data dates
+    if config.backtest.start_date:
+        date_start = config.backtest.start_date.strftime("%Y-%m-%d")
+    elif config.data.start_date:
         date_start = config.data.start_date.strftime("%Y-%m-%d")
-    elif results.get("backtesting") and len(results["backtesting"]) > 0:
-        # Try to get from first backtest result
-        first_result = results["backtesting"][0]
-        if "start_date" in first_result:
-            date_start = first_result["start_date"]
 
-    if config.data.end_date:
+    if config.backtest.end_date:
+        date_end = config.backtest.end_date.strftime("%Y-%m-%d")
+    elif config.data.end_date:
         date_end = config.data.end_date.strftime("%Y-%m-%d")
-    elif results.get("backtesting") and len(results["backtesting"]) > 0:
-        # Try to get from first backtest result
-        first_result = results["backtesting"][0]
-        if "end_date" in first_result:
-            date_end = first_result["end_date"]
+
+    # If dates not in config, try to get from backtest results
+    if (
+        (date_start == "N/A" or date_end == "N/A")
+        and results.get("backtesting")
+        and len(results["backtesting"]) > 0
+    ):
+        # Look through all results to find one with dates
+        for backtest_result in results["backtesting"]:
+            if date_start == "N/A" and "start_date" in backtest_result:
+                date_start = backtest_result["start_date"]
+            if date_end == "N/A" and "end_date" in backtest_result:
+                date_end = backtest_result["end_date"]
+            # Stop if we found both dates
+            if date_start != "N/A" and date_end != "N/A":
+                break
 
     portfolio_results = PortfolioBacktestResults(
         initial_portfolio_value=results.get("initial_portfolio_value", 0),
@@ -896,38 +978,130 @@ def print_results(
             # Show ticker-level backtest results in a table
             console.print("\n[bold green]Ticker-Level Backtest Results[/bold green]")
 
-            table = Table(title="Ticker-Level Backtest Results")
-            table.add_column("Ticker", style="cyan", no_wrap=True)
-            table.add_column("Strategy", style="yellow", no_wrap=True)
-            table.add_column("Return", style="green", justify="right")
-            table.add_column("Sharpe Ratio", style="blue", justify="right")
-            table.add_column("Max Drawdown", style="red", justify="right")
-            table.add_column("Trades", style="white", justify="right")
-            table.add_column("Win Rate", style="magenta", justify="right")
+            # Check if we have train/test results
+            has_train_test = any(
+                "train_results" in backtest for backtest in results["backtesting"]
+            )
 
-            for backtest in results["backtesting"]:
-                return_str = f"{backtest['return_pct']:+.2f}%"
-                sharpe_str = f"{backtest['sharpe_ratio']:.2f}"
-                drawdown_str = f"{backtest['max_drawdown_pct']:.2f}%"
-                trades_str = str(backtest["num_trades"])
+            if has_train_test:
+                # Display train/test split results
+                table = Table(title="Ticker-Level Backtest Results (Train/Test Split)")
+                table.add_column("Ticker", style="cyan", no_wrap=True)
+                table.add_column("Strategy", style="yellow", no_wrap=True)
+                table.add_column("Train Return", style="green", justify="right")
+                table.add_column("Test Return", style="green", justify="right")
+                table.add_column("Train Sharpe", style="blue", justify="right")
+                table.add_column("Test Sharpe", style="blue", justify="right")
+                table.add_column("Test Trades", style="white", justify="right")
+                table.add_column("Test Win Rate", style="magenta", justify="right")
 
-                if backtest["win_rate"] is None:
-                    win_rate_str = "N/A"
-                else:
-                    win_rate_str = f"{backtest['win_rate']:.1f}%"
+                for backtest in results["backtesting"]:
+                    if "train_results" in backtest:
+                        train_return_str = (
+                            f"{backtest['train_results']['return_pct']:+.2f}%"
+                        )
+                        test_return_str = (
+                            f"{backtest['test_results']['return_pct']:+.2f}%"
+                        )
+                        train_sharpe_str = (
+                            f"{backtest['train_results']['sharpe_ratio']:.2f}"
+                        )
+                        test_sharpe_str = (
+                            f"{backtest['test_results']['sharpe_ratio']:.2f}"
+                        )
+                        test_trades_str = str(backtest["test_results"]["num_trades"])
 
-                table.add_row(
-                    backtest["ticker"],
-                    backtest["strategy"].upper(),
-                    return_str,
-                    sharpe_str,
-                    drawdown_str,
-                    trades_str,
-                    win_rate_str,
+                        if backtest["test_results"]["win_rate"] is None or pd.isna(
+                            backtest["test_results"]["win_rate"]
+                        ):
+                            test_win_rate_str = "N/A"
+                        else:
+                            test_win_rate_str = (
+                                f"{backtest['test_results']['win_rate']:.1f}%"
+                            )
+
+                        table.add_row(
+                            backtest["ticker"],
+                            backtest["strategy"].upper(),
+                            train_return_str,
+                            test_return_str,
+                            train_sharpe_str,
+                            test_sharpe_str,
+                            test_trades_str,
+                            test_win_rate_str,
+                        )
+                    else:
+                        # Fallback for strategies without train/test split
+                        return_str = f"{backtest['return_pct']:+.2f}%"
+                        sharpe_str = f"{backtest['sharpe_ratio']:.2f}"
+                        trades_str = str(backtest["num_trades"])
+
+                        if backtest["win_rate"] is None:
+                            win_rate_str = "N/A"
+                        else:
+                            win_rate_str = f"{backtest['win_rate']:.1f}%"
+
+                        table.add_row(
+                            backtest["ticker"],
+                            backtest["strategy"].upper(),
+                            return_str,
+                            return_str,  # Same for both train/test
+                            sharpe_str,
+                            sharpe_str,  # Same for both train/test
+                            trades_str,
+                            win_rate_str,
+                        )
+
+                console.print(table)
+                console.print()  # Add blank line
+
+                # Show train/test periods
+                first_with_split = next(
+                    (b for b in results["backtesting"] if "train_period" in b), None
                 )
+                if first_with_split:
+                    console.print("[bold cyan]Data Periods:[/bold cyan]")
+                    console.print(
+                        f"  Training: {first_with_split['train_period']['start']} to {first_with_split['train_period']['end']} ({first_with_split['train_period']['days']} days)"
+                    )
+                    console.print(
+                        f"  Testing:  {first_with_split['test_period']['start']} to {first_with_split['test_period']['end']} ({first_with_split['test_period']['days']} days)"
+                    )
+                    console.print()
+            else:
+                # Display traditional results without train/test split
+                table = Table(title="Ticker-Level Backtest Results")
+                table.add_column("Ticker", style="cyan", no_wrap=True)
+                table.add_column("Strategy", style="yellow", no_wrap=True)
+                table.add_column("Return", style="green", justify="right")
+                table.add_column("Sharpe Ratio", style="blue", justify="right")
+                table.add_column("Max Drawdown", style="red", justify="right")
+                table.add_column("Trades", style="white", justify="right")
+                table.add_column("Win Rate", style="magenta", justify="right")
 
-            console.print(table)
-            console.print()  # Add blank line
+                for backtest in results["backtesting"]:
+                    return_str = f"{backtest['return_pct']:+.2f}%"
+                    sharpe_str = f"{backtest['sharpe_ratio']:.2f}"
+                    drawdown_str = f"{backtest['max_drawdown_pct']:.2f}%"
+                    trades_str = str(backtest["num_trades"])
+
+                    if backtest["win_rate"] is None:
+                        win_rate_str = "N/A"
+                    else:
+                        win_rate_str = f"{backtest['win_rate']:.1f}%"
+
+                    table.add_row(
+                        backtest["ticker"],
+                        backtest["strategy"].upper(),
+                        return_str,
+                        sharpe_str,
+                        drawdown_str,
+                        trades_str,
+                        win_rate_str,
+                    )
+
+                console.print(table)
+                console.print()  # Add blank line
 
             # Show summary message about strategies and stocks
             console.print(
@@ -954,7 +1128,27 @@ def print_results(
             table.add_column("Confidence Range", style="yellow", justify="center")
             table.add_column("Best Model", style="blue")
 
-            for forecast in results["forecasting"]:
+            # Sort forecasts by return percentage (highest to lowest)
+            # Separate error results from valid forecasts
+            error_forecasts = [f for f in results["forecasting"] if "error" in f]
+            valid_forecasts = [f for f in results["forecasting"] if "error" not in f]
+
+            # Calculate return percentage for sorting
+            for forecast in valid_forecasts:
+                forecast["return_pct"] = (
+                    (forecast["forecast_price"] - forecast["current_price"])
+                    / forecast["current_price"]
+                ) * 100
+
+            # Sort valid forecasts by return percentage (highest to lowest)
+            sorted_forecasts = sorted(
+                valid_forecasts, key=lambda f: f["return_pct"], reverse=True
+            )
+
+            # Combine sorted valid forecasts with error forecasts at the end
+            all_forecasts = sorted_forecasts + error_forecasts
+
+            for forecast in all_forecasts:
                 if "error" in forecast:
                     table.add_row(
                         forecast["ticker"],
@@ -1018,7 +1212,8 @@ def print_results(
                 eval_table.add_column("Train Period", style="white")
                 eval_table.add_column("Test Period", style="white")
 
-                for forecast in results["forecasting"]:
+                # Use the same sorted order as the forecast table
+                for forecast in all_forecasts:
                     if "error" not in forecast and "evaluation" in forecast:
                         eval_metrics = forecast["evaluation"]
                         train_period = forecast.get("train_period", {})
@@ -1092,22 +1287,30 @@ def main():
         from .config import TickerConfig
 
         config.portfolio.tickers = [TickerConfig(symbol=args.ticker, quantity=1.0)]
+        # Disable auto-allocation for single ticker mode since we don't have categories
+        config.portfolio.auto_allocate = False
+        config.portfolio.dynamic_allocation = False
+        config.portfolio.allocation_method = "equal_weight"
+        # Allow 100% position for single ticker mode
+        config.portfolio.max_position_size = 100.0
 
     # Override date ranges if provided
     if args.train_start:
-        config.data.train_start_date = datetime.strptime(
+        config.forecast.train_start_date = datetime.strptime(
             args.train_start, "%Y-%m-%d"
         ).date()
     if args.train_end:
-        config.data.train_end_date = datetime.strptime(
+        config.forecast.train_end_date = datetime.strptime(
             args.train_end, "%Y-%m-%d"
         ).date()
     if args.test_start:
-        config.data.test_start_date = datetime.strptime(
+        config.forecast.test_start_date = datetime.strptime(
             args.test_start, "%Y-%m-%d"
         ).date()
     if args.test_end:
-        config.data.test_end_date = datetime.strptime(args.test_end, "%Y-%m-%d").date()
+        config.forecast.test_end_date = datetime.strptime(
+            args.test_end, "%Y-%m-%d"
+        ).date()
 
     # Save configuration if requested
     if args.save_config:
@@ -1237,10 +1440,18 @@ def main():
         ) as progress:
             # Show forecast warning if needed
             if will_forecast:
+                # Determine forecast mode message
+                if config.forecast.forecast_length is not None:
+                    forecast_msg = f"• Forecasting {config.forecast.forecast_length} days into the future"
+                elif config.forecast.test_start_date and config.forecast.test_end_date:
+                    forecast_msg = f"• Evaluating forecast on test period: {config.forecast.test_start_date} to {config.forecast.test_end_date}"
+                else:
+                    forecast_msg = "• Forecast configuration error: neither forecast_length nor test dates specified"
+
                 console.print(
                     Panel.fit(
                         f"[bold yellow]FORECAST MODE - IMPORTANT NOTES:[/bold yellow]\n"
-                        f"• Forecasting {config.forecast.forecast_length} days into the future\n"
+                        f"{forecast_msg}\n"
                         f"• AutoTS will try multiple models to find the best fit\n"
                         f"• This process may take several minutes per ticker\n"
                         f"• Press Ctrl+C at any time to cancel\n"
@@ -1310,17 +1521,35 @@ def main():
 
                             try:
                                 runner = container.backtest_runner()
+                                # Determine which dates to use for backtesting
+                                backtest_start = None
+                                backtest_end = None
+
+                                # First check if backtest has specific dates
+                                if (
+                                    config.backtest.start_date
+                                    and config.backtest.end_date
+                                ):
+                                    backtest_start = (
+                                        config.backtest.start_date.strftime("%Y-%m-%d")
+                                    )
+                                    backtest_end = config.backtest.end_date.strftime(
+                                        "%Y-%m-%d"
+                                    )
+                                # Fall back to general data dates
+                                elif config.data.start_date and config.data.end_date:
+                                    backtest_start = config.data.start_date.strftime(
+                                        "%Y-%m-%d"
+                                    )
+                                    backtest_end = config.data.end_date.strftime(
+                                        "%Y-%m-%d"
+                                    )
+
                                 backtest_result = runner.run_from_symbol(
                                     ticker,
                                     strategy_class,
-                                    start_date=config.data.start_date.strftime(
-                                        "%Y-%m-%d"
-                                    )
-                                    if config.data.start_date
-                                    else None,
-                                    end_date=config.data.end_date.strftime("%Y-%m-%d")
-                                    if config.data.end_date
-                                    else None,
+                                    start_date=backtest_start,
+                                    end_date=backtest_end,
                                 )
 
                                 # Handle NaN values for win rate when there are no trades
@@ -1330,20 +1559,30 @@ def main():
                                         None if backtest_result["# Trades"] == 0 else 0
                                     )
 
-                                results["backtesting"].append(
-                                    {
-                                        "ticker": ticker,
-                                        "strategy": strategy_config.name,
-                                        "parameters": strategy_config.parameters,
-                                        "return_pct": backtest_result["Return [%]"],
-                                        "sharpe_ratio": backtest_result["Sharpe Ratio"],
-                                        "max_drawdown_pct": backtest_result[
-                                            "Max. Drawdown [%]"
-                                        ],
-                                        "num_trades": backtest_result["# Trades"],
-                                        "win_rate": win_rate,
-                                    }
-                                )
+                                result_entry = {
+                                    "ticker": ticker,
+                                    "strategy": strategy_config.name,
+                                    "parameters": strategy_config.parameters,
+                                    "return_pct": backtest_result["Return [%]"],
+                                    "sharpe_ratio": backtest_result["Sharpe Ratio"],
+                                    "max_drawdown_pct": backtest_result[
+                                        "Max. Drawdown [%]"
+                                    ],
+                                    "num_trades": backtest_result["# Trades"],
+                                    "win_rate": win_rate,
+                                }
+
+                                # Add dates if available
+                                if "Start Date" in backtest_result:
+                                    result_entry["start_date"] = backtest_result[
+                                        "Start Date"
+                                    ]
+                                if "End Date" in backtest_result:
+                                    result_entry["end_date"] = backtest_result[
+                                        "End Date"
+                                    ]
+
+                                results["backtesting"].append(result_entry)
                             except Exception as e:
                                 console.print(
                                     f"[red]Error backtesting {strategy_config.name} on {ticker}: {e}[/red]"
@@ -1382,7 +1621,6 @@ def main():
                     )
 
                     # Run sequential forecasting
-                    from .forecasting import StockForecaster
 
                     # Initialize results
                     results["forecasting"] = []
@@ -1397,8 +1635,8 @@ def main():
                         try:
                             # Check if test dates are provided for evaluation
                             if (
-                                config.data.test_start_date
-                                and config.data.test_end_date
+                                config.forecast.test_start_date
+                                and config.forecast.test_end_date
                             ):
                                 # Use the new evaluation method
                                 forecast_result = run_forecast_with_evaluation(
@@ -1412,6 +1650,12 @@ def main():
 
                             results["forecasting"].append(forecast_result)
 
+                            # Update progress to show completion
+                            forecast_progress.update(
+                                forecast_task,
+                                description=f"[green]✅ Forecasted {symbol}[/green] ({idx}/{len(ticker_symbols)})",
+                            )
+
                         except KeyboardInterrupt:
                             log_manager.warning(
                                 f"Forecast for {symbol} interrupted by user"
@@ -1424,6 +1668,12 @@ def main():
                             log_manager.error(f"Error forecasting {symbol}: {e}")
                             results["forecasting"].append(
                                 {"ticker": symbol, "error": str(e)}
+                            )
+
+                            # Update progress to show error
+                            forecast_progress.update(
+                                forecast_task,
+                                description=f"[red]❌ Failed {symbol}[/red] ({idx}/{len(ticker_symbols)})",
                             )
 
                         # Advance progress
@@ -1464,14 +1714,15 @@ def main():
         portfolio_value_table.add_column("Date", style="white")
         portfolio_value_table.add_column("Value", style="green")
 
-        # Add initial capital row with test start date
-        test_start = (
-            config.data.test_start_date.strftime("%Y-%m-%d")
-            if config.data.test_start_date
-            else "Initial"
-        )
+        # Add initial capital row with appropriate date
+        if config.forecast.test_start_date:
+            # Historical evaluation mode - use test start date
+            test_start = config.forecast.test_start_date.strftime("%Y-%m-%d")
+        else:
+            # Future prediction mode - use today's date
+            test_start = datetime.now().strftime("%Y-%m-%d")
         portfolio_value_table.add_row(
-            "Portfolio Value", test_start, f"${portfolio.initial_capital:,.2f}"
+            "Observed Value", test_start, f"${portfolio.initial_capital:,.2f}"
         )
 
         # Calculate forecasted portfolio value based on forecast results
@@ -1480,31 +1731,40 @@ def main():
             total_accuracy = 0
             valid_forecasts = 0
 
+            # Check if we're in evaluation mode (have evaluation metrics)
+            is_evaluation_mode = any(
+                "evaluation" in f for f in results["forecasting"] if "error" not in f
+            )
+
             for forecast in results["forecasting"]:
-                if "error" not in forecast and "evaluation" in forecast:
-                    # Calculate portfolio value change based on forecast accuracy
+                if "error" not in forecast:
                     ticker = forecast["ticker"]
                     asset = next(
                         (a for a in portfolio.get_all_assets() if a.symbol == ticker),
                         None,
                     )
-                    if asset and forecast["evaluation"]:
-                        # Get the asset's allocation
+                    if asset:
+                        # Get the asset's current value
                         asset_value = asset.quantity * forecast["current_price"]
+
+                        # Calculate the forecasted change
                         forecast_change = (
                             forecast["forecast_price"] - forecast["current_price"]
                         ) / forecast["current_price"]
+
+                        # Apply the change to the portfolio value
                         forecasted_value += asset_value * forecast_change
 
-                        # Calculate accuracy from MAPE
-                        accuracy = 100 - forecast["evaluation"]["mape"]
-                        total_accuracy += accuracy
-                        valid_forecasts += 1
+                        # If in evaluation mode, track accuracy
+                        if "evaluation" in forecast:
+                            accuracy = 100 - forecast["evaluation"]["mape"]
+                            total_accuracy += accuracy
+                            valid_forecasts += 1
 
-            # Add forecasted value row with test end date
+            # Add forecasted value row with appropriate end date
             test_end = None
-            if config.data.test_end_date:
-                test_end = config.data.test_end_date.strftime("%Y-%m-%d")
+            if config.forecast.test_end_date:
+                test_end = config.forecast.test_end_date.strftime("%Y-%m-%d")
             else:
                 # Try to get end date from any forecast result
                 for forecast in results["forecasting"]:
@@ -1514,11 +1774,11 @@ def main():
 
             if test_end:
                 portfolio_value_table.add_row(
-                    "Portfolio Value", test_end, f"${forecasted_value:,.2f}"
+                    "Predicted Value", test_end, f"${forecasted_value:,.2f}"
                 )
 
-            # Add average accuracy row
-            if valid_forecasts > 0 and test_end:
+            # Add average accuracy row only for evaluation mode
+            if is_evaluation_mode and valid_forecasts > 0 and test_end:
                 avg_accuracy = total_accuracy / valid_forecasts
                 portfolio_value_table.add_row(
                     "Accuracy", test_end, f"{avg_accuracy:.4f}%"
@@ -1552,8 +1812,15 @@ def main():
 
         # Ticker-level results already shown in print_results() above
 
+        # Sort strategy summaries by return during period (highest to lowest)
+        sorted_summaries = sorted(
+            portfolio_backtest_results.strategy_summaries,
+            key=lambda s: (s.final_portfolio_value - s.initial_portfolio_value),
+            reverse=True,  # Highest returns first
+        )
+
         # Show summary for each strategy using structured data
-        for strategy_summary in portfolio_backtest_results.strategy_summaries:
+        for strategy_summary in sorted_summaries:
             # Get broker config info
             broker_info = ""
             if config.backtest.broker_config:
@@ -1601,17 +1868,30 @@ def main():
                 else "white"
             )
 
-            # Format dates
-            start_date = (
-                config.data.start_date.strftime("%Y-%m-%d")
-                if config.data.start_date
-                else "N/A"
-            )
-            end_date = (
-                config.data.end_date.strftime("%Y-%m-%d")
-                if config.data.end_date
-                else "N/A"
-            )
+            # Format dates - try multiple sources
+            start_date = "N/A"
+            end_date = "N/A"
+
+            # First try backtest dates, then data dates, then results
+            if config.backtest.start_date:
+                start_date = config.backtest.start_date.strftime("%Y-%m-%d")
+            elif config.data.start_date:
+                start_date = config.data.start_date.strftime("%Y-%m-%d")
+            elif (
+                portfolio_backtest_results.date_range
+                and portfolio_backtest_results.date_range.get("start")
+            ):
+                start_date = portfolio_backtest_results.date_range["start"]
+
+            if config.backtest.end_date:
+                end_date = config.backtest.end_date.strftime("%Y-%m-%d")
+            elif config.data.end_date:
+                end_date = config.data.end_date.strftime("%Y-%m-%d")
+            elif (
+                portfolio_backtest_results.date_range
+                and portfolio_backtest_results.date_range.get("end")
+            ):
+                end_date = portfolio_backtest_results.date_range["end"]
 
             summary_content = f"""Start: {start_date}
 End:   {end_date}
@@ -1619,8 +1899,8 @@ End:   {end_date}
 Parameters: {strategy_summary.parameters if strategy_summary.parameters else "Default"}
 {broker_info}
 
-$P_1$: ${strategy_summary.initial_portfolio_value:,.2f}
-$P_2$: ${strategy_summary.final_portfolio_value:,.2f}
+Portfolio Value at {start_date}: ${strategy_summary.initial_portfolio_value:,.2f}
+Portfolio Value at {end_date}: ${strategy_summary.final_portfolio_value:,.2f}
 
 Strategy Performance:
   Average Return: [{period_return_color}]{strategy_summary.average_return_pct:+.2f}%[/{period_return_color}]

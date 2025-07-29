@@ -225,26 +225,12 @@ class PortfolioConfig(BaseModel):
 class DataConfig(BaseModel):
     """Configuration for data fetching."""
 
-    # Legacy fields for backward compatibility
+    # General date range for data fetching
     start_date: str | date | None = Field(
         default=None, description="Start date for historical data (YYYY-MM-DD)"
     )
     end_date: str | date | None = Field(
         default=None, description="End date for historical data (YYYY-MM-DD)"
-    )
-
-    # New fields for train/test split
-    train_start_date: str | date | None = Field(
-        default=None, description="Start date for training data (YYYY-MM-DD)"
-    )
-    train_end_date: str | date | None = Field(
-        default=None, description="End date for training data (YYYY-MM-DD)"
-    )
-    test_start_date: str | date | None = Field(
-        default=None, description="Start date for testing data (YYYY-MM-DD)"
-    )
-    test_end_date: str | date | None = Field(
-        default=None, description="End date for testing data (YYYY-MM-DD)"
     )
     interval: str = Field(
         default="1d",
@@ -260,10 +246,6 @@ class DataConfig(BaseModel):
     @field_validator(
         "start_date",
         "end_date",
-        "train_start_date",
-        "train_end_date",
-        "test_start_date",
-        "test_end_date",
         mode="before",
     )
     @classmethod
@@ -276,29 +258,11 @@ class DataConfig(BaseModel):
 
     @model_validator(mode="after")
     def validate_date_ranges(self):
-        """Validate date ranges and set defaults for backward compatibility."""
-        # If new date fields are not set, use legacy fields
-        if self.train_start_date is None and self.start_date is not None:
-            self.train_start_date = self.start_date
-        if self.train_end_date is None and self.end_date is not None:
-            self.train_end_date = self.end_date
-
-        # Validate training date range
-        if self.train_start_date and self.train_end_date:
-            if self.train_start_date >= self.train_end_date:
-                raise ValueError("train_start_date must be before train_end_date")
-
-        # Validate testing date range
-        if self.test_start_date and self.test_end_date:
-            if self.test_start_date >= self.test_end_date:
-                raise ValueError("test_start_date must be before test_end_date")
-
-        # Validate that test period comes after training period
-        if self.train_end_date and self.test_start_date:
-            if self.test_start_date < self.train_end_date:
-                raise ValueError(
-                    "test_start_date must be after or equal to train_end_date"
-                )
+        """Validate date ranges."""
+        # Validate date range
+        if self.start_date and self.end_date:
+            if self.start_date >= self.end_date:
+                raise ValueError("start_date must be before end_date")
 
         return self
 
@@ -456,6 +420,14 @@ class BacktestConfig(BaseModel):
     initial_cash: float = Field(
         default=10000.0, gt=0, description="Initial cash amount for backtesting"
     )
+
+    # Backtest-specific date range
+    start_date: str | date | None = Field(
+        default=None, description="Start date for backtesting (YYYY-MM-DD)"
+    )
+    end_date: str | date | None = Field(
+        default=None, description="End date for backtesting (YYYY-MM-DD)"
+    )
     commission: float = Field(
         default=0.002,
         ge=0,
@@ -482,6 +454,23 @@ class BacktestConfig(BaseModel):
         description="Categories of assets to exclude from backtesting (buy-and-hold only)",
     )
 
+    @field_validator("start_date", "end_date", mode="before")
+    @classmethod
+    def parse_dates(cls, v):
+        if v is None:
+            return v
+        if isinstance(v, str):
+            return datetime.strptime(v, "%Y-%m-%d").date()
+        return v
+
+    @model_validator(mode="after")
+    def validate_date_ranges(self):
+        """Validate date ranges."""
+        if self.start_date and self.end_date:
+            if self.start_date >= self.end_date:
+                raise ValueError("start_date must be before end_date")
+        return self
+
     def model_post_init(self, __context):
         """Initialize broker config from commission if not provided."""
         if self.broker_config is None:
@@ -496,8 +485,24 @@ class BacktestConfig(BaseModel):
 class ForecastConfig(BaseModel):
     """Configuration for forecasting."""
 
-    forecast_length: int = Field(
-        default=14, ge=1, description="Number of periods to forecast"
+    forecast_length: int | None = Field(
+        default=None,
+        ge=1,
+        description="Number of periods to forecast from today (mutually exclusive with test dates)",
+    )
+
+    # Train/test split for forecast evaluation
+    train_start_date: str | date | None = Field(
+        default=None, description="Start date for training data (YYYY-MM-DD)"
+    )
+    train_end_date: str | date | None = Field(
+        default=None, description="End date for training data (YYYY-MM-DD)"
+    )
+    test_start_date: str | date | None = Field(
+        default=None, description="Start date for testing data (YYYY-MM-DD)"
+    )
+    test_end_date: str | date | None = Field(
+        default=None, description="End date for testing data (YYYY-MM-DD)"
     )
     frequency: str = Field(
         default="infer",
@@ -528,6 +533,66 @@ class ForecastConfig(BaseModel):
         default="backwards",
         description="Validation method ('backwards', 'seasonal', 'similarity')",
     )
+    max_workers: int = Field(
+        default=1, ge=1, description="Maximum parallel workers for forecasting"
+    )
+
+    @field_validator(
+        "train_start_date",
+        "train_end_date",
+        "test_start_date",
+        "test_end_date",
+        mode="before",
+    )
+    @classmethod
+    def parse_dates(cls, v):
+        if v is None:
+            return v
+        if isinstance(v, str):
+            return datetime.strptime(v, "%Y-%m-%d").date()
+        return v
+
+    @model_validator(mode="after")
+    def validate_date_ranges(self):
+        """Validate date ranges and ensure mutual exclusivity."""
+        # Check mutual exclusivity between forecast_length and test dates
+        has_test_dates = (
+            self.test_start_date is not None and self.test_end_date is not None
+        )
+        has_forecast_length = self.forecast_length is not None
+
+        if has_test_dates and has_forecast_length:
+            raise ValueError(
+                "Cannot specify both forecast_length and test dates. "
+                "Use forecast_length for future predictions OR test dates for historical evaluation."
+            )
+
+        # If using test dates, train dates are required
+        if has_test_dates and (
+            self.train_start_date is None or self.train_end_date is None
+        ):
+            raise ValueError(
+                "When using test dates for evaluation, train dates must also be specified."
+            )
+
+        # Validate training date range
+        if self.train_start_date and self.train_end_date:
+            if self.train_start_date >= self.train_end_date:
+                raise ValueError("train_start_date must be before train_end_date")
+
+        # Validate testing date range
+        if self.test_start_date and self.test_end_date:
+            if self.test_start_date >= self.test_end_date:
+                raise ValueError("test_start_date must be before test_end_date")
+
+        # Validate that test period comes after training period
+        if self.train_end_date and self.test_start_date:
+            if self.test_start_date < self.train_end_date:
+                raise ValueError(
+                    "test_start_date must be after or equal to train_end_date"
+                )
+
+        return self
 
 
 class TechnicalAnalysisConfig(BaseModel):

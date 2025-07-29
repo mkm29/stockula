@@ -43,30 +43,74 @@ Maximum accuracy with longer computation time:
 - **VAR**: Vector autoregression
 - **VECM**: Vector error correction models
 
+### Financial Models
+
+When `use_financial_models` is enabled (default), Stockula uses a curated list of models optimized for stock price data:
+
+- **LastValueNaive**: Simple but effective for financial data
+- **AverageValueNaive**: Moving average approach
+- **SeasonalNaive**: Captures seasonal patterns
+- **ARIMA**: Classic time series model
+- **ETS**: Exponential smoothing
+- **DynamicFactor**: Good for capturing trends
+- **VAR**: Vector autoregression
+- **Regression Models**: Univariate, Multivariate, Window, and Datepart regression
+- **NVAR**: Neural VAR for complex patterns
+- **Theta**: Theta method
+- **ARDL**: Autoregressive distributed lag
+
+Note: Motif models (pattern recognition) have been excluded to avoid warnings with small datasets.
+
 ## Configuration
 
-### Basic Forecasting Setup
+### Forecast Modes
+
+Stockula supports two mutually exclusive forecast modes:
+
+1. **Future Prediction Mode**: Forecast N days into the future from today
+1. **Historical Evaluation Mode**: Train on historical data and evaluate accuracy on a test period
+
+### Future Prediction Mode
 
 ```yaml
-# Data configuration with train/test split
-data:
-  train_start_date: "2025-01-01"   # Training data start
-  train_end_date: "2025-03-31"     # Training data end
-  test_start_date: "2025-04-01"    # Test data start (for evaluation)
-  test_end_date: "2025-06-30"      # Test data end
-
 forecast:
-  forecast_length: 30           # Days to forecast
+  forecast_length: 30           # Days to forecast from today
   model_list: "fast"            # fast, default, slow
   prediction_interval: 0.95     # 95% confidence interval
+  # Note: Do NOT specify test dates when using forecast_length
 ```
+
+### Historical Evaluation Mode
+
+```yaml
+forecast:
+  # Train/test split for historical evaluation
+  train_start_date: "2025-01-01"   # Training data start
+  train_end_date: "2025-03-31"     # Training data end  
+  test_start_date: "2025-04-01"    # Test data start (for evaluation)
+  test_end_date: "2025-06-30"      # Test data end
+  
+  model_list: "fast"            # fast, default, slow
+  prediction_interval: 0.95     # 95% confidence interval
+  # Note: Do NOT specify forecast_length when using train/test dates
+```
+
+**Important**: `forecast_length` and test dates (`test_start_date`/`test_end_date`) are mutually exclusive. You must choose one mode or the other.
 
 ### Advanced Configuration
 
 ```yaml
 forecast:
-  # Forecast parameters
-  forecast_length: 30           # Days ahead to forecast
+  # Mode 1: Future prediction (choose one)
+  forecast_length: 30           # Days ahead to forecast from today
+  
+  # Mode 2: Historical evaluation (choose one)
+  # train_start_date: "2025-01-01"
+  # train_end_date: "2025-03-31"
+  # test_start_date: "2025-04-01"
+  # test_end_date: "2025-06-30"
+  
+  # Common parameters
   frequency: "infer"            # D, W, M, or infer from data
   prediction_interval: 0.95     # Confidence interval (0.8, 0.9, 0.95, 0.99)
   
@@ -116,6 +160,43 @@ forecast:
   num_validations: 5            # Extensive validation
   ensemble: "auto"              # Best ensemble method
   transformer_list: "all"       # All transformations
+```
+
+## Choosing Between Forecast Modes
+
+### When to Use Future Prediction Mode
+
+Use `forecast_length` when you want to:
+
+- Predict future stock prices from today
+- Make trading decisions based on expected future prices
+- Generate forecasts for portfolio planning
+- Create alerts for expected price movements
+
+Example:
+
+```yaml
+forecast:
+  forecast_length: 14  # Predict 14 days into the future
+```
+
+### When to Use Historical Evaluation Mode
+
+Use train/test dates when you want to:
+
+- Evaluate model accuracy on historical data
+- Compare different forecasting models
+- Backtest forecast-based trading strategies
+- Understand model performance before using it for real predictions
+
+Example:
+
+```yaml
+forecast:
+  train_start_date: "2024-01-01"
+  train_end_date: "2024-12-31"
+  test_start_date: "2025-01-01"
+  test_end_date: "2025-01-31"
 ```
 
 ## Usage Examples
@@ -181,20 +262,68 @@ for asset in portfolio.assets:
 
 ## Rich CLI Output
 
-### Portfolio Value Summary (Forecast Mode)
+### Mode Detection
 
-When running in forecast mode with train/test split, you'll see:
+The CLI automatically detects which mode you're using and displays appropriate information:
+
+#### Future Prediction Mode
+
+```
+╭────────────────────────────────────────────────────────────────╮
+│ FORECAST MODE - IMPORTANT NOTES:                               │
+│ • Forecasting 14 days into the future                          │
+│ • AutoTS will try multiple models to find the best fit         │
+│ • This process may take several minutes per ticker             │
+│ • Press Ctrl+C at any time to cancel                           │
+│ • Enable logging for more detailed progress information        │
+╰────────────────────────────────────────────────────────────────╯
+```
+
+#### Historical Evaluation Mode
+
+```
+╭────────────────────────────────────────────────────────────────╮
+│ FORECAST MODE - IMPORTANT NOTES:                               │
+│ • Evaluating forecast on test period: 2025-04-01 to 2025-06-30 │
+│ • AutoTS will try multiple models to find the best fit         │
+│ • This process may take several minutes per ticker             │
+│ • Press Ctrl+C at any time to cancel                           │
+│ • Enable logging for more detailed progress information        │
+╰────────────────────────────────────────────────────────────────╯
+```
+
+### Portfolio Value Summary
+
+The portfolio value table shows different information based on the forecast mode:
+
+#### Future Prediction Mode
 
 ```
                Portfolio Value               
 ┏━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━┳━━━━━━━━━━━━┓
 ┃ Metric          ┃ Date       ┃ Value      ┃
 ┡━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━╇━━━━━━━━━━━━┩
-│ Portfolio Value │ 2025-04-01 │ $20,000.00 │
-│ Portfolio Value │ 2025-06-30 │ $19,934.32 │
+│ Observed Value  │ 2025-07-29 │ $20,000.00 │
+│ Predicted Value │ 2025-08-13 │ $20,456.32 │
+└─────────────────┴────────────┴────────────┘
+```
+
+#### Historical Evaluation Mode
+
+```
+               Portfolio Value               
+┏━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━┳━━━━━━━━━━━━┓
+┃ Metric          ┃ Date       ┃ Value      ┃
+┡━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━╇━━━━━━━━━━━━┩
+│ Observed Value  │ 2025-04-01 │ $20,000.00 │
+│ Predicted Value │ 2025-06-30 │ $19,934.32 │
 │ Accuracy        │ 2025-06-30 │ 90.8621%   │
 └─────────────────┴────────────┴────────────┘
 ```
+
+- **Observed Value**: The current portfolio value at the start date (today for future mode, test start for evaluation mode)
+- **Predicted Value**: The forecasted portfolio value at the end date based on individual stock predictions
+- **Accuracy**: (Evaluation mode only) The average forecast accuracy across all stocks, calculated as 100% - MAPE
 
 ### Forecast Results Table
 
@@ -268,12 +397,12 @@ AutoTS provides detailed progress information:
 
 ## Train/Test Evaluation
 
-When train/test dates are configured in your config file, Stockula automatically:
+When using Historical Evaluation Mode (train/test dates configured without forecast_length), Stockula automatically:
 
 1. **Trains models** on historical data from `train_start_date` to `train_end_date`
-2. **Makes predictions** for the period from `test_start_date` to `test_end_date`
-3. **Compares predictions** to actual prices during the test period
-4. **Calculates accuracy metrics**:
+1. **Makes predictions** for the period from `test_start_date` to `test_end_date`
+1. **Compares predictions** to actual prices during the test period
+1. **Calculates accuracy metrics**:
    - **RMSE (Root Mean Square Error)**: Average prediction error in dollars
    - **MAE (Mean Absolute Error)**: Average absolute error in dollars
    - **MAPE (Mean Absolute Percentage Error)**: Average percentage error
@@ -282,11 +411,16 @@ When train/test dates are configured in your config file, Stockula automatically
 ### Example Configuration
 
 ```yaml
-data:
+forecast:
+  # Historical evaluation mode - NO forecast_length specified
   train_start_date: "2025-01-01"   # 3 months of training data
   train_end_date: "2025-03-31"     
   test_start_date: "2025-04-01"    # 3 months of test data
   test_end_date: "2025-06-30"      
+  
+  # Model configuration
+  model_list: "fast"
+  prediction_interval: 0.95
 ```
 
 ### Interpreting Results
@@ -539,5 +673,34 @@ def forecast_based_rebalancing(portfolio, forecaster, rebalance_threshold=0.05):
 1. **Performance Monitoring**: Track forecast accuracy over time
 1. **Model Decay**: Retrain models when accuracy degrades
 1. **Computational Resources**: Balance accuracy vs. computation time
+
+## Troubleshooting
+
+### Common Warnings
+
+1. **"Frequency is 'None'! Data frequency not recognized."**
+
+   - This warning appears when AutoTS cannot automatically detect the data frequency
+   - Solution: Ensure your data has consistent date intervals or explicitly set `frequency` in config
+   - Default behavior: Stockula now defaults to 'D' (daily) frequency and attempts to infer the actual frequency from your data automatically
+
+1. **"k too large for size of data in motif"**
+
+   - This warning occurred with Motif pattern recognition models when pattern length exceeded data size
+   - Solution: Already fixed - Motif models have been removed from the default financial model list
+   - If using custom model lists, avoid UnivariateMotif and MultivariateMotif with small datasets
+
+1. **Alembic migration warnings**
+
+   - These warnings indicate database schema updates
+   - Solution: The migrations now check for existing indexes before creating them
+   - The warnings should no longer appear after the fix
+
+### Performance Tips
+
+1. **Reduce model search time**: Use `model_list: "fast"` and lower `max_generations`
+1. **Handle small datasets**: Ensure at least 2-3 years of historical data for best results
+1. **Memory usage**: For large portfolios, consider forecasting in batches
+1. **Parallel processing**: Set `max_workers` > 1 for concurrent forecasting (use cautiously)
 
 The forecasting module provides a powerful foundation for predictive analysis while maintaining ease of use through AutoTS automation and Rich CLI integration.

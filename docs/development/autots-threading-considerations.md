@@ -7,6 +7,7 @@ AutoTS has inherent threading limitations that require careful consideration whe
 ## Threading Limitations
 
 AutoTS experiences issues with multi-threaded execution:
+
 - Thread safety problems with internal model fitting
 - Potential deadlocks when running multiple forecasts simultaneously
 - Forced to use `max_workers=1` to avoid reliability issues
@@ -27,6 +28,7 @@ max_workers = 1  # AutoTS threading issues require this
 Given AutoTS's threading constraints, sequential forecasting is often more reliable and can be equally performant:
 
 **Benefits:**
+
 - **Simpler code**: No thread synchronization complexity
 - **More reliable**: Avoids AutoTS threading issues
 - **Easier debugging**: Predictable execution flow
@@ -60,34 +62,34 @@ def forecast_portfolio_sequential(symbols, config, data_fetcher):
 
 ## Performance Considerations
 
-| Approach | Pros | Cons |
-|----------|------|------|
-| Parallel (max_workers=1) | Maintains parallel interface | Threading overhead with no benefit |
-| Sequential | Simple, reliable, no overhead | Cannot leverage multiple cores |
+| Approach                 | Pros                          | Cons                               |
+| ------------------------ | ----------------------------- | ---------------------------------- |
+| Parallel (max_workers=1) | Maintains parallel interface  | Threading overhead with no benefit |
+| Sequential               | Simple, reliable, no overhead | Cannot leverage multiple cores     |
 
 ## Future Improvements
 
 ### Alternative Parallelism Strategies
 
 1. **Process-based parallelism**: Use multiprocessing instead of threading
-2. **Batch processing**: Group symbols and process in separate processes
-3. **Alternative libraries**: Consider libraries with better parallel support
+1. **Batch processing**: Group symbols and process in separate processes
+1. **Alternative libraries**: Consider libraries with better parallel support
 
 ### Migration Path
 
 If migrating away from threading:
 
 1. Update configuration to remove `max_workers` parameter
-2. Replace parallel forecasting calls with sequential implementation
-3. Update progress tracking for sequential execution
-4. Remove threading-related imports and utilities
+1. Replace parallel forecasting calls with sequential implementation
+1. Update progress tracking for sequential execution
+1. Remove threading-related imports and utilities
 
 ## Best Practices
 
 1. **Always test with production data volumes**: Threading issues may only appear with larger datasets
-2. **Monitor memory usage**: Sequential processing may have different memory patterns
-3. **Implement proper error handling**: Ensure failures in one forecast don't affect others
-4. **Consider user experience**: Provide clear progress feedback during long-running operations
+1. **Monitor memory usage**: Sequential processing may have different memory patterns
+1. **Implement proper error handling**: Ensure failures in one forecast don't affect others
+1. **Consider user experience**: Provide clear progress feedback during long-running operations
 
 ## Configuration
 

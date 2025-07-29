@@ -273,6 +273,216 @@ class BacktestRunner:
 
         return result
 
+    def run_with_train_test_split(
+        self,
+        symbol: str,
+        strategy: type,
+        train_start_date: str | None = None,
+        train_end_date: str | None = None,
+        test_start_date: str | None = None,
+        test_end_date: str | None = None,
+        optimize_on_train: bool = True,
+        treasury_duration: str = "3_month",
+        use_dynamic_risk_free_rate: bool = True,
+        **kwargs,
+    ) -> dict[str, Any]:
+        """Run backtest with train/test split for out-of-sample validation.
+
+        Args:
+            symbol: Stock symbol to test
+            strategy: Strategy class to test
+            train_start_date: Start date for training data (YYYY-MM-DD)
+            train_end_date: End date for training data (YYYY-MM-DD)
+            test_start_date: Start date for testing data (YYYY-MM-DD)
+            test_end_date: End date for testing data (YYYY-MM-DD)
+            optimize_on_train: Whether to optimize parameters on training data
+            treasury_duration: Treasury duration to use ('3_month', '13_week', etc.)
+            use_dynamic_risk_free_rate: Whether to automatically fetch dynamic T-bill rates
+            **kwargs: Additional parameters for the strategy or optimization
+
+        Returns:
+            Dictionary with both training and testing results
+        """
+        if not self.data_fetcher:
+            raise ValueError(
+                "Data fetcher not configured. Ensure DI container is properly set up."
+            )
+
+        # Fetch data for the entire period
+        all_start_date = train_start_date or test_start_date
+        all_end_date = test_end_date or train_end_date
+
+        all_data = self.data_fetcher.get_stock_data(
+            symbol, all_start_date, all_end_date
+        )
+
+        # Split data into train and test sets
+        train_data = None
+        test_data = None
+
+        if train_start_date and train_end_date:
+            train_mask = (all_data.index >= pd.to_datetime(train_start_date)) & (
+                all_data.index <= pd.to_datetime(train_end_date)
+            )
+            train_data = all_data[train_mask]
+
+        if test_start_date and test_end_date:
+            test_mask = (all_data.index >= pd.to_datetime(test_start_date)) & (
+                all_data.index <= pd.to_datetime(test_end_date)
+            )
+            test_data = all_data[test_mask]
+
+        # If no explicit split provided, use the entire dataset
+        if train_data is None and test_data is None:
+            train_data = all_data
+            test_data = all_data
+        elif train_data is None:
+            train_data = test_data  # Use test data for both if no train data
+        elif test_data is None:
+            test_data = train_data  # Use train data for both if no test data
+
+        # Fetch Treasury rates if requested
+        if use_dynamic_risk_free_rate and not isinstance(
+            self.risk_free_rate, pd.Series
+        ):
+            if all_start_date and all_end_date:
+                treasury_rates = self.data_fetcher.get_treasury_rates(
+                    all_start_date, all_end_date, treasury_duration
+                )
+                if not treasury_rates.empty:
+                    self.risk_free_rate = treasury_rates
+
+        results = {
+            "symbol": symbol,
+            "strategy": strategy.__name__,
+            "train_period": {
+                "start": train_data.index[0].strftime("%Y-%m-%d")
+                if len(train_data) > 0
+                else None,
+                "end": train_data.index[-1].strftime("%Y-%m-%d")
+                if len(train_data) > 0
+                else None,
+                "days": len(train_data),
+            },
+            "test_period": {
+                "start": test_data.index[0].strftime("%Y-%m-%d")
+                if len(test_data) > 0
+                else None,
+                "end": test_data.index[-1].strftime("%Y-%m-%d")
+                if len(test_data) > 0
+                else None,
+                "days": len(test_data),
+            },
+        }
+
+        # Run on training data
+        if optimize_on_train and "param_ranges" in kwargs:
+            # Optimize parameters on training data
+            param_ranges = kwargs.pop("param_ranges")
+            print(f"Optimizing {strategy.__name__} parameters on training data...")
+            optimized_result = self.optimize(train_data, strategy, **param_ranges)
+
+            # Extract optimized parameters
+            optimized_params = {
+                k: v
+                for k, v in optimized_result._asdict().items()
+                if k
+                not in [
+                    "Start",
+                    "End",
+                    "Duration",
+                    "Exposure Time [%]",
+                    "Equity Final [$]",
+                    "Equity Peak [$]",
+                    "Return [%]",
+                    "Buy & Hold Return [%]",
+                    "Max. Drawdown [%]",
+                    "Avg. Drawdown [%]",
+                    "Max. Drawdown Duration",
+                    "Avg. Drawdown Duration",
+                    "# Trades",
+                    "Win Rate [%]",
+                    "Best Trade [%]",
+                    "Worst Trade [%]",
+                    "Avg. Trade [%]",
+                    "Max. Trade Duration",
+                    "Avg. Trade Duration",
+                    "Profit Factor",
+                    "Expectancy [%]",
+                    "SQN",
+                    "Sharpe Ratio",
+                    "Sortino Ratio",
+                    "Calmar Ratio",
+                    "_strategy",
+                    "_equity_curve",
+                    "_trades",
+                ]
+            }
+
+            results["optimized_parameters"] = optimized_params
+
+            # Run backtest on training data with optimized parameters
+            for param_name, param_value in optimized_params.items():
+                setattr(strategy, param_name, param_value)
+
+            train_result = self.run(train_data, strategy, **kwargs)
+            results["train_results"] = self._extract_key_metrics(train_result)
+        else:
+            # Run backtest on training data without optimization
+            train_result = self.run(train_data, strategy, **kwargs)
+            results["train_results"] = self._extract_key_metrics(train_result)
+            results["optimized_parameters"] = kwargs
+
+        # Run backtest on test data with same parameters
+        test_result = self.run(test_data, strategy, **kwargs)
+        results["test_results"] = self._extract_key_metrics(test_result)
+
+        # Calculate performance degradation
+        if results["train_results"]["return_pct"] != 0:
+            results["performance_degradation"] = {
+                "return_pct": (
+                    (
+                        results["test_results"]["return_pct"]
+                        - results["train_results"]["return_pct"]
+                    )
+                    / abs(results["train_results"]["return_pct"])
+                    * 100
+                ),
+                "sharpe_ratio": (
+                    (
+                        results["test_results"]["sharpe_ratio"]
+                        - results["train_results"]["sharpe_ratio"]
+                    )
+                    / abs(results["train_results"]["sharpe_ratio"])
+                    * 100
+                    if results["train_results"]["sharpe_ratio"] != 0
+                    else 0
+                ),
+            }
+        else:
+            results["performance_degradation"] = {"return_pct": 0, "sharpe_ratio": 0}
+
+        return results
+
+    def _extract_key_metrics(self, backtest_result: dict[str, Any]) -> dict[str, Any]:
+        """Extract key metrics from backtest results.
+
+        Args:
+            backtest_result: Raw backtest result
+
+        Returns:
+            Dictionary with key metrics
+        """
+        return {
+            "return_pct": backtest_result.get("Return [%]", 0),
+            "sharpe_ratio": backtest_result.get("Sharpe Ratio", 0),
+            "max_drawdown_pct": backtest_result.get("Max. Drawdown [%]", 0),
+            "num_trades": backtest_result.get("# Trades", 0),
+            "win_rate": backtest_result.get("Win Rate [%]", 0),
+            "equity_final": backtest_result.get("Equity Final [$]", 0),
+            "buy_hold_return_pct": backtest_result.get("Buy & Hold Return [%]", 0),
+        }
+
     def run_from_symbol(
         self,
         symbol: str,

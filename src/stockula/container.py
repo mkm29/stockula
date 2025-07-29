@@ -3,7 +3,7 @@
 from dependency_injector import containers, providers
 
 from .backtesting.runner import BacktestRunner
-from .config import StockulaConfig, load_config
+from .config import load_config
 from .data.fetcher import DataFetcher
 from .database.manager import DatabaseManager
 from .domain.factory import DomainFactory
@@ -26,9 +26,7 @@ class Container(containers.DeclarativeContainer):
 
     # Stockula configuration
     stockula_config = providers.Singleton(
-        lambda config_path: load_config(config_path)
-        if config_path
-        else StockulaConfig(),
+        lambda config_path: load_config(config_path),
         config_path=config_path,
     )
 
@@ -73,6 +71,9 @@ class Container(containers.DeclarativeContainer):
         StockForecaster,
         forecast_length=providers.Callable(
             lambda config: config.forecast.forecast_length, stockula_config
+        ),
+        frequency=providers.Callable(
+            lambda config: config.forecast.frequency, stockula_config
         ),
         model_list=providers.Callable(
             lambda config: config.forecast.model_list, stockula_config

@@ -42,9 +42,13 @@ class TestStockForecaster:
 
         # Test defaults
         forecaster_default = StockForecaster()
-        assert forecaster_default.forecast_length == 14
-        assert forecaster_default.frequency == "infer"
-        assert forecaster_default.prediction_interval == 0.9
+        assert (
+            forecaster_default.forecast_length is None
+        )  # Changed to None for mutual exclusivity
+        assert (
+            forecaster_default.frequency == "D"
+        )  # Now defaults to 'D' instead of 'infer'
+        assert forecaster_default.prediction_interval == 0.95
 
     def test_forecast_with_data(self, forecast_data):
         """Test forecasting with provided data."""
@@ -83,47 +87,44 @@ class TestStockForecaster:
 
     def test_forecast_from_symbol(self, mock_data_fetcher, forecast_data):
         """Test forecasting from symbol."""
-        forecaster = StockForecaster(forecast_length=14)
-
         # Create a mock DataFetcher that returns our test data
         mock_fetcher = Mock()
         mock_fetcher.get_stock_data = Mock(return_value=forecast_data)
 
-        with patch(
-            "stockula.forecasting.forecaster.DataFetcher",
-            return_value=mock_fetcher,
-        ):
-            with patch("stockula.forecasting.forecaster.AutoTS") as mock_autots:
-                # Setup mock AutoTS
-                mock_model = Mock()
+        # Pass the data fetcher to the forecaster
+        forecaster = StockForecaster(forecast_length=14, data_fetcher=mock_fetcher)
 
-                # Create proper mock prediction
-                start_date = forecast_data.index[-1] + timedelta(days=1)
-                mock_prediction = create_mock_autots_prediction(start_date, periods=14)
+        with patch("stockula.forecasting.forecaster.AutoTS") as mock_autots:
+            # Setup mock AutoTS
+            mock_model = Mock()
 
-                mock_model.predict.return_value = mock_prediction
-                mock_model.best_model_name = "TestModel"
-                mock_model.best_model_params = {}
-                mock_model.best_model_transformation_params = {}
+            # Create proper mock prediction
+            start_date = forecast_data.index[-1] + timedelta(days=1)
+            mock_prediction = create_mock_autots_prediction(start_date, periods=14)
 
-                mock_autots_instance = Mock()
-                mock_autots_instance.fit.return_value = mock_model
-                mock_autots.return_value = mock_autots_instance
+            mock_model.predict.return_value = mock_prediction
+            mock_model.best_model_name = "TestModel"
+            mock_model.best_model_params = {}
+            mock_model.best_model_transformation_params = {}
 
-                # Run forecast
-                predictions = forecaster.forecast_from_symbol("AAPL")
+            mock_autots_instance = Mock()
+            mock_autots_instance.fit.return_value = mock_model
+            mock_autots.return_value = mock_autots_instance
 
-                # Check results
-                assert isinstance(predictions, pd.DataFrame)
-                assert len(predictions) == 14
-                assert all(
-                    col in predictions.columns
-                    for col in ["forecast", "lower_bound", "upper_bound"]
-                )
-                # Check values - the helper creates base_value ± 5.0
-                assert predictions["forecast"].iloc[0] == 110.0
-                assert predictions["lower_bound"].iloc[0] == 105.0
-                assert predictions["upper_bound"].iloc[0] == 115.0
+            # Run forecast
+            predictions = forecaster.forecast_from_symbol("AAPL")
+
+            # Check results
+            assert isinstance(predictions, pd.DataFrame)
+            assert len(predictions) == 14
+            assert all(
+                col in predictions.columns
+                for col in ["forecast", "lower_bound", "upper_bound"]
+            )
+            # Check values - the helper creates base_value ± 5.0
+            assert predictions["forecast"].iloc[0] == 110.0
+            assert predictions["lower_bound"].iloc[0] == 105.0
+            assert predictions["upper_bound"].iloc[0] == 115.0
 
     def test_get_best_model(self):
         """Test getting best model information."""
@@ -134,9 +135,10 @@ class TestStockForecaster:
             forecaster.get_best_model()
 
         # Mock a fitted model
-        forecaster.best_model = Mock()
-        forecaster.best_model_name = "ARIMA"
-        forecaster.best_model_params = {"p": 1, "d": 1, "q": 1}
+        forecaster.model = Mock()
+        forecaster.model.best_model_name = "ARIMA"
+        forecaster.model.best_model_params = {"p": 1, "d": 1, "q": 1}
+        forecaster.model.best_model_transformation_params = {}
 
         model_info = forecaster.get_best_model()
         assert model_info["model_name"] == "ARIMA"
@@ -147,7 +149,20 @@ class TestStockForecaster:
         forecaster = StockForecaster(forecast_length=7)
 
         with patch("stockula.forecasting.forecaster.AutoTS") as mock_autots:
+            # Create a proper mock model that returns valid predictions
+            mock_model = Mock()
+
+            # Use the helper to create proper prediction structure
+            start_date = forecast_data.index[-1] + timedelta(days=1)
+            mock_prediction = create_mock_autots_prediction(start_date, periods=7)
+
+            mock_model.predict.return_value = mock_prediction
+            mock_model.best_model_name = "TestModel"
+            mock_model.best_model_params = {}
+            mock_model.best_model_transformation_params = {}
+
             mock_autots_instance = Mock()
+            mock_autots_instance.fit.return_value = mock_model
             mock_autots.return_value = mock_autots_instance
 
             # Test with different model lists
@@ -160,10 +175,23 @@ class TestStockForecaster:
 
     def test_ensemble_parameter(self, forecast_data):
         """Test ensemble parameter."""
-        forecaster = StockForecaster()
+        forecaster = StockForecaster(forecast_length=7)
 
         with patch("stockula.forecasting.forecaster.AutoTS") as mock_autots:
+            # Create a proper mock model that returns valid predictions
+            mock_model = Mock()
+
+            # Use the helper to create proper prediction structure
+            start_date = forecast_data.index[-1] + timedelta(days=1)
+            mock_prediction = create_mock_autots_prediction(start_date, periods=7)
+
+            mock_model.predict.return_value = mock_prediction
+            mock_model.best_model_name = "TestModel"
+            mock_model.best_model_params = {}
+            mock_model.best_model_transformation_params = {}
+
             mock_autots_instance = Mock()
+            mock_autots_instance.fit.return_value = mock_model
             mock_autots.return_value = mock_autots_instance
 
             # Test with different ensemble methods
@@ -182,24 +210,53 @@ class TestStockForecaster:
             index=pd.date_range("2023-01-01", periods=100, freq="D"),
         )
 
-        forecaster = StockForecaster(frequency="infer")
+        forecaster = StockForecaster(frequency="infer", forecast_length=7)
 
         with patch("stockula.forecasting.forecaster.AutoTS") as mock_autots:
+            # Create a proper mock model that returns valid predictions
+            mock_model = Mock()
+
+            # Use the helper to create proper prediction structure
+            start_date = daily_data.index[-1] + timedelta(days=1)
+            mock_prediction = create_mock_autots_prediction(start_date, periods=7)
+
+            mock_model.predict.return_value = mock_prediction
+            mock_model.best_model_name = "TestModel"
+            mock_model.best_model_params = {}
+            mock_model.best_model_transformation_params = {}
+
             mock_autots_instance = Mock()
+            mock_autots_instance.fit.return_value = mock_model
             mock_autots.return_value = mock_autots_instance
 
             forecaster.fit_predict(daily_data)
 
-            # AutoTS should be called with inferred frequency
+            # AutoTS should be called with 'D' since we default infer to 'D'
+            # The actual inference happens inside the fit method
             call_args = mock_autots.call_args_list[0]
-            assert call_args[1]["frequency"] == "infer"
+            assert call_args[1]["frequency"] == "D"
 
     def test_validation_parameters(self, forecast_data):
         """Test validation parameters."""
-        forecaster = StockForecaster(num_validations=3, validation_method="similarity")
+        forecaster = StockForecaster(
+            forecast_length=7, num_validations=3, validation_method="similarity"
+        )
 
         with patch("stockula.forecasting.forecaster.AutoTS") as mock_autots:
+            # Create a proper mock model that returns valid predictions
+            mock_model = Mock()
+
+            # Use the helper to create proper prediction structure
+            start_date = forecast_data.index[-1] + timedelta(days=1)
+            mock_prediction = create_mock_autots_prediction(start_date, periods=7)
+
+            mock_model.predict.return_value = mock_prediction
+            mock_model.best_model_name = "TestModel"
+            mock_model.best_model_params = {}
+            mock_model.best_model_transformation_params = {}
+
             mock_autots_instance = Mock()
+            mock_autots_instance.fit.return_value = mock_model
             mock_autots.return_value = mock_autots_instance
 
             forecaster.forecast(forecast_data)
@@ -211,10 +268,23 @@ class TestStockForecaster:
 
     def test_max_generations(self, forecast_data):
         """Test max generations parameter."""
-        forecaster = StockForecaster(max_generations=10)
+        forecaster = StockForecaster(forecast_length=7, max_generations=10)
 
         with patch("stockula.forecasting.forecaster.AutoTS") as mock_autots:
+            # Create a proper mock model that returns valid predictions
+            mock_model = Mock()
+
+            # Use the helper to create proper prediction structure
+            start_date = forecast_data.index[-1] + timedelta(days=1)
+            mock_prediction = create_mock_autots_prediction(start_date, periods=7)
+
+            mock_model.predict.return_value = mock_prediction
+            mock_model.best_model_name = "TestModel"
+            mock_model.best_model_params = {}
+            mock_model.best_model_transformation_params = {}
+
             mock_autots_instance = Mock()
+            mock_autots_instance.fit.return_value = mock_model
             mock_autots.return_value = mock_autots_instance
 
             forecaster.forecast(forecast_data, max_generations=10)
@@ -258,18 +328,13 @@ class TestForecastingEdgeCases:
         with patch("stockula.forecasting.forecaster.AutoTS") as mock_autots:
             # Mock to return constant predictions
             mock_model = Mock()
-            mock_predictions = pd.DataFrame(
-                {
-                    "forecast": [100] * 14,
-                    "lower_bound": [100] * 14,
-                    "upper_bound": [100] * 14,
-                },
-                index=pd.date_range(
-                    start=constant_data.index[-1] + timedelta(days=1), periods=14
-                ),
+            # Use the helper to create proper prediction structure
+            start_date = constant_data.index[-1] + timedelta(days=1)
+            mock_prediction = create_mock_autots_prediction(
+                start_date, periods=14, base_value=100.0
             )
 
-            mock_model.predict.return_value = mock_predictions
+            mock_model.predict.return_value = mock_prediction
             mock_autots_instance = Mock()
             mock_autots_instance.fit.return_value = mock_model
             mock_autots.return_value = mock_autots_instance
@@ -288,10 +353,23 @@ class TestForecastingEdgeCases:
         # Remove some data points
         data_with_gaps = data_with_gaps.drop(data_with_gaps.index[20:30])
 
-        forecaster = StockForecaster()
+        forecaster = StockForecaster(forecast_length=7)
 
         with patch("stockula.forecasting.forecaster.AutoTS") as mock_autots:
+            # Create a proper mock model that returns valid predictions
+            mock_model = Mock()
+
+            # Use the helper to create proper prediction structure
+            start_date = data_with_gaps.index[-1] + timedelta(days=1)
+            mock_prediction = create_mock_autots_prediction(start_date, periods=7)
+
+            mock_model.predict.return_value = mock_prediction
+            mock_model.best_model_name = "TestModel"
+            mock_model.best_model_params = {}
+            mock_model.best_model_transformation_params = {}
+
             mock_autots_instance = Mock()
+            mock_autots_instance.fit.return_value = mock_model
             mock_autots.return_value = mock_autots_instance
 
             # Should handle gaps in data
@@ -310,18 +388,13 @@ class TestForecastingEdgeCases:
         with patch("stockula.forecasting.forecaster.AutoTS") as mock_autots:
             # Mock long predictions
             mock_model = Mock()
-            mock_predictions = pd.DataFrame(
-                {
-                    "forecast": np.linspace(100, 200, 365),
-                    "lower_bound": np.linspace(90, 180, 365),
-                    "upper_bound": np.linspace(110, 220, 365),
-                },
-                index=pd.date_range(
-                    start=data.index[-1] + timedelta(days=1), periods=365
-                ),
+            # Use the helper to create proper prediction structure
+            start_date = data.index[-1] + timedelta(days=1)
+            mock_prediction = create_mock_autots_prediction(
+                start_date, periods=365, base_value=150.0
             )
 
-            mock_model.predict.return_value = mock_predictions
+            mock_model.predict.return_value = mock_prediction
             mock_autots_instance = Mock()
             mock_autots_instance.fit.return_value = mock_model
             mock_autots.return_value = mock_autots_instance
@@ -357,18 +430,11 @@ class TestForecastingIntegration:
 
         with patch("stockula.forecasting.forecaster.AutoTS") as mock_autots:
             mock_model = Mock()
-            mock_predictions = pd.DataFrame(
-                {
-                    "forecast": [110] * 14,
-                    "lower_bound": [105] * 14,
-                    "upper_bound": [115] * 14,
-                },
-                index=pd.date_range(
-                    start=enhanced_data.index[-1] + timedelta(days=1), periods=14
-                ),
-            )
+            # Use the helper to create proper prediction structure
+            start_date = enhanced_data.index[-1] + timedelta(days=1)
+            mock_prediction = create_mock_autots_prediction(start_date, periods=14)
 
-            mock_model.predict.return_value = mock_predictions
+            mock_model.predict.return_value = mock_prediction
             mock_autots_instance = Mock()
             mock_autots_instance.fit.return_value = mock_model
             mock_autots.return_value = mock_autots_instance

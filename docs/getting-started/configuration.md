@@ -32,10 +32,19 @@ backtest:
         fast_period: 10
         slow_period: 20
 
-# Forecasting settings
+# Forecasting settings (choose one mode)
+# Option 1: Future prediction mode
 forecast:
-  forecast_length: 30
+  forecast_length: 30        # Days to forecast from today
   model_list: "fast"
+  
+# Option 2: Historical evaluation mode
+# forecast:
+#   train_start_date: "2025-01-01"
+#   train_end_date: "2025-03-31"
+#   test_start_date: "2025-04-01"
+#   test_end_date: "2025-06-30"
+#   model_list: "fast"
 
 # Technical analysis settings
 technical_analysis:
@@ -253,12 +262,16 @@ technical_analysis:
 
 ## Forecast Configuration
 
-Optimize forecasting performance:
+Stockula supports two mutually exclusive forecasting modes:
+
+### Future Prediction Mode
+
+Forecast N days into the future from today:
 
 ```yaml
 forecast:
-  forecast_length: 30           # Days to forecast
-  frequency: "infer"            # D, W, M, or infer
+  forecast_length: 30           # Days to forecast from today
+  frequency: "infer"            # Data frequency: 'D' (daily), 'W' (weekly), 'M' (monthly), or 'infer' to auto-detect
   prediction_interval: 0.95     # Confidence interval
   model_list: "fast"            # fast, default, slow, parallel
   ensemble: "auto"              # auto, simple, distance, horizontal
@@ -267,13 +280,40 @@ forecast:
   validation_method: "backwards" # backwards, seasonal, similarity
 ```
 
-### Performance Optimization
+### Historical Evaluation Mode
 
-For faster forecasting:
+Train on historical data and evaluate accuracy on a test period:
 
 ```yaml
 forecast:
+  # Train/test split for evaluation
+  train_start_date: "2025-01-01"   # Training period start
+  train_end_date: "2025-03-31"     # Training period end
+  test_start_date: "2025-04-01"    # Test period start
+  test_end_date: "2025-06-30"      # Test period end
+  
+  # Model configuration
+  frequency: "infer"
+  prediction_interval: 0.95
+  model_list: "fast"
+  ensemble: "auto"
+  max_generations: 5
+  num_validations: 2
+  validation_method: "backwards"
+```
+
+**Important**: Do not specify both `forecast_length` and test dates. Choose one mode or the other. The system will validate this and raise an error if both are configured.
+
+### Performance Optimization
+
+For faster forecasting in either mode:
+
+```yaml
+forecast:
+  # Choose your mode (forecast_length OR test dates)
   forecast_length: 14           # Shorter forecasts
+  # OR use shorter test periods for evaluation
+  
   model_list: "fast"            # Only fast models
   max_generations: 2            # Fewer iterations
   num_validations: 1            # Single validation

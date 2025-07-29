@@ -109,6 +109,40 @@ backtest:
         slow_period: 20
 ```
 
+### Train/Test Split Configuration
+
+Stockula supports train/test split for backtesting, allowing you to optimize strategies on training data and validate performance on out-of-sample test data:
+
+```yaml
+data:
+  # Training period
+  train_start_date: "2023-01-01"
+  train_end_date: "2023-12-31"
+  
+  # Testing period (out-of-sample)
+  test_start_date: "2024-01-01"
+  test_end_date: "2024-06-30"
+
+backtest:
+  initial_cash: 20000.0
+  optimize: true  # Enable parameter optimization on training data
+  optimization_params:
+    fast_period: [5, 10, 15]
+    slow_period: [20, 30, 40]
+  strategies:
+    - name: smacross
+      parameters:
+        fast_period: 10
+        slow_period: 20
+```
+
+When train/test split is configured:
+
+- Strategy parameters are optimized on the training period
+- Performance is evaluated on the test period
+- Both train and test results are displayed for comparison
+- Performance degradation between periods is calculated
+
 ### Advanced Configuration
 
 ```yaml
@@ -234,7 +268,7 @@ Portfolio Information:
   Calendar Days: 365
 ```
 
-#### Backtesting Results Table
+#### Standard Backtesting Results Table
 
 ```
                          Backtesting Results                          
@@ -247,6 +281,27 @@ Portfolio Information:
 │ NVDA   │ RSI       │ +22.40%    │ 1.85           │ -15.20%        │
 │ TSLA   │ RSI       │ +5.30%     │ 0.65           │ -25.80%        │
 └────────┴───────────┴────────────┴────────────────┴────────────────┘
+```
+
+#### Train/Test Split Results Table
+
+When using train/test split configuration, the output shows both training and testing performance:
+
+```
+              Ticker-Level Backtest Results (Train/Test Split)               
+┏━━━━━━━━┳━━━━━━━━━━━┳━━━━━━━━━━━━━━┳━━━━━━━━━━━━━┳━━━━━━━━━━━━━━┳━━━━━━━━━━━━━┓
+┃ Ticker ┃ Strategy  ┃ Train Return ┃ Test Return ┃ Train Sharpe ┃ Test Sharpe ┃
+┡━━━━━━━━╇━━━━━━━━━━━╇━━━━━━━━━━━━━━╇━━━━━━━━━━━━━╇━━━━━━━━━━━━━━╇━━━━━━━━━━━━━┩
+│ AAPL   │ SMACROSS  │ +18.50%      │ +12.30%     │ 1.45         │ 1.10        │
+│ GOOGL  │ SMACROSS  │ +10.25%      │ +7.80%      │ 1.20         │ 0.95        │
+│ MSFT   │ SMACROSS  │ +5.75%       │ -3.20%      │ 0.80         │ -0.25       │
+│ NVDA   │ SMACROSS  │ +25.40%      │ +19.80%     │ 2.10         │ 1.75        │
+│ TSLA   │ SMACROSS  │ +8.90%       │ +3.50%      │ 0.95         │ 0.55        │
+└────────┴───────────┴──────────────┴─────────────┴──────────────┴─────────────┘
+
+Data Periods:
+  Training: 2023-01-01 to 2023-12-31 (252 days)
+  Testing:  2024-01-01 to 2024-06-30 (126 days)
 ```
 
 ### Strategy Summary Panel

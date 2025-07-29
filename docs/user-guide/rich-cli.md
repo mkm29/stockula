@@ -126,6 +126,37 @@ Color coding:
 
 ### Forecast Results
 
+#### Portfolio Value Summary
+
+The portfolio value table adapts based on forecast mode:
+
+**Future Prediction Mode:**
+
+```
+               Portfolio Value               
+┏━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━┳━━━━━━━━━━━━┓
+┃ Metric          ┃ Date       ┃ Value      ┃
+┡━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━╇━━━━━━━━━━━━┩
+│ Observed Value  │ 2025-07-29 │ $20,000.00 │
+│ Predicted Value │ 2025-08-13 │ $20,456.32 │
+└─────────────────┴────────────┴────────────┘
+```
+
+**Historical Evaluation Mode:**
+
+```
+               Portfolio Value               
+┏━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━┳━━━━━━━━━━━━┓
+┃ Metric          ┃ Date       ┃ Value      ┃
+┡━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━╇━━━━━━━━━━━━┩
+│ Observed Value  │ 2025-04-01 │ $20,000.00 │
+│ Predicted Value │ 2025-06-30 │ $19,934.32 │
+│ Accuracy        │ 2025-06-30 │ 90.8621%   │
+└─────────────────┴────────────┴────────────┘
+```
+
+#### Individual Stock Forecasts
+
 ```
                     Price Forecasts                     
 ┏━━━━━━━━┳━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━┓
@@ -139,9 +170,11 @@ Color coding:
 
 Features:
 
+- Clear labeling of observed vs predicted values
+- Date display for both current and forecast dates
 - Currency formatting with $ prefix
 - Confidence interval ranges
-- Directional change indication
+- Accuracy metrics for evaluation mode
 
 ## Strategy Summary Panels
 

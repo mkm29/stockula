@@ -1,3 +1,4 @@
+---
 # Stockula Configuration - Dynamic Allocation Example
 # Based on EMA portfolio strategy with allocation amounts for better capital utilization
 data:
@@ -9,15 +10,15 @@ portfolio:
   initial_capital: 20000
   allocation_method: dynamic
   dynamic_allocation: true
-  allow_fractional_shares: false # Use integer shares only
+  allow_fractional_shares: false  # Use integer shares only
   rebalance_frequency: monthly
-  max_position_size: 20.0 # Allow larger positions for better utilization
+  max_position_size: 20.0  # Allow larger positions for better utilization
   # Portfolio tickers with allocation amounts for precise capital deployment
   tickers:
     # Broad-Market Core holdings (hold-only) - $7,000 total (35%)
     - symbol: SPY
       category: INDEX
-      allocation_amount: 1167 # $1,167 each
+      allocation_amount: 1167
     - symbol: VOO
       category: INDEX
       allocation_amount: 1167
@@ -32,12 +33,12 @@ portfolio:
       allocation_amount: 1167
     - symbol: FXAIX
       category: INDEX
-      allocation_amount: 1165 # Slightly less to total $7,000
+      allocation_amount: 1165  # Slightly less to total $7,000
     # Momentum / Large-Cap Growth (tradeable) - $9,500 total (47.5%)
     - symbol: NVDA
       category: MOMENTUM
       sector: Technology
-      allocation_amount: 950 # $950 each
+      allocation_amount: 950
     - symbol: AMD
       category: MOMENTUM
       sector: Technology
@@ -78,7 +79,7 @@ portfolio:
     - symbol: LIDR
       category: SPECULATIVE
       sector: Technology
-      allocation_amount: 875 # $875 each
+      allocation_amount: 875
     - symbol: OPEN
       category: SPECULATIVE
       sector: Real Estate
@@ -103,13 +104,13 @@ portfolio:
 #      category: INDEX
 #      allocation_amount: 1167
 #    # ... etc with allocation_amount: 1167 for all INDEX
-#    
-#    # Momentum holdings - $9,500 total  
+#
+#    # Momentum holdings - $9,500 total
 #    - symbol: NVDA
 #      category: MOMENTUM
 #      allocation_amount: 950
 #    # ... etc with allocation_amount: 950 for all MOMENTUM
-#    
+#
 #    # Speculative holdings - $3,500 total
 #    - symbol: LIDR
 #      category: SPECULATIVE
