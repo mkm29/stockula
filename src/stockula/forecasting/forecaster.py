@@ -1,11 +1,11 @@
-"""Stock price forecasting using AutoTS."""
+"""Stock price forecasting using AutoTS - cleaned version without parallel processing."""
 
 import logging
 import os
 import signal
 import sys
+import time
 import warnings
-import threading
 from contextlib import contextmanager
 from typing import TYPE_CHECKING, Any, Optional
 
@@ -14,65 +14,48 @@ from autots import AutoTS
 from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, TextColumn
 
-# Global lock for all AutoTS operations to prevent threading issues
-_AUTOTS_GLOBAL_LOCK = threading.Lock()
-
 console = Console()
 
 if TYPE_CHECKING:
-    from ..interfaces import IDataFetcher
+    from ..data import DataFetcher
 
-# Create logger
 logger = logging.getLogger(__name__)
 
-# Global flag for interruption
-_interrupted = False
+# Set up warning suppression for AutoTS
+warnings.filterwarnings("ignore", category=UserWarning, module="autots")
+warnings.filterwarnings("ignore", category=FutureWarning, module="autots")
+warnings.filterwarnings("ignore", message=".*ConvergenceWarning.*")
+warnings.filterwarnings("ignore", message=".*DataConversionWarning.*")
+warnings.filterwarnings("ignore", message=".*SVD did not converge.*")
 
 
-@contextmanager
-def suppress_autots_output():
-    """Context manager to suppress AutoTS verbose output."""
-    # Disable interactive plots from Prophet
-    old_mplbackend = os.environ.get("MPLBACKEND")
-    os.environ["MPLBACKEND"] = "Agg"  # Non-interactive backend
+class SuppressAutoTSOutput:
+    """Context manager to suppress AutoTS verbose output and warnings."""
 
-    # Set cmdstanpy temp dir to avoid permission issues
-    old_cmdstan_tmpdir = os.environ.get("CMDSTAN_TMP_DIR")
-    import tempfile
+    def __init__(self):
+        """Initialize the output suppressor."""
+        self.original_stdout = None
+        self.original_stderr = None
+        self.null_file = None
 
-    os.environ["CMDSTAN_TMP_DIR"] = tempfile.gettempdir()
+    def __enter__(self):
+        """Redirect stdout and stderr to suppress output."""
+        # Configure warnings
+        warnings.filterwarnings("ignore", category=UserWarning)
+        warnings.filterwarnings("ignore", category=RuntimeWarning)
+        warnings.filterwarnings("ignore", category=FutureWarning)
+        warnings.filterwarnings("ignore", message=".*is not available.*")
+        warnings.filterwarnings("ignore", message=".*SVD did not converge.*")
+        warnings.filterwarnings("ignore", message=".*Ill-conditioned matrix.*")
+        warnings.filterwarnings("ignore", message=".*invalid value encountered.*")
+        warnings.filterwarnings("ignore", message=".*divide by zero.*")
+        warnings.filterwarnings("ignore", message=".*overflow encountered.*")
+        warnings.filterwarnings("ignore", message="Template Eval Error:")
+        warnings.filterwarnings("ignore", message="Model Number:")
+        warnings.filterwarnings("ignore", message="Ensembling")
+        warnings.filterwarnings("ignore", message="Data frequency is:")
 
-    # Suppress cmdstanpy verbose logging
-    cmdstanpy_logger = logging.getLogger("cmdstanpy")
-    prophet_logger = logging.getLogger("prophet")
-    prophet_plot_logger = logging.getLogger("prophet.plot")
-    matplotlib_logger = logging.getLogger("matplotlib")
-
-    old_cmdstanpy_level = cmdstanpy_logger.level
-    old_prophet_level = prophet_logger.level
-    old_prophet_plot_level = prophet_plot_logger.level
-    old_matplotlib_level = matplotlib_logger.level
-
-    # Set to ERROR to only show critical issues
-    cmdstanpy_logger.setLevel(logging.ERROR)
-    prophet_logger.setLevel(logging.ERROR)
-    prophet_plot_logger.setLevel(logging.ERROR)
-    matplotlib_logger.setLevel(logging.WARNING)
-
-    # Suppress warnings
-    with warnings.catch_warnings():
-        warnings.filterwarnings("ignore")
-        # Specifically ignore joblib warnings including resource tracker
-        warnings.filterwarnings("ignore", category=UserWarning, module="joblib")
-        warnings.filterwarnings(
-            "ignore", message="resource_tracker: There appear to be"
-        )
-        warnings.filterwarnings(
-            "ignore",
-            message="resource_tracker:",
-            module="joblib.externals.loky.backend.resource_tracker",
-        )
-        # Ignore matplotlib font cache warnings
+        # Suppress matplotlib font cache warnings
         warnings.filterwarnings(
             "ignore", message="Matplotlib is building the font cache"
         )
@@ -92,115 +75,112 @@ def suppress_autots_output():
         warnings.filterwarnings(
             "ignore", category=RuntimeWarning, message="Mean of empty slice"
         )
+
+        # Suppress sklearn specific warnings
         warnings.filterwarnings(
             "ignore",
-            category=RuntimeWarning,
-            message="Degrees of freedom <= 0 for slice",
+            category=UserWarning,
+            message=".*X does not have valid feature names.*",
         )
-        warnings.filterwarnings("ignore", category=RuntimeWarning, module="sklearn")
-        warnings.filterwarnings("ignore", category=RuntimeWarning, module="numpy")
-        warnings.filterwarnings("ignore", category=RuntimeWarning, module="autots")
-
-        # Suppress statsmodels warnings
-        warnings.filterwarnings("ignore", category=UserWarning, module="statsmodels")
-        warnings.filterwarnings(
-            "ignore", message="Negative binomial dispersion parameter"
-        )
-        warnings.filterwarnings("ignore", message="Non-invertible MA parameters found")
-        warnings.filterwarnings(
-            "ignore", message="Non-stationary starting autoregressive parameters found"
-        )
-
-        # Suppress sklearn convergence warnings
-        warnings.filterwarnings("ignore", message="ConvergenceWarning")
-        warnings.filterwarnings("ignore", message="did not converge")
-
-        # Suppress statsmodels GLM warnings that occur with problematic model combinations
-        try:
-            from statsmodels.tools.sm_exceptions import DomainWarning
-
-            warnings.filterwarnings("ignore", category=DomainWarning)
-        except ImportError:
-            pass
-
-        # Suppress specific GLM warnings
         warnings.filterwarnings(
             "ignore",
-            message="The InversePower link function does not respect the domain",
+            category=UserWarning,
+            message=".*X has feature names.*",
         )
 
-        # Try to import and suppress ValueWarning if it exists
-        try:
-            from statsmodels.tools.sm_exceptions import ValueWarning
-
-            warnings.filterwarnings("ignore", category=ValueWarning)
-        except ImportError:
-            # If ValueWarning doesn't exist, ignore it
-            pass
-
-        # Suppress sklearn DataConversionWarning
-        warnings.filterwarnings(
-            "ignore", category=UserWarning, message="Data was converted to boolean"
-        )
-        # Also suppress specific metric warnings
-        warnings.filterwarnings(
-            "ignore", message="Data was converted to boolean for metric"
-        )
-        warnings.filterwarnings(
-            "ignore", category=UserWarning, module="sklearn.metrics.pairwise"
-        )
-
-        # Suppress fast_kalman warnings
-        warnings.filterwarnings(
-            "ignore", category=RuntimeWarning, module="autots.tools.fast_kalman"
-        )
-
-        # Suppress sklearn extmath warnings
-        warnings.filterwarnings(
-            "ignore", category=RuntimeWarning, module="sklearn.utils.extmath"
-        )
-
-        # Suppress statsmodels ARDL warnings
-        warnings.filterwarnings(
-            "ignore", category=RuntimeWarning, module="statsmodels.tsa.ardl"
-        )
-
-        # Suppress pandas FutureWarning about downcasting behavior
+        # Sklearn convergence warnings
         warnings.filterwarnings(
             "ignore",
-            category=FutureWarning,
-            message="Downcasting behavior in `replace`",
+            message=".*ConvergenceWarning.*",
+        )
+        warnings.filterwarnings(
+            "ignore",
+            message=".*did not converge.*",
         )
 
-        # Set environment variable to suppress joblib resource tracker warnings
-        old_loky_pickler = os.environ.get("LOKY_PICKLER", None)
-        os.environ["LOKY_PICKLER"] = "pickle"
-
-        # Also suppress AutoTS template eval errors by setting env var
-        old_autots_suppress = os.environ.get(
-            "SUPPRESS_AUTOTS_TEMPLATE_EVAL_ERRORS", None
+        # Ignore GLM warnings
+        warnings.filterwarnings(
+            "ignore",
+            message=".*DomainWarning.*",
         )
-        os.environ["SUPPRESS_AUTOTS_TEMPLATE_EVAL_ERRORS"] = "1"
 
-        # Redirect stdout and stderr based on debug mode
-        old_stdout = sys.stdout
-        old_stderr = sys.stderr
+        # Statsmodels warnings
+        warnings.filterwarnings(
+            "ignore",
+            message=".*maximum likelihood optimization failed.*",
+        )
+        warnings.filterwarnings("ignore", category=RuntimeWarning, module="statsmodels")
 
-        class FilteredOutput:
-            def __init__(self, original_stream, suppress_all=False):
+        # Joblib warnings
+        warnings.filterwarnings("ignore", category=UserWarning, module="joblib")
+        warnings.filterwarnings("ignore", message=".*resource_tracker.*")
+
+        # Data conversion warnings
+        warnings.filterwarnings("ignore", message=".*Data was converted to boolean.*")
+        warnings.filterwarnings("ignore", message=".*DataConversionWarning.*")
+
+        # Pandas warnings
+        warnings.filterwarnings("ignore", message=".*DataFrame.interpolate.*")
+        warnings.filterwarnings("ignore", category=FutureWarning, module="pandas")
+
+        # AutoTS specific patterns
+        warnings.filterwarnings("ignore", message=".*failed validation.*")
+        warnings.filterwarnings("ignore", message=".*New Generation.*")
+
+        # Open null device
+        self.null_file = open(os.devnull, "w")
+
+        # Store original streams
+        self.original_stdout = sys.stdout
+        self.original_stderr = sys.stderr
+
+        # Create custom stream that filters AutoTS output
+        class FilteredStream:
+            def __init__(self, original_stream):
                 self.original_stream = original_stream
-                self.suppress_all = suppress_all
 
             def write(self, s):
-                if self.suppress_all:
-                    # In production, suppress various AutoTS outputs
-                    # Skip empty lines and whitespace-only lines
-                    if not s or s.isspace():
-                        return len(s)
+                # Completely suppress empty strings
+                if not s or s == "\n":
+                    return len(s)
 
-                    # Skip lines we want to suppress
+                # Only filter non-debug messages
+                if not logger.isEnabledFor(logging.DEBUG):
+                    # List of patterns to suppress
                     suppress_patterns = [
+                        "Model Number:",
+                        "New Generation:",
+                        "Validation Round:",
+                        "Ensembling",
+                        "Data frequency is:",
+                        "Model Index:",
                         "Template Eval Error:",
+                        "Ensemble Weights:",
+                        "Model Weights:",
+                        "with avg smape",
+                        "📈",
+                        "AutoTS",
+                        "failed validation",
+                        # Suppress warnings from AutoTS
+                        "UserWarning:",
+                        "RuntimeWarning:",
+                        "FutureWarning:",
+                        "DomainWarning:",
+                        "DataConversionWarning:",
+                        "ConvergenceWarning:",
+                        # Suppress model info
+                        "Univariate",
+                        "Multivariate",
+                        # Suppress sklearn warnings
+                        "sklearn",
+                        "Convergence",
+                        "resource_tracker:",
+                        # Suppress error stack traces we handle
+                        "Traceback",
+                        "ValueError:",
+                        "KeyError:",
+                        "during handling",
+                        # Suppress ensembling details
                         "Ensembling Error:",
                         "interpolating",
                         "SVD did not converge",
@@ -231,57 +211,33 @@ def suppress_autots_output():
                 # Delegate all other attributes to the original stream
                 return getattr(self.original_stream, name)
 
-        # Use filtered output to remove noisy AutoTS messages
-        # Always suppress template eval errors unless in DEBUG mode
-        suppress_all = not logger.isEnabledFor(logging.DEBUG)
-        sys.stdout = FilteredOutput(
-            old_stdout, suppress_all=True
-        )  # Always filter stdout
-        sys.stderr = FilteredOutput(
-            old_stderr, suppress_all=True
-        )  # Always filter stderr
+        # Replace stdout and stderr with filtered versions
+        sys.stdout = FilteredStream(self.original_stdout)
+        sys.stderr = FilteredStream(self.original_stderr)
 
-        try:
-            yield
-        finally:
-            sys.stdout = old_stdout
-            sys.stderr = old_stderr
-            # Restore environment variables
-            if old_loky_pickler is None:
-                os.environ.pop("LOKY_PICKLER", None)
-            else:
-                os.environ["LOKY_PICKLER"] = old_loky_pickler
+        return self
 
-            if old_autots_suppress is None:
-                os.environ.pop("SUPPRESS_AUTOTS_TEMPLATE_EVAL_ERRORS", None)
-            else:
-                os.environ["SUPPRESS_AUTOTS_TEMPLATE_EVAL_ERRORS"] = old_autots_suppress
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """Restore original stdout and stderr."""
+        # Restore original streams
+        if self.original_stdout:
+            sys.stdout = self.original_stdout
+        if self.original_stderr:
+            sys.stderr = self.original_stderr
 
-            # Restore matplotlib backend
-            if old_mplbackend is None:
-                os.environ.pop("MPLBACKEND", None)
-            else:
-                os.environ["MPLBACKEND"] = old_mplbackend
+        # Close null file
+        if self.null_file:
+            self.null_file.close()
 
-            # Restore cmdstan temp dir
-            if old_cmdstan_tmpdir is None:
-                os.environ.pop("CMDSTAN_TMP_DIR", None)
-            else:
-                os.environ["CMDSTAN_TMP_DIR"] = old_cmdstan_tmpdir
-
-            # Restore logger levels
-            cmdstanpy_logger.setLevel(old_cmdstanpy_level)
-            prophet_logger.setLevel(old_prophet_level)
-            prophet_plot_logger.setLevel(old_prophet_plot_level)
-            matplotlib_logger.setLevel(old_matplotlib_level)
+        # Reset warnings to default
+        warnings.resetwarnings()
 
 
-def signal_handler(signum, frame):
-    """Handle interrupt signals gracefully."""
-    global _interrupted
-    _interrupted = True
-    logger.info("\nReceived interrupt signal. Stopping forecast...")
-    sys.exit(0)
+@contextmanager
+def suppress_autots_output():
+    """Context manager to suppress AutoTS output."""
+    with SuppressAutoTSOutput():
+        yield
 
 
 class StockForecaster:
@@ -295,261 +251,207 @@ class StockForecaster:
     FINANCIAL_MODEL_LIST = [
         "LastValueNaive",  # Simple but effective for financial data
         "AverageValueNaive",  # Moving average approach
-        "SeasonalNaive",  # Captures seasonality
-        "GLS",  # Generalized Least Squares
-        "ETS",  # Exponential Smoothing
+        "SeasonalNaive",  # Captures seasonal patterns
         "ARIMA",  # Classic time series model
-        # "FBProphet",  # Temporarily excluded due to cmdstanpy permission issues
-        "RollingRegression",  # Rolling window regression
-        "WindowRegression",  # Window-based regression
-        "VAR",  # Vector Autoregression
-        "VECM",  # Vector Error Correction
-        "DynamicFactor",  # Dynamic Factor Model
-        "MotifSimulation",  # Pattern-based simulation
-        "SectionalMotif",  # Cross-sectional patterns
+        "ETS",  # Exponential smoothing
+        "DynamicFactor",  # Good for capturing trends
+        "VAR",  # Vector autoregression
+        "UnivariateRegression",  # Basic regression models
+        "MultivariateRegression",  # Multiple regression
+        "WindowRegression",  # Rolling window regression
+        "DatepartRegression",  # Date-based features
+        "UnivariateMotif",  # Pattern recognition
+        "MultivariateMotif",  # Multi-pattern recognition
         "NVAR",  # Neural VAR
         "Theta",  # Theta method
-        # Note: ARDL excluded due to numerical stability issues with stock data
-        # Note: FBProphet excluded due to cmdstanpy permission issues on some systems
+        "ARDL",  # Autoregressive distributed lag
     ]
 
-    # Fastest models for quick forecasting (15-30 seconds per symbol)
-    # These models provide excellent speed/accuracy trade-off for stock data
-    FAST_FINANCIAL_MODEL_LIST = [
-        "LastValueNaive",  # Very fast (<1s) - Uses last value as forecast
-        "AverageValueNaive",  # Very fast (<1s) - Moving average approach
-        "SeasonalNaive",  # Fast (<5s) - Captures seasonal patterns
-        "ETS",  # Fast (5-10s) - Exponential smoothing (Error/Trend/Seasonality)
-        "ARIMA",  # Moderate (10-20s) - AutoRegressive Integrated Moving Average
-        "Theta",  # Fast (5-10s) - Statistical decomposition method
-    ]
-
-    # Ultra-fast models for immediate results (5-10 seconds per symbol)
+    # Ultra-fast models for quick results
     ULTRA_FAST_MODEL_LIST = [
-        "LastValueNaive",  # <1s - Simple but effective baseline
-        "AverageValueNaive",  # <1s - Moving average
-        "SeasonalNaive",  # <5s - Basic seasonality
+        "LastValueNaive",
+        "AverageValueNaive",
+        "SeasonalNaive",
+    ]
+
+    # Fast models that balance speed and accuracy
+    FAST_MODEL_LIST = ULTRA_FAST_MODEL_LIST + [
+        "ZeroesNaive",
+        "ETS",
+        "WindowRegression",
+        "UnivariateRegression",
+        "Theta",
     ]
 
     def __init__(
         self,
         forecast_length: int = 14,
         frequency: str = "infer",
-        prediction_interval: float = 0.9,
+        prediction_interval: float = 0.95,
+        ensemble: str | None = "auto",
         num_validations: int = 2,
         validation_method: str = "backwards",
-        model_list: str = "fast",
-        data_fetcher: Optional["IDataFetcher"] = None,
+        model_list: str | list[str] = "fast",
+        max_generations: int = 5,
+        no_negatives: bool = True,
+        data_fetcher: Optional["DataFetcher"] = None,
     ):
-        """Initialize forecaster.
+        """Initialize the stock forecaster.
 
         Args:
             forecast_length: Number of periods to forecast
-            frequency: Time series frequency ('D', 'W', 'M', etc.), 'infer' to auto-detect
+            frequency: Data frequency ('infer' to detect automatically)
             prediction_interval: Confidence interval for predictions (0-1)
+            ensemble: Ensemble method or None
             num_validations: Number of validation splits
-            validation_method: Validation method ('backwards', 'seasonal', 'similarity')
-            model_list: Default model list to use
-            data_fetcher: Injected data fetcher instance
+            validation_method: Validation method ('backwards', 'even', 'similarity')
+            model_list: List of models or preset ('fast', 'superfast', 'parallel', 'statistical', 'probabilistic', 'multivariate')
+            max_generations: Maximum generations for model search
+            no_negatives: Constraint predictions to be non-negative
+            data_fetcher: Optional DataFetcher instance for retrieving stock data
         """
         self.forecast_length = forecast_length
         self.frequency = frequency
         self.prediction_interval = prediction_interval
+        self.ensemble = ensemble
         self.num_validations = num_validations
         self.validation_method = validation_method
         self.model_list = model_list
+        self.max_generations = max_generations
+        self.no_negatives = no_negatives
+        self.data_fetcher = data_fetcher
         self.model = None
         self.prediction = None
-        self.data_fetcher = data_fetcher
+
+    def _get_model_list(
+        self, model_list: str | list[str], target_column: str = "Close"
+    ) -> list[str] | str:
+        """Get the appropriate model list based on input.
+
+        Args:
+            model_list: String preset or list of model names
+            target_column: Name of the target column for logging
+
+        Returns:
+            List of model names or string preset for AutoTS
+        """
+        if isinstance(model_list, list):
+            return model_list
+
+        # Map our presets to model lists
+        if model_list == "ultra_fast":
+            logger.info(
+                f"Using ultra-fast model list ({len(self.ULTRA_FAST_MODEL_LIST)} models) for {target_column}"
+            )
+            return self.ULTRA_FAST_MODEL_LIST
+        elif model_list == "financial":
+            return self.FINANCIAL_MODEL_LIST
+        elif model_list == "fast_financial":
+            # Intersection of fast and financial models
+            return [m for m in self.FAST_MODEL_LIST if m in self.FINANCIAL_MODEL_LIST]
+        else:
+            # Use AutoTS built-in presets
+            return model_list
 
     def fit(
         self,
         data: pd.DataFrame,
         target_column: str = "Close",
-        date_col: str | None = None,
-        model_list: str = "fast",
-        ensemble: str = "auto",
-        max_generations: int = 5,
+        model_list: str | list[str] | None = None,
+        ensemble: str | None = None,
+        max_generations: int | None = None,
         show_progress: bool = True,
     ) -> "StockForecaster":
-        """Fit forecasting model on historical data.
+        """Fit the forecasting model on historical data.
 
         Args:
-            data: DataFrame with time series data
+            data: DataFrame with time series data (index should be DatetimeIndex)
             target_column: Column to forecast
-            date_col: Date column name (if None, uses index)
-            model_list: Model subset to use ('fast', 'default', 'slow', 'parallel', 'financial')
-            ensemble: Ensemble method ('auto', 'simple', 'distance', 'horizontal')
-            max_generations: Maximum generations for model search
-            show_progress: Whether to show progress indicators (default True)
+            model_list: Override default model list
+            ensemble: Override default ensemble method
+            max_generations: Override default max generations
+            show_progress: Whether to show progress bar
 
         Returns:
-            Self for method chaining
+            Self for chaining
         """
-        # Prepare data
-        if date_col:
-            data = data.set_index(date_col)
+        # Validate input
+        if not isinstance(data.index, pd.DatetimeIndex):
+            raise ValueError("Data index must be a DatetimeIndex")
 
-        # Ensure we have the target column
         if target_column not in data.columns:
             raise ValueError(f"Target column '{target_column}' not found in data")
 
-        # Validate data for financial time series
-        target_data = data[target_column]
+        # Use provided parameters or defaults
+        model_list = model_list or self.model_list
+        ensemble = ensemble if ensemble is not None else self.ensemble
+        max_generations = max_generations or self.max_generations
 
-        # Check for non-positive values (problematic for some models)
-        if (target_data <= 0).any():
-            logger.warning(
-                f"Found {(target_data <= 0).sum()} non-positive values in {target_column}. This may cause issues with some models."
-            )
+        # Get actual model list
+        actual_model_list = self._get_model_list(model_list, target_column)
 
-        # Check for missing values
-        if target_data.isna().any():
-            logger.warning(
-                f"Found {target_data.isna().sum()} missing values in {target_column}. AutoTS will handle these."
-            )
-
-        # Use financial model list for stock data or if explicitly requested
-        # Default to financial models for fast mode to avoid statsmodels warnings
-        # Always use financial models for stock data to avoid issues
-        if target_column in ["Close", "Price", "close", "price"]:
-            # For stock data, use appropriate financial models
-            if model_list == "fast":
-                actual_model_list = self.FAST_FINANCIAL_MODEL_LIST
-                logger.info(
-                    f"Using fast financial model list ({len(self.FAST_FINANCIAL_MODEL_LIST)} models) for {target_column}"
-                )
-                print(
-                    f"INFO: Using fast financial model list ({len(self.FAST_FINANCIAL_MODEL_LIST)} models) for {target_column}"
-                )
-            elif model_list == "ultra_fast":
-                actual_model_list = self.ULTRA_FAST_MODEL_LIST
-                logger.info(
-                    f"Using ultra-fast model list ({len(self.ULTRA_FAST_MODEL_LIST)} models) for {target_column}"
-                )
-                print(
-                    f"INFO: Using ultra-fast model list ({len(self.ULTRA_FAST_MODEL_LIST)} models) for {target_column}"
-                )
-            elif model_list == "financial" or model_list == "default":
-                actual_model_list = self.FINANCIAL_MODEL_LIST
-                logger.info(
-                    f"Using full financial model list ({len(self.FINANCIAL_MODEL_LIST)} models) for {target_column}"
-                )
-            else:
-                # If user explicitly requests a different model list, use it
-                actual_model_list = model_list
-                logger.warning(
-                    f"Using non-financial model list '{model_list}' for stock data - may cause warnings"
-                )
-        else:
-            # Non-stock data, use requested model list
-            actual_model_list = model_list
-
-        # Prepare data for AutoTS - it needs date as a column, not index
+        # Prepare data for AutoTS
         data_for_model = data[[target_column]].copy()
 
-        # Ensure the index is a DatetimeIndex
-        if not isinstance(data_for_model.index, pd.DatetimeIndex):
-            data_for_model.index = pd.to_datetime(data_for_model.index)
-
-        # Reset index to have date as a column named 'date'
+        # Reset index to have date as a column
         data_for_model = data_for_model.reset_index()
         data_for_model.columns = ["date", target_column]
 
-        # Ensure date column is datetime format
-        data_for_model["date"] = pd.to_datetime(data_for_model["date"])
-
-        # Set up signal handler for graceful interruption (only in main thread)
-        import threading
-
-        if threading.current_thread() is threading.main_thread():
-            signal.signal(signal.SIGINT, signal_handler)
-
         logger.debug(f"Fitting model on {len(data_for_model)} data points")
-        if threading.current_thread() is threading.main_thread():
-            logger.debug(f"Forecast horizon: {self.forecast_length} periods")
+        logger.debug(
+            f"Date range: {data_for_model['date'].min()} to {data_for_model['date'].max()}"
+        )
 
         try:
-            with suppress_autots_output():
-                # Suppress joblib warnings
-                import os
+            # Set signal handler for graceful interruption
+            def signal_handler(sig, frame):
+                logger.warning("Forecasting interrupted by user.")
+                sys.exit(0)
 
-                os.environ["JOBLIB_TEMP_FOLDER"] = "/tmp"
+            signal.signal(signal.SIGINT, signal_handler)
 
-                # Determine if we should show progress
-                should_show_progress = (
-                    show_progress
-                    and threading.current_thread() is threading.main_thread()
-                )
+            # Create progress context
+            if show_progress:
+                with Progress(
+                    SpinnerColumn(),
+                    TextColumn("[progress.description]{task.description}"),
+                    console=console,
+                    transient=True,
+                ) as progress:
+                    task = progress.add_task(
+                        "[cyan]Training models on historical data...", total=None
+                    )
 
-                if should_show_progress:
-                    # Show progress only in main thread
-                    with Progress(
-                        SpinnerColumn(),
-                        TextColumn("[progress.description]{task.description}"),
-                        console=console,
-                        transient=False,
-                    ) as progress:
-                        task = progress.add_task(
-                            "[yellow]Setting up time series models...",
-                            total=None,
-                        )
+                    self.model = AutoTS(
+                        forecast_length=self.forecast_length,
+                        frequency=self.frequency,
+                        prediction_interval=self.prediction_interval,
+                        ensemble=ensemble,
+                        model_list=actual_model_list,
+                        max_generations=max_generations,
+                        num_validations=self.num_validations,
+                        validation_method=self.validation_method,
+                        verbose=0,  # Disable verbose in progress mode
+                        no_negatives=True,
+                        drop_most_recent=0,
+                        n_jobs="auto",
+                        constraint=None,
+                        drop_data_older_than_periods=None,
+                        model_interrupt=False,
+                    )
 
-                        # Run initialization in a thread to keep spinner animated
-                        import time
-                        from concurrent.futures import ThreadPoolExecutor
+                    logger.debug(
+                        f"Fitting AutoTS with parameters: model_list={actual_model_list if isinstance(actual_model_list, str) else f'{len(actual_model_list)} models'}, max_generations={max_generations}"
+                    )
 
-                        def init_autots():
-                            """Initialize AutoTS model in background."""
-                            return AutoTS(
-                                forecast_length=self.forecast_length,
-                                frequency=self.frequency,
-                                prediction_interval=self.prediction_interval,
-                                ensemble=ensemble,
-                                model_list=actual_model_list,
-                                max_generations=max_generations,
-                                num_validations=self.num_validations,
-                                validation_method=self.validation_method,
-                                verbose=1
-                                if logger.isEnabledFor(logging.DEBUG)
-                                else 0,  # Verbose only in debug mode
-                                no_negatives=True,  # Stock prices can't be negative
-                                drop_most_recent=0,  # Don't drop recent data
-                                n_jobs="auto",  # Use available cores
-                                constraint=None,  # No constraint to avoid some errors
-                                drop_data_older_than_periods=None,  # Keep all data
-                                model_interrupt=False,  # Don't interrupt on errors
-                            )
+                    # Fit the model
+                    with suppress_autots_output():
+                        # Run fit in a separate thread to allow progress updates
+                        import concurrent.futures
 
-                        # Initialize in background thread
-                        with ThreadPoolExecutor(max_workers=1) as executor:
-                            init_future = executor.submit(init_autots)
-
-                            # Update progress while initializing
-                            dots = ["", ".", "..", "..."]
-                            dot_index = 0
-
-                            while not init_future.done():
-                                desc = f"[yellow]Setting up time series models{dots[dot_index]}"
-                                progress.update(task, description=desc)
-                                dot_index = (dot_index + 1) % len(dots)
-                                time.sleep(0.2)
-
-                            # Get the initialized model
-                            self.model = init_future.result()
-
-                        # Fit the model
-                        progress.update(
-                            task,
-                            description="[cyan]Training models on historical data...",
-                        )
-                        logger.debug(
-                            f"Fitting AutoTS with parameters: model_list={actual_model_list if isinstance(actual_model_list, str) else f'{len(actual_model_list)} models'}, max_generations={max_generations}"
-                        )
-
-                        # Run model fitting in a separate thread to keep Progress updating
-                        with ThreadPoolExecutor(max_workers=1) as executor:
-                            # Submit the fit task to run in background
+                        with concurrent.futures.ThreadPoolExecutor(
+                            max_workers=1
+                        ) as executor:
                             future = executor.submit(
                                 self.model.fit,
                                 data_for_model,
@@ -573,51 +475,41 @@ class StockForecaster:
 
                         complete_msg = "[green]✓ Model training completed"
                         progress.update(task, description=complete_msg)
-                else:
-                    # No progress display (for worker threads)
-                    import threading
+            else:
+                # No progress display (for worker threads)
+                n_jobs_value = "auto"
 
-                    # For worker threads, limit n_jobs to 1 to avoid nested parallelism
-                    if threading.current_thread() is not threading.main_thread():
-                        n_jobs_value = 1
-                        logger.debug("Running in worker thread, setting n_jobs=1")
-                    else:
-                        n_jobs_value = "auto"
+                self.model = AutoTS(
+                    forecast_length=self.forecast_length,
+                    frequency=self.frequency,
+                    prediction_interval=self.prediction_interval,
+                    ensemble=ensemble,
+                    model_list=actual_model_list,
+                    max_generations=max_generations,
+                    num_validations=self.num_validations,
+                    validation_method=self.validation_method,
+                    verbose=1
+                    if logger.isEnabledFor(logging.DEBUG)
+                    else 0,  # Verbose only in debug mode
+                    no_negatives=True,  # Stock prices can't be negative
+                    drop_most_recent=0,  # Don't drop recent data
+                    n_jobs=n_jobs_value,  # Limit to 1 in worker threads
+                    constraint=None,  # No constraint to avoid some errors
+                    drop_data_older_than_periods=None,  # Keep all data
+                    model_interrupt=False,  # Don't interrupt on errors
+                )
 
-                    self.model = AutoTS(
-                        forecast_length=self.forecast_length,
-                        frequency=self.frequency,
-                        prediction_interval=self.prediction_interval,
-                        ensemble=ensemble,
-                        model_list=actual_model_list,
-                        max_generations=max_generations,
-                        num_validations=self.num_validations,
-                        validation_method=self.validation_method,
-                        verbose=1
-                        if logger.isEnabledFor(logging.DEBUG)
-                        else 0,  # Verbose only in debug mode
-                        no_negatives=True,  # Stock prices can't be negative
-                        drop_most_recent=0,  # Don't drop recent data
-                        n_jobs=n_jobs_value,  # Limit to 1 in worker threads
-                        constraint=None,  # No constraint to avoid some errors
-                        drop_data_older_than_periods=None,  # Keep all data
-                        model_interrupt=False,  # Don't interrupt on errors
-                    )
+                logger.debug(
+                    f"Fitting AutoTS with parameters: model_list={actual_model_list if isinstance(actual_model_list, str) else f'{len(actual_model_list)} models'}, max_generations={max_generations}, n_jobs={n_jobs_value}"
+                )
 
-                    logger.debug(
-                        f"Fitting AutoTS with parameters: model_list={actual_model_list if isinstance(actual_model_list, str) else f'{len(actual_model_list)} models'}, max_generations={max_generations}, n_jobs={n_jobs_value}"
-                    )
-
-                    # Fit the model directly without progress
-                    # Use global lock for AutoTS fit operation
-                    with _AUTOTS_GLOBAL_LOCK:
-                        logger.debug("Acquired global AutoTS lock for fit()")
-                        self.model = self.model.fit(
-                            data_for_model,
-                            date_col="date",
-                            value_col=target_column,
-                            id_col=None,
-                        )
+                # Fit the model directly without progress
+                self.model = self.model.fit(
+                    data_for_model,
+                    date_col="date",
+                    value_col=target_column,
+                    id_col=None,
+                )
 
             logger.debug("Model fitting completed")
 
@@ -641,14 +533,8 @@ class StockForecaster:
 
         logger.debug("Generating predictions...")
 
-        # Use global lock for AutoTS predict operation
-        logger.debug("Calling model.predict()...")
-
-        # AutoTS is not thread-safe, use global lock
-        with _AUTOTS_GLOBAL_LOCK:
-            logger.debug("Acquired global AutoTS lock for predict()")
-            with suppress_autots_output():
-                self.prediction = self.model.predict()
+        with suppress_autots_output():
+            self.prediction = self.model.predict()
 
         forecast = self.prediction.forecast
         logger.debug(f"Forecast shape: {forecast.shape}")
@@ -686,6 +572,109 @@ class StockForecaster:
         self.fit(data, target_column, **kwargs)
         return self.predict()
 
+    def forecast_from_symbol_with_evaluation(
+        self,
+        symbol: str,
+        train_start_date: str | None = None,
+        train_end_date: str | None = None,
+        test_start_date: str | None = None,
+        test_end_date: str | None = None,
+        target_column: str = "Close",
+        **kwargs,
+    ) -> dict[str, Any]:
+        """Forecast stock prices using train/test split with evaluation.
+
+        Args:
+            symbol: Stock symbol to forecast
+            train_start_date: Start date for training data
+            train_end_date: End date for training data
+            test_start_date: Start date for testing data
+            test_end_date: End date for testing data
+            target_column: Column to forecast
+            **kwargs: Additional arguments for fit()
+
+        Returns:
+            Dictionary with predictions and evaluation metrics
+        """
+        if self.data_fetcher is None:
+            raise ValueError("Data fetcher not configured")
+
+        # Fetch training data
+        train_data = self.data_fetcher.get_stock_data(
+            symbol, train_start_date, train_end_date
+        )
+
+        if train_data.empty:
+            raise ValueError(f"No training data available for symbol {symbol}")
+
+        # Fetch test data if dates provided
+        test_data = None
+        if test_start_date and test_end_date:
+            test_data = self.data_fetcher.get_stock_data(
+                symbol, test_start_date, test_end_date
+            )
+
+        # Fit model on training data
+        self.fit(train_data, target_column, **kwargs)
+
+        # Generate predictions
+        predictions = self.predict()
+
+        # If test data available, calculate evaluation metrics
+        evaluation_metrics = None
+        if test_data is not None and not test_data.empty:
+            # Align predictions with test data
+            common_dates = predictions.index.intersection(test_data.index)
+            if len(common_dates) > 0:
+                actual_values = test_data.loc[common_dates, target_column]
+                forecast_values = predictions.loc[common_dates, "forecast"]
+
+                # Calculate residuals and metrics
+                residuals = actual_values - forecast_values
+
+                from sklearn.metrics import mean_absolute_error, mean_squared_error
+                import numpy as np
+
+                mae = mean_absolute_error(actual_values, forecast_values)
+                mse = mean_squared_error(actual_values, forecast_values)
+                rmse = np.sqrt(mse)
+                mape = (
+                    np.mean(np.abs((actual_values - forecast_values) / actual_values))
+                    * 100
+                )
+
+                evaluation_metrics = {
+                    "mae": mae,
+                    "mse": mse,
+                    "rmse": rmse,
+                    "mape": mape,
+                    "residuals": residuals.tolist(),
+                    "actual_values": actual_values.tolist(),
+                    "forecast_values": forecast_values.tolist(),
+                    "evaluation_dates": common_dates.strftime("%Y-%m-%d").tolist(),
+                }
+
+        return {
+            "predictions": predictions,
+            "evaluation_metrics": evaluation_metrics,
+            "train_period": {
+                "start": train_data.index[0].strftime("%Y-%m-%d"),
+                "end": train_data.index[-1].strftime("%Y-%m-%d"),
+                "size": len(train_data),
+            },
+            "test_period": {
+                "start": test_data.index[0].strftime("%Y-%m-%d")
+                if test_data is not None
+                else None,
+                "end": test_data.index[-1].strftime("%Y-%m-%d")
+                if test_data is not None
+                else None,
+                "size": len(test_data) if test_data is not None else 0,
+            }
+            if test_data is not None
+            else None,
+        }
+
     def forecast_from_symbol(
         self,
         symbol: str,
@@ -706,18 +695,16 @@ class StockForecaster:
         Returns:
             DataFrame with predictions
         """
-        logger.debug(f"Fetching data for {symbol}")
-        if not self.data_fetcher:
-            raise ValueError(
-                "Data fetcher not configured. Ensure DI container is properly set up."
-            )
+        if self.data_fetcher is None:
+            raise ValueError("Data fetcher not configured")
 
+        # Fetch historical data
         data = self.data_fetcher.get_stock_data(symbol, start_date, end_date)
 
         if data.empty:
             raise ValueError(f"No data available for symbol {symbol}")
 
-        logger.debug(f"Retrieved {len(data)} data points")
+        # Fit and predict
         return self.fit_predict(data, target_column, **kwargs)
 
     def get_best_model(self) -> dict[str, Any]:
@@ -737,12 +724,13 @@ class StockForecaster:
         }
 
         logger.debug(f"Best model: {model_info['model_name']}")
+
         return model_info
 
     def plot_forecast(
         self, historical_data: pd.DataFrame | None = None, n_historical: int = 100
-    ):
-        """Plot forecast with historical data.
+    ) -> None:
+        """Plot the forecast with historical data.
 
         Args:
             historical_data: Historical data to plot alongside forecast
@@ -751,25 +739,67 @@ class StockForecaster:
         if self.prediction is None:
             raise ValueError("No predictions available. Call predict() first.")
 
-        self.model.plot(self.prediction, include_history=True, n_back=n_historical)
+        # Use AutoTS built-in plotting
+        self.prediction.plot(
+            self.model.df_wide_numeric,
+            remove_zero_series=False,
+            start_date=(-n_historical if n_historical else None),
+        )
 
     def forecast(
         self, data: pd.DataFrame, target_column: str = "Close", **kwargs
     ) -> pd.DataFrame:
-        """Forecast future values (alias for fit_predict).
+        """Alias for fit_predict method.
 
         Args:
-            data: DataFrame with time series data
-            target_column: Column to forecast
-            **kwargs: Additional arguments for fit()
+            data: Historical time series data
+            target_column: Name of the column to forecast
+            **kwargs: Additional arguments passed to fit_predict
 
         Returns:
-            DataFrame with predictions
+            DataFrame with forecast predictions
         """
         return self.fit_predict(data, target_column, **kwargs)
 
+    def evaluate_forecast(
+        self, actual_data: pd.DataFrame, target_column: str = "Close"
+    ) -> dict[str, float]:
+        """Evaluate forecast accuracy against actual data.
+
+        Args:
+            actual_data: DataFrame with actual values
+            target_column: Column to compare
+
+        Returns:
+            Dictionary with evaluation metrics
+        """
+        if self.prediction is None:
+            raise ValueError("No predictions available. Call predict() first.")
+
+        # Get forecast values
+        forecast = self.prediction.forecast.iloc[:, 0]
+
+        # Align actual data with forecast dates
+        actual_values = actual_data.loc[forecast.index, target_column]
+
+        # Calculate metrics
+        from sklearn.metrics import mean_absolute_error, mean_squared_error
+        import numpy as np
+
+        mae = mean_absolute_error(actual_values, forecast)
+        mse = mean_squared_error(actual_values, forecast)
+        rmse = np.sqrt(mse)
+        mape = np.mean(np.abs((actual_values - forecast) / actual_values)) * 100
+
+        return {
+            "mae": mae,
+            "mse": mse,
+            "rmse": rmse,
+            "mape": mape,
+        }
+
     @classmethod
-    def forecast_multiple_parallel(
+    def forecast_multiple_symbols(
         cls,
         symbols: list[str],
         start_date: str | None = None,
@@ -778,160 +808,44 @@ class StockForecaster:
         model_list: str = "fast",
         ensemble: str = "auto",
         max_generations: int = 5,
-        max_workers: int = 4,
         data_fetcher=None,
-        progress_callback=None,
-        status_update_interval: int = 10,
+        show_progress: bool = True,
     ) -> dict[str, dict[str, Any]]:
-        """Forecast multiple stocks in parallel.
+        """Forecast multiple stock symbols sequentially.
 
         Args:
             symbols: List of stock symbols to forecast
             start_date: Start date for historical data
             end_date: End date for historical data
             forecast_length: Number of periods to forecast
-            model_list: Model subset to use
+            model_list: Model list preset or custom list
             ensemble: Ensemble method
             max_generations: Maximum generations for model search
-            max_workers: Maximum number of parallel workers
             data_fetcher: Data fetcher instance
-            progress_callback: Optional callback for progress updates
-            status_update_interval: Seconds between status updates
+            show_progress: Whether to show progress
 
         Returns:
             Dictionary mapping symbols to their forecast results
         """
-        import threading
-        import time
-        from concurrent.futures import ThreadPoolExecutor, as_completed
-
-        # Warn about AutoTS threading limitations
-        if max_workers > 1:
-            logger.warning(
-                f"Using max_workers={max_workers}. Note: AutoTS has threading limitations "
-                "and may hang with concurrent operations. Consider using max_workers=1 for reliability."
-            )
-
         results = {}
-        lock = threading.Lock()
-        status_info = {
-            "active": {},  # symbol -> start_time
-            "completed": [],
-            "errors": [],
-            "pending": list(symbols),
-        }
 
-        def update_status(symbol: str, status: str, start_time: float = None):
-            """Update the status of a symbol."""
-            with lock:
-                if status == "started":
-                    status_info["active"][symbol] = start_time or time.time()
-                    if symbol in status_info["pending"]:
-                        status_info["pending"].remove(symbol)
-                elif status == "completed":
-                    if symbol in status_info["active"]:
-                        del status_info["active"][symbol]
-                    status_info["completed"].append(symbol)
-                elif status == "error":
-                    if symbol in status_info["active"]:
-                        del status_info["active"][symbol]
-                    status_info["errors"].append(symbol)
+        logger.info(f"Starting sequential forecast for {len(symbols)} symbols")
 
-        def get_status_summary():
-            """Get a summary of current status."""
-            with lock:
-                active_details = []
-                for symbol, start_time in status_info["active"].items():
-                    elapsed = int(time.time() - start_time)
-                    active_details.append(f"{symbol} ({elapsed}s)")
+        for idx, symbol in enumerate(symbols, 1):
+            try:
+                logger.info(f"Processing {symbol} ({idx}/{len(symbols)})")
 
-                return {
-                    "active": active_details,
-                    "active_count": len(status_info["active"]),
-                    "completed_count": len(status_info["completed"]),
-                    "error_count": len(status_info["errors"]),
-                    "pending_count": len(status_info["pending"]),
-                    "total": len(symbols),
-                }
-
-        def forecast_single(symbol: str) -> tuple[str, dict[str, Any]]:
-            """Forecast a single symbol with timeout protection."""
-            # Set up warning suppression for this worker thread
-            import warnings
-            import os
-            from concurrent.futures import ThreadPoolExecutor, TimeoutError
-
-            # Set environment variable to suppress sklearn warnings
-            os.environ["PYTHONWARNINGS"] = (
-                "ignore::UserWarning:sklearn.metrics.pairwise"
-            )
-
-            # Configure warnings at the start
-            warnings.simplefilter("ignore")
-            warnings.filterwarnings("ignore", category=UserWarning)
-            warnings.filterwarnings("ignore", category=RuntimeWarning)
-            warnings.filterwarnings("ignore", category=FutureWarning)
-
-            # Specific sklearn warnings
-            warnings.filterwarnings(
-                "ignore",
-                message="Data was converted to boolean",
-            )
-            warnings.filterwarnings("ignore", message="DataConversionWarning")
-            warnings.filterwarnings("ignore", category=RuntimeWarning, module="sklearn")
-            warnings.filterwarnings("ignore", category=UserWarning, module="sklearn")
-            # Suppress joblib resource tracker warnings
-            warnings.filterwarnings("ignore", message="resource_tracker:")
-            warnings.filterwarnings("ignore", category=UserWarning, module="joblib")
-
-            start_time = time.time()
-            update_status(symbol, "started", start_time)
-
-            # Set a reasonable timeout for each symbol based on model list
-            if isinstance(model_list, list) and len(model_list) == 1:
-                SYMBOL_TIMEOUT = 15  # 15 seconds for single model
-            elif model_list == "ultra_fast":
-                SYMBOL_TIMEOUT = 30  # 30 seconds for ultra-fast models
-            elif model_list == "fast":
-                SYMBOL_TIMEOUT = 60  # 60 seconds for fast models
-            else:
-                SYMBOL_TIMEOUT = 120  # 120 seconds for other models
-
-            def run_forecast():
-                """Run the forecast in a separate thread to enable timeout."""
-                # Create a forecaster instance for this symbol
+                # Create a forecaster instance
                 forecaster = cls(
                     forecast_length=forecast_length,
                     data_fetcher=data_fetcher,
                 )
 
-                # Log which symbol is being processed
-                logger.debug(f"Starting forecast for {symbol}")
+                # Get data and forecast
+                data = data_fetcher.get_stock_data(symbol, start_date, end_date)
 
-                # Add detailed timing logs
-                total_start = time.time()
-
-                # Time data fetching
-                fetch_start = time.time()
-                logger.debug(f"[{symbol}] Starting data fetch...")
-
-                # Get data directly to separate fetch time from modeling time
-                if not forecaster.data_fetcher:
-                    raise ValueError("Data fetcher not configured")
-
-                data = forecaster.data_fetcher.get_stock_data(
-                    symbol, start_date, end_date
-                )
-                fetch_time = time.time() - fetch_start
-                logger.debug(
-                    f"[{symbol}] Data fetched in {fetch_time:.1f}s ({len(data)} points)"
-                )
-
-                # Time model fitting and prediction
-                fit_start = time.time()
-                logger.debug(
-                    f"[{symbol}] Starting model fitting with {model_list} models..."
-                )
+                if data.empty:
+                    raise ValueError(f"No data available for symbol {symbol}")
 
                 predictions = forecaster.fit_predict(
                     data,
@@ -939,104 +853,31 @@ class StockForecaster:
                     model_list=model_list,
                     ensemble=ensemble,
                     max_generations=max_generations,
-                    show_progress=False,  # Disable progress display in worker threads
+                    show_progress=show_progress,
                 )
 
-                fit_time = time.time() - fit_start
-                total_time = time.time() - total_start
-
-                logger.debug(f"[{symbol}] Model fitting completed in {fit_time:.1f}s")
-                logger.debug(
-                    f"[{symbol}] Total forecast time: {total_time:.1f}s (fetch: {fetch_time:.1f}s, fit: {fit_time:.1f}s)"
-                )
-
-                logger.debug(f"[{symbol}] Getting best model info...")
+                # Get best model info
                 model_info = forecaster.get_best_model()
-                logger.debug(
-                    f"Completed forecast for {symbol} using {model_info['model_name']}"
-                )
-                logger.debug(f"[{symbol}] Best model: {model_info['model_name']}")
 
-                # Check predictions data
-                logger.debug(f"[{symbol}] Processing predictions...")
-                if predictions is None:
-                    raise ValueError(f"No predictions returned for {symbol}")
-
-                result = {
+                # Store results
+                results[symbol] = {
                     "ticker": symbol,
-                    "current_price": predictions["forecast"].iloc[0],
-                    "forecast_price": predictions["forecast"].iloc[-1],
-                    "lower_bound": predictions["lower_bound"].iloc[-1],
-                    "upper_bound": predictions["upper_bound"].iloc[-1],
+                    "current_price": float(predictions["forecast"].iloc[0]),
+                    "forecast_price": float(predictions["forecast"].iloc[-1]),
+                    "lower_bound": float(predictions["lower_bound"].iloc[-1]),
+                    "upper_bound": float(predictions["upper_bound"].iloc[-1]),
                     "forecast_length": forecast_length,
                     "best_model": model_info["model_name"],
                     "model_params": model_info.get("model_params", {}),
                 }
 
-                logger.debug(f"[{symbol}] Forecast complete!")
-                return result
-
-            try:
-                # Run forecast directly without nested executor
-                result = run_forecast()
-                update_status(symbol, "completed")
-                if progress_callback:
-                    with lock:
-                        progress_callback(symbol, "completed", get_status_summary())
-                return symbol, result
+                logger.info(f"Completed {symbol} using {model_info['model_name']}")
 
             except Exception as e:
                 logger.error(f"Error forecasting {symbol}: {e}")
-                update_status(symbol, "error")
-
-                if progress_callback:
-                    with lock:
-                        progress_callback(symbol, "error", get_status_summary())
-
-                return symbol, {"ticker": symbol, "error": str(e)}
-
-        # Use ThreadPoolExecutor for parallel forecasting
-        with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            # Submit all forecast tasks
-            future_to_symbol = {
-                executor.submit(forecast_single, symbol): symbol for symbol in symbols
-            }
-
-            # Start a background thread for periodic status updates
-            stop_updates = threading.Event()
-
-            def periodic_status_updates():
-                """Send periodic status updates."""
-                while not stop_updates.is_set():
-                    time.sleep(status_update_interval)
-                    if not stop_updates.is_set() and progress_callback:
-                        status = get_status_summary()
-                        if status["active_count"] > 0:
-                            logger.debug(f"Sending status update: {status}")
-                            with lock:
-                                progress_callback(None, "status_update", status)
-
-            if (
-                progress_callback
-                and threading.current_thread() is threading.main_thread()
-            ):
-                status_thread = threading.Thread(
-                    target=periodic_status_updates, daemon=True
-                )
-                status_thread.start()
-
-            # Process completed forecasts
-            try:
-                for future in as_completed(future_to_symbol):
-                    symbol = future_to_symbol[future]
-                    try:
-                        _, result = future.result()
-                        results[symbol] = result
-                    except Exception as e:
-                        logger.error(f"Failed to get result for {symbol}: {e}")
-                        results[symbol] = {"ticker": symbol, "error": str(e)}
-            finally:
-                # Stop the status update thread
-                stop_updates.set()
+                results[symbol] = {
+                    "ticker": symbol,
+                    "error": str(e),
+                }
 
         return results

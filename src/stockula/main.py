@@ -327,6 +327,83 @@ def run_backtest(
 
 
 @inject
+def run_forecast_with_evaluation(
+    ticker: str,
+    config: StockulaConfig,
+    stock_forecaster: IStockForecaster = Provide[Container.stock_forecaster],
+) -> dict[str, Any]:
+    """Run forecasting with train/test split and evaluation.
+
+    Args:
+        ticker: Stock symbol
+        config: Configuration object
+        stock_forecaster: Injected stock forecaster
+
+    Returns:
+        Dictionary with forecast results and evaluation metrics
+    """
+    log_manager.info(f"\nForecasting {ticker} with train/test evaluation...")
+
+    forecaster = stock_forecaster
+
+    try:
+        # Use new date fields if available, otherwise fall back to legacy
+        train_start = config.data.train_start_date or config.data.start_date
+        train_end = config.data.train_end_date or config.data.end_date
+        test_start = config.data.test_start_date
+        test_end = config.data.test_end_date
+
+        result = forecaster.forecast_from_symbol_with_evaluation(
+            ticker,
+            train_start_date=train_start.strftime("%Y-%m-%d") if train_start else None,
+            train_end_date=train_end.strftime("%Y-%m-%d") if train_end else None,
+            test_start_date=test_start.strftime("%Y-%m-%d") if test_start else None,
+            test_end_date=test_end.strftime("%Y-%m-%d") if test_end else None,
+            model_list=config.forecast.model_list,
+            ensemble=config.forecast.ensemble,
+            max_generations=config.forecast.max_generations,
+        )
+
+        predictions = result["predictions"]
+        model_info = forecaster.get_best_model()
+
+        log_manager.info(
+            f"Forecast completed for {ticker} using {model_info['model_name']}"
+        )
+
+        forecast_result = {
+            "ticker": ticker,
+            "current_price": float(predictions["forecast"].iloc[0]),
+            "forecast_price": float(predictions["forecast"].iloc[-1]),
+            "lower_bound": float(predictions["lower_bound"].iloc[-1]),
+            "upper_bound": float(predictions["upper_bound"].iloc[-1]),
+            "forecast_length": config.forecast.forecast_length,
+            "start_date": predictions.index[0].strftime("%Y-%m-%d"),
+            "end_date": predictions.index[-1].strftime("%Y-%m-%d"),
+            "best_model": model_info["model_name"],
+            "model_params": model_info.get("model_params", {}),
+            "train_period": result["train_period"],
+            "test_period": result["test_period"],
+        }
+
+        # Add evaluation metrics if available
+        if result["evaluation_metrics"]:
+            forecast_result["evaluation"] = result["evaluation_metrics"]
+            log_manager.info(
+                f"Evaluation metrics for {ticker}: RMSE={result['evaluation_metrics']['rmse']:.2f}, "
+                f"MAPE={result['evaluation_metrics']['mape']:.2f}%"
+            )
+
+        return forecast_result
+
+    except KeyboardInterrupt:
+        log_manager.warning(f"Forecast for {ticker} interrupted by user")
+        return {"ticker": ticker, "error": "Interrupted by user"}
+    except Exception as e:
+        log_manager.error(f"Error forecasting {ticker}: {e}")
+        return {"ticker": ticker, "error": str(e)}
+
+
 def run_forecast(
     ticker: str,
     config: StockulaConfig,
@@ -375,6 +452,8 @@ def run_forecast(
             "lower_bound": predictions["lower_bound"].iloc[-1],
             "upper_bound": predictions["upper_bound"].iloc[-1],
             "forecast_length": config.forecast.forecast_length,
+            "start_date": predictions.index[0].strftime("%Y-%m-%d"),
+            "end_date": predictions.index[-1].strftime("%Y-%m-%d"),
             "best_model": model_info["model_name"],
             "model_params": model_info.get("model_params", {}),
         }
@@ -844,7 +923,14 @@ def print_results(
         if "forecasting" in results:
             console.print("\n[bold purple]=== Forecasting Results ===[/bold purple]")
 
-            table = Table(title="Price Forecasts")
+            # Get date range from first non-error forecast
+            date_info = ""
+            for forecast in results["forecasting"]:
+                if "error" not in forecast and "start_date" in forecast:
+                    date_info = f" ({forecast['start_date']} to {forecast['end_date']})"
+                    break
+
+            table = Table(title=f"Price Forecasts{date_info}")
             table.add_column("Ticker", style="cyan", no_wrap=True)
             table.add_column("Current Price", style="white", justify="right")
             table.add_column("Forecast Price", style="green", justify="right")
@@ -899,6 +985,43 @@ def print_results(
 
             console.print(table)
 
+            # Display evaluation metrics if available
+            has_evaluation = any(
+                "evaluation" in f for f in results["forecasting"] if "error" not in f
+            )
+            if has_evaluation:
+                console.print(
+                    "\n[bold cyan]=== Forecast Evaluation Metrics ===[/bold cyan]"
+                )
+
+                eval_table = Table(title="Model Performance on Test Data")
+                eval_table.add_column("Ticker", style="cyan", no_wrap=True)
+                eval_table.add_column("RMSE", style="yellow", justify="right")
+                eval_table.add_column("MAE", style="yellow", justify="right")
+                eval_table.add_column("MAPE %", style="yellow", justify="right")
+                eval_table.add_column("Train Period", style="white")
+                eval_table.add_column("Test Period", style="white")
+
+                for forecast in results["forecasting"]:
+                    if "error" not in forecast and "evaluation" in forecast:
+                        eval_metrics = forecast["evaluation"]
+                        train_period = forecast.get("train_period", {})
+                        test_period = forecast.get("test_period", {})
+
+                        train_str = f"{train_period.get('start', 'N/A')} to {train_period.get('end', 'N/A')}"
+                        test_str = f"{test_period.get('start', 'N/A')} to {test_period.get('end', 'N/A')}"
+
+                        eval_table.add_row(
+                            forecast["ticker"],
+                            f"${eval_metrics['rmse']:.2f}",
+                            f"${eval_metrics['mae']:.2f}",
+                            f"{eval_metrics['mape']:.2f}%",
+                            train_str,
+                            test_str,
+                        )
+
+                console.print(eval_table)
+
 
 def main():
     """Main entry point."""
@@ -927,6 +1050,16 @@ def main():
         "--save-config", type=str, help="Save current configuration to file"
     )
 
+    # Add date range arguments
+    parser.add_argument(
+        "--train-start", type=str, help="Training start date (YYYY-MM-DD)"
+    )
+    parser.add_argument("--train-end", type=str, help="Training end date (YYYY-MM-DD)")
+    parser.add_argument(
+        "--test-start", type=str, help="Testing start date (YYYY-MM-DD)"
+    )
+    parser.add_argument("--test-end", type=str, help="Testing end date (YYYY-MM-DD)")
+
     args = parser.parse_args()
 
     # Initialize DI container first
@@ -943,6 +1076,22 @@ def main():
         from .config import TickerConfig
 
         config.portfolio.tickers = [TickerConfig(symbol=args.ticker, quantity=1.0)]
+
+    # Override date ranges if provided
+    if args.train_start:
+        config.data.train_start_date = datetime.strptime(
+            args.train_start, "%Y-%m-%d"
+        ).date()
+    if args.train_end:
+        config.data.train_end_date = datetime.strptime(
+            args.train_end, "%Y-%m-%d"
+        ).date()
+    if args.test_start:
+        config.data.test_start_date = datetime.strptime(
+            args.test_start, "%Y-%m-%d"
+        ).date()
+    if args.test_end:
+        config.data.test_end_date = datetime.strptime(args.test_end, "%Y-%m-%d").date()
 
     # Save configuration if requested
     if args.save_config:
@@ -1191,111 +1340,82 @@ def main():
                 # Note: This section is now handled by parallel forecasting below
                 pass
 
-            # Run parallel forecasting if needed
+            # Run sequential forecasting if needed
             if will_forecast and ticker_symbols:
                 console.print(
-                    "\n[bold blue]Starting parallel forecasting...[/bold blue]"
-                )
-                actual_max_workers = min(
-                    config.forecast.max_workers, len(ticker_symbols)
+                    "\n[bold blue]Starting sequential forecasting...[/bold blue]"
                 )
                 console.print(
-                    f"[dim]Configuration: max_workers={actual_max_workers}, "
-                    f"max_generations={config.forecast.max_generations}, "
+                    f"[dim]Configuration: max_generations={config.forecast.max_generations}, "
                     f"num_validations={config.forecast.num_validations}[/dim]"
                 )
 
-                # Create a separate progress display for parallel forecasting with just a spinner
+                # Create a separate progress display for sequential forecasting
                 with Progress(
                     SpinnerColumn(),
                     TextColumn("[progress.description]{task.description}"),
+                    BarColumn(),
+                    TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
+                    TimeRemainingColumn(),
                     console=console,
                     transient=True,
                 ) as forecast_progress:
-                    forecast_spinner_task = forecast_progress.add_task(
+                    forecast_task = forecast_progress.add_task(
                         f"[blue]Forecasting {len(ticker_symbols)} tickers...",
-                        total=None,  # No total for spinner
+                        total=len(ticker_symbols),
                     )
 
-                    # Progress tracking for parallel forecasting
-                    completed_count = 0
-
-                    def update_parallel_progress(
-                        symbol: str | None, status: str, status_info: dict = None
-                    ):
-                        nonlocal completed_count
-
-                        if status == "status_update" and status_info:
-                            # Periodic status update
-                            active_str = ""
-                            if status_info["active"]:
-                                active_str = (
-                                    f" Active: {', '.join(status_info['active'])}"
-                                )
-
-                            desc = (
-                                f"[blue]Forecasting {status_info['total']} tickers - "
-                            )
-                            desc += f"[green]{status_info['completed_count']} completed[/green], "
-                            desc += f"[yellow]{status_info['active_count']} in progress[/yellow]"
-                            if status_info["error_count"] > 0:
-                                desc += (
-                                    f", [red]{status_info['error_count']} errors[/red]"
-                                )
-                            if active_str:
-                                desc += f" | {active_str}"
-
-                            forecast_progress.update(
-                                forecast_spinner_task,
-                                description=desc,
-                            )
-                        elif status in ["completed", "error"]:
-                            # Individual completion update
-                            completed_count += 1
-                            if status_info:
-                                desc = f"[blue]Forecasting {status_info['total']} tickers - "
-                                desc += f"[green]{status_info['completed_count']} completed[/green]"
-                                if status_info["active_count"] > 0:
-                                    desc += f", [yellow]{status_info['active_count']} in progress[/yellow]"
-                                if status_info["error_count"] > 0:
-                                    desc += f", [red]{status_info['error_count']} errors[/red]"
-                            else:
-                                # Fallback if no status_info
-                                desc = f"[blue]Forecasting {len(ticker_symbols)} tickers ({completed_count} completed)..."
-
-                            forecast_progress.update(
-                                forecast_spinner_task,
-                                description=desc,
-                            )
-
-                    # Run parallel forecasting
+                    # Run sequential forecasting
                     from .forecasting import StockForecaster
 
-                    # Don't use suppress_autots_output at main thread level - it causes issues with threading
-                    forecast_results = StockForecaster.forecast_multiple_parallel(
-                        symbols=ticker_symbols,
-                        start_date=config.data.start_date.strftime("%Y-%m-%d")
-                        if config.data.start_date
-                        else None,
-                        end_date=config.data.end_date.strftime("%Y-%m-%d")
-                        if config.data.end_date
-                        else None,
-                        forecast_length=config.forecast.forecast_length,
-                        model_list=config.forecast.model_list,
-                        ensemble=config.forecast.ensemble,
-                        max_generations=config.forecast.max_generations,
-                        max_workers=actual_max_workers,  # Already calculated above
-                        data_fetcher=container.data_fetcher(),
-                        progress_callback=update_parallel_progress,
-                        status_update_interval=2,  # Update every 2 seconds
-                    )
+                    # Initialize results
+                    results["forecasting"] = []
 
-                    # Convert results to list format
-                    results["forecasting"] = list(forecast_results.values())
+                    # Process each ticker sequentially
+                    for idx, symbol in enumerate(ticker_symbols, 1):
+                        forecast_progress.update(
+                            forecast_task,
+                            description=f"[blue]Forecasting {symbol} ({idx}/{len(ticker_symbols)})...",
+                        )
+
+                        try:
+                            # Check if test dates are provided for evaluation
+                            if (
+                                config.data.test_start_date
+                                and config.data.test_end_date
+                            ):
+                                # Use the new evaluation method
+                                forecast_result = run_forecast_with_evaluation(
+                                    symbol, config, container.stock_forecaster()
+                                )
+                            else:
+                                # Use the original method
+                                forecast_result = run_forecast(
+                                    symbol, config, container.stock_forecaster()
+                                )
+
+                            results["forecasting"].append(forecast_result)
+
+                        except KeyboardInterrupt:
+                            log_manager.warning(
+                                f"Forecast for {symbol} interrupted by user"
+                            )
+                            results["forecasting"].append(
+                                {"ticker": symbol, "error": "Interrupted by user"}
+                            )
+                            break
+                        except Exception as e:
+                            log_manager.error(f"Error forecasting {symbol}: {e}")
+                            results["forecasting"].append(
+                                {"ticker": symbol, "error": str(e)}
+                            )
+
+                        # Advance progress
+                        forecast_progress.advance(forecast_task)
 
                     # Mark progress as complete
                     forecast_progress.update(
-                        forecast_spinner_task,
+                        forecast_task,
                         description="[green]Forecasting complete!",
                     )
     else:
@@ -1323,12 +1443,29 @@ def main():
     # Show current portfolio value for forecast mode after all processing is complete
     if args.mode == "forecast":
         # Show portfolio value in a nice table
-        portfolio_value_table = Table(title="Current Portfolio Value")
+        portfolio_value_table = Table(title="Portfolio Value")
         portfolio_value_table.add_column("Metric", style="cyan", no_wrap=True)
+        portfolio_value_table.add_column("Date", style="white")
         portfolio_value_table.add_column("Value", style="green")
-        portfolio_value_table.add_row(
-            "Current Portfolio Value", f"${initial_portfolio_value:,.2f}"
+
+        # Add initial capital row with start date
+        start_date = (
+            config.data.start_date.strftime("%Y-%m-%d")
+            if config.data.start_date
+            else "Initial"
         )
+        portfolio_value_table.add_row(
+            "Portfolio Value", start_date, f"${portfolio.initial_capital:,.2f}"
+        )
+
+        # Add current value row
+        from datetime import datetime
+
+        current_date = datetime.now().strftime("%Y-%m-%d")
+        portfolio_value_table.add_row(
+            "Portfolio Value", current_date, f"${initial_portfolio_value:,.2f}"
+        )
+
         console.print(portfolio_value_table)
 
     # Output results
