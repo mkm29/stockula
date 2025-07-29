@@ -106,11 +106,18 @@ backtest:
   # Hold-only categories will not be backtested
   hold_only_categories: ["INDEX", "BOND"]
 forecast:
-  forecast_length: 28
-  model_list: "fast"
+  forecast_length: 14
+  frequency: "infer" # Auto-detect frequency
+  prediction_interval: 0.95 # 95% confidence interval
+  model_list: "ultra_fast" # Use ultra-fast models (5-10s per symbol)
+  ensemble: "simple" # simple is faster than auto
+  max_generations: 1 # Reduced for speed
+  num_validations: 1 # Validation splits
+  max_workers: 1 # Parallel workers (reduce if still having issues)
+  validation_method: "backwards" # backwards, seasonal, similarity
 # Logging configuration - enable for verbose output
 logging:
-  enabled: false # Set to true for detailed allocation and price fetching info
+  enabled: true # Set to true for detailed allocation and price fetching info
   level: INFO # Logging level: DEBUG, INFO, WARNING, ERROR
   log_to_file: false # Set to true to also log to file
   log_file: "stockula.log" # Log file name

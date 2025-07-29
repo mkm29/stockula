@@ -1,0 +1,21 @@
+# Minimal test config with just 2 tickers
+data:
+  start_date: "2025-07-01"
+  end_date: "2025-07-25"
+  use_cache: true
+
+portfolio:
+  name: "2-Ticker Test"
+  initial_capital: 5000
+  allocation_method: equal
+  tickers:
+    - symbol: AAPL
+      quantity: 5
+    - symbol: MSFT
+      quantity: 3
+
+forecast:
+  forecast_length: 7
+  model_list: fast
+  ensemble: auto
+  max_generations: 1  # Just 1 generation for speed

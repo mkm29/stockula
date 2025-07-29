@@ -83,6 +83,10 @@ class DatabaseManager:
 
         # Run migrations
         try:
+            # Suppress Alembic info messages
+            import logging
+
+            logging.getLogger("alembic.runtime.migration").setLevel(logging.WARNING)
             command.upgrade(alembic_cfg, "head")
         except Exception as e:
             print(f"Warning: Could not run migrations: {e}")

@@ -712,13 +712,13 @@ class TestMainAdvanced:
 
     @patch("stockula.main.create_container")
     @patch("stockula.main.setup_logging")
-    @patch("stockula.main.run_forecast")
+    @patch("stockula.forecasting.StockForecaster.forecast_multiple_parallel")
     @patch("stockula.main.print_results")
     @patch("sys.argv", ["stockula", "--mode", "forecast", "--ticker", "AAPL"])
     def test_main_forecast_mode_with_warning(
         self,
         mock_print,
-        mock_forecast,
+        mock_forecast_parallel,
         mock_logging,
         mock_container,
         capsys,
@@ -731,8 +731,17 @@ class TestMainAdvanced:
         # Setup container
         container = Mock()
         container.stockula_config.return_value = config
-        container.logging_manager.return_value = Mock()
+        mock_log_manager = Mock()
+        container.logging_manager.return_value = mock_log_manager
         mock_container.return_value = container
+
+        # Make setup_logging initialize the global log_manager
+        def setup_logging_side_effect(config, logging_manager=None):
+            import stockula.main
+
+            stockula.main.log_manager = mock_log_manager
+
+        mock_logging.side_effect = setup_logging_side_effect
 
         # Setup domain factory
         mock_asset = Mock()
@@ -757,13 +766,15 @@ class TestMainAdvanced:
         container.stock_forecaster.return_value = Mock()
         container.stock_forecaster.return_value = Mock()
 
-        # Setup forecast results
-        mock_forecast.return_value = {"ticker": "AAPL", "forecast_price": 155.0}
+        # Setup forecast results - parallel function returns dict
+        mock_forecast_parallel.return_value = {
+            "AAPL": {"ticker": "AAPL", "forecast_price": 155.0}
+        }
 
         main()
 
-        # Should call forecast function
-        mock_forecast.assert_called_once()
+        # Should call parallel forecast function
+        mock_forecast_parallel.assert_called_once()
         mock_print.assert_called_once()
 
         # Check that warning elements are present
@@ -1300,13 +1311,13 @@ class TestMainAdvanced:
 
     @patch("stockula.main.create_container")
     @patch("stockula.main.setup_logging")
-    @patch("stockula.main.run_forecast")
+    @patch("stockula.forecasting.StockForecaster.forecast_multiple_parallel")
     @patch("stockula.main.print_results")
     @patch("sys.argv", ["stockula", "--mode", "forecast"])
     def test_main_creates_forecasting_key(
         self,
         mock_print,
-        mock_forecast,
+        mock_forecast_parallel,
         mock_logging,
         mock_container,
     ):
@@ -1317,8 +1328,17 @@ class TestMainAdvanced:
         # Setup container
         container = Mock()
         container.stockula_config.return_value = config
-        container.logging_manager.return_value = Mock()
+        mock_log_manager = Mock()
+        container.logging_manager.return_value = mock_log_manager
         mock_container.return_value = container
+
+        # Make setup_logging initialize the global log_manager
+        def setup_logging_side_effect(config, logging_manager=None):
+            import stockula.main
+
+            stockula.main.log_manager = mock_log_manager
+
+        mock_logging.side_effect = setup_logging_side_effect
 
         # Setup domain factory
         mock_asset = Mock()
@@ -1340,10 +1360,20 @@ class TestMainAdvanced:
         container.data_fetcher.return_value = mock_fetcher
         container.backtest_runner.return_value = Mock()
         container.stock_forecaster.return_value = Mock()
-        container.stock_forecaster.return_value = Mock()
 
-        # Setup forecast results
-        mock_forecast.return_value = {"ticker": "AAPL", "forecast_price": 155.0}
+        # Setup parallel forecast results
+        mock_forecast_parallel.return_value = {
+            "AAPL": {
+                "ticker": "AAPL",
+                "current_price": 150.0,
+                "forecast_price": 155.0,
+                "lower_bound": 152.0,
+                "upper_bound": 158.0,
+                "forecast_length": 14,
+                "best_model": "ARIMA",
+                "model_params": {},
+            }
+        }
 
         main()
 
@@ -1502,17 +1532,13 @@ class TestMainAdvanced:
     @patch("stockula.main.create_container")
     @patch("stockula.main.setup_logging")
     @patch("stockula.main.run_technical_analysis")
-    @patch("stockula.main.run_forecast")
     @patch("stockula.main.run_backtest")
     @patch("stockula.main.print_results")
-    @patch("stockula.main.log_manager")
     @patch("sys.argv", ["stockula", "--mode", "all"])
     def test_main_all_mode(
         self,
-        mock_log_manager,
         mock_print,
         mock_backtest,
-        mock_forecast,
         mock_ta,
         mock_logging,
         mock_container,
@@ -1532,8 +1558,17 @@ class TestMainAdvanced:
         # Setup container
         container = Mock()
         container.stockula_config.return_value = config
-        container.logging_manager.return_value = Mock()
+        mock_log_manager = Mock()
+        container.logging_manager.return_value = mock_log_manager
         mock_container.return_value = container
+
+        # Make setup_logging initialize the global log_manager
+        def setup_logging_side_effect(config, logging_manager=None):
+            import stockula.main
+
+            stockula.main.log_manager = mock_log_manager
+
+        mock_logging.side_effect = setup_logging_side_effect
 
         # Setup domain factory
         mock_asset = Mock()
@@ -1571,17 +1606,30 @@ class TestMainAdvanced:
         mock_backtest.return_value = []
 
         # Mock all analysis functions
-        with patch("stockula.main.run_technical_analysis") as mock_ta:
-            with patch("stockula.main.run_forecast") as mock_forecast:
-                mock_ta.return_value = {"ticker": "AAPL", "indicators": {}}
-                mock_forecast.return_value = {"ticker": "AAPL", "forecast_price": 155.0}
+        with patch(
+            "stockula.forecasting.forecaster.StockForecaster.forecast_multiple_parallel"
+        ) as mock_forecast_parallel:
+            mock_ta.return_value = {"ticker": "AAPL", "indicators": {}}
+            # Mock parallel forecast to return a dictionary
+            mock_forecast_parallel.return_value = {
+                "AAPL": {
+                    "ticker": "AAPL",
+                    "current_price": 150.0,
+                    "forecast_price": 155.0,
+                    "lower_bound": 152.0,
+                    "upper_bound": 158.0,
+                    "forecast_length": 14,
+                    "best_model": "GLS",
+                }
+            }
 
-                main()
+            main()
 
-                # All analysis functions should be called for each ticker (1 ticker configured)
-                assert mock_ta.call_count == 1
-                mock_backtest_runner.run_from_symbol.assert_called()
-                assert mock_forecast.call_count == 1
+            # All analysis functions should be called
+            assert mock_ta.call_count == 1
+            mock_backtest_runner.run_from_symbol.assert_called()
+            # Check that parallel forecast was called
+            mock_forecast_parallel.assert_called_once()
 
     @patch("stockula.main.create_container")
     @patch("stockula.main.setup_logging")

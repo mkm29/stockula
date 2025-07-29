@@ -1,5 +1,19 @@
 """Stockula main entry point."""
 
+# Suppress warnings early - before any imports that might trigger them
+import logging
+
+logging.getLogger("alembic.runtime.migration").setLevel(logging.WARNING)
+logging.getLogger("alembic").setLevel(logging.WARNING)
+
+import warnings
+
+warnings.filterwarnings("ignore", category=UserWarning, module="joblib")
+
+import os
+
+os.environ["JOBLIB_TEMP_FOLDER"] = "/tmp"
+
 import argparse
 import json
 from datetime import datetime, timedelta
@@ -834,6 +848,7 @@ def print_results(
             table.add_column("Ticker", style="cyan", no_wrap=True)
             table.add_column("Current Price", style="white", justify="right")
             table.add_column("Forecast Price", style="green", justify="right")
+            table.add_column("Return %", style="magenta", justify="right")
             table.add_column("Confidence Range", style="yellow", justify="center")
             table.add_column("Best Model", style="blue")
 
@@ -844,11 +859,17 @@ def print_results(
                         "[red]Error[/red]",
                         "[red]Error[/red]",
                         "[red]Error[/red]",
+                        "[red]Error[/red]",
                         f"[red]{forecast['error']}[/red]",
                     )
                 else:
                     current_price = forecast["current_price"]
                     forecast_price = forecast["forecast_price"]
+
+                    # Calculate return percentage
+                    return_pct = (
+                        (forecast_price - current_price) / current_price
+                    ) * 100
 
                     # Color code forecast based on direction
                     forecast_color = (
@@ -862,10 +883,16 @@ def print_results(
                         f"[{forecast_color}]${forecast_price:.2f}[/{forecast_color}]"
                     )
 
+                    # Format return percentage with color
+                    return_str = (
+                        f"[{forecast_color}]{return_pct:+.2f}%[/{forecast_color}]"
+                    )
+
                     table.add_row(
                         forecast["ticker"],
                         f"${current_price:.2f}",
                         forecast_str,
+                        return_str,
                         f"${forecast['lower_bound']:.2f} - ${forecast['upper_bound']:.2f}",
                         forecast["best_model"],
                     )
@@ -982,15 +1009,6 @@ def main():
         current_prices = fetcher.get_current_prices(symbols, show_progress=True)
         initial_portfolio_value = portfolio.get_portfolio_value(current_prices)
 
-        # Show portfolio value in a nice table
-        portfolio_value_table = Table(title="Current Portfolio Value")
-        portfolio_value_table.add_column("Metric", style="cyan", no_wrap=True)
-        portfolio_value_table.add_column("Value", style="green")
-        portfolio_value_table.add_row(
-            "Current Portfolio Value", f"${initial_portfolio_value:,.2f}"
-        )
-        console.print(portfolio_value_table)
-
     # Calculate returns (always needed, not just for logging)
     initial_return = initial_portfolio_value - portfolio.initial_capital
     initial_return_pct = (initial_return / portfolio.initial_capital) * 100
@@ -1056,11 +1074,12 @@ def main():
             if will_forecast:
                 console.print(
                     Panel.fit(
-                        "[bold yellow]FORECAST MODE - IMPORTANT NOTES:[/bold yellow]\n"
-                        "• AutoTS will try multiple models to find the best fit\n"
-                        "• This process may take several minutes per ticker\n"
-                        "• Press Ctrl+C at any time to cancel\n"
-                        "• Enable logging for more detailed progress information",
+                        f"[bold yellow]FORECAST MODE - IMPORTANT NOTES:[/bold yellow]\n"
+                        f"• Forecasting {config.forecast.forecast_length} days into the future\n"
+                        f"• AutoTS will try multiple models to find the best fit\n"
+                        f"• This process may take several minutes per ticker\n"
+                        f"• Press Ctrl+C at any time to cancel\n"
+                        f"• Enable logging for more detailed progress information",
                         border_style="yellow",
                     )
                 )
@@ -1078,12 +1097,6 @@ def main():
                     )
                 else:
                     backtest_task = None
-
-            if will_forecast:
-                forecast_task = progress.add_task(
-                    f"[blue]Forecasting {len(ticker_symbols)} tickers...",
-                    total=len(ticker_symbols),
-                )
 
             # Process each ticker with progress tracking
             for ticker_idx, ticker in enumerate(ticker_symbols):
@@ -1175,19 +1188,116 @@ def main():
                         if backtest_task is not None:
                             progress.advance(backtest_task)
 
-                if will_forecast:
-                    if "forecasting" not in results:
-                        results["forecasting"] = []
+                # Note: This section is now handled by parallel forecasting below
+                pass
 
-                    progress.update(
-                        forecast_task, description=f"[blue]Forecasting {ticker}..."
+            # Run parallel forecasting if needed
+            if will_forecast and ticker_symbols:
+                console.print(
+                    "\n[bold blue]Starting parallel forecasting...[/bold blue]"
+                )
+                actual_max_workers = min(
+                    config.forecast.max_workers, len(ticker_symbols)
+                )
+                console.print(
+                    f"[dim]Configuration: max_workers={actual_max_workers}, "
+                    f"max_generations={config.forecast.max_generations}, "
+                    f"num_validations={config.forecast.num_validations}[/dim]"
+                )
+
+                # Create a separate progress display for parallel forecasting with just a spinner
+                with Progress(
+                    SpinnerColumn(),
+                    TextColumn("[progress.description]{task.description}"),
+                    console=console,
+                    transient=True,
+                ) as forecast_progress:
+                    forecast_spinner_task = forecast_progress.add_task(
+                        f"[blue]Forecasting {len(ticker_symbols)} tickers...",
+                        total=None,  # No total for spinner
                     )
 
-                    forecast_result = run_forecast(
-                        ticker, config, stock_forecaster=container.stock_forecaster()
+                    # Progress tracking for parallel forecasting
+                    completed_count = 0
+
+                    def update_parallel_progress(
+                        symbol: str | None, status: str, status_info: dict = None
+                    ):
+                        nonlocal completed_count
+
+                        if status == "status_update" and status_info:
+                            # Periodic status update
+                            active_str = ""
+                            if status_info["active"]:
+                                active_str = (
+                                    f" Active: {', '.join(status_info['active'])}"
+                                )
+
+                            desc = (
+                                f"[blue]Forecasting {status_info['total']} tickers - "
+                            )
+                            desc += f"[green]{status_info['completed_count']} completed[/green], "
+                            desc += f"[yellow]{status_info['active_count']} in progress[/yellow]"
+                            if status_info["error_count"] > 0:
+                                desc += (
+                                    f", [red]{status_info['error_count']} errors[/red]"
+                                )
+                            if active_str:
+                                desc += f" | {active_str}"
+
+                            forecast_progress.update(
+                                forecast_spinner_task,
+                                description=desc,
+                            )
+                        elif status in ["completed", "error"]:
+                            # Individual completion update
+                            completed_count += 1
+                            if status_info:
+                                desc = f"[blue]Forecasting {status_info['total']} tickers - "
+                                desc += f"[green]{status_info['completed_count']} completed[/green]"
+                                if status_info["active_count"] > 0:
+                                    desc += f", [yellow]{status_info['active_count']} in progress[/yellow]"
+                                if status_info["error_count"] > 0:
+                                    desc += f", [red]{status_info['error_count']} errors[/red]"
+                            else:
+                                # Fallback if no status_info
+                                desc = f"[blue]Forecasting {len(ticker_symbols)} tickers ({completed_count} completed)..."
+
+                            forecast_progress.update(
+                                forecast_spinner_task,
+                                description=desc,
+                            )
+
+                    # Run parallel forecasting
+                    from .forecasting import StockForecaster
+
+                    # Don't use suppress_autots_output at main thread level - it causes issues with threading
+                    forecast_results = StockForecaster.forecast_multiple_parallel(
+                        symbols=ticker_symbols,
+                        start_date=config.data.start_date.strftime("%Y-%m-%d")
+                        if config.data.start_date
+                        else None,
+                        end_date=config.data.end_date.strftime("%Y-%m-%d")
+                        if config.data.end_date
+                        else None,
+                        forecast_length=config.forecast.forecast_length,
+                        model_list=config.forecast.model_list,
+                        ensemble=config.forecast.ensemble,
+                        max_generations=config.forecast.max_generations,
+                        max_workers=actual_max_workers,  # Already calculated above
+                        data_fetcher=container.data_fetcher(),
+                        progress_callback=update_parallel_progress,
+                        status_update_interval=2,  # Update every 2 seconds
                     )
-                    results["forecasting"].append(forecast_result)
-                    progress.advance(forecast_task)
+
+                    # Convert results to list format
+                    results["forecasting"] = list(forecast_results.values())
+
+                    # Mark progress as complete
+                    forecast_progress.update(
+                        forecast_spinner_task,
+                        description="[green]Forecasting complete!",
+                    )
     else:
         # No progress bars needed for TA only
         for ticker in ticker_symbols:
@@ -1209,6 +1319,17 @@ def main():
                         show_progress=True,
                     )
                 )
+
+    # Show current portfolio value for forecast mode after all processing is complete
+    if args.mode == "forecast":
+        # Show portfolio value in a nice table
+        portfolio_value_table = Table(title="Current Portfolio Value")
+        portfolio_value_table.add_column("Metric", style="cyan", no_wrap=True)
+        portfolio_value_table.add_column("Value", style="green")
+        portfolio_value_table.add_row(
+            "Current Portfolio Value", f"${initial_portfolio_value:,.2f}"
+        )
+        console.print(portfolio_value_table)
 
     # Output results
     output_format = args.output or config.output.get("format", "console")

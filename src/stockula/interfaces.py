@@ -94,6 +94,11 @@ class ILoggingManager(ABC):
         """Log critical message."""
         pass
 
+    @abstractmethod
+    def set_module_level(self, module_name: str, level: str) -> None:
+        """Set the logging level for a specific module."""
+        pass
+
 
 class ITechnicalIndicators(ABC):
     """Interface for technical analysis operations."""
