@@ -45,10 +45,10 @@ backtest:
       overbought_threshold: [70, 75, 80]
 # Forecasting configuration
 forecast:
-  forecast_length: 30  # Days to forecast
+  # forecast_length: 30  # Days to forecast
   frequency: "infer"  # Auto-detect frequency
   prediction_interval: 0.95  # 95% confidence interval
-  model_list: "fast"  # fast, default, slow, parallel
+  model_list: "default"  # fast, default, slow, parallel
   ensemble: "auto"  # auto, simple, distance, horizontal
   max_generations: 5  # Model search generations
   num_validations: 2  # Validation splits

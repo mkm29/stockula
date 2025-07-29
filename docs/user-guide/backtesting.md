@@ -306,6 +306,8 @@ Data Periods:
 
 ### Strategy Summary Panel
 
+Strategy summaries are displayed in descending order by "Return During Period" (highest returns first):
+
 ```
 ╭───────────────────────────── STRATEGY: SMACROSS ─────────────────────────────╮
 │                                                                              │

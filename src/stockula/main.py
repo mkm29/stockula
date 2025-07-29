@@ -1336,6 +1336,40 @@ def main():
 
     console.print(portfolio_table)
 
+    # Display detailed portfolio holdings
+    holdings_table = Table(title="Portfolio Holdings")
+    holdings_table.add_column("Ticker", style="cyan", no_wrap=True)
+    holdings_table.add_column("Type", style="yellow")
+    holdings_table.add_column("Quantity", style="green", justify="right")
+
+    all_assets = portfolio.get_all_assets()
+    for asset in all_assets:
+        # Get symbol as string
+        symbol = str(asset.symbol) if hasattr(asset, "symbol") else "N/A"
+
+        # Get category name as string
+        category_name = "N/A"
+        if hasattr(asset, "category") and asset.category is not None:
+            if hasattr(asset.category, "name"):
+                category_name = str(asset.category.name)
+            else:
+                category_name = str(asset.category)
+
+        # Handle quantity formatting - check if it's a real number
+        quantity_str = "N/A"
+        if hasattr(asset, "quantity") and isinstance(asset.quantity, (int, float)):
+            quantity_str = f"{asset.quantity:.2f}"
+        elif hasattr(asset, "quantity"):
+            # Try to convert to float if possible
+            try:
+                quantity_str = f"{float(asset.quantity):.2f}"
+            except (TypeError, ValueError):
+                quantity_str = str(asset.quantity)
+
+        holdings_table.add_row(symbol, category_name, quantity_str)
+
+    console.print(holdings_table)
+
     # Get portfolio value at start of backtest period
     fetcher = container.data_fetcher()
     symbols = [asset.symbol for asset in portfolio.get_all_assets()]

@@ -71,8 +71,8 @@ uv run python -m stockula.main
 
 # Run specific analysis modes
 uv run python -m stockula.main --ticker GOOGL --mode ta        # Technical analysis
-uv run python -m stockula.main --ticker MSFT --mode backtest  # Backtesting
-uv run python -m stockula.main --ticker NVDA --mode forecast  # Forecasting
+uv run python -m stockula.main --ticker MSFT --mode backtest  # Backtesting (results sorted by return, highest first)
+uv run python -m stockula.main --ticker NVDA --mode forecast  # Forecasting (results sorted by return, highest first)
 ```
 
 ### Configuration Example
@@ -281,6 +281,8 @@ graph TB
 ```
 
 ### Strategy Summaries
+
+Strategy summaries are displayed in descending order by "Return During Period" (highest returns first):
 
 ```bash
 ╭─────────────────────────────────────────────────── STRATEGY: DOUBLEEMACROSS ────────────────────────────────────────────────────╮

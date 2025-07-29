@@ -327,18 +327,22 @@ The portfolio value table shows different information based on the forecast mode
 
 ### Forecast Results Table
 
+Forecast results are displayed in descending order by expected return percentage (highest returns first):
+
 ```
                     Price Forecasts                     
 ┏━━━━━━━━┳━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━┓
 ┃ Ticker ┃ Current Price ┃ Forecast Price ┃ Confidence Range ┃
 ┡━━━━━━━━╇━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━┩
-│ AAPL   │ $150.25       │ $155.80 ↑     │ $145.20 - $165.40│
 │ NVDA   │ $875.40       │ $920.15 ↑     │ $850.30 - $995.20│
-│ TSLA   │ $248.50       │ $235.30 ↓     │ $215.10 - $265.50│
+│ AAPL   │ $150.25       │ $155.80 ↑     │ $145.20 - $165.40│
 │ GOOGL  │ $2,750.80     │ $2,825.45 ↑   │ $2,650.30 - $3,010.60│
 │ MSFT   │ $405.60       │ $412.25 ↑     │ $385.40 - $445.80│
+│ TSLA   │ $248.50       │ $235.30 ↓     │ $215.10 - $265.50│
 └────────┴───────────────┴────────────────┴──────────────────┘
 ```
+
+Note: In this example, NVDA shows the highest expected return (+5.1%), followed by AAPL (+3.7%), GOOGL (+2.7%), MSFT (+1.6%), and TSLA (-5.3%).
 
 ### Forecast Evaluation Metrics
 
