@@ -3,7 +3,7 @@
 from datetime import date, datetime
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
 class BacktestResult(BaseModel):
@@ -225,11 +225,26 @@ class PortfolioConfig(BaseModel):
 class DataConfig(BaseModel):
     """Configuration for data fetching."""
 
+    # Legacy fields for backward compatibility
     start_date: str | date | None = Field(
         default=None, description="Start date for historical data (YYYY-MM-DD)"
     )
     end_date: str | date | None = Field(
         default=None, description="End date for historical data (YYYY-MM-DD)"
+    )
+
+    # New fields for train/test split
+    train_start_date: str | date | None = Field(
+        default=None, description="Start date for training data (YYYY-MM-DD)"
+    )
+    train_end_date: str | date | None = Field(
+        default=None, description="End date for training data (YYYY-MM-DD)"
+    )
+    test_start_date: str | date | None = Field(
+        default=None, description="Start date for testing data (YYYY-MM-DD)"
+    )
+    test_end_date: str | date | None = Field(
+        default=None, description="End date for testing data (YYYY-MM-DD)"
     )
     interval: str = Field(
         default="1d",
@@ -242,7 +257,15 @@ class DataConfig(BaseModel):
         default="stockula.db", description="Path to SQLite database file for caching"
     )
 
-    @field_validator("start_date", "end_date", mode="before")
+    @field_validator(
+        "start_date",
+        "end_date",
+        "train_start_date",
+        "train_end_date",
+        "test_start_date",
+        "test_end_date",
+        mode="before",
+    )
     @classmethod
     def parse_dates(cls, v):
         if v is None:
@@ -250,6 +273,34 @@ class DataConfig(BaseModel):
         if isinstance(v, str):
             return datetime.strptime(v, "%Y-%m-%d").date()
         return v
+
+    @model_validator(mode="after")
+    def validate_date_ranges(self):
+        """Validate date ranges and set defaults for backward compatibility."""
+        # If new date fields are not set, use legacy fields
+        if self.train_start_date is None and self.start_date is not None:
+            self.train_start_date = self.start_date
+        if self.train_end_date is None and self.end_date is not None:
+            self.train_end_date = self.end_date
+
+        # Validate training date range
+        if self.train_start_date and self.train_end_date:
+            if self.train_start_date >= self.train_end_date:
+                raise ValueError("train_start_date must be before train_end_date")
+
+        # Validate testing date range
+        if self.test_start_date and self.test_end_date:
+            if self.test_start_date >= self.test_end_date:
+                raise ValueError("test_start_date must be before test_end_date")
+
+        # Validate that test period comes after training period
+        if self.train_end_date and self.test_start_date:
+            if self.test_start_date < self.train_end_date:
+                raise ValueError(
+                    "test_start_date must be after or equal to train_end_date"
+                )
+
+        return self
 
 
 class StrategyConfig(BaseModel):

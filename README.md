@@ -15,9 +15,9 @@ Stockula is a comprehensive Python trading platform that provides tools for tech
     - [🏁 Getting Started](#-getting-started)
     - [📖 User Guide](#-user-guide)
     - [🔧 API Reference](#-api-reference)
-    - [🛠️ Development](#%EF%B8%8F-development)
+    - [🛠️ Development](#️-development)
     - [🔍 Help](#-help)
-  - [🏗️ Architecture](#%EF%B8%8F-architecture)
+  - [🏗️ Architecture](#️-architecture)
   - [📋 Requirements](#-requirements)
     - [Key Dependencies](#key-dependencies)
   - [🎨 Rich CLI Examples](#-rich-cli-examples)
@@ -112,13 +112,13 @@ For comprehensive documentation, visit our [**MkDocs Documentation Site**](https
 
 ### 📖 User Guide
 
-- [**Architecture Overview**](https://mkm29.github.io/stockula/user-guide/architecture/) - System design and data flow
-- [**Data Fetching**](https://mkm29.github.io/stockula/user-guide/data-fetching/) - Market data and caching system
-- [**Technical Analysis**](https://mkm29.github.io/stockula/user-guide/technical-analysis/) - 40+ indicators and usage
-- [**Backtesting**](https://mkm29.github.io/stockula/user-guide/backtesting/) - Strategy testing with realistic costs
-- [**Forecasting**](https://mkm29.github.io/stockula/user-guide/forecasting/) - AutoTS time series prediction
+- [**Architecture Overview**](docs/user-guide/architecture.md) - System design and data flow
+- [**Data Fetching**](docs/user-guide/data-fetching.md) - Market data and caching system
+- [**Technical Analysis**](hdocs/user-guide/technical-analysis.md) - 40+ indicators and usage
+- [**Backtesting**](docs/user-guide/backtesting.md) - Strategy testing with realistic costs
+- [**Forecasting**](docs/user-guide/forecasting.md) - AutoTS time series prediction
 - [**Forecasting Models**](docs/FORECASTING_MODELS.md) - Fast & full financial model details
-- [**Rich CLI Features**](https://mkm29.github.io/stockula/user-guide/rich-cli/) - Enhanced command-line interface
+- [**Rich CLI Features**](docs/user-guide/rich-cli.md) - Enhanced command-line interface
 
 ### 🔧 API Reference
 

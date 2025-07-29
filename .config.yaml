@@ -1,12 +1,14 @@
 # Stockula Configuration - Auto-Allocation Example
 # Only requires initial capital and category ratios - automatically determines optimal quantities
 data:
-  start_date: "2023-01-01"  # Extended to get more historical data
-  end_date: "2025-07-25"
+  train_start_date: "2025-01-01"
+  train_end_date: "2025-03-31"
+  test_start_date: "2025-04-01"
+  test_end_date: "2025-06-30"
   use_cache: true # Database caching enabled
 # Portfolio configuration with automatic allocation
 portfolio:
-  name: "Auto-Allocated EMA Portfolio"
+  name: "Auto-Allocated Smigula Portfolio"
   initial_capital: 20000
   allocation_method: auto
   auto_allocate: true

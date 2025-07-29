@@ -303,12 +303,15 @@ class TestRunForecast:
 
         # Mock forecaster
         mock_forecaster = Mock()
+        # Create predictions with date index
+        dates = pd.date_range("2024-01-01", periods=5)
         mock_predictions = pd.DataFrame(
             {
                 "forecast": [110, 111, 112, 113, 114],
                 "lower_bound": [105, 106, 107, 108, 109],
                 "upper_bound": [115, 116, 117, 118, 119],
-            }
+            },
+            index=dates,
         )
         mock_forecaster.forecast_from_symbol.return_value = mock_predictions
         mock_forecaster.get_best_model.return_value = {
@@ -325,6 +328,8 @@ class TestRunForecast:
         assert result["upper_bound"] == 119
         assert result["forecast_length"] == 30
         assert result["best_model"] == "ARIMA"
+        assert result["start_date"] == "2024-01-01"
+        assert result["end_date"] == "2024-01-05"
 
     @patch("stockula.main.log_manager")
     def test_run_forecast_keyboard_interrupt(self, mock_log_manager):
@@ -497,6 +502,7 @@ class TestMainFunction:
 
     @patch("stockula.main.create_container")
     @patch("stockula.main.setup_logging")
+    @patch("stockula.main.log_manager")
     @patch("stockula.main.run_technical_analysis")
     @patch("stockula.main.print_results")
     @patch("sys.argv", ["stockula", "--mode", "ta", "--ticker", "AAPL"])
@@ -504,6 +510,7 @@ class TestMainFunction:
         self,
         mock_print,
         mock_ta,
+        mock_log_manager,
         mock_logging,
         mock_container,
     ):
@@ -542,6 +549,11 @@ class TestMainFunction:
 
         # Setup TA results
         mock_ta.return_value = {"ticker": "AAPL", "indicators": {}}
+
+        # Initialize the global log_manager
+        import stockula.main
+
+        stockula.main.log_manager = mock_log_manager
 
         main()
 
@@ -643,11 +655,13 @@ class TestMainFunction:
         mock_backtest_runner.run_from_symbol.assert_called_once()
         mock_print.assert_called_once()
 
+    @patch("stockula.main.create_container")
     @patch("stockula.config.settings.load_yaml_config")
     @patch("sys.argv", ["stockula", "--config", "nonexistent.yaml"])
-    def test_main_config_not_found(self, mock_load_yaml):
+    def test_main_config_not_found(self, mock_load_yaml, mock_create_container):
         """Test main function with non-existent config file."""
-        mock_load_yaml.side_effect = FileNotFoundError("Config not found")
+        # Make create_container raise the FileNotFoundError
+        mock_create_container.side_effect = FileNotFoundError("Config not found")
 
         # Main doesn't handle FileNotFoundError - it lets it propagate
         with pytest.raises(FileNotFoundError):
@@ -710,15 +724,31 @@ class TestMainIntegration:
 class TestMainAdvanced:
     """Advanced tests for main function to improve coverage."""
 
-    @patch("stockula.main.create_container")
-    @patch("stockula.main.setup_logging")
-    @patch("stockula.main.print_results")
+    def setup_method(self):
+        """Reset global state before each test."""
+        import stockula.main
+
+        stockula.main.log_manager = None
+
+        # Clear any sys.argv modifications
+        import sys
+
+        if hasattr(sys, "_argv_backup"):
+            sys.argv = sys._argv_backup.copy()
+        else:
+            sys.argv = ["pytest"]
+
     @patch("sys.argv", ["stockula", "--mode", "forecast", "--ticker", "AAPL"])
+    @patch("stockula.main.print_results")
+    @patch("stockula.main.log_manager")
+    @patch("stockula.main.setup_logging")
+    @patch("stockula.main.create_container")
     def test_main_forecast_mode_with_warning(
         self,
-        mock_print,
-        mock_logging,
         mock_container,
+        mock_logging,
+        mock_log_manager,
+        mock_print,
         capsys,
     ):
         """Test main function in forecast mode with warning message."""
@@ -726,20 +756,31 @@ class TestMainAdvanced:
         config = StockulaConfig()
         config.portfolio.tickers = [TickerConfig(symbol="AAPL", quantity=1.0)]
 
-        # Setup container
-        container = Mock()
+        # Setup container with a fresh mock to avoid state pollution
+        container = Mock(
+            spec=[
+                "stockula_config",
+                "logging_manager",
+                "domain_factory",
+                "data_fetcher",
+                "backtest_runner",
+                "stock_forecaster",
+            ]
+        )
         container.stockula_config.return_value = config
-        mock_log_manager = Mock()
-        container.logging_manager.return_value = mock_log_manager
+        container.logging_manager.return_value = Mock()
         mock_container.return_value = container
 
-        # Make setup_logging initialize the global log_manager
-        def setup_logging_side_effect(config, logging_manager=None):
-            import stockula.main
+        # Initialize the global log_manager directly
+        import stockula.main
 
-            stockula.main.log_manager = mock_log_manager
+        stockula.main.log_manager = mock_log_manager
 
-        mock_logging.side_effect = setup_logging_side_effect
+        # Ensure the mocks are properly isolated
+        mock_container.reset_mock()
+        mock_logging.reset_mock()
+        mock_log_manager.reset_mock()
+        mock_print.reset_mock()
 
         # Setup domain factory
         mock_asset = Mock()
@@ -769,19 +810,29 @@ class TestMainAdvanced:
                 "forecast": [150.0, 155.0],
                 "lower_bound": [145.0, 150.0],
                 "upper_bound": [155.0, 160.0],
-            }
+            },
+            index=pd.date_range("2023-01-01", periods=2, freq="D"),
         )
         mock_forecaster.forecast_from_symbol.return_value = mock_predictions
         mock_forecaster.get_best_model.return_value = {
             "model_name": "TestModel",
             "model_params": {},
         }
-        container.stock_forecaster.return_value = mock_forecaster
+        # Make stock_forecaster a function that returns mock_forecaster
+        # Create a completely fresh mock to avoid state pollution
+        fresh_stock_forecaster_mock = Mock(return_value=mock_forecaster)
+        container.stock_forecaster = fresh_stock_forecaster_mock
 
+        # Call main and check results
         main()
 
+        # Check that the portfolio was created with the overridden ticker
+        mock_factory.create_portfolio.assert_called_once()
+
         # Should call forecast_from_symbol for AAPL
+        # The forecaster is called via run_forecast which is called from main
         mock_forecaster.forecast_from_symbol.assert_called_once()
+
         mock_print.assert_called_once()
 
         # Check that warning elements are present
@@ -789,11 +840,13 @@ class TestMainAdvanced:
         assert "FORECAST" in captured.out.upper()
         assert "AutoTS" in captured.out or "models" in captured.out
 
+    @patch("stockula.main.create_container")
     @patch("stockula.config.settings.load_yaml_config")
     @patch("sys.argv", ["stockula", "--config", "nonexistent.yaml"])
-    def test_main_config_exception(self, mock_load_yaml):
+    def test_main_config_exception(self, mock_load_yaml, mock_create_container):
         """Test main function with general exception in config loading."""
-        mock_load_yaml.side_effect = Exception("Config parsing error")
+        # Make create_container raise the exception
+        mock_create_container.side_effect = Exception("Config parsing error")
 
         # Main doesn't handle exceptions - it lets them propagate
         with pytest.raises(Exception, match="Config parsing error"):
@@ -1538,6 +1591,7 @@ class TestMainAdvanced:
 
     @patch("stockula.main.create_container")
     @patch("stockula.main.setup_logging")
+    @patch("stockula.main.log_manager")
     @patch("stockula.main.run_technical_analysis")
     @patch("stockula.main.run_backtest")
     @patch("stockula.main.print_results")
@@ -1547,6 +1601,7 @@ class TestMainAdvanced:
         mock_print,
         mock_backtest,
         mock_ta,
+        mock_log_manager,
         mock_logging,
         mock_container,
     ):
@@ -1565,17 +1620,13 @@ class TestMainAdvanced:
         # Setup container
         container = Mock()
         container.stockula_config.return_value = config
-        mock_log_manager = Mock()
-        container.logging_manager.return_value = mock_log_manager
+        container.logging_manager.return_value = Mock()
         mock_container.return_value = container
 
-        # Make setup_logging initialize the global log_manager
-        def setup_logging_side_effect(config, logging_manager=None):
-            import stockula.main
+        # Initialize the global log_manager directly
+        import stockula.main
 
-            stockula.main.log_manager = mock_log_manager
-
-        mock_logging.side_effect = setup_logging_side_effect
+        stockula.main.log_manager = mock_log_manager
 
         # Setup domain factory
         mock_asset = Mock()
@@ -1619,14 +1670,18 @@ class TestMainAdvanced:
                 "forecast": [150.0, 155.0],
                 "lower_bound": [152.0, 158.0],
                 "upper_bound": [152.0, 158.0],
-            }
+            },
+            index=pd.date_range("2023-01-01", periods=2, freq="D"),
         )
         mock_forecaster.forecast_from_symbol.return_value = mock_predictions
         mock_forecaster.get_best_model.return_value = {
             "model_name": "GLS",
             "model_params": {},
         }
-        container.stock_forecaster.return_value = mock_forecaster
+        # Make stock_forecaster a function that returns mock_forecaster
+        # Create a completely fresh mock to avoid state pollution
+        fresh_stock_forecaster_mock = Mock(return_value=mock_forecaster)
+        container.stock_forecaster = fresh_stock_forecaster_mock
 
         # Mock all analysis functions
         mock_ta.return_value = {"ticker": "AAPL", "indicators": {}}
@@ -1641,11 +1696,13 @@ class TestMainAdvanced:
 
     @patch("stockula.main.create_container")
     @patch("stockula.main.setup_logging")
+    @patch("stockula.main.log_manager")
     @patch("stockula.main.print_results")
     @patch("sys.argv", ["stockula", "--mode", "backtest"])
     def test_main_unknown_hold_only_category(
         self,
         mock_print,
+        mock_log_manager,
         mock_logging,
         mock_container,
         capsys,
@@ -1660,6 +1717,11 @@ class TestMainAdvanced:
         container.stockula_config.return_value = config
         container.logging_manager.return_value = Mock()
         mock_container.return_value = container
+
+        # Initialize the global log_manager directly
+        import stockula.main
+
+        stockula.main.log_manager = mock_log_manager
 
         # Setup domain factory
         mock_asset = Mock()

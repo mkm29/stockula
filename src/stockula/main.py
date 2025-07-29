@@ -327,6 +327,83 @@ def run_backtest(
 
 
 @inject
+def run_forecast_with_evaluation(
+    ticker: str,
+    config: StockulaConfig,
+    stock_forecaster: IStockForecaster = Provide[Container.stock_forecaster],
+) -> dict[str, Any]:
+    """Run forecasting with train/test split and evaluation.
+
+    Args:
+        ticker: Stock symbol
+        config: Configuration object
+        stock_forecaster: Injected stock forecaster
+
+    Returns:
+        Dictionary with forecast results and evaluation metrics
+    """
+    log_manager.info(f"\nForecasting {ticker} with train/test evaluation...")
+
+    forecaster = stock_forecaster
+
+    try:
+        # Use new date fields if available, otherwise fall back to legacy
+        train_start = config.data.train_start_date or config.data.start_date
+        train_end = config.data.train_end_date or config.data.end_date
+        test_start = config.data.test_start_date
+        test_end = config.data.test_end_date
+
+        result = forecaster.forecast_from_symbol_with_evaluation(
+            ticker,
+            train_start_date=train_start.strftime("%Y-%m-%d") if train_start else None,
+            train_end_date=train_end.strftime("%Y-%m-%d") if train_end else None,
+            test_start_date=test_start.strftime("%Y-%m-%d") if test_start else None,
+            test_end_date=test_end.strftime("%Y-%m-%d") if test_end else None,
+            model_list=config.forecast.model_list,
+            ensemble=config.forecast.ensemble,
+            max_generations=config.forecast.max_generations,
+        )
+
+        predictions = result["predictions"]
+        model_info = forecaster.get_best_model()
+
+        log_manager.info(
+            f"Forecast completed for {ticker} using {model_info['model_name']}"
+        )
+
+        forecast_result = {
+            "ticker": ticker,
+            "current_price": float(predictions["forecast"].iloc[0]),
+            "forecast_price": float(predictions["forecast"].iloc[-1]),
+            "lower_bound": float(predictions["lower_bound"].iloc[-1]),
+            "upper_bound": float(predictions["upper_bound"].iloc[-1]),
+            "forecast_length": config.forecast.forecast_length,
+            "start_date": predictions.index[0].strftime("%Y-%m-%d"),
+            "end_date": predictions.index[-1].strftime("%Y-%m-%d"),
+            "best_model": model_info["model_name"],
+            "model_params": model_info.get("model_params", {}),
+            "train_period": result["train_period"],
+            "test_period": result["test_period"],
+        }
+
+        # Add evaluation metrics if available
+        if result["evaluation_metrics"]:
+            forecast_result["evaluation"] = result["evaluation_metrics"]
+            log_manager.info(
+                f"Evaluation metrics for {ticker}: RMSE={result['evaluation_metrics']['rmse']:.2f}, "
+                f"MAPE={result['evaluation_metrics']['mape']:.2f}%"
+            )
+
+        return forecast_result
+
+    except KeyboardInterrupt:
+        log_manager.warning(f"Forecast for {ticker} interrupted by user")
+        return {"ticker": ticker, "error": "Interrupted by user"}
+    except Exception as e:
+        log_manager.error(f"Error forecasting {ticker}: {e}")
+        return {"ticker": ticker, "error": str(e)}
+
+
 def run_forecast(
     ticker: str,
     config: StockulaConfig,
@@ -908,6 +985,43 @@ def print_results(
 
             console.print(table)
 
+            # Display evaluation metrics if available
+            has_evaluation = any(
+                "evaluation" in f for f in results["forecasting"] if "error" not in f
+            )
+            if has_evaluation:
+                console.print(
+                    "\n[bold cyan]=== Forecast Evaluation Metrics ===[/bold cyan]"
+                )
+
+                eval_table = Table(title="Model Performance on Test Data")
+                eval_table.add_column("Ticker", style="cyan", no_wrap=True)
+                eval_table.add_column("RMSE", style="yellow", justify="right")
+                eval_table.add_column("MAE", style="yellow", justify="right")
+                eval_table.add_column("MAPE %", style="yellow", justify="right")
+                eval_table.add_column("Train Period", style="white")
+                eval_table.add_column("Test Period", style="white")
+
+                for forecast in results["forecasting"]:
+                    if "error" not in forecast and "evaluation" in forecast:
+                        eval_metrics = forecast["evaluation"]
+                        train_period = forecast.get("train_period", {})
+                        test_period = forecast.get("test_period", {})
+
+                        train_str = f"{train_period.get('start', 'N/A')} to {train_period.get('end', 'N/A')}"
+                        test_str = f"{test_period.get('start', 'N/A')} to {test_period.get('end', 'N/A')}"
+
+                        eval_table.add_row(
+                            forecast["ticker"],
+                            f"${eval_metrics['rmse']:.2f}",
+                            f"${eval_metrics['mae']:.2f}",
+                            f"{eval_metrics['mape']:.2f}%",
+                            train_str,
+                            test_str,
+                        )
+
+                console.print(eval_table)
+
 
 def main():
     """Main entry point."""
@@ -936,6 +1050,16 @@ def main():
         "--save-config", type=str, help="Save current configuration to file"
     )
 
+    # Add date range arguments
+    parser.add_argument(
+        "--train-start", type=str, help="Training start date (YYYY-MM-DD)"
+    )
+    parser.add_argument("--train-end", type=str, help="Training end date (YYYY-MM-DD)")
+    parser.add_argument(
+        "--test-start", type=str, help="Testing start date (YYYY-MM-DD)"
+    )
+    parser.add_argument("--test-end", type=str, help="Testing end date (YYYY-MM-DD)")
+
     args = parser.parse_args()
 
     # Initialize DI container first
@@ -952,6 +1076,22 @@ def main():
         from .config import TickerConfig
 
         config.portfolio.tickers = [TickerConfig(symbol=args.ticker, quantity=1.0)]
+
+    # Override date ranges if provided
+    if args.train_start:
+        config.data.train_start_date = datetime.strptime(
+            args.train_start, "%Y-%m-%d"
+        ).date()
+    if args.train_end:
+        config.data.train_end_date = datetime.strptime(
+            args.train_end, "%Y-%m-%d"
+        ).date()
+    if args.test_start:
+        config.data.test_start_date = datetime.strptime(
+            args.test_start, "%Y-%m-%d"
+        ).date()
+    if args.test_end:
+        config.data.test_end_date = datetime.strptime(args.test_end, "%Y-%m-%d").date()
 
     # Save configuration if requested
     if args.save_config:
@@ -1239,49 +1379,22 @@ def main():
                         )
 
                         try:
-                            # Use the injected forecaster for single symbol
-                            forecaster = container.stock_forecaster()
-                            predictions = forecaster.forecast_from_symbol(
-                                symbol,
-                                start_date=config.data.start_date.strftime("%Y-%m-%d")
-                                if config.data.start_date
-                                else None,
-                                end_date=config.data.end_date.strftime("%Y-%m-%d")
-                                if config.data.end_date
-                                else None,
-                                model_list=config.forecast.model_list,
-                                ensemble=config.forecast.ensemble,
-                                max_generations=config.forecast.max_generations,
-                            )
+                            # Check if test dates are provided for evaluation
+                            if (
+                                config.data.test_start_date
+                                and config.data.test_end_date
+                            ):
+                                # Use the new evaluation method
+                                forecast_result = run_forecast_with_evaluation(
+                                    symbol, config, container.stock_forecaster()
+                                )
+                            else:
+                                # Use the original method
+                                forecast_result = run_forecast(
+                                    symbol, config, container.stock_forecaster()
+                                )
 
-                            model_info = forecaster.get_best_model()
-
-                            results["forecasting"].append(
-                                {
-                                    "ticker": symbol,
-                                    "current_price": float(
-                                        predictions["forecast"].iloc[0]
-                                    ),
-                                    "forecast_price": float(
-                                        predictions["forecast"].iloc[-1]
-                                    ),
-                                    "lower_bound": float(
-                                        predictions["lower_bound"].iloc[-1]
-                                    ),
-                                    "upper_bound": float(
-                                        predictions["upper_bound"].iloc[-1]
-                                    ),
-                                    "forecast_length": config.forecast.forecast_length,
-                                    "start_date": predictions.index[0].strftime(
-                                        "%Y-%m-%d"
-                                    ),
-                                    "end_date": predictions.index[-1].strftime(
-                                        "%Y-%m-%d"
-                                    ),
-                                    "best_model": model_info["model_name"],
-                                    "model_params": model_info.get("model_params", {}),
-                                }
-                            )
+                            results["forecasting"].append(forecast_result)
 
                         except KeyboardInterrupt:
                             log_manager.warning(

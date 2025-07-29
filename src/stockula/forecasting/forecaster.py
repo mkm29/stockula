@@ -572,6 +572,109 @@ class StockForecaster:
         self.fit(data, target_column, **kwargs)
         return self.predict()
 
+    def forecast_from_symbol_with_evaluation(
+        self,
+        symbol: str,
+        train_start_date: str | None = None,
+        train_end_date: str | None = None,
+        test_start_date: str | None = None,
+        test_end_date: str | None = None,
+        target_column: str = "Close",
+        **kwargs,
+    ) -> dict[str, Any]:
+        """Forecast stock prices using train/test split with evaluation.
+
+        Args:
+            symbol: Stock symbol to forecast
+            train_start_date: Start date for training data
+            train_end_date: End date for training data
+            test_start_date: Start date for testing data
+            test_end_date: End date for testing data
+            target_column: Column to forecast
+            **kwargs: Additional arguments for fit()
+
+        Returns:
+            Dictionary with predictions and evaluation metrics
+        """
+        if self.data_fetcher is None:
+            raise ValueError("Data fetcher not configured")
+
+        # Fetch training data
+        train_data = self.data_fetcher.get_stock_data(
+            symbol, train_start_date, train_end_date
+        )
+
+        if train_data.empty:
+            raise ValueError(f"No training data available for symbol {symbol}")
+
+        # Fetch test data if dates provided
+        test_data = None
+        if test_start_date and test_end_date:
+            test_data = self.data_fetcher.get_stock_data(
+                symbol, test_start_date, test_end_date
+            )
+
+        # Fit model on training data
+        self.fit(train_data, target_column, **kwargs)
+
+        # Generate predictions
+        predictions = self.predict()
+
+        # If test data available, calculate evaluation metrics
+        evaluation_metrics = None
+        if test_data is not None and not test_data.empty:
+            # Align predictions with test data
+            common_dates = predictions.index.intersection(test_data.index)
+            if len(common_dates) > 0:
+                actual_values = test_data.loc[common_dates, target_column]
+                forecast_values = predictions.loc[common_dates, "forecast"]
+
+                # Calculate residuals and metrics
+                residuals = actual_values - forecast_values
+
+                from sklearn.metrics import mean_absolute_error, mean_squared_error
+                import numpy as np
+
+                mae = mean_absolute_error(actual_values, forecast_values)
+                mse = mean_squared_error(actual_values, forecast_values)
+                rmse = np.sqrt(mse)
+                mape = (
+                    np.mean(np.abs((actual_values - forecast_values) / actual_values))
+                    * 100
+                )
+
+                evaluation_metrics = {
+                    "mae": mae,
+                    "mse": mse,
+                    "rmse": rmse,
+                    "mape": mape,
+                    "residuals": residuals.tolist(),
+                    "actual_values": actual_values.tolist(),
+                    "forecast_values": forecast_values.tolist(),
+                    "evaluation_dates": common_dates.strftime("%Y-%m-%d").tolist(),
+                }
+
+        return {
+            "predictions": predictions,
+            "evaluation_metrics": evaluation_metrics,
+            "train_period": {
+                "start": train_data.index[0].strftime("%Y-%m-%d"),
+                "end": train_data.index[-1].strftime("%Y-%m-%d"),
+                "size": len(train_data),
+            },
+            "test_period": {
+                "start": test_data.index[0].strftime("%Y-%m-%d")
+                if test_data is not None
+                else None,
+                "end": test_data.index[-1].strftime("%Y-%m-%d")
+                if test_data is not None
+                else None,
+                "size": len(test_data) if test_data is not None else 0,
+            }
+            if test_data is not None
+            else None,
+        }
+
     def forecast_from_symbol(
         self,
         symbol: str,
