@@ -653,16 +653,32 @@ def create_portfolio_backtest_results(
         }
 
     # Create portfolio results
+    # Get date range from config or results
+    date_start = "N/A"
+    date_end = "N/A"
+
+    if config.data.start_date:
+        date_start = config.data.start_date.strftime("%Y-%m-%d")
+    elif results.get("backtesting") and len(results["backtesting"]) > 0:
+        # Try to get from first backtest result
+        first_result = results["backtesting"][0]
+        if "start_date" in first_result:
+            date_start = first_result["start_date"]
+
+    if config.data.end_date:
+        date_end = config.data.end_date.strftime("%Y-%m-%d")
+    elif results.get("backtesting") and len(results["backtesting"]) > 0:
+        # Try to get from first backtest result
+        first_result = results["backtesting"][0]
+        if "end_date" in first_result:
+            date_end = first_result["end_date"]
+
     portfolio_results = PortfolioBacktestResults(
         initial_portfolio_value=results.get("initial_portfolio_value", 0),
         initial_capital=results.get("initial_capital", 0),
         date_range={
-            "start": config.data.start_date.strftime("%Y-%m-%d")
-            if config.data.start_date
-            else None,
-            "end": config.data.end_date.strftime("%Y-%m-%d")
-            if config.data.end_date
-            else None,
+            "start": date_start,
+            "end": date_end,
         },
         broker_config=broker_config,
         strategy_summaries=strategy_summaries,
@@ -1448,23 +1464,65 @@ def main():
         portfolio_value_table.add_column("Date", style="white")
         portfolio_value_table.add_column("Value", style="green")
 
-        # Add initial capital row with start date
-        start_date = (
-            config.data.start_date.strftime("%Y-%m-%d")
-            if config.data.start_date
+        # Add initial capital row with test start date
+        test_start = (
+            config.data.test_start_date.strftime("%Y-%m-%d")
+            if config.data.test_start_date
             else "Initial"
         )
         portfolio_value_table.add_row(
-            "Portfolio Value", start_date, f"${portfolio.initial_capital:,.2f}"
+            "Portfolio Value", test_start, f"${portfolio.initial_capital:,.2f}"
         )
 
-        # Add current value row
-        from datetime import datetime
+        # Calculate forecasted portfolio value based on forecast results
+        if "forecasting" in results and results["forecasting"]:
+            forecasted_value = portfolio.initial_capital
+            total_accuracy = 0
+            valid_forecasts = 0
 
-        current_date = datetime.now().strftime("%Y-%m-%d")
-        portfolio_value_table.add_row(
-            "Portfolio Value", current_date, f"${initial_portfolio_value:,.2f}"
-        )
+            for forecast in results["forecasting"]:
+                if "error" not in forecast and "evaluation" in forecast:
+                    # Calculate portfolio value change based on forecast accuracy
+                    ticker = forecast["ticker"]
+                    asset = next(
+                        (a for a in portfolio.get_all_assets() if a.symbol == ticker),
+                        None,
+                    )
+                    if asset and forecast["evaluation"]:
+                        # Get the asset's allocation
+                        asset_value = asset.quantity * forecast["current_price"]
+                        forecast_change = (
+                            forecast["forecast_price"] - forecast["current_price"]
+                        ) / forecast["current_price"]
+                        forecasted_value += asset_value * forecast_change
+
+                        # Calculate accuracy from MAPE
+                        accuracy = 100 - forecast["evaluation"]["mape"]
+                        total_accuracy += accuracy
+                        valid_forecasts += 1
+
+            # Add forecasted value row with test end date
+            test_end = None
+            if config.data.test_end_date:
+                test_end = config.data.test_end_date.strftime("%Y-%m-%d")
+            else:
+                # Try to get end date from any forecast result
+                for forecast in results["forecasting"]:
+                    if "error" not in forecast and "end_date" in forecast:
+                        test_end = forecast["end_date"]
+                        break
+
+            if test_end:
+                portfolio_value_table.add_row(
+                    "Portfolio Value", test_end, f"${forecasted_value:,.2f}"
+                )
+
+            # Add average accuracy row
+            if valid_forecasts > 0 and test_end:
+                avg_accuracy = total_accuracy / valid_forecasts
+                portfolio_value_table.add_row(
+                    "Accuracy", test_end, f"{avg_accuracy:.4f}%"
+                )
 
         console.print(portfolio_value_table)
 

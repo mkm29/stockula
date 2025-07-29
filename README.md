@@ -34,7 +34,7 @@ Stockula is a comprehensive Python trading platform that provides tools for tech
 - **📊 Technical Analysis**: 40+ indicators (SMA, EMA, RSI, MACD, Bollinger Bands, etc.)
 - **🔄 Backtesting**: Test trading strategies with realistic broker costs and commission structures
 - **📈 Data Fetching**: Real-time and historical market data via yfinance with intelligent SQLite caching
-- **🔮 Price Forecasting**: Automated time series forecasting using AutoTS with ensemble models
+- **🔮 Price Forecasting**: Automated time series forecasting using AutoTS with train/test evaluation and accuracy metrics
 - **🎨 Rich CLI Interface**: Beautiful progress bars, tables, and colored output
 - **🗄️ Database Caching**: Automatic SQLite caching for offline analysis and fast data access
 - **🚀 Modern Python**: Built with uv for fast package management and Pydantic for configuration

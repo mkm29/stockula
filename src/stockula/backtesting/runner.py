@@ -170,7 +170,20 @@ class BacktestRunner:
         )
 
         # Run backtest with static risk-free rate
-        self.results = bt.run(**kwargs)
+        # Suppress progress output by redirecting stderr
+        import sys
+        import os
+
+        # Save current stderr
+        old_stderr = sys.stderr
+        try:
+            # Redirect stderr to devnull to suppress progress bars
+            sys.stderr = open(os.devnull, "w")
+            self.results = bt.run(**kwargs)
+        finally:
+            # Restore stderr
+            sys.stderr.close()
+            sys.stderr = old_stderr
 
         # Store equity curve for dynamic metrics calculation
         # The results object has an _equity_curve attribute
@@ -243,7 +256,22 @@ class BacktestRunner:
             exclusive_orders=self.exclusive_orders,
         )
 
-        return bt.optimize(**param_ranges)
+        # Suppress progress output by redirecting stderr
+        import sys
+        import os
+
+        # Save current stderr
+        old_stderr = sys.stderr
+        try:
+            # Redirect stderr to devnull to suppress progress bars
+            sys.stderr = open(os.devnull, "w")
+            result = bt.optimize(**param_ranges)
+        finally:
+            # Restore stderr
+            sys.stderr.close()
+            sys.stderr = old_stderr
+
+        return result
 
     def run_from_symbol(
         self,
