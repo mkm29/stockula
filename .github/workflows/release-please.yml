@@ -95,3 +95,6 @@ jobs:
           cache-to: type=gha,mode=max
           build-args: |
             VERSION=${{ needs.release-please.outputs.tag_name }}
+            BUILD_DATE=${{ fromJSON(steps.meta.outputs.json).labels['org.opencontainers.image.created'] }}
+            GIT_COMMIT=${{ github.sha }}
+            GIT_URL=${{ github.event.repository.html_url }}

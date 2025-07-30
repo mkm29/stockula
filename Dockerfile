@@ -7,6 +7,12 @@
 # Stage 1: Base image with uv and system dependencies
 FROM python:3.13-slim AS base
 
+# Build arguments for labels
+ARG VERSION=dev
+ARG BUILD_DATE
+ARG GIT_COMMIT
+ARG GIT_URL
+
 # Set environment variables
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
@@ -71,6 +77,25 @@ RUN uv run ruff check src/ tests/
 # Stage 5: Production stage - minimal runtime image
 FROM base AS production
 
+# Re-declare build arguments for this stage
+ARG VERSION=dev
+ARG BUILD_DATE
+ARG GIT_COMMIT
+ARG GIT_URL
+
+# Add labels following OCI Image Format Specification
+LABEL org.opencontainers.image.created="${BUILD_DATE}" \
+      org.opencontainers.image.authors="Stockula Contributors" \
+      org.opencontainers.image.url="${GIT_URL}" \
+      org.opencontainers.image.documentation="${GIT_URL}" \
+      org.opencontainers.image.source="${GIT_URL}" \
+      org.opencontainers.image.version="${VERSION}" \
+      org.opencontainers.image.revision="${GIT_COMMIT}" \
+      org.opencontainers.image.vendor="Stockula" \
+      org.opencontainers.image.licenses="MIT" \
+      org.opencontainers.image.title="Stockula" \
+      org.opencontainers.image.description="Quantitative trading platform with backtesting and forecasting"
+
 # Create non-root user for security
 RUN groupadd --gid 1000 stockula && \
     useradd --uid 1000 --gid stockula --shell /bin/bash --create-home stockula
@@ -92,6 +117,7 @@ COPY --chown=stockula:stockula examples/ examples/
 # Set up environment
 ENV VIRTUAL_ENV=/opt/venv
 ENV PATH="$VIRTUAL_ENV/bin:$PATH"
+ENV STOCKULA_VERSION="${VERSION}"
 
 # Install the package
 RUN /opt/venv/bin/python -m pip install -e .
