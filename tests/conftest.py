@@ -7,6 +7,25 @@ import numpy as np
 import pandas as pd
 import pytest
 
+
+# pytest-xdist support
+def pytest_configure(config):
+    """Configure pytest with xdist-specific markers."""
+    config.addinivalue_line(
+        "markers", "xdist_group(name): mark test to run in the same xdist worker"
+    )
+
+
+@pytest.fixture(scope="session")
+def worker_id(request):
+    """Get the xdist worker id for parallel test execution."""
+    return (
+        request.config.workerinput.get("workerid", "master")
+        if hasattr(request.config, "workerinput")
+        else "master"
+    )
+
+
 from stockula.backtesting import BacktestRunner
 from stockula.config import (
     BacktestConfig,
@@ -263,13 +282,17 @@ def mock_data_fetcher(mock_yfinance_ticker, sample_prices):
 
 
 @pytest.fixture(scope="session")
-def test_db_path():
-    """Create a persistent test database path for the session."""
-    from pathlib import Path
+def test_db_path(tmp_path_factory, worker_id):
+    """Create a persistent test database path for the session.
 
-    db_path = Path(__file__).parent / "data" / "test_stockula.db"
-    # Ensure directory exists
-    db_path.parent.mkdir(parents=True, exist_ok=True)
+    When using pytest-xdist, each worker gets its own database file.
+    """
+    if worker_id == "master":
+        # Not running in parallel mode
+        db_path = tmp_path_factory.mktemp("data") / "test_stockula.db"
+    else:
+        # Running with pytest-xdist, create unique db per worker
+        db_path = tmp_path_factory.mktemp(f"data_{worker_id}") / "test_stockula.db"
     return str(db_path)
 
 
@@ -439,6 +462,34 @@ def _seed_test_database(db: DatabaseManager):
 def temp_db_path(tmp_path):
     """Create a temporary database path."""
     return str(tmp_path / "test_stockula.db")
+
+
+@pytest.fixture(scope="function")
+def in_memory_database():
+    """Create an in-memory SQLite database for tests.
+
+    This is much faster than file-based databases and provides
+    complete isolation between tests.
+    """
+    import os
+
+    # Set test environment to skip migrations
+    os.environ["PYTEST_CURRENT_TEST"] = "true"
+
+    # Create in-memory database
+    db = DatabaseManager(":memory:")
+
+    # Create all tables
+    from sqlmodel import SQLModel
+
+    SQLModel.metadata.create_all(db.engine)
+
+    # Seed with minimal test data if needed
+    _seed_test_database(db)
+
+    yield db
+
+    # No cleanup needed for in-memory database
 
 
 @pytest.fixture(scope="function")

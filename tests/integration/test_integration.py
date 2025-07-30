@@ -15,14 +15,17 @@ from stockula.domain import DomainFactory
 class TestEndToEndWorkflow:
     """Test complete workflows."""
 
-    def test_config_to_portfolio_workflow(self, temp_config_file):
+    def test_config_to_portfolio_workflow(self, temp_config_file, mock_data_fetcher):
         """Test loading config and creating portfolio."""
         # Load config
         config = load_config(temp_config_file)
         assert isinstance(config, StockulaConfig)
 
-        # Create portfolio
-        factory = DomainFactory()
+        # Increase max position size to avoid allocation constraint errors
+        config.portfolio.max_position_size = 50.0
+
+        # Create portfolio with mock data fetcher
+        factory = DomainFactory(fetcher=mock_data_fetcher)
         portfolio = factory.create_portfolio(config)
 
         assert portfolio.name == "Test Portfolio"
@@ -31,59 +34,66 @@ class TestEndToEndWorkflow:
 
     def test_data_fetching_with_cache(self, temp_db_path, mock_yfinance_ticker):
         """Test data fetching with database caching."""
-        with patch("yfinance.Ticker", return_value=mock_yfinance_ticker):
+        with patch("yfinance.Ticker", return_value=mock_yfinance_ticker) as mock_yf:
             fetcher = DataFetcher(use_cache=True, db_path=temp_db_path)
 
+            # Use a specific date range that won't change
+            start_date = "2023-01-01"
+            end_date = "2023-01-31"
+
             # First fetch - should hit API and cache
-            data1 = fetcher.get_stock_data("AAPL", period="5d")
+            data1 = fetcher.get_stock_data("AAPL", start=start_date, end=end_date)
             assert not data1.empty
+            assert mock_yf.called  # First call should hit API
+
+            # Reset the mock
+            mock_yf.reset_mock()
 
             # Second fetch - should use cache
-            with patch("yfinance.Ticker") as mock_yf:
-                data2 = fetcher.get_stock_data("AAPL", period="5d")
-                assert not mock_yf.called  # Should not call API
-                assert len(data2) == len(data1)
+            data2 = fetcher.get_stock_data("AAPL", start=start_date, end=end_date)
+            assert not mock_yf.called  # Should not call API
+            assert len(data2) == len(data1)
 
     def test_full_analysis_workflow(
-        self, sample_stockula_config, mock_data_fetcher, backtest_data
+        self, sample_stockula_config, mock_data_fetcher, backtest_data, mock_container
     ):
         """Test complete analysis workflow."""
-        with patch("stockula.main.DataFetcher", return_value=mock_data_fetcher):
-            mock_data_fetcher.get_stock_data.return_value = backtest_data
+        # Mock the container to use our mock data fetcher
+        mock_data_fetcher.get_stock_data.return_value = backtest_data
 
-            factory = DomainFactory()
-            portfolio = factory.create_portfolio(sample_stockula_config)
+        factory = DomainFactory(fetcher=mock_data_fetcher)
+        portfolio = factory.create_portfolio(sample_stockula_config)
 
-            # Technical Analysis
-            from stockula.main import run_technical_analysis
+        # Technical Analysis
+        from stockula.main import run_technical_analysis
 
-            ta_results = []
-            for asset in portfolio.assets[:1]:  # Test with first asset
-                result = run_technical_analysis(asset.symbol, sample_stockula_config)
-                ta_results.append(result)
+        ta_results = []
+        for asset in portfolio.assets[:1]:  # Test with first asset
+            result = run_technical_analysis(asset.symbol, sample_stockula_config)
+            ta_results.append(result)
 
-            assert len(ta_results) == 1
-            assert ta_results[0]["ticker"] == "AAPL"
+        assert len(ta_results) == 1
+        assert ta_results[0]["ticker"] == "AAPL"
 
-            # Backtesting
-            from stockula.main import run_backtest
+        # Backtesting
+        from stockula.main import run_backtest
 
-            bt_results = []
-            for asset in portfolio.assets[:1]:
-                results = run_backtest(asset.symbol, sample_stockula_config)
-                bt_results.extend(results)
+        bt_results = []
+        for asset in portfolio.assets[:1]:
+            results = run_backtest(asset.symbol, sample_stockula_config)
+            bt_results.extend(results)
 
-            assert len(bt_results) > 0
+        assert len(bt_results) > 0
 
-            # Forecasting
-            from stockula.main import run_forecast
+        # Forecasting
+        from stockula.main import run_forecast
 
-            fc_results = []
-            for asset in portfolio.assets[:1]:
-                result = run_forecast(asset.symbol, sample_stockula_config)
-                fc_results.append(result)
+        fc_results = []
+        for asset in portfolio.assets[:1]:
+            result = run_forecast(asset.symbol, sample_stockula_config)
+            fc_results.append(result)
 
-            assert len(fc_results) == 1
+        assert len(fc_results) == 1
 
 
 @pytest.mark.integration

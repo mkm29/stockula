@@ -52,6 +52,7 @@ dev-dependencies = [
     "pytest-cov>=6.2.1",
     "mkdocs>=1.6.1",
     "mkdocs-material>=9.6.16",
+    "pytest-xdist>=3.8.0",
 ]
 
 [tool.coverage.run]
