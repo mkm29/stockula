@@ -3,8 +3,10 @@ name: Release Please
 
 "on":
   push:
-    branches:
-      - main
+    # branches:
+    #   - main
+    tags:
+      - 'v*'
 
 permissions:
   contents: write

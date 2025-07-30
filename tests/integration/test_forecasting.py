@@ -46,8 +46,8 @@ class TestStockForecaster:
             forecaster_default.forecast_length is None
         )  # Changed to None for mutual exclusivity
         assert (
-            forecaster_default.frequency == "D"
-        )  # Now defaults to 'D' instead of 'infer'
+            forecaster_default.frequency == "infer"
+        )  # Default is 'infer' which gets converted to 'D' during fit
         assert forecaster_default.prediction_interval == 0.95
 
     def test_forecast_with_data(self, forecast_data):

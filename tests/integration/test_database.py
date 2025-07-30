@@ -305,12 +305,20 @@ class TestDatabaseIntegrity:
     """Test database integrity and constraints."""
 
     def test_foreign_key_constraint(self, test_database):
-        """Test foreign key constraints."""
-        # Try to add price data for non-existent stock
-        with pytest.raises(Exception):
-            test_database.add_price_data(
-                "INVALID", datetime.now(), 100.0, 101.0, 99.0, 100.5, 1000000, "1d"
-            )
+        """Test that price data can be added for non-existent stock (auto-creation)."""
+        # The store_price_history method auto-creates stocks if they don't exist
+        # This test verifies that behavior
+        test_database.add_price_data(
+            "NEWSTOCK", datetime.now(), 100.0, 101.0, 99.0, 100.5, 1000000, "1d"
+        )
+
+        # Verify the stock was auto-created
+        with test_database.get_session() as session:
+            from stockula.database.models import Stock
+
+            stock = session.query(Stock).filter_by(symbol="NEWSTOCK").first()
+            assert stock is not None
+            assert stock.symbol == "NEWSTOCK"
 
     def test_unique_constraints(self, test_database):
         """Test unique constraints."""

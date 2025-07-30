@@ -49,3 +49,83 @@ if __name__ == '__main__':
 ```
 
 By implementing comprehensive unit tests, you can identify and fix bugs early in the development cycle, improve code quality, and gain confidence in the accuracy of your backtesting results.
+
+## Integration Testing with Dependency Injection
+
+When testing components that use dependency injection (like those using the `@inject` decorator from `dependency-injector`), you need to properly wire the container in your tests:
+
+```python
+from stockula.container import Container
+from unittest.mock import Mock
+
+def test_injected_function(self):
+    # Create container and override dependencies
+    container = Container()
+    mock_data_fetcher = Mock()
+    container.data_fetcher.override(mock_data_fetcher)
+    
+    # IMPORTANT: Wire the container to enable injection
+    container.wire(modules=["stockula.main"])
+    
+    # Now you can call the injected function
+    result = run_technical_analysis("AAPL", config)
+```
+
+## Testing Best Practices for Stockula
+
+### Mock Setup for Technical Indicators
+
+When mocking technical indicators that return pandas-like objects with `iloc` indexing:
+
+```python
+def create_iloc_mock(value):
+    iloc_mock = Mock()
+    iloc_mock.__getitem__ = Mock(return_value=value)
+    return iloc_mock
+
+# Setup indicator mock
+sma_mock = Mock()
+sma_mock.iloc = create_iloc_mock(150.0)
+mock_ta_instance.sma.return_value = sma_mock
+```
+
+### Database Testing
+
+The DatabaseManager automatically creates stocks if they don't exist when storing price data. This means foreign key constraint tests should verify auto-creation rather than expecting exceptions:
+
+```python
+def test_foreign_key_constraint(self, test_database):
+    # Price data can be added for non-existent stock (auto-creation)
+    test_database.add_price_data(
+        "NEWSTOCK", datetime.now(), 100.0, 101.0, 99.0, 100.5, 1000000, "1d"
+    )
+    
+    # Verify the stock was auto-created
+    with test_database.get_session() as session:
+        stock = session.query(Stock).filter_by(symbol="NEWSTOCK").first()
+        assert stock is not None
+```
+
+### Configuration Testing
+
+When testing functions that expect specific configuration structures, ensure your test configs include all required fields:
+
+```python
+# For backtest tests, include strategies
+sample_stockula_config.backtest.strategies = [
+    StrategyConfig(name="smacross", parameters={"fast_period": 10, "slow_period": 20})
+]
+```
+
+### Rich Console Output Testing
+
+When testing functions that use Rich for console output, assertions should check for the formatted output components rather than exact string matches:
+
+```python
+# Instead of:
+assert output == "SMA_20: 150.00"
+
+# Use:
+assert "SMA_20" in output
+assert "150.00" in output
+```

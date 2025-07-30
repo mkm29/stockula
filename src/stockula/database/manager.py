@@ -765,3 +765,25 @@ class DatabaseManager:
         )
         # Return the raw SQLite connection
         return self.engine.raw_connection().driver_connection
+
+    def add_stock_info(self, symbol: str, info: dict):
+        """Add stock info to database (backward compatibility)."""
+        self.store_stock_info(symbol, info)
+
+    def add_dividends(self, symbol: str, dividends_data: pd.Series):
+        """Add dividends data (backward compatibility)."""
+        self.store_dividends(symbol, dividends_data)
+
+    def add_splits(self, symbol: str, splits_data: pd.Series):
+        """Add splits data (backward compatibility)."""
+        self.store_splits(symbol, splits_data)
+
+    def add_options_data(
+        self,
+        symbol: str,
+        expiration: str,
+        calls_df: pd.DataFrame,
+        puts_df: pd.DataFrame,
+    ):
+        """Add options data (backward compatibility)."""
+        self.store_options_chain(symbol, expiration, calls_df, puts_df)

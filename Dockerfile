@@ -8,7 +8,7 @@
 FROM ghcr.io/astral-sh/uv:python3.13-bookworm-slim AS base
 
 # Build arguments for labels
-ARG VERSION=dev
+ARG VERSION="0.0.0"
 ARG BUILD_DATE
 ARG GIT_COMMIT
 ARG GIT_URL
