@@ -36,8 +36,8 @@ FROM base AS builder
 # Set working directory
 WORKDIR /app
 
-# Copy uv configuration files
-COPY pyproject.toml uv.lock ./
+# Copy uv configuration files and README (needed by hatchling)
+COPY pyproject.toml uv.lock README.md ./
 
 # Create virtual environment and install dependencies
 RUN uv venv /opt/venv --python 3.13
