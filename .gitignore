@@ -221,7 +221,7 @@ Thumbs.db
 *.swp
 *.swo
 *~
-CLAUDE.market_data
+CLAUDE.md
 .claude
 
 # Backup files

@@ -2,7 +2,7 @@
 
 ## [Unreleased]
 
-## [0.1.0](https://github.com/mkm29/stockula/releases/tag/v0.1.0) (2025-01-28)
+## [v0.1.0] - 2025-07-30
 
 ### Features
 
