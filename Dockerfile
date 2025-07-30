@@ -5,7 +5,7 @@
 # - https://pythonspeed.com/articles/activate-virtualenv-dockerfile/
 
 # Stage 1: Base image with uv and system dependencies
-FROM python:3.13-slim AS base
+FROM ghcr.io/astral-sh/uv:python3.13-bookworm-slim AS base
 
 # Build arguments for labels
 ARG VERSION=dev
@@ -103,8 +103,8 @@ RUN groupadd --gid 1000 stockula && \
 # Set working directory
 WORKDIR /app
 
-# Copy virtual environment from builder stage
-COPY --from=builder /opt/venv /opt/venv
+# Copy virtual environment from builder stage with correct ownership
+COPY --from=builder --chown=stockula:stockula /opt/venv /opt/venv
 
 # Copy source code and necessary files
 COPY --chown=stockula:stockula src/ src/
@@ -119,11 +119,9 @@ ENV VIRTUAL_ENV=/opt/venv
 ENV PATH="$VIRTUAL_ENV/bin:$PATH"
 ENV STOCKULA_VERSION="${VERSION}"
 
-# Install the package
-RUN /opt/venv/bin/python -m pip install -e .
-
-# Create directories for data and results
-RUN mkdir -p /app/data /app/results && \
+# Install the package in editable mode using uv and create directories
+RUN uv pip install --python /opt/venv/bin/python -e . && \
+    mkdir -p /app/data /app/results && \
     chown -R stockula:stockula /app
 
 # Switch to non-root user
