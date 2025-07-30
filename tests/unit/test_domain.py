@@ -589,13 +589,15 @@ class TestDomainFactoryAdvanced:
             factory = DomainFactory(fetcher=mock_data_fetcher)
             portfolio = factory.create_portfolio(config)
 
-            # All tickers should be included
-            assert len(portfolio.assets) == 5
+            # Only tickers with non-zero category allocation should be included
+            # VWO has 0% allocation for INTERNATIONAL category, so it's excluded
+            assert len(portfolio.assets) == 4
 
             # Check that quantities were calculated
-            # Note: Even VWO with 0% allocation gets shares due to aggressive redistribution
             for asset in portfolio.assets:
                 assert asset.quantity > 0
+                # VWO should not be in the portfolio
+                assert asset.ticker.symbol != "VWO"
 
     def test_ticker_registry_integration(self, mock_data_fetcher):
         """Test ticker registry integration with factory."""
