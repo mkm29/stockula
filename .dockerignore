@@ -107,5 +107,6 @@ docker-compose*.yml
 Jenkinsfile
 
 # Package manager files that are already copied
-uv.lock
-pyproject.toml
+# Note: These files are needed by Docker build, don't exclude them
+# uv.lock
+# pyproject.toml
