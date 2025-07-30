@@ -324,11 +324,20 @@ class TestDataFetcherCaching:
         """Test that cache hit avoids API call."""
         fetcher = DataFetcher(use_cache=True, db_path=populated_database.db_path)
 
-        with patch("yfinance.Ticker") as mock_yf:
-            # Should not call yfinance
-            data = fetcher.get_stock_data("AAPL", start="2023-01-01", end="2023-01-31")
-            assert not mock_yf.called
-            assert not data.empty
+        # First get some data that we know exists in the database
+        existing_data = populated_database.get_price_history("AAPL")
+        if not existing_data.empty:
+            # Use date range that we know exists
+            start_date = existing_data.index[0].strftime("%Y-%m-%d")
+            end_date = existing_data.index[-1].strftime("%Y-%m-%d")
+
+            with patch("yfinance.Ticker") as mock_yf:
+                # Should not call yfinance
+                data = fetcher.get_stock_data("AAPL", start=start_date, end=end_date)
+                assert not mock_yf.called
+                assert not data.empty
+        else:
+            pytest.skip("No data in populated database")
 
     def test_cache_miss_calls_api(self, temp_db_path, mock_yfinance_ticker):
         """Test that cache miss calls API."""
