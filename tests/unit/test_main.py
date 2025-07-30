@@ -786,6 +786,7 @@ class TestMainAdvanced:
         mock_asset = Mock()
         mock_asset.symbol = "AAPL"
         mock_asset.category = None
+        mock_asset.quantity = 1.0
         mock_portfolio = Mock()
         mock_portfolio.name = "Test Portfolio"
         mock_portfolio.initial_capital = 100000.0
@@ -1351,23 +1352,31 @@ class TestMainAdvanced:
 
         # Check output shows strategy summary elements
         captured = capsys.readouterr()
+        output_lower = captured.out.lower()
+
         # Strategy name should appear
-        assert "SMACROSS" in captured.out or "smacross" in captured.out
-        # Check for key format elements (flexible matching)
-        assert (
-            "$P_1$" in captured.out
-            or "P1" in captured.out
-            or "initial" in captured.out.lower()
-        )
-        assert (
-            "$P_2$" in captured.out
-            or "P2" in captured.out
-            or "final" in captured.out.lower()
-        )
-        assert "Strategy" in captured.out or "strategy" in captured.out.lower()
-        assert "Performance" in captured.out or "performance" in captured.out.lower()
-        assert "Start" in captured.out or "start" in captured.out.lower()
-        assert "End" in captured.out or "end" in captured.out.lower()
+        assert "SMACROSS" in captured.out or "smacross" in output_lower
+
+        # Check for portfolio value indicators (new format)
+        assert "portfolio value at" in output_lower
+
+        # Check for dates in the output
+        assert "2024-01-01" in captured.out  # Start date
+        assert "2025-07-25" in captured.out  # End date (from mock)
+
+        # Check for monetary values
+        assert "$109,500.00" in captured.out  # Initial portfolio value
+        assert "$122,640.00" in captured.out  # Final portfolio value
+
+        # Check for other key elements
+        assert "strategy" in output_lower
+        assert "performance" in output_lower
+        assert "start:" in output_lower
+        assert "end:" in output_lower
+        assert "average return" in output_lower
+        assert "winning stocks" in output_lower
+        assert "losing stocks" in output_lower
+        assert "total trades" in output_lower
 
     @patch("stockula.main.create_container")
     @patch("stockula.main.setup_logging")

@@ -1,11 +1,9 @@
 """Unit tests for forecasting module."""
 
 import logging
-import signal
 import sys
 import warnings
 from datetime import timedelta
-from io import StringIO
 from unittest.mock import Mock, patch
 
 import numpy as np
@@ -25,7 +23,7 @@ class TestSuppressAutoTSOutput:
         """Test that warnings are suppressed."""
         with suppress_autots_output():
             # This warning should be suppressed
-            warnings.warn("Test warning", UserWarning)
+            warnings.warn("Test warning", UserWarning, stacklevel=2)
             # No warning should be raised
 
     def test_suppress_stdout_when_not_debug(self):
@@ -91,7 +89,9 @@ class TestStockForecasterInitialization:
         """Test initialization with default parameters."""
         forecaster = StockForecaster()
 
-        assert forecaster.forecast_length == 14
+        assert (
+            forecaster.forecast_length is None
+        )  # Changed to None for mutual exclusivity
         assert forecaster.frequency == "infer"
         assert forecaster.prediction_interval == 0.95
         assert forecaster.num_validations == 2
@@ -144,7 +144,7 @@ class TestStockForecasterFit:
         """Test fitting with valid data."""
         mock_autots_class, mock_instance, mock_model = mock_autots
 
-        forecaster = StockForecaster()
+        forecaster = StockForecaster(forecast_length=14)  # Specify forecast_length
 
         # Set up signal handler mock
         with patch("stockula.forecasting.forecaster.signal.signal"):
@@ -159,7 +159,9 @@ class TestStockForecasterFit:
         # Check AutoTS parameters
         call_kwargs = mock_autots_class.call_args[1]
         assert call_kwargs["forecast_length"] == 14
-        assert call_kwargs["frequency"] == "infer"
+        assert (
+            call_kwargs["frequency"] == "D"
+        )  # "infer" is converted to "D" to avoid warnings
         assert call_kwargs["prediction_interval"] == 0.95
         assert call_kwargs["verbose"] == 0
         assert call_kwargs["no_negatives"] is True

@@ -15,9 +15,9 @@ Stockula is a comprehensive Python trading platform that provides tools for tech
     - [🏁 Getting Started](#-getting-started)
     - [📖 User Guide](#-user-guide)
     - [🔧 API Reference](#-api-reference)
-    - [🛠️ Development](#️-development)
+    - [🛠️ Development](#%EF%B8%8F-development)
     - [🔍 Help](#-help)
-  - [🏗️ Architecture](#️-architecture)
+  - [🏗️ Architecture](#%EF%B8%8F-architecture)
   - [📋 Requirements](#-requirements)
     - [Key Dependencies](#key-dependencies)
   - [🎨 Rich CLI Examples](#-rich-cli-examples)
@@ -34,7 +34,9 @@ Stockula is a comprehensive Python trading platform that provides tools for tech
 - **📊 Technical Analysis**: 40+ indicators (SMA, EMA, RSI, MACD, Bollinger Bands, etc.)
 - **🔄 Backtesting**: Test trading strategies with realistic broker costs and commission structures
 - **📈 Data Fetching**: Real-time and historical market data via yfinance with intelligent SQLite caching
-- **🔮 Price Forecasting**: Automated time series forecasting using AutoTS with train/test evaluation and accuracy metrics
+- **🔮 Price Forecasting**: Automated time series forecasting using AutoTS with two modes:
+  - Future prediction mode: Forecast N days from today
+  - Historical evaluation mode: Train/test split with accuracy metrics (RMSE, MAE, MAPE)
 - **🎨 Rich CLI Interface**: Beautiful progress bars, tables, and colored output
 - **🗄️ Database Caching**: Automatic SQLite caching for offline analysis and fast data access
 - **🚀 Modern Python**: Built with uv for fast package management and Pydantic for configuration
@@ -69,8 +71,8 @@ uv run python -m stockula.main
 
 # Run specific analysis modes
 uv run python -m stockula.main --ticker GOOGL --mode ta        # Technical analysis
-uv run python -m stockula.main --ticker MSFT --mode backtest  # Backtesting
-uv run python -m stockula.main --ticker NVDA --mode forecast  # Forecasting
+uv run python -m stockula.main --ticker MSFT --mode backtest  # Backtesting (results sorted by return, highest first)
+uv run python -m stockula.main --ticker NVDA --mode forecast  # Forecasting (results sorted by return, highest first)
 ```
 
 ### Configuration Example
@@ -99,6 +101,37 @@ backtest:
         fast_period: 10
         slow_period: 20
 ```
+
+### Forecast Evaluation
+
+When running forecasts in evaluation mode (with train/test split), Stockula provides accuracy metrics:
+
+```bash
+               Portfolio Value               
+┏━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━┳━━━━━━━━━━━━┓
+┃ Metric          ┃ Date       ┃ Value      ┃
+┡━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━╇━━━━━━━━━━━━┩
+│ Observed Value  │ 2025-04-01 │ $20,000.00 │
+│ Predicted Value │ 2025-04-30 │ $20,201.99 │
+│ Accuracy        │ 2025-04-30 │ 92.4190%   │
+└─────────────────┴────────────┴────────────┘
+```
+
+**How Accuracy is Calculated:**
+
+Portfolio accuracy is calculated as: **Accuracy = 100% - MAPE**
+
+Where MAPE (Mean Absolute Percentage Error) measures the average percentage difference between predicted and actual prices. For example:
+
+- If a stock's MAPE is 6.11%, its accuracy is 93.89%
+- The portfolio accuracy is the average of all individual stock accuracies
+
+This provides an intuitive measure where:
+
+- 100% = Perfect prediction
+- 90%+ = Excellent forecast
+- 80-90% = Good forecast
+- \<80% = Consider improving model or data
 
 ## 📚 Documentation
 
@@ -249,6 +282,8 @@ graph TB
 
 ### Strategy Summaries
 
+Strategy summaries are displayed in descending order by "Return During Period" (highest returns first):
+
 ```bash
 ╭─────────────────────────────────────────────────── STRATEGY: DOUBLEEMACROSS ────────────────────────────────────────────────────╮
 │                                                                                                                                 │
@@ -283,7 +318,9 @@ MIT License - see [LICENSE](LICENSE) file for details.
 
 ## 🤝 Contributing
 
-Contributions are welcome! Please see our [Contributing Guide](docs/development/contributing/) for development setup and guidelines.
+Contributions are welcome! Please see our [Contributing Guide](CONTRIBUTING.md) for development setup and guidelines.
+
+This project uses [Conventional Commits](https://www.conventionalcommits.org/) and [Release Please](https://github.com/googleapis/release-please) for automated releases.
 
 ______________________________________________________________________
 

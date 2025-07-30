@@ -274,7 +274,7 @@ class TestForecastConfig:
     def test_forecast_config_defaults(self):
         """Test default forecast configuration."""
         config = ForecastConfig()
-        assert config.forecast_length == 14
+        assert config.forecast_length is None  # Changed to None for mutual exclusivity
         assert config.frequency == "infer"
         assert config.prediction_interval == 0.9
         assert config.model_list == "fast"
@@ -295,6 +295,48 @@ class TestForecastConfig:
         assert config.model_list == "default"
         assert config.ensemble == "simple"
         assert config.max_generations == 10
+
+    def test_forecast_length_and_test_dates_mutual_exclusivity(self):
+        """Test that forecast_length and test dates are mutually exclusive."""
+        # Should raise error when both forecast_length and test dates are provided
+        with pytest.raises(
+            ValueError, match="Cannot specify both forecast_length and test dates"
+        ):
+            ForecastConfig(
+                forecast_length=14,
+                train_start_date="2025-01-01",
+                train_end_date="2025-03-31",
+                test_start_date="2025-04-01",
+                test_end_date="2025-04-30",
+            )
+
+    def test_forecast_with_test_dates_requires_train_dates(self):
+        """Test that test dates require train dates."""
+        # Should raise error when test dates are provided without train dates
+        with pytest.raises(
+            ValueError,
+            match="When using test dates for evaluation, train dates must also be specified",
+        ):
+            ForecastConfig(test_start_date="2025-04-01", test_end_date="2025-04-30")
+
+    def test_forecast_with_only_forecast_length(self):
+        """Test configuration with only forecast_length."""
+        config = ForecastConfig(forecast_length=30)
+        assert config.forecast_length == 30
+        assert config.test_start_date is None
+        assert config.test_end_date is None
+
+    def test_forecast_with_only_test_dates(self):
+        """Test configuration with only test dates."""
+        config = ForecastConfig(
+            train_start_date="2025-01-01",
+            train_end_date="2025-03-31",
+            test_start_date="2025-04-01",
+            test_end_date="2025-04-30",
+        )
+        assert config.forecast_length is None
+        assert config.test_start_date is not None
+        assert config.test_end_date is not None
 
 
 class TestTechnicalAnalysisConfig:
@@ -394,8 +436,10 @@ class TestConfigLoading:
         with pytest.raises(FileNotFoundError, match="Configuration file not found"):
             load_config("nonexistent.yaml")
 
-    def test_load_config_no_file_uses_defaults(self):
+    def test_load_config_no_file_uses_defaults(self, tmp_path, monkeypatch):
         """Test loading configuration with no file uses defaults."""
+        # Change to temp directory to ensure no config files are found
+        monkeypatch.chdir(tmp_path)
         config = load_config(None)
         assert isinstance(config, StockulaConfig)
         assert config.portfolio.name == "Main Portfolio"  # Default

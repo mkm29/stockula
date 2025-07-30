@@ -1,3 +1,4 @@
+---
 # Stockula Configuration Example
 # Copy this file to config.yaml and modify as needed
 # Data fetching configuration
@@ -8,15 +9,15 @@ data:
     - MSFT
     - TSLA
     - AMZN
-  start_date: "2023-01-01" # Optional: defaults to 1 year ago
-  end_date: null # Optional: defaults to today
-  interval: "1d" # 1m, 5m, 15m, 30m, 60m, 1d, 5d, 1wk, 1mo
+  start_date: "2023-01-01"  # Optional: defaults to 1 year ago
+  end_date: null  # Optional: defaults to today
+  interval: "1d"  # 1m, 5m, 15m, 30m, 60m, 1d, 5d, 1wk, 1mo
 # Backtesting configuration
 backtest:
   initial_cash: 10000.0
-  commission: 0.002 # 0.2% per trade
-  margin: 1.0 # No leverage by default
-  optimize: false # Enable parameter optimization
+  commission: 0.002  # 0.2% per trade
+  margin: 1.0  # No leverage by default
+  optimize: false  # Enable parameter optimization
   # Strategies to test
   strategies:
     - name: SMACross
@@ -44,14 +45,14 @@ backtest:
       overbought_threshold: [70, 75, 80]
 # Forecasting configuration
 forecast:
-  forecast_length: 30 # Days to forecast
-  frequency: "infer" # Auto-detect frequency
-  prediction_interval: 0.95 # 95% confidence interval
-  model_list: "fast" # fast, default, slow, parallel
-  ensemble: "auto" # auto, simple, distance, horizontal
-  max_generations: 5 # Model search generations
-  num_validations: 2 # Validation splits
-  validation_method: "backwards" # backwards, seasonal, similarity
+  # forecast_length: 30  # Days to forecast
+  frequency: "infer"  # Auto-detect frequency
+  prediction_interval: 0.95  # 95% confidence interval
+  model_list: "default"  # fast, default, slow, parallel
+  ensemble: "auto"  # auto, simple, distance, horizontal
+  max_generations: 5  # Model search generations
+  num_validations: 2  # Validation splits
+  validation_method: "backwards"  # backwards, seasonal, similarity
 # Technical analysis configuration
 technical_analysis:
   indicators:
@@ -75,6 +76,6 @@ technical_analysis:
   atr_period: 14
 # Output configuration
 output:
-  format: "console" # console, json, csv
+  format: "console"  # console, json, csv
   save_results: true
   results_dir: "./results"

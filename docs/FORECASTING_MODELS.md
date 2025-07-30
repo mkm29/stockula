@@ -10,14 +10,14 @@ Stockula uses AutoTS for time series forecasting with carefully curated model li
 
 The `FAST_FINANCIAL_MODEL_LIST` contains 6 carefully selected models that provide the best balance of speed and accuracy for stock price forecasting:
 
-| Model | Description | Speed | Best For |
-|-------|-------------|-------|----------|
-| **LastValueNaive** | Uses the last observed value as the forecast | Very Fast (< 1s) | Baseline predictions, volatile stocks |
-| **AverageValueNaive** | Uses a moving average of recent values | Very Fast (< 1s) | Smoothing short-term volatility |
-| **SeasonalNaive** | Captures and projects seasonal patterns | Fast (< 5s) | Stocks with clear weekly/monthly patterns |
-| **ETS** | Exponential Smoothing (Error, Trend, Seasonality) | Fast (5-10s) | Trending stocks with seasonal components |
-| **ARIMA** | AutoRegressive Integrated Moving Average | Moderate (10-20s) | Well-behaved time series with clear patterns |
-| **Theta** | Statistical decomposition method | Fast (5-10s) | Robust general-purpose forecasting |
+| Model                 | Description                                       | Speed             | Best For                                     |
+| --------------------- | ------------------------------------------------- | ----------------- | -------------------------------------------- |
+| **LastValueNaive**    | Uses the last observed value as the forecast      | Very Fast (< 1s)  | Baseline predictions, volatile stocks        |
+| **AverageValueNaive** | Uses a moving average of recent values            | Very Fast (< 1s)  | Smoothing short-term volatility              |
+| **SeasonalNaive**     | Captures and projects seasonal patterns           | Fast (< 5s)       | Stocks with clear weekly/monthly patterns    |
+| **ETS**               | Exponential Smoothing (Error, Trend, Seasonality) | Fast (5-10s)      | Trending stocks with seasonal components     |
+| **ARIMA**             | AutoRegressive Integrated Moving Average          | Moderate (10-20s) | Well-behaved time series with clear patterns |
+| **Theta**             | Statistical decomposition method                  | Fast (5-10s)      | Robust general-purpose forecasting           |
 
 **Total execution time**: 15-30 seconds per symbol with default settings
 
@@ -82,25 +82,25 @@ AutoTS includes many models that are problematic for stock data:
 Our financial models were selected based on:
 
 1. **Numerical Stability** - No domain errors or convergence issues
-2. **Speed** - Complete forecasts in reasonable time
-3. **Accuracy** - Proven track record with financial time series
-4. **Robustness** - Handle missing data and outliers gracefully
+1. **Speed** - Complete forecasts in reasonable time
+1. **Accuracy** - Proven track record with financial time series
+1. **Robustness** - Handle missing data and outliers gracefully
 
 ## Performance Optimization
 
 ### Speed Tips
 
 1. **Use Fast Models**: Default `model_list="fast"` for quick results
-2. **Reduce Generations**: Set `max_generations=1` for fastest execution
-3. **Increase Workers**: Set `max_workers=8` if you have 8+ CPU cores
-4. **Limit Data**: Use only necessary historical data (e.g., 1 year)
+1. **Reduce Generations**: Set `max_generations=1` for fastest execution
+1. **Increase Workers**: Set `max_workers=8` if you have 8+ CPU cores
+1. **Limit Data**: Use only necessary historical data (e.g., 1 year)
 
 ### Accuracy Tips
 
 1. **Use Full Models**: Set `model_list="financial"` for best results
-2. **Increase Generations**: Set `max_generations=5` for thorough search
-3. **Add Validations**: Set `num_validations=3` for better model selection
-4. **More Data**: Use 2-3 years of historical data
+1. **Increase Generations**: Set `max_generations=5` for thorough search
+1. **Add Validations**: Set `num_validations=3` for better model selection
+1. **More Data**: Use 2-3 years of historical data
 
 ## Example Usage
 
@@ -133,8 +133,9 @@ Using fast financial model list (6 models) for Close
 ```
 
 This confirms:
+
 - Number of parallel workers processing symbols
-- Model evolution generations 
+- Model evolution generations
 - Validation splits for model selection
 - Which model list is being used
 

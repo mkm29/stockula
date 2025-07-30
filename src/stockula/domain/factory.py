@@ -285,6 +285,11 @@ class DomainFactory:
                 logger.warning(f"No tickers found for category {category}")
                 continue
 
+            # Skip categories with 0% allocation
+            if ratio == 0:
+                logger.debug(f"Skipping {category} - 0% allocation")
+                continue
+
             category_capital = target_capital * ratio
             category_tickers = tickers_by_category[category_upper]
             category_allocations[category] = {
@@ -322,36 +327,66 @@ class DomainFactory:
                     0  # No unused capital with fractional shares
                 )
             else:
-                # Integer shares: optimize allocation to use maximum capital
+                # Integer shares: optimize allocation for balanced portfolio
                 remaining_capital = category_capital
                 ticker_quantities = {}
 
-                # Start with minimum 1 share per ticker that we can afford
-                for ticker_config in category_tickers:
+                # Calculate target value per ticker for balanced allocation
+                target_value_per_ticker = category_capital / len(category_tickers)
+
+                # Sort tickers by price to allocate more expensive ones first
+                sorted_tickers = sorted(
+                    category_tickers,
+                    key=lambda t: calculation_prices[t.symbol],
+                    reverse=True,
+                )
+
+                # First pass: Try to get each ticker close to its target value
+                for ticker_config in sorted_tickers:
                     price = calculation_prices[ticker_config.symbol]
+                    symbol = ticker_config.symbol
+
+                    # Calculate ideal number of shares for this ticker
+                    ideal_shares = target_value_per_ticker / price
+
+                    # Round to nearest integer, but at least 1 if we can afford it
                     if remaining_capital >= price:
-                        ticker_quantities[ticker_config.symbol] = 1
-                        remaining_capital -= price
+                        # For expensive stocks, round down to conserve capital
+                        # For cheap stocks, round to nearest to better match target
+                        if price > target_value_per_ticker * 0.5:
+                            target_shares = max(1, int(ideal_shares))
+                        else:
+                            target_shares = max(1, round(ideal_shares))
+
+                        # Don't exceed available capital
+                        max_affordable = int(remaining_capital / price)
+                        actual_shares = min(target_shares, max_affordable)
+
+                        ticker_quantities[symbol] = actual_shares
+                        remaining_capital -= actual_shares * price
                     else:
-                        ticker_quantities[ticker_config.symbol] = 0
+                        ticker_quantities[symbol] = 0
 
-                # Greedily allocate remaining capital to maximize utilization
-                while remaining_capital > 0:
-                    best_symbol = None
-                    best_price = float("inf")
+                # Second pass: Distribute remaining capital more evenly
+                # Sort by how far each ticker is from its target value
+                ticker_distances = []
+                for ticker_config in category_tickers:
+                    symbol = ticker_config.symbol
+                    price = calculation_prices[symbol]
+                    current_value = ticker_quantities[symbol] * price
+                    distance_from_target = target_value_per_ticker - current_value
+                    if distance_from_target > price:  # Can add at least one more share
+                        ticker_distances.append((symbol, distance_from_target, price))
 
-                    # Find the most expensive stock we can still afford
-                    for ticker_config in category_tickers:
-                        price = calculation_prices[ticker_config.symbol]
-                        if price <= remaining_capital and price < best_price:
-                            best_price = price
-                            best_symbol = ticker_config.symbol
+                # Sort by distance from target (largest distance first)
+                ticker_distances.sort(key=lambda x: x[1], reverse=True)
 
-                    if best_symbol is None:
-                        break  # Can't afford any more shares
-
-                    ticker_quantities[best_symbol] += 1
-                    remaining_capital -= best_price
+                # Allocate remaining capital to stocks furthest from their target
+                for symbol, distance, price in ticker_distances:
+                    while remaining_capital >= price and distance > price:
+                        ticker_quantities[symbol] += 1
+                        remaining_capital -= price
+                        distance -= price
 
                 # Store results and calculate actual costs
                 for ticker_config in category_tickers:
@@ -369,43 +404,95 @@ class DomainFactory:
                 category_unused[category] = remaining_capital
                 logger.debug(f"  Category unused capital: ${remaining_capital:.2f}")
 
-        # Second pass: Aggressively redistribute ALL remaining capital to maximize utilization
+        # Second pass: Redistribute remaining capital for better balance
         if not config.portfolio.allow_fractional_shares:
             # Calculate remaining capital from initial investment (not just category leftovers)
             remaining_capital = config.portfolio.initial_capital - total_allocated
             logger.debug(
-                f"\nAggressive redistribution of remaining capital: ${remaining_capital:.2f}"
+                f"\nRedistributing remaining capital for balance: ${remaining_capital:.2f}"
             )
 
-            # Create a single pool of all tickers sorted by price (cheapest first for maximum shares)
-            all_tickers_with_prices = []
-            for category, allocation_info in category_allocations.items():
-                for ticker_config in allocation_info["tickers"]:
-                    symbol = ticker_config.symbol
-                    price = calculation_prices[symbol]
-                    all_tickers_with_prices.append((symbol, price))
+            # Calculate current portfolio values and identify underweight positions
+            ticker_values = {}
+            total_value = 0
+            for symbol, quantity in calculated_quantities.items():
+                if quantity > 0:
+                    value = quantity * calculation_prices[symbol]
+                    ticker_values[symbol] = value
+                    total_value += value
 
-            # Sort by price (cheapest first) to maximize number of additional shares
-            all_tickers_with_prices.sort(key=lambda x: x[1])
+            # Calculate average position value (excluding zero positions)
+            positions_with_shares = sum(
+                1 for q in calculated_quantities.values() if q > 0
+            )
+            if positions_with_shares > 0:
+                avg_position_value = total_value / positions_with_shares
+            else:
+                avg_position_value = 0
 
-            # Redistribute ALL remaining capital across all tickers
-            while remaining_capital > 0:
+            # Redistribute to positions below average
+            max_iterations = 100  # Prevent infinite loops
+            iteration = 0
+            while remaining_capital > 0 and iteration < max_iterations:
+                iteration += 1
                 any_allocation = False
 
-                # Try to buy one more share of the cheapest affordable stock
-                for symbol, price in all_tickers_with_prices:
+                # Find positions below average that we can add to
+                underweight_positions = []
+                for symbol, quantity in calculated_quantities.items():
+                    if quantity > 0:  # Only consider positions we already have
+                        current_value = ticker_values.get(symbol, 0)
+                        price = calculation_prices[symbol]
+
+                        # Check if below average and we can afford more
+                        if (
+                            current_value < avg_position_value * 0.9
+                            and price <= remaining_capital
+                        ):
+                            distance_from_avg = avg_position_value - current_value
+                            underweight_positions.append(
+                                (symbol, distance_from_avg, price)
+                            )
+
+                # Sort by distance from average (most underweight first)
+                underweight_positions.sort(key=lambda x: x[1], reverse=True)
+
+                # Add shares to most underweight positions
+                for symbol, distance, price in underweight_positions:
                     if price <= remaining_capital:
                         calculated_quantities[symbol] += 1
                         remaining_capital -= price
                         total_allocated += price
+                        ticker_values[symbol] += price
                         any_allocation = True
                         logger.debug(
-                            f"  Redistributed: +1 {symbol} share (${price:.2f})"
+                            f"  Balanced redistribution: +1 {symbol} share (${price:.2f})"
                         )
-                        break  # Start over with cheapest stock
+                        break  # Recalculate after each addition
 
                 if not any_allocation:
-                    break  # Can't afford any more shares
+                    # If no underweight positions, add to smallest positions
+                    smallest_positions = sorted(
+                        [
+                            (s, ticker_values.get(s, 0), calculation_prices[s])
+                            for s in calculated_quantities.keys()
+                            if calculated_quantities[s] > 0
+                            and calculation_prices[s] <= remaining_capital
+                        ],
+                        key=lambda x: x[1],
+                    )
+
+                    if smallest_positions:
+                        symbol, current_value, price = smallest_positions[0]
+                        calculated_quantities[symbol] += 1
+                        remaining_capital -= price
+                        total_allocated += price
+                        ticker_values[symbol] = current_value + price
+                        logger.debug(
+                            f"  Final redistribution: +1 {symbol} share (${price:.2f})"
+                        )
+                    else:
+                        break  # Can't afford any more shares
 
             logger.debug(f"Final unused capital: ${remaining_capital:.2f}")
 
@@ -451,9 +538,15 @@ class DomainFactory:
             )
 
             for ticker_config in tickers_to_add:
-                calculated_quantity = calculated_quantities.get(ticker_config.symbol)
-                asset = self._create_asset(ticker_config, calculated_quantity)
-                portfolio.add_asset(asset)
+                calculated_quantity = calculated_quantities.get(ticker_config.symbol, 0)
+                # Skip tickers with 0 allocation (e.g., from categories with 0% ratio)
+                if calculated_quantity > 0:
+                    asset = self._create_asset(ticker_config, calculated_quantity)
+                    portfolio.add_asset(asset)
+                else:
+                    logger.debug(
+                        f"Skipping {ticker_config.symbol} - 0 shares allocated"
+                    )
         elif config.portfolio.dynamic_allocation:
             logger.info(
                 "Using dynamic allocation - calculating quantities based on allocation percentages/amounts..."

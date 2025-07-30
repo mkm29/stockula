@@ -62,6 +62,11 @@ class SuppressAutoTSOutput:
         # Ignore prophet plotly warnings
         warnings.filterwarnings("ignore", message="Importing plotly failed")
 
+        # Prophet warnings
+        warnings.filterwarnings(
+            "ignore", message=".*Optimization terminated abnormally.*", module="prophet"
+        )
+
         # Suppress numerical warnings from sklearn, numpy, and statsmodels
         warnings.filterwarnings(
             "ignore", category=RuntimeWarning, message="divide by zero encountered"
@@ -110,6 +115,23 @@ class SuppressAutoTSOutput:
             message=".*maximum likelihood optimization failed.*",
         )
         warnings.filterwarnings("ignore", category=RuntimeWarning, module="statsmodels")
+
+        # ARDL model warnings
+        warnings.filterwarnings(
+            "ignore",
+            message=".*divide by zero encountered in matmul.*",
+            module="statsmodels.tsa.ardl",
+        )
+        warnings.filterwarnings(
+            "ignore",
+            message=".*overflow encountered in matmul.*",
+            module="statsmodels.tsa.ardl",
+        )
+        warnings.filterwarnings(
+            "ignore",
+            message=".*invalid value encountered in matmul.*",
+            module="statsmodels.tsa.ardl",
+        )
 
         # Joblib warnings
         warnings.filterwarnings("ignore", category=UserWarning, module="joblib")
@@ -191,6 +213,16 @@ class SuppressAutoTSOutput:
                         "2022-",
                         "2021-",
                         "2020-",
+                        # Prophet warnings
+                        "Optimization terminated abnormally",
+                        "Falling back to Newton",
+                        "WARNI",
+                        "prophet.models",
+                        # Statsmodels ARDL warnings
+                        "divide by zero encountered in matmul",
+                        "overflow encountered in matmul",
+                        "invalid value encountered in matmul",
+                        "No anomalies detected",
                     ]
 
                     if any(pattern in s for pattern in suppress_patterns):
@@ -260,11 +292,13 @@ class StockForecaster:
         "MultivariateRegression",  # Multiple regression
         "WindowRegression",  # Rolling window regression
         "DatepartRegression",  # Date-based features
-        "UnivariateMotif",  # Pattern recognition
-        "MultivariateMotif",  # Multi-pattern recognition
+        # Note: Motif models removed to avoid "k too large" warnings with small datasets
+        # "UnivariateMotif",  # Pattern recognition
+        # "MultivariateMotif",  # Multi-pattern recognition
         "NVAR",  # Neural VAR
         "Theta",  # Theta method
-        "ARDL",  # Autoregressive distributed lag
+        # Note: ARDL removed due to numerical instability with financial data
+        # "ARDL",  # Autoregressive distributed lag
     ]
 
     # Ultra-fast models for quick results
@@ -285,7 +319,7 @@ class StockForecaster:
 
     def __init__(
         self,
-        forecast_length: int = 14,
+        forecast_length: int | None = None,
         frequency: str = "infer",
         prediction_interval: float = 0.95,
         ensemble: str | None = "auto",
@@ -299,7 +333,7 @@ class StockForecaster:
         """Initialize the stock forecaster.
 
         Args:
-            forecast_length: Number of periods to forecast
+            forecast_length: Number of periods to forecast (None for evaluation mode)
             frequency: Data frequency ('infer' to detect automatically)
             prediction_interval: Confidence interval for predictions (0-1)
             ensemble: Ensemble method or None
@@ -422,9 +456,29 @@ class StockForecaster:
                         "[cyan]Training models on historical data...", total=None
                     )
 
+                    # Use a default forecast length if None (will be overridden in evaluation mode)
+                    forecast_length_to_use = (
+                        self.forecast_length if self.forecast_length is not None else 14
+                    )
+
+                    # Try to infer frequency from data if set to 'infer'
+                    freq_to_use = self.frequency
+                    if self.frequency == "infer":
+                        try:
+                            # Try to infer frequency from data
+                            inferred_freq = pd.infer_freq(data_for_model["date"])
+                            if inferred_freq:
+                                freq_to_use = inferred_freq
+                            else:
+                                # If inference fails, default to 'D' to avoid AutoTS warnings
+                                freq_to_use = "D"
+                        except Exception:
+                            # If inference fails, default to 'D' to avoid warnings
+                            freq_to_use = "D"
+
                     self.model = AutoTS(
-                        forecast_length=self.forecast_length,
-                        frequency=self.frequency,
+                        forecast_length=forecast_length_to_use,
+                        frequency=freq_to_use,
                         prediction_interval=self.prediction_interval,
                         ensemble=ensemble,
                         model_list=actual_model_list,
@@ -479,9 +533,29 @@ class StockForecaster:
                 # No progress display (for worker threads)
                 n_jobs_value = "auto"
 
+                # Use a default forecast length if None (will be overridden in evaluation mode)
+                forecast_length_to_use = (
+                    self.forecast_length if self.forecast_length is not None else 14
+                )
+
+                # Try to infer frequency from data if set to 'infer'
+                freq_to_use = self.frequency
+                if self.frequency == "infer":
+                    try:
+                        # Try to infer frequency from data
+                        inferred_freq = pd.infer_freq(data_for_model["date"])
+                        if inferred_freq:
+                            freq_to_use = inferred_freq
+                        else:
+                            # If inference fails, default to 'D' to avoid AutoTS warnings
+                            freq_to_use = "D"
+                    except Exception:
+                        # If inference fails, default to 'D' to avoid warnings
+                        freq_to_use = "D"
+
                 self.model = AutoTS(
-                    forecast_length=self.forecast_length,
-                    frequency=self.frequency,
+                    forecast_length=forecast_length_to_use,
+                    frequency=freq_to_use,
                     prediction_interval=self.prediction_interval,
                     ensemble=ensemble,
                     model_list=actual_model_list,
@@ -614,8 +688,37 @@ class StockForecaster:
                 symbol, test_start_date, test_end_date
             )
 
-        # Fit model on training data
-        self.fit(train_data, target_column, **kwargs)
+            # If forecast_length is None (evaluation mode), calculate it from test period
+            if self.forecast_length is None:
+                # Calculate the number of business days in the test period
+                import pandas as pd
+
+                test_start = pd.to_datetime(test_start_date)
+                test_end = pd.to_datetime(test_end_date)
+
+                # Count business days between test start and end
+                business_days = pd.bdate_range(start=test_start, end=test_end)
+                temp_forecast_length = len(business_days)
+
+                logger.debug(
+                    f"Calculated forecast length from test period: {temp_forecast_length} business days"
+                )
+
+                # Temporarily set forecast length for this evaluation
+                original_forecast_length = self.forecast_length
+                self.forecast_length = temp_forecast_length
+
+                # Fit model on training data with calculated forecast length
+                self.fit(train_data, target_column, **kwargs)
+
+                # Restore original forecast length
+                self.forecast_length = original_forecast_length
+            else:
+                # Use specified forecast length
+                self.fit(train_data, target_column, **kwargs)
+        else:
+            # No test data, just fit normally
+            self.fit(train_data, target_column, **kwargs)
 
         # Generate predictions
         predictions = self.predict()
@@ -632,8 +735,8 @@ class StockForecaster:
                 # Calculate residuals and metrics
                 residuals = actual_values - forecast_values
 
-                from sklearn.metrics import mean_absolute_error, mean_squared_error
                 import numpy as np
+                from sklearn.metrics import mean_absolute_error, mean_squared_error
 
                 mae = mean_absolute_error(actual_values, forecast_values)
                 mse = mean_squared_error(actual_values, forecast_values)
@@ -783,8 +886,8 @@ class StockForecaster:
         actual_values = actual_data.loc[forecast.index, target_column]
 
         # Calculate metrics
-        from sklearn.metrics import mean_absolute_error, mean_squared_error
         import numpy as np
+        from sklearn.metrics import mean_absolute_error, mean_squared_error
 
         mae = mean_absolute_error(actual_values, forecast)
         mse = mean_squared_error(actual_values, forecast)
