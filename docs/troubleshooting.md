@@ -498,6 +498,68 @@ uv run python -m stockula.database.cli stats
 uv run python -m stockula.database.cli query AAPL --limit 5
 ```
 
+## Testing Issues
+
+### Dependency Injection Test Failures
+
+**Issue**: Tests fail with "AttributeError: 'Provide' object has no attribute 'get_stock_data'"
+
+```
+AttributeError: 'Provide' object has no attribute 'get_stock_data'
+```
+
+**Solution**: Wire the container in your test setup:
+
+```python
+from stockula.container import Container
+
+container = Container()
+container.data_fetcher.override(mock_data_fetcher)
+container.wire(modules=["stockula.main"])  # This is required!
+```
+
+### Mock Object Errors
+
+**Issue**: "TypeError: 'Mock' object is not subscriptable"
+
+**Solution**: Create proper mock objects that support pandas-like operations:
+
+```python
+def create_iloc_mock(value):
+    iloc_mock = Mock()
+    iloc_mock.__getitem__ = Mock(return_value=value)
+    return iloc_mock
+
+sma_mock = Mock()
+sma_mock.iloc = create_iloc_mock(150.0)
+```
+
+### Rich Console Output in Tests
+
+**Issue**: Test assertions fail due to Rich table formatting
+
+**Solution**: Check for content rather than exact format:
+
+```python
+# Instead of: assert output == "SMA_20: 150.00"
+assert "SMA_20" in output
+assert "150.00" in output
+```
+
+### Database Test Issues
+
+**Issue**: Foreign key constraint tests fail because stocks are auto-created
+
+**Solution**: Update tests to verify auto-creation behavior:
+
+```python
+# Stocks are auto-created when storing price data
+test_database.add_price_data("NEWSTOCK", ...)
+# Verify the stock was created
+stock = session.query(Stock).filter_by(symbol="NEWSTOCK").first()
+assert stock is not None
+```
+
 ## FAQ
 
 **Q: Why is forecasting so slow?**

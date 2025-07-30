@@ -2,6 +2,17 @@
 
 ## [Unreleased]
 
+### Bug Fixes
+
+- **Test Suite Fixes**: Fixed multiple integration test failures
+  - Added backward compatibility methods to DatabaseManager (`add_stock_info`, `add_dividends`, `add_splits`, `add_options_data`)
+  - Fixed dependency injection issues in tests by properly wiring the container with `container.wire(modules=["stockula.main"])`
+  - Updated test assertions to match Rich table formatting output
+  - Fixed `StockForecaster` test to expect correct default frequency value ('infer' instead of 'D')
+  - Updated foreign key constraint test to reflect actual behavior where stocks are auto-created
+  - Fixed mock object setup for technical indicators to properly support subscriptable operations
+  - Added missing strategy configuration to backtest tests
+
 ## [v0.1.0] - 2025-07-30
 
 ### Features
