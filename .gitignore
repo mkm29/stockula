@@ -166,7 +166,7 @@ cython_debug/
 
 # uv
 .uv/
-uv.lock
+# uv.lock
 
 # Project-specific ignores
 # ========================
