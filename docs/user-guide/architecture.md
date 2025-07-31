@@ -10,7 +10,7 @@ graph TB
         CLI[CLI main.py]
         Config[Configuration<br/>.config.yaml]
     end
-    
+
     subgraph "Core Domain"
         Factory[Domain Factory]
         Portfolio[Portfolio]
@@ -18,24 +18,24 @@ graph TB
         Ticker[Ticker]
         Category[Category]
     end
-    
+
     subgraph "Data Layer"
         Fetcher[Data Fetcher<br/>yfinance wrapper]
         DB[(SQLite Database<br/>stockula.db)]
         Cache[Cache Manager]
     end
-    
+
     subgraph "Analysis Modules"
         TA[Technical Analysis<br/>finta]
         BT[Backtesting<br/>strategies]
         FC[Forecasting<br/>AutoTS]
     end
-    
+
     subgraph "Configuration & Utilities"
         Models[Config Models<br/>Pydantic]
         LogManager[Logging Manager]
     end
-    
+
     CLI --> Config
     Config --> Models
     Models --> Factory
@@ -43,22 +43,22 @@ graph TB
     Portfolio --> Asset
     Asset --> Ticker
     Asset --> Category
-    
+
     CLI --> TA
     CLI --> BT
     CLI --> FC
-    
+
     TA --> Fetcher
     BT --> Fetcher
     FC --> Fetcher
-    
+
     Fetcher --> DB
     Fetcher --> Cache
     Cache --> DB
-    
+
     CLI --> LogManager
     LogManager --> Models
-    
+
     style CLI fill:#2196F3,stroke:#1976D2,color:#fff
     style Config fill:#4CAF50,stroke:#388E3C,color:#fff
     style DB fill:#FF9800,stroke:#F57C00,color:#fff
@@ -79,7 +79,7 @@ sequenceDiagram
     participant Fetcher
     participant DB
     participant Analysis
-    
+
     User->>CLI: Run command
     CLI->>Config: Load .config.yaml
     Config->>Factory: Create domain objects

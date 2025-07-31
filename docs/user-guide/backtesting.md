@@ -118,7 +118,7 @@ data:
   # Training period
   train_start_date: "2023-01-01"
   train_end_date: "2023-12-31"
-  
+
   # Testing period (out-of-sample)
   test_start_date: "2024-01-01"
   test_end_date: "2024-06-30"
@@ -152,11 +152,11 @@ backtest:
   exclusive_orders: true         # One position at a time
   trade_on_close: false         # Trade on next open
   hedging: false                # No hedging allowed
-  
+
   # Broker configuration
   broker_config:
     name: "robinhood"           # Use preset broker
-  
+
   # Multiple strategies
   strategies:
     - name: smacross
@@ -271,7 +271,7 @@ Portfolio Information:
 #### Standard Backtesting Results Table
 
 ```
-                         Backtesting Results                          
+                         Backtesting Results
 ┏━━━━━━━━┳━━━━━━━━━━━┳━━━━━━━━━━━━┳━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━┓
 ┃ Ticker ┃ Strategy  ┃ Return     ┃ Sharpe Ratio   ┃ Max Drawdown   ┃
 ┡━━━━━━━━╇━━━━━━━━━━━╇━━━━━━━━━━━━╇━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━┩
@@ -288,7 +288,7 @@ Portfolio Information:
 When using train/test split configuration, the output shows both training and testing performance:
 
 ```
-              Ticker-Level Backtest Results (Train/Test Split)               
+              Ticker-Level Backtest Results (Train/Test Split)
 ┏━━━━━━━━┳━━━━━━━━━━━┳━━━━━━━━━━━━━━┳━━━━━━━━━━━━━┳━━━━━━━━━━━━━━┳━━━━━━━━━━━━━┓
 ┃ Ticker ┃ Strategy  ┃ Train Return ┃ Test Return ┃ Train Sharpe ┃ Test Sharpe ┃
 ┡━━━━━━━━╇━━━━━━━━━━━╇━━━━━━━━━━━━━━╇━━━━━━━━━━━━━╇━━━━━━━━━━━━━━╇━━━━━━━━━━━━━┩
@@ -374,30 +374,30 @@ from stockula.technical_analysis.indicators import TechnicalAnalysis
 
 class MACDStrategy(BaseStrategy):
     """MACD crossover strategy with RSI filter."""
-    
+
     def init(self):
         """Initialize indicators."""
         ta = TechnicalAnalysis()
-        
+
         # MACD indicator
         macd_data = ta.calculate_macd(self.data.df, fast=12, slow=26, signal=9)
         self.macd = self.I(lambda: macd_data['macd'])
         self.signal = self.I(lambda: macd_data['signal'])
-        
+
         # RSI filter
         self.rsi = self.I(ta.calculate_rsi, self.data.Close, period=14)
-    
+
     def next(self):
         """Execute trading logic."""
         # Entry conditions
         macd_bullish = self.macd[-1] > self.signal[-1]
         macd_cross = self.macd[-2] <= self.signal[-2]
         rsi_filter = self.rsi[-1] < 70  # Not overbought
-        
+
         # Exit conditions
         macd_bearish = self.macd[-1] < self.signal[-1]
         macd_cross_down = self.macd[-2] >= self.signal[-2]
-        
+
         # Trading logic
         if macd_bullish and macd_cross and rsi_filter and not self.position:
             self.buy()
@@ -433,16 +433,16 @@ config = {
 ```python
 class PositionSizedStrategy(BaseStrategy):
     def init(self):
-        self.atr = self.I(ta.calculate_atr, self.data.High, self.data.Low, 
+        self.atr = self.I(ta.calculate_atr, self.data.High, self.data.Low,
                          self.data.Close, period=14)
-    
+
     def next(self):
         if self.should_buy():
             # Risk-based position sizing
             risk_per_trade = 0.02  # 2% risk per trade
             stop_distance = 2 * self.atr[-1]  # 2 ATR stop
             position_size = (self.equity * risk_per_trade) / stop_distance
-            
+
             self.buy(size=position_size)
 ```
 
@@ -455,7 +455,7 @@ class StopLossStrategy(BaseStrategy):
             entry_price = self.data.Close[-1]
             stop_loss = entry_price * 0.95    # 5% stop loss
             take_profit = entry_price * 1.15  # 15% take profit
-            
+
             self.buy(sl=stop_loss, tp=take_profit)
 ```
 
@@ -467,15 +467,15 @@ class MultiTimeframeStrategy(BaseStrategy):
         # Daily trend filter
         daily_data = self.get_daily_data()
         self.daily_trend = self.I(ta.calculate_sma, daily_data.Close, period=50)
-        
+
         # Hourly signals
         self.hourly_ma = self.I(ta.calculate_sma, self.data.Close, period=20)
-    
+
     def next(self):
         # Only trade in direction of daily trend
         daily_bullish = self.data.Close[-1] > self.daily_trend[-1]
         hourly_signal = self.data.Close[-1] > self.hourly_ma[-1]
-        
+
         if daily_bullish and hourly_signal:
             self.buy()
 ```
@@ -491,22 +491,22 @@ def optimize_strategy(symbol, strategy_class, param_ranges):
     """Optimize strategy parameters."""
     best_return = -float('inf')
     best_params = None
-    
+
     # Generate parameter combinations
     param_names = list(param_ranges.keys())
     param_values = list(param_ranges.values())
-    
+
     for combination in product(*param_values):
         params = dict(zip(param_names, combination))
-        
+
         # Run backtest with these parameters
         strategy = strategy_class(**params)
         results = runner.run_strategy(symbol, strategy)
-        
+
         if results['Return [%]'] > best_return:
             best_return = results['Return [%]']
             best_params = params
-    
+
     return best_params, best_return
 
 # Example usage
@@ -525,22 +525,22 @@ def walk_forward_analysis(symbol, strategy_class, lookback_days=252):
     """Perform walk-forward analysis."""
     data = fetcher.get_stock_data(symbol, start_date="2020-01-01")
     results = []
-    
+
     for i in range(lookback_days, len(data), 63):  # Quarterly rebalancing
         # Optimization period
         opt_data = data.iloc[i-lookback_days:i]
         best_params = optimize_on_data(opt_data, strategy_class)
-        
+
         # Testing period
         test_data = data.iloc[i:i+63]
         test_results = backtest_with_params(test_data, strategy_class, best_params)
-        
+
         results.append({
             'period': data.index[i],
             'params': best_params,
             'return': test_results['Return [%]']
         })
-    
+
     return results
 ```
 
@@ -555,20 +555,20 @@ def backtest_portfolio(config):
     """Backtest entire portfolio."""
     factory = DomainFactory(config)
     portfolio = factory.create_portfolio()
-    
+
     portfolio_results = {}
     total_value = 0
-    
+
     for asset in portfolio.assets:
         # Run strategy on each asset
         results = runner.run_from_symbol(asset.ticker)
         portfolio_results[asset.ticker] = results
-        
+
         # Calculate weighted contribution
         weight = asset.allocation_amount / portfolio.total_value
         contribution = results['Return [%]'] * weight
         total_value += contribution
-    
+
     portfolio_results['portfolio_return'] = total_value
     return portfolio_results
 ```
@@ -579,14 +579,14 @@ def backtest_portfolio(config):
 def analyze_strategy_correlation(tickers, strategy):
     """Analyze correlation between strategy returns."""
     returns = {}
-    
+
     for ticker in tickers:
         results = runner.run_from_symbol(ticker, strategy=strategy)
         returns[ticker] = results['Return [%]']
-    
+
     return_series = pd.Series(returns)
     correlation_matrix = return_series.corr()
-    
+
     return correlation_matrix
 ```
 

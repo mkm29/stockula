@@ -13,7 +13,7 @@ data:
   end_date: null  # defaults to today
   interval: "1d"
 
-# Portfolio management settings  
+# Portfolio management settings
 portfolio:
   initial_capital: 100000
   allocation_method: equal_weight
@@ -37,7 +37,7 @@ backtest:
 forecast:
   forecast_length: 30        # Days to forecast from today
   model_list: "fast"
-  
+
 # Option 2: Historical evaluation mode
 # forecast:
 #   train_start_date: "2025-01-01"
@@ -113,7 +113,7 @@ portfolio:
   rebalance_frequency: monthly
   max_position_size: 20.0      # Max 20% per position
   stop_loss_pct: 10.0          # Global stop loss
-  
+
   tickers:
     - symbol: AAPL
       sector: Technology
@@ -153,7 +153,7 @@ portfolio:
           allocation_amount: 15000
         - symbol: VTI
           allocation_amount: 15000
-    
+
     - name: growth_stocks
       description: "High growth technology"
       allocation_amount: 30000
@@ -189,7 +189,7 @@ backtest:
   # Use a preset broker
   broker_config:
     name: "robinhood"  # Zero commission with TAF
-    
+
   # Or custom configuration
   broker_config:
     name: "custom"
@@ -223,13 +223,13 @@ backtest:
       parameters:
         fast_period: 10
         slow_period: 20
-    
+
     - name: rsi
       parameters:
         period: 14
         oversold_threshold: 30
         overbought_threshold: 70
-    
+
     - name: doubleemacross
       parameters:
         fast_period: 34
@@ -291,7 +291,7 @@ forecast:
   train_end_date: "2025-03-31"     # Training period end
   test_start_date: "2025-04-01"    # Test period start
   test_end_date: "2025-06-30"      # Test period end
-  
+
   # Model configuration
   frequency: "infer"
   prediction_interval: 0.95
@@ -313,7 +313,7 @@ forecast:
   # Choose your mode (forecast_length OR test dates)
   forecast_length: 14           # Shorter forecasts
   # OR use shorter test periods for evaluation
-  
+
   model_list: "fast"            # Only fast models
   max_generations: 2            # Fewer iterations
   num_validations: 1            # Single validation
@@ -366,7 +366,7 @@ Stockula uses Pydantic for configuration validation. Invalid configurations will
 ValidationError: 2 validation errors for StockulaConfig
 portfolio.initial_capital
   ensure this value is greater than 0 (type=value_error.number.not_gt; limit_value=0)
-backtest.commission  
+backtest.commission
   ensure this value is less than or equal to 1 (type=value_error.number.not_le; limit_value=1)
 ```
 

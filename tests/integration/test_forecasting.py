@@ -3,7 +3,6 @@
 from datetime import timedelta
 from unittest.mock import Mock, patch
 
-import numpy as np
 import pandas as pd
 import pytest
 
@@ -33,21 +32,15 @@ class TestStockForecaster:
 
     def test_initialization(self):
         """Test StockForecaster initialization."""
-        forecaster = StockForecaster(
-            forecast_length=30, frequency="D", prediction_interval=0.95
-        )
+        forecaster = StockForecaster(forecast_length=30, frequency="D", prediction_interval=0.95)
         assert forecaster.forecast_length == 30
         assert forecaster.frequency == "D"
         assert forecaster.prediction_interval == 0.95
 
         # Test defaults
         forecaster_default = StockForecaster()
-        assert (
-            forecaster_default.forecast_length is None
-        )  # Changed to None for mutual exclusivity
-        assert (
-            forecaster_default.frequency == "infer"
-        )  # Default is 'infer' which gets converted to 'D' during fit
+        assert forecaster_default.forecast_length is None  # Changed to None for mutual exclusivity
+        assert forecaster_default.frequency == "infer"  # Default is 'infer' which gets converted to 'D' during fit
         assert forecaster_default.prediction_interval == 0.95
 
     def test_forecast_with_data(self, forecast_data):
@@ -78,10 +71,7 @@ class TestStockForecaster:
             # Check results
             assert isinstance(predictions, pd.DataFrame)
             assert len(predictions) == 7
-            assert all(
-                col in predictions.columns
-                for col in ["forecast", "lower_bound", "upper_bound"]
-            )
+            assert all(col in predictions.columns for col in ["forecast", "lower_bound", "upper_bound"])
             assert mock_autots_instance.fit.called
             assert mock_model.predict.called
 
@@ -117,10 +107,7 @@ class TestStockForecaster:
             # Check results
             assert isinstance(predictions, pd.DataFrame)
             assert len(predictions) == 14
-            assert all(
-                col in predictions.columns
-                for col in ["forecast", "lower_bound", "upper_bound"]
-            )
+            assert all(col in predictions.columns for col in ["forecast", "lower_bound", "upper_bound"])
             # Check values - the helper creates base_value ± 5.0
             assert predictions["forecast"].iloc[0] == 110.0
             assert predictions["lower_bound"].iloc[0] == 105.0
@@ -238,9 +225,7 @@ class TestStockForecaster:
 
     def test_validation_parameters(self, forecast_data):
         """Test validation parameters."""
-        forecaster = StockForecaster(
-            forecast_length=7, num_validations=3, validation_method="similarity"
-        )
+        forecaster = StockForecaster(forecast_length=7, num_validations=3, validation_method="similarity")
 
         with patch("stockula.forecasting.forecaster.AutoTS") as mock_autots:
             # Create a proper mock model that returns valid predictions
@@ -319,9 +304,7 @@ class TestForecastingEdgeCases:
     def test_single_value_data(self):
         """Test handling of constant data."""
         # All values the same
-        constant_data = pd.DataFrame(
-            {"Close": [100] * 50}, index=pd.date_range("2023-01-01", periods=50)
-        )
+        constant_data = pd.DataFrame({"Close": [100] * 50}, index=pd.date_range("2023-01-01", periods=50))
 
         forecaster = StockForecaster()
 
@@ -330,9 +313,7 @@ class TestForecastingEdgeCases:
             mock_model = Mock()
             # Use the helper to create proper prediction structure
             start_date = constant_data.index[-1] + timedelta(days=1)
-            mock_prediction = create_mock_autots_prediction(
-                start_date, periods=14, base_value=100.0
-            )
+            mock_prediction = create_mock_autots_prediction(start_date, periods=14, base_value=100.0)
 
             mock_model.predict.return_value = mock_prediction
             mock_autots_instance = Mock()
@@ -378,9 +359,7 @@ class TestForecastingEdgeCases:
 
     def test_extreme_forecast_length(self):
         """Test extreme forecast lengths."""
-        data = pd.DataFrame(
-            {"Close": range(100)}, index=pd.date_range("2023-01-01", periods=100)
-        )
+        data = pd.DataFrame({"Close": range(100)}, index=pd.date_range("2023-01-01", periods=100))
 
         # Very long forecast
         forecaster = StockForecaster(forecast_length=365)
@@ -390,9 +369,7 @@ class TestForecastingEdgeCases:
             mock_model = Mock()
             # Use the helper to create proper prediction structure
             start_date = data.index[-1] + timedelta(days=1)
-            mock_prediction = create_mock_autots_prediction(
-                start_date, periods=365, base_value=150.0
-            )
+            mock_prediction = create_mock_autots_prediction(start_date, periods=365, base_value=150.0)
 
             mock_model.predict.return_value = mock_prediction
             mock_autots_instance = Mock()
@@ -440,7 +417,7 @@ class TestForecastingIntegration:
             mock_autots.return_value = mock_autots_instance
 
             # Should use only Close column for forecasting
-            predictions = forecaster.forecast(enhanced_data)
+            forecaster.forecast(enhanced_data)
 
             # Verify fit was called with only Close data
             fit_call_args = mock_autots_instance.fit.call_args

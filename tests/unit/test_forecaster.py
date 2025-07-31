@@ -89,9 +89,7 @@ class TestStockForecasterInitialization:
         """Test initialization with default parameters."""
         forecaster = StockForecaster()
 
-        assert (
-            forecaster.forecast_length is None
-        )  # Changed to None for mutual exclusivity
+        assert forecaster.forecast_length is None  # Changed to None for mutual exclusivity
         assert forecaster.frequency == "infer"
         assert forecaster.prediction_interval == 0.95
         assert forecaster.num_validations == 2
@@ -142,7 +140,7 @@ class TestStockForecasterFit:
 
     def test_fit_with_valid_data(self, sample_data, mock_autots):
         """Test fitting with valid data."""
-        mock_autots_class, mock_instance, mock_model = mock_autots
+        mock_autots_class, mock_instance, _ = mock_autots
 
         forecaster = StockForecaster(forecast_length=14)  # Specify forecast_length
 
@@ -159,9 +157,7 @@ class TestStockForecasterFit:
         # Check AutoTS parameters
         call_kwargs = mock_autots_class.call_args[1]
         assert call_kwargs["forecast_length"] == 14
-        assert (
-            call_kwargs["frequency"] == "D"
-        )  # "infer" is converted to "D" to avoid warnings
+        assert call_kwargs["frequency"] == "D"  # "infer" is converted to "D" to avoid warnings
         assert call_kwargs["prediction_interval"] == 0.95
         assert call_kwargs["verbose"] == 0
         assert call_kwargs["no_negatives"] is True
@@ -176,11 +172,9 @@ class TestStockForecasterFit:
         assert "Close" in fit_df.columns
         assert len(fit_df) == len(sample_data)
 
-    def test_fit_missing_target_column(self, mock_autots):
+    def test_fit_missing_target_column(self):
         """Test fit with missing target column."""
-        data = pd.DataFrame(
-            {"Price": [100, 101, 102]}, index=pd.date_range("2023-01-01", periods=3)
-        )
+        data = pd.DataFrame({"Price": [100, 101, 102]}, index=pd.date_range("2023-01-01", periods=3))
 
         forecaster = StockForecaster()
 
@@ -189,14 +183,12 @@ class TestStockForecasterFit:
 
     def test_fit_with_custom_parameters(self, sample_data, mock_autots):
         """Test fit with custom parameters."""
-        mock_autots_class, mock_instance, mock_model = mock_autots
+        mock_autots_class, _, _ = mock_autots
 
         forecaster = StockForecaster()
 
         with patch("stockula.forecasting.forecaster.signal.signal"):
-            forecaster.fit(
-                sample_data, model_list="slow", ensemble="simple", max_generations=10
-            )
+            forecaster.fit(sample_data, model_list="slow", ensemble="simple", max_generations=10)
 
         # Check AutoTS parameters
         call_kwargs = mock_autots_class.call_args[1]
@@ -206,7 +198,7 @@ class TestStockForecasterFit:
 
     def test_fit_keyboard_interrupt(self, sample_data, mock_autots):
         """Test handling keyboard interrupt during fit."""
-        mock_autots_class, mock_instance, mock_model = mock_autots
+        _, mock_instance, _ = mock_autots
         mock_instance.fit.side_effect = KeyboardInterrupt()
 
         forecaster = StockForecaster()
@@ -217,7 +209,7 @@ class TestStockForecasterFit:
 
     def test_fit_general_exception(self, sample_data, mock_autots):
         """Test handling general exception during fit."""
-        mock_autots_class, mock_instance, mock_model = mock_autots
+        _, mock_instance, _ = mock_autots
         mock_instance.fit.side_effect = Exception("Model error")
 
         forecaster = StockForecaster()
@@ -241,15 +233,9 @@ class TestStockForecasterPredict:
 
         # Create forecast data
         forecast_dates = pd.date_range("2023-02-01", periods=14)
-        mock_prediction.forecast = pd.DataFrame(
-            {"TEST": [110 + i for i in range(14)]}, index=forecast_dates
-        )
-        mock_prediction.upper_forecast = pd.DataFrame(
-            {"TEST": [115 + i for i in range(14)]}, index=forecast_dates
-        )
-        mock_prediction.lower_forecast = pd.DataFrame(
-            {"TEST": [105 + i for i in range(14)]}, index=forecast_dates
-        )
+        mock_prediction.forecast = pd.DataFrame({"TEST": [110 + i for i in range(14)]}, index=forecast_dates)
+        mock_prediction.upper_forecast = pd.DataFrame({"TEST": [115 + i for i in range(14)]}, index=forecast_dates)
+        mock_prediction.lower_forecast = pd.DataFrame({"TEST": [105 + i for i in range(14)]}, index=forecast_dates)
 
         mock_model.predict.return_value = mock_prediction
         forecaster.model = mock_model
@@ -258,7 +244,7 @@ class TestStockForecasterPredict:
 
     def test_predict_with_fitted_model(self, fitted_forecaster):
         """Test prediction with fitted model."""
-        forecaster, mock_model, mock_prediction = fitted_forecaster
+        forecaster, mock_model, _ = fitted_forecaster
 
         result = forecaster.predict()
 
@@ -307,9 +293,7 @@ class TestStockForecasterFitPredict:
                 mock_predict.return_value = mock_predictions
 
                 data = pd.DataFrame({"Close": [100, 101, 102]})
-                result = forecaster.fit_predict(
-                    data, target_column="Close", model_list="fast"
-                )
+                result = forecaster.fit_predict(data, target_column="Close", model_list="fast")
 
                 # Should call both methods
                 mock_fit.assert_called_once_with(data, "Close", model_list="fast")
@@ -352,9 +336,7 @@ class TestStockForecasterForecastFromSymbol:
             result = forecaster.forecast_from_symbol("AAPL", start_date="2023-01-01")
 
             # Should fetch data
-            mock_fetcher.get_stock_data.assert_called_once_with(
-                "AAPL", "2023-01-01", None
-            )
+            mock_fetcher.get_stock_data.assert_called_once_with("AAPL", "2023-01-01", None)
 
             # Should fit and predict
             mock_fit_predict.assert_called_once()
@@ -514,9 +496,7 @@ class TestStockForecasterIntegration:
 
             # Mock forecast results
             forecast_dates = pd.date_range(dates[-1] + timedelta(days=1), periods=14)
-            mock_prediction.forecast = pd.DataFrame(
-                {"Close": [125 + i * 0.5 for i in range(14)]}, index=forecast_dates
-            )
+            mock_prediction.forecast = pd.DataFrame({"Close": [125 + i * 0.5 for i in range(14)]}, index=forecast_dates)
             mock_prediction.upper_forecast = pd.DataFrame(
                 {"Close": [130 + i * 0.5 for i in range(14)]}, index=forecast_dates
             )
@@ -533,9 +513,7 @@ class TestStockForecasterIntegration:
             mock_autots.return_value = mock_instance
 
             # Create forecaster
-            forecaster = StockForecaster(
-                forecast_length=14, frequency="D", prediction_interval=0.95
-            )
+            forecaster = StockForecaster(forecast_length=14, frequency="D", prediction_interval=0.95)
 
             # Run full workflow
             with patch("stockula.forecasting.forecaster.signal.signal"):
@@ -544,10 +522,7 @@ class TestStockForecasterIntegration:
             # Verify results
             assert isinstance(predictions, pd.DataFrame)
             assert len(predictions) == 14
-            assert all(
-                col in predictions.columns
-                for col in ["forecast", "lower_bound", "upper_bound"]
-            )
+            assert all(col in predictions.columns for col in ["forecast", "lower_bound", "upper_bound"])
 
             # Check model info
             model_info = forecaster.get_best_model()
@@ -570,9 +545,7 @@ class TestStockForecasterIntegration:
 
             with patch("stockula.forecasting.forecaster.signal.signal"):
                 # Set the specific logger to DEBUG level as well
-                with caplog.at_level(
-                    logging.DEBUG, logger="stockula.forecasting.forecaster"
-                ):
+                with caplog.at_level(logging.DEBUG, logger="stockula.forecasting.forecaster"):
                     forecaster.fit(data)
 
             # Check log messages

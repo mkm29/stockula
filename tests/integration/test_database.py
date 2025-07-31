@@ -4,7 +4,6 @@ import sqlite3
 from datetime import datetime, timedelta
 
 import pandas as pd
-import pytest
 
 from stockula.database.manager import DatabaseManager
 
@@ -86,16 +85,12 @@ class TestDatabaseManager:
         test_database.add_stock("TEST_STOCK", "Test Stock Inc.")
 
         price_date = datetime.now()
-        test_database.add_price_data(
-            "TEST_STOCK", price_date, 150.0, 152.0, 149.0, 151.0, 1000000, "1d"
-        )
+        test_database.add_price_data("TEST_STOCK", price_date, 150.0, 152.0, 149.0, 151.0, 1000000, "1d")
 
         # Verify price data was added
         with test_database.get_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute(
-                "SELECT * FROM price_history WHERE symbol = ?", ("TEST_STOCK",)
-            )
+            cursor.execute("SELECT * FROM price_history WHERE symbol = ?", ("TEST_STOCK",))
             row = cursor.fetchone()
 
         assert row is not None
@@ -131,9 +126,7 @@ class TestDatabaseManager:
         # Verify all data was added
         with test_database.get_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute(
-                "SELECT COUNT(*) FROM price_history WHERE symbol = ?", ("BULK_TEST",)
-            )
+            cursor.execute("SELECT COUNT(*) FROM price_history WHERE symbol = ?", ("BULK_TEST",))
             count = cursor.fetchone()[0]
             assert count == len(sample_ohlcv_data)
 
@@ -143,14 +136,10 @@ class TestDatabaseManager:
 
         assert isinstance(data, pd.DataFrame)
         assert not data.empty
-        assert all(
-            col in data.columns for col in ["Open", "High", "Low", "Close", "Volume"]
-        )
+        assert all(col in data.columns for col in ["Open", "High", "Low", "Close", "Volume"])
 
         # Test with date range
-        data_filtered = populated_database.get_price_history(
-            "AAPL", start_date="2023-01-10", end_date="2023-01-20"
-        )
+        data_filtered = populated_database.get_price_history("AAPL", start_date="2023-01-10", end_date="2023-01-20")
         assert len(data_filtered) < len(data)
 
     def test_get_latest_price_date(self, populated_database):
@@ -198,9 +187,7 @@ class TestDatabaseManager:
         test_database.add_stock("DIV_TEST", "Dividend Test Inc.")
 
         # Create dividend series
-        dividend_dates = pd.DatetimeIndex(
-            [datetime(2023, 1, 15), datetime(2023, 4, 15), datetime(2023, 7, 15)]
-        )
+        dividend_dates = pd.DatetimeIndex([datetime(2023, 1, 15), datetime(2023, 4, 15), datetime(2023, 7, 15)])
         dividend_amounts = [0.23, 0.24, 0.24]
         dividend_series = pd.Series(dividend_amounts, index=dividend_dates)
 
@@ -267,14 +254,10 @@ class TestDatabaseManager:
         )
 
         # Call with correct signature: symbol, calls, puts, expiry
-        test_database.add_options_data(
-            "AAPL", calls_data, puts_data, expiry.strftime("%Y-%m-%d")
-        )
+        test_database.add_options_data("AAPL", calls_data, puts_data, expiry.strftime("%Y-%m-%d"))
 
         # Verify options were added
-        calls, puts = test_database.get_options_chain(
-            "AAPL", expiry.strftime("%Y-%m-%d")
-        )
+        calls, puts = test_database.get_options_chain("AAPL", expiry.strftime("%Y-%m-%d"))
         assert len(calls) == 3
         assert calls.iloc[0]["strike"] == 140.0
 
@@ -295,9 +278,7 @@ class TestDatabaseManager:
         """Test cleaning up old data."""
         # Add some old data
         old_date = datetime.now() - timedelta(days=400)
-        populated_database.add_price_data(
-            "AAPL", old_date, 100.0, 101.0, 99.0, 100.5, 500000, "1d"
-        )
+        populated_database.add_price_data("AAPL", old_date, 100.0, 101.0, 99.0, 100.5, 500000, "1d")
 
         # Get count before cleanup
         with populated_database.get_connection() as conn:
@@ -324,9 +305,7 @@ class TestDatabaseIntegrity:
         """Test that price data can be added for non-existent stock (auto-creation)."""
         # The store_price_history method auto-creates stocks if they don't exist
         # This test verifies that behavior
-        test_database.add_price_data(
-            "NEWSTOCK", datetime.now(), 100.0, 101.0, 99.0, 100.5, 1000000, "1d"
-        )
+        test_database.add_price_data("NEWSTOCK", datetime.now(), 100.0, 101.0, 99.0, 100.5, 1000000, "1d")
 
         # Verify the stock was auto-created
         with test_database.get_session() as session:
@@ -344,15 +323,11 @@ class TestDatabaseIntegrity:
 
         # Add price data
         price_date = datetime.now()
-        test_database.add_price_data(
-            "UNIQUE_TEST", price_date, 150.0, 152.0, 149.0, 151.0, 1000000, "1d"
-        )
+        test_database.add_price_data("UNIQUE_TEST", price_date, 150.0, 152.0, 149.0, 151.0, 1000000, "1d")
 
         # Try to add duplicate (same symbol, date, interval)
         # Should update, not error
-        test_database.add_price_data(
-            "UNIQUE_TEST", price_date, 151.0, 153.0, 150.0, 152.0, 1100000, "1d"
-        )
+        test_database.add_price_data("UNIQUE_TEST", price_date, 151.0, 153.0, 150.0, 152.0, 1100000, "1d")
 
         # Verify only one record exists for this specific date
         with test_database.get_connection() as conn:
@@ -391,8 +366,6 @@ class TestDatabaseIntegrity:
         # Verify data was added and stock was auto-created
         with test_database.get_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute(
-                "SELECT COUNT(*) FROM price_history WHERE symbol = ?", ("NEWSTOCK",)
-            )
+            cursor.execute("SELECT COUNT(*) FROM price_history WHERE symbol = ?", ("NEWSTOCK",))
             count = cursor.fetchone()[0]
             assert count == 2  # Both records should be added

@@ -127,7 +127,7 @@ for asset in portfolio.get_all_assets():
     if asset.allocation_amount:
         asset_pct = asset.calculate_percentage(portfolio.initial_capital)
         print(f"    -> {asset_pct:.1f}% of portfolio")
-    
+
 # Access categories
 print("\nCategory Summary:")
 for category in portfolio.categories:
@@ -269,10 +269,10 @@ class PortfolioBucket:
     name: str
     allocation_pct: InitVar[Optional[float]] = None  # Init-only variable
     _allocation_pct: Optional[float] = field(default=None, init=False, repr=False)
-    
+
     def __post_init__(self, allocation_pct: Optional[float]):
         self._allocation_pct = allocation_pct
-    
+
     @property
     def allocation_pct(self) -> Optional[float]:
         """Get bucket-level percentage allocation (read-only)."""
@@ -320,13 +320,12 @@ except AttributeError as e:
 
 # Test Asset read-only properties
 ticker = Ticker("AAPL")
-asset = Asset(ticker=ticker, allocation_amount=5000)
-print(f"Asset allocation: ${asset.allocation_amount}")
+asset = Asset(ticker_init=ticker, quantity_init=1.0, category_init=None)
+print(f"Asset: {asset}")
 
-try:
-    asset.allocation_amount = 6000  # This should fail
-except AttributeError as e:
-    print(f"✓ allocation_amount is read-only: {e}")
+# Note: Asset now uses InitVar fields for initialization
+# ticker_init, quantity_init, and category_init parameters are used during construction
+# The actual ticker, quantity, and category are accessible as read-only properties
 ```
 
 Expected output:

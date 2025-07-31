@@ -16,7 +16,7 @@ os.environ["JOBLIB_TEMP_FOLDER"] = "/tmp"
 
 import argparse
 import json
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -62,6 +62,15 @@ log_manager: ILoggingManager | None = None
 console = Console()
 
 
+def date_to_string(date_value: str | date | None) -> str | None:
+    """Convert date or string to string format."""
+    if date_value is None:
+        return None
+    if isinstance(date_value, str):
+        return date_value
+    return date_value.strftime("%Y-%m-%d")
+
+
 @inject
 def setup_logging(
     config: StockulaConfig,
@@ -73,7 +82,7 @@ def setup_logging(
     log_manager.setup(config)
 
 
-def get_strategy_class(strategy_name: str):
+def get_strategy_class(strategy_name: str) -> type[Any] | None:
     """Get strategy class by name."""
     strategies = {
         "smacross": SMACrossStrategy,
@@ -111,10 +120,8 @@ def run_technical_analysis(
     """
     data = data_fetcher.get_stock_data(
         ticker,
-        start=config.data.start_date.strftime("%Y-%m-%d")
-        if config.data.start_date
-        else None,
-        end=config.data.end_date.strftime("%Y-%m-%d") if config.data.end_date else None,
+        start=date_to_string(config.data.start_date),
+        end=date_to_string(config.data.end_date),
         interval=config.data.interval,
     )
 
@@ -157,92 +164,110 @@ def run_technical_analysis(
             current_step = 0
 
             if "sma" in ta_config.indicators:
+                indicators_dict = results["indicators"]
+                assert isinstance(indicators_dict, dict)
                 for period in ta_config.sma_periods:
                     progress.update(
                         task,
                         description=f"[cyan]Computing SMA({period}) for {ticker}...",
                     )
-                    results["indicators"][f"SMA_{period}"] = ta.sma(period).iloc[-1]
+                    indicators_dict[f"SMA_{period}"] = ta.sma(period).iloc[-1]
                     current_step += 1
                     progress.advance(task)
 
             if "ema" in ta_config.indicators:
+                indicators_dict = results["indicators"]
+                assert isinstance(indicators_dict, dict)
                 for period in ta_config.ema_periods:
                     progress.update(
                         task,
                         description=f"[cyan]Computing EMA({period}) for {ticker}...",
                     )
-                    results["indicators"][f"EMA_{period}"] = ta.ema(period).iloc[-1]
+                    indicators_dict[f"EMA_{period}"] = ta.ema(period).iloc[-1]
                     current_step += 1
                     progress.advance(task)
 
             if "rsi" in ta_config.indicators:
-                progress.update(
-                    task, description=f"[cyan]Computing RSI for {ticker}..."
-                )
-                results["indicators"]["RSI"] = ta.rsi(ta_config.rsi_period).iloc[-1]
+                progress.update(task, description=f"[cyan]Computing RSI for {ticker}...")
+                indicators_dict = results["indicators"]
+                assert isinstance(indicators_dict, dict)
+                indicators_dict["RSI"] = ta.rsi(ta_config.rsi_period).iloc[-1]
                 current_step += 1
                 progress.advance(task)
 
             if "macd" in ta_config.indicators:
-                progress.update(
-                    task, description=f"[cyan]Computing MACD for {ticker}..."
-                )
+                progress.update(task, description=f"[cyan]Computing MACD for {ticker}...")
                 macd_data = ta.macd(**ta_config.macd_params)
-                results["indicators"]["MACD"] = macd_data.iloc[-1].to_dict()
+                indicators_dict = results["indicators"]
+                assert isinstance(indicators_dict, dict)
+                indicators_dict["MACD"] = macd_data.iloc[-1].to_dict()
                 current_step += 1
                 progress.advance(task)
 
             if "bbands" in ta_config.indicators:
-                progress.update(
-                    task, description=f"[cyan]Computing Bollinger Bands for {ticker}..."
-                )
+                progress.update(task, description=f"[cyan]Computing Bollinger Bands for {ticker}...")
                 bbands_data = ta.bbands(**ta_config.bbands_params)
-                results["indicators"]["BBands"] = bbands_data.iloc[-1].to_dict()
+                indicators_dict = results["indicators"]
+                assert isinstance(indicators_dict, dict)
+                indicators_dict["BBands"] = bbands_data.iloc[-1].to_dict()
                 current_step += 1
                 progress.advance(task)
 
             if "atr" in ta_config.indicators:
-                progress.update(
-                    task, description=f"[cyan]Computing ATR for {ticker}..."
-                )
-                results["indicators"]["ATR"] = ta.atr(ta_config.atr_period).iloc[-1]
+                progress.update(task, description=f"[cyan]Computing ATR for {ticker}...")
+                indicators_dict = results["indicators"]
+                assert isinstance(indicators_dict, dict)
+                indicators_dict["ATR"] = ta.atr(ta_config.atr_period).iloc[-1]
                 current_step += 1
                 progress.advance(task)
 
             if "adx" in ta_config.indicators:
-                progress.update(
-                    task, description=f"[cyan]Computing ADX for {ticker}..."
-                )
-                results["indicators"]["ADX"] = ta.adx(14).iloc[-1]
+                progress.update(task, description=f"[cyan]Computing ADX for {ticker}...")
+                indicators_dict = results["indicators"]
+                assert isinstance(indicators_dict, dict)
+                indicators_dict["ADX"] = ta.adx(14).iloc[-1]
                 current_step += 1
                 progress.advance(task)
     else:
         # Run without progress bars (for single indicators or when disabled)
         if "sma" in ta_config.indicators:
+            indicators_dict = results["indicators"]
+            assert isinstance(indicators_dict, dict)
             for period in ta_config.sma_periods:
-                results["indicators"][f"SMA_{period}"] = ta.sma(period).iloc[-1]
+                indicators_dict[f"SMA_{period}"] = ta.sma(period).iloc[-1]
 
         if "ema" in ta_config.indicators:
+            indicators_dict = results["indicators"]
+            assert isinstance(indicators_dict, dict)
             for period in ta_config.ema_periods:
-                results["indicators"][f"EMA_{period}"] = ta.ema(period).iloc[-1]
+                indicators_dict[f"EMA_{period}"] = ta.ema(period).iloc[-1]
 
         if "rsi" in ta_config.indicators:
-            results["indicators"]["RSI"] = ta.rsi(ta_config.rsi_period).iloc[-1]
+            indicators_dict = results["indicators"]
+            assert isinstance(indicators_dict, dict)
+            indicators_dict["RSI"] = ta.rsi(ta_config.rsi_period).iloc[-1]
 
         if "macd" in ta_config.indicators:
             macd_data = ta.macd(**ta_config.macd_params)
-            results["indicators"]["MACD"] = macd_data.iloc[-1].to_dict()
+            indicators_dict = results["indicators"]
+            assert isinstance(indicators_dict, dict)
+            indicators_dict["MACD"] = macd_data.iloc[-1].to_dict()
 
         if "bbands" in ta_config.indicators:
             bbands_data = ta.bbands(**ta_config.bbands_params)
-            results["indicators"]["BBands"] = bbands_data.iloc[-1].to_dict()
+            indicators_dict = results["indicators"]
+            assert isinstance(indicators_dict, dict)
+            indicators_dict["BBands"] = bbands_data.iloc[-1].to_dict()
 
         if "atr" in ta_config.indicators:
-            results["indicators"]["ATR"] = ta.atr(ta_config.atr_period).iloc[-1]
+            indicators_dict = results["indicators"]
+            assert isinstance(indicators_dict, dict)
+            indicators_dict["ATR"] = ta.atr(ta_config.atr_period).iloc[-1]
 
         if "adx" in ta_config.indicators:
-            results["indicators"]["ADX"] = ta.adx(14).iloc[-1]
+            indicators_dict = results["indicators"]
+            assert isinstance(indicators_dict, dict)
+            indicators_dict["ADX"] = ta.adx(14).iloc[-1]
 
     return results
 
@@ -269,9 +294,7 @@ def run_backtest(
 
     # Check if we should use train/test split for backtesting
     # Note: This is for backtest parameter optimization, not forecast evaluation
-    use_train_test_split = (
-        False  # Disabled for now since train/test is in forecast config
-    )
+    use_train_test_split = False  # Disabled for now since train/test is in forecast config
 
     for strategy_config in config.backtest.strategies:
         strategy_class = get_strategy_class(strategy_config.name)
@@ -291,20 +314,10 @@ def run_backtest(
                 backtest_result = runner.run_with_train_test_split(
                     ticker,
                     strategy_class,
-                    train_start_date=config.forecast.train_start_date.strftime(
-                        "%Y-%m-%d"
-                    )
-                    if config.forecast.train_start_date
-                    else None,
-                    train_end_date=config.forecast.train_end_date.strftime("%Y-%m-%d")
-                    if config.forecast.train_end_date
-                    else None,
-                    test_start_date=config.forecast.test_start_date.strftime("%Y-%m-%d")
-                    if config.forecast.test_start_date
-                    else None,
-                    test_end_date=config.forecast.test_end_date.strftime("%Y-%m-%d")
-                    if config.forecast.test_end_date
-                    else None,
+                    train_start_date=date_to_string(config.forecast.train_start_date),
+                    train_end_date=date_to_string(config.forecast.train_end_date),
+                    test_start_date=date_to_string(config.forecast.test_start_date),
+                    test_end_date=date_to_string(config.forecast.test_end_date),
                     optimize_on_train=config.backtest.optimize,
                     param_ranges=config.backtest.optimization_params
                     if config.backtest.optimize and config.backtest.optimization_params
@@ -315,16 +328,12 @@ def run_backtest(
                 result_entry = {
                     "ticker": ticker,
                     "strategy": strategy_config.name,
-                    "parameters": backtest_result.get(
-                        "optimized_parameters", strategy_config.parameters
-                    ),
+                    "parameters": backtest_result.get("optimized_parameters", strategy_config.parameters),
                     "train_period": backtest_result["train_period"],
                     "test_period": backtest_result["test_period"],
                     "train_results": backtest_result["train_results"],
                     "test_results": backtest_result["test_results"],
-                    "performance_degradation": backtest_result.get(
-                        "performance_degradation", {}
-                    ),
+                    "performance_degradation": backtest_result.get("performance_degradation", {}),
                 }
 
                 # For backward compatibility, also include test results as top-level metrics
@@ -332,9 +341,7 @@ def run_backtest(
                     {
                         "return_pct": backtest_result["test_results"]["return_pct"],
                         "sharpe_ratio": backtest_result["test_results"]["sharpe_ratio"],
-                        "max_drawdown_pct": backtest_result["test_results"][
-                            "max_drawdown_pct"
-                        ],
+                        "max_drawdown_pct": backtest_result["test_results"]["max_drawdown_pct"],
                         "num_trades": backtest_result["test_results"]["num_trades"],
                         "win_rate": backtest_result["test_results"]["win_rate"],
                     }
@@ -348,12 +355,12 @@ def run_backtest(
 
                 # First check if backtest has specific dates
                 if config.backtest.start_date and config.backtest.end_date:
-                    backtest_start = config.backtest.start_date.strftime("%Y-%m-%d")
-                    backtest_end = config.backtest.end_date.strftime("%Y-%m-%d")
+                    backtest_start = date_to_string(config.backtest.start_date)
+                    backtest_end = date_to_string(config.backtest.end_date)
                 # Fall back to general data dates
                 elif config.data.start_date and config.data.end_date:
-                    backtest_start = config.data.start_date.strftime("%Y-%m-%d")
-                    backtest_end = config.data.end_date.strftime("%Y-%m-%d")
+                    backtest_start = date_to_string(config.data.start_date)
+                    backtest_end = date_to_string(config.data.end_date)
 
                 backtest_result = runner.run_from_symbol(
                     ticker,
@@ -413,7 +420,8 @@ def run_forecast_with_evaluation(
     Returns:
         Dictionary with forecast results and evaluation metrics
     """
-    log_manager.info(f"\nForecasting {ticker} with train/test evaluation...")
+    if log_manager:
+        log_manager.info(f"\nForecasting {ticker} with train/test evaluation...")
 
     forecaster = stock_forecaster
 
@@ -426,10 +434,10 @@ def run_forecast_with_evaluation(
 
         result = forecaster.forecast_from_symbol_with_evaluation(
             ticker,
-            train_start_date=train_start.strftime("%Y-%m-%d") if train_start else None,
-            train_end_date=train_end.strftime("%Y-%m-%d") if train_end else None,
-            test_start_date=test_start.strftime("%Y-%m-%d") if test_start else None,
-            test_end_date=test_end.strftime("%Y-%m-%d") if test_end else None,
+            train_start_date=date_to_string(train_start),
+            train_end_date=date_to_string(train_end),
+            test_start_date=date_to_string(test_start),
+            test_end_date=date_to_string(test_end),
             model_list=config.forecast.model_list,
             ensemble=config.forecast.ensemble,
             max_generations=config.forecast.max_generations,
@@ -438,9 +446,8 @@ def run_forecast_with_evaluation(
         predictions = result["predictions"]
         model_info = forecaster.get_best_model()
 
-        log_manager.info(
-            f"Forecast completed for {ticker} using {model_info['model_name']}"
-        )
+        if log_manager:
+            log_manager.info(f"Forecast completed for {ticker} using {model_info['model_name']}")
 
         forecast_result = {
             "ticker": ticker,
@@ -460,18 +467,21 @@ def run_forecast_with_evaluation(
         # Add evaluation metrics if available
         if result["evaluation_metrics"]:
             forecast_result["evaluation"] = result["evaluation_metrics"]
-            log_manager.info(
-                f"Evaluation metrics for {ticker}: RMSE={result['evaluation_metrics']['rmse']:.2f}, "
-                f"MAPE={result['evaluation_metrics']['mape']:.2f}%"
-            )
+            if log_manager:
+                log_manager.info(
+                    f"Evaluation metrics for {ticker}: RMSE={result['evaluation_metrics']['rmse']:.2f}, "
+                    f"MAPE={result['evaluation_metrics']['mape']:.2f}%"
+                )
 
         return forecast_result
 
     except KeyboardInterrupt:
-        log_manager.warning(f"Forecast for {ticker} interrupted by user")
+        if log_manager:
+            log_manager.warning(f"Forecast for {ticker} interrupted by user")
         return {"ticker": ticker, "error": "Interrupted by user"}
     except Exception as e:
-        log_manager.error(f"Error forecasting {ticker}: {e}")
+        if log_manager:
+            log_manager.error(f"Error forecasting {ticker}: {e}")
         return {"ticker": ticker, "error": str(e)}
 
 
@@ -490,21 +500,16 @@ def run_forecast(
     Returns:
         Dictionary with forecast results
     """
-    log_manager.info(
-        f"\nForecasting {ticker} for {config.forecast.forecast_length} days..."
-    )
+    if log_manager:
+        log_manager.info(f"\nForecasting {ticker} for {config.forecast.forecast_length} days...")
 
     forecaster = stock_forecaster
 
     try:
         predictions = forecaster.forecast_from_symbol(
             ticker,
-            start_date=config.data.start_date.strftime("%Y-%m-%d")
-            if config.data.start_date
-            else None,
-            end_date=config.data.end_date.strftime("%Y-%m-%d")
-            if config.data.end_date
-            else None,
+            start_date=date_to_string(config.data.start_date),
+            end_date=date_to_string(config.data.end_date),
             model_list=config.forecast.model_list,
             ensemble=config.forecast.ensemble,
             max_generations=config.forecast.max_generations,
@@ -512,9 +517,8 @@ def run_forecast(
 
         model_info = forecaster.get_best_model()
 
-        log_manager.info(
-            f"Forecast completed for {ticker} using {model_info['model_name']}"
-        )
+        if log_manager:
+            log_manager.info(f"Forecast completed for {ticker} using {model_info['model_name']}")
 
         return {
             "ticker": ticker,
@@ -529,10 +533,12 @@ def run_forecast(
             "model_params": model_info.get("model_params", {}),
         }
     except KeyboardInterrupt:
-        log_manager.warning(f"Forecast for {ticker} interrupted by user")
+        if log_manager:
+            log_manager.warning(f"Forecast for {ticker} interrupted by user")
         return {"ticker": ticker, "error": "Interrupted by user"}
     except Exception as e:
-        log_manager.error(f"Error forecasting {ticker}: {e}")
+        if log_manager:
+            log_manager.error(f"Error forecasting {ticker}: {e}")
         return {"ticker": ticker, "error": str(e)}
 
 
@@ -570,49 +576,33 @@ def save_detailed_report(
         "strategy": strategy_name,
         "timestamp": timestamp,
         "date_range": {
-            "start": config.data.start_date.strftime("%Y-%m-%d")
-            if config.data.start_date
-            else None,
-            "end": config.data.end_date.strftime("%Y-%m-%d")
-            if config.data.end_date
-            else None,
+            "start": date_to_string(config.data.start_date),
+            "end": date_to_string(config.data.end_date),
         },
         "portfolio": {
             "initial_value": results.get("initial_portfolio_value", 0),
             "initial_capital": results.get("initial_capital", 0),
         },
         "broker_config": {
-            "name": config.backtest.broker_config.name
-            if config.backtest.broker_config
-            else "legacy",
+            "name": config.backtest.broker_config.name if config.backtest.broker_config else "legacy",
             "commission_type": config.backtest.broker_config.commission_type
             if config.backtest.broker_config
             else "percentage",
             "commission_value": config.backtest.broker_config.commission_value
             if config.backtest.broker_config
             else config.backtest.commission,
-            "min_commission": config.backtest.broker_config.min_commission
-            if config.backtest.broker_config
-            else None,
-            "regulatory_fees": config.backtest.broker_config.regulatory_fees
-            if config.backtest.broker_config
-            else 0,
+            "min_commission": config.backtest.broker_config.min_commission if config.backtest.broker_config else None,
+            "regulatory_fees": config.backtest.broker_config.regulatory_fees if config.backtest.broker_config else 0,
         },
         "detailed_results": strategy_results,
         "summary": {
             "total_trades": sum(r.get("num_trades", 0) for r in strategy_results),
-            "winning_stocks": sum(
-                1 for r in strategy_results if r.get("return_pct", 0) > 0
-            ),
-            "losing_stocks": sum(
-                1 for r in strategy_results if r.get("return_pct", 0) < 0
-            ),
-            "average_return": sum(r.get("return_pct", 0) for r in strategy_results)
-            / len(strategy_results)
+            "winning_stocks": sum(1 for r in strategy_results if r.get("return_pct", 0) > 0),
+            "losing_stocks": sum(1 for r in strategy_results if r.get("return_pct", 0) < 0),
+            "average_return": sum(r.get("return_pct", 0) for r in strategy_results) / len(strategy_results)
             if strategy_results
             else 0,
-            "average_sharpe": sum(r.get("sharpe_ratio", 0) for r in strategy_results)
-            / len(strategy_results)
+            "average_sharpe": sum(r.get("sharpe_ratio", 0) for r in strategy_results) / len(strategy_results)
             if strategy_results
             else 0,
         },
@@ -670,11 +660,7 @@ def create_portfolio_backtest_results(
         # Calculate summary metrics
         total_return = sum(r.return_pct for r in detailed_results)
         avg_return = total_return / len(detailed_results) if detailed_results else 0
-        avg_sharpe = (
-            sum(r.sharpe_ratio for r in detailed_results) / len(detailed_results)
-            if detailed_results
-            else 0
-        )
+        avg_sharpe = sum(r.sharpe_ratio for r in detailed_results) / len(detailed_results) if detailed_results else 0
         total_trades = sum(r.num_trades for r in detailed_results)
         winning_stocks = sum(1 for r in detailed_results if r.return_pct > 0)
         losing_stocks = sum(1 for r in detailed_results if r.return_pct < 0)
@@ -725,26 +711,30 @@ def create_portfolio_backtest_results(
 
     # Create portfolio results
     # Get date range from config or results
-    date_start = "N/A"
-    date_end = "N/A"
+    date_start: str = "N/A"
+    date_end: str = "N/A"
 
     # First try backtest dates, then data dates
     if config.backtest.start_date:
-        date_start = config.backtest.start_date.strftime("%Y-%m-%d")
+        date_start_val = date_to_string(config.backtest.start_date)
+        if date_start_val is not None:
+            date_start = date_start_val
     elif config.data.start_date:
-        date_start = config.data.start_date.strftime("%Y-%m-%d")
+        date_start_val = date_to_string(config.data.start_date)
+        if date_start_val is not None:
+            date_start = date_start_val
 
     if config.backtest.end_date:
-        date_end = config.backtest.end_date.strftime("%Y-%m-%d")
+        date_end_val = date_to_string(config.backtest.end_date)
+        if date_end_val is not None:
+            date_end = date_end_val
     elif config.data.end_date:
-        date_end = config.data.end_date.strftime("%Y-%m-%d")
+        date_end_val = date_to_string(config.data.end_date)
+        if date_end_val is not None:
+            date_end = date_end_val
 
     # If dates not in config, try to get from backtest results
-    if (
-        (date_start == "N/A" or date_end == "N/A")
-        and results.get("backtesting")
-        and len(results["backtesting"]) > 0
-    ):
+    if (date_start == "N/A" or date_end == "N/A") and results.get("backtesting") and len(results["backtesting"]) > 0:
         # Look through all results to find one with dates
         for backtest_result in results["backtesting"]:
             if date_start == "N/A" and "start_date" in backtest_result:
@@ -769,9 +759,7 @@ def create_portfolio_backtest_results(
     return portfolio_results
 
 
-def print_results(
-    results: dict[str, Any], output_format: str = "console", config=None, container=None
-):
+def print_results(results: dict[str, Any], output_format: str = "console", config=None, container=None):
     """Print results in specified format.
 
     Args:
@@ -786,9 +774,7 @@ def print_results(
         # Console output with Rich formatting
 
         if "technical_analysis" in results:
-            console.print(
-                "\n[bold blue]Technical Analysis Results[/bold blue]", style="bold"
-            )
+            console.print("\n[bold blue]Technical Analysis Results[/bold blue]", style="bold")
 
             for ta_result in results["technical_analysis"]:
                 table = Table(title=f"Technical Analysis - {ta_result['ticker']}")
@@ -798,23 +784,17 @@ def print_results(
                 for indicator, value in ta_result["indicators"].items():
                     if isinstance(value, dict):
                         for k, v in value.items():
-                            formatted_value = (
-                                f"{v:.2f}" if isinstance(v, (int, float)) else str(v)
-                            )
+                            formatted_value = f"{v:.2f}" if isinstance(v, int | float) else str(v)
                             table.add_row(f"{indicator} - {k}", formatted_value)
                     else:
-                        formatted_value = (
-                            f"{value:.2f}"
-                            if isinstance(value, (int, float))
-                            else str(value)
-                        )
+                        formatted_value = f"{value:.2f}" if isinstance(value, int | float) else str(value)
                         table.add_row(indicator, formatted_value)
 
                 console.print(table)
 
         if "backtesting" in results:
             # Check if we have multiple strategies
-            strategies = set(b["strategy"] for b in results["backtesting"])
+            strategies = {b["strategy"] for b in results["backtesting"]}
 
             # Display general portfolio information
             console.print("\n[bold green]=== Backtesting Results ===[/bold green]")
@@ -826,53 +806,33 @@ def print_results(
             if "portfolio" in results:
                 portfolio_data = results["portfolio"]
                 if "initial_capital" in portfolio_data:
-                    portfolio_info.append(
-                        f"[cyan]Initial Capital:[/cyan] ${portfolio_data['initial_capital']:,.2f}"
-                    )
+                    portfolio_info.append(f"[cyan]Initial Capital:[/cyan] ${portfolio_data['initial_capital']:,.2f}")
                 if "start" in portfolio_data and portfolio_data["start"]:
-                    portfolio_info.append(
-                        f"[cyan]Start Date:[/cyan] {portfolio_data['start']}"
-                    )
+                    portfolio_info.append(f"[cyan]Start Date:[/cyan] {portfolio_data['start']}")
                 if "end" in portfolio_data and portfolio_data["end"]:
-                    portfolio_info.append(
-                        f"[cyan]End Date:[/cyan] {portfolio_data['end']}"
-                    )
+                    portfolio_info.append(f"[cyan]End Date:[/cyan] {portfolio_data['end']}")
 
             # If portfolio info not in metadata, try to extract from backtest results
             if not portfolio_info and results.get("backtesting"):
                 # Get portfolio information from the first backtest result
-                first_backtest = (
-                    results["backtesting"][0] if results["backtesting"] else {}
-                )
+                first_backtest = results["backtesting"][0] if results["backtesting"] else {}
 
                 if "initial_cash" in first_backtest:
-                    portfolio_info.append(
-                        f"[cyan]Initial Capital:[/cyan] ${first_backtest['initial_cash']:,.2f}"
-                    )
+                    portfolio_info.append(f"[cyan]Initial Capital:[/cyan] ${first_backtest['initial_cash']:,.2f}")
                 if "start_date" in first_backtest:
-                    portfolio_info.append(
-                        f"[cyan]Start Date:[/cyan] {first_backtest['start_date']}"
-                    )
+                    portfolio_info.append(f"[cyan]Start Date:[/cyan] {first_backtest['start_date']}")
                 if "end_date" in first_backtest:
-                    portfolio_info.append(
-                        f"[cyan]End Date:[/cyan] {first_backtest['end_date']}"
-                    )
+                    portfolio_info.append(f"[cyan]End Date:[/cyan] {first_backtest['end_date']}")
                 if "trading_days" in first_backtest:
-                    portfolio_info.append(
-                        f"[cyan]Trading Days:[/cyan] {first_backtest['trading_days']:,}"
-                    )
+                    portfolio_info.append(f"[cyan]Trading Days:[/cyan] {first_backtest['trading_days']:,}")
                 if "calendar_days" in first_backtest:
-                    portfolio_info.append(
-                        f"[cyan]Calendar Days:[/cyan] {first_backtest['calendar_days']:,}"
-                    )
+                    portfolio_info.append(f"[cyan]Calendar Days:[/cyan] {first_backtest['calendar_days']:,}")
 
                 # Fallback: Look for cash/initial capital in other locations
                 if not portfolio_info:
                     initial_capital = results.get("initial_capital")
                     if initial_capital:
-                        portfolio_info.append(
-                            f"[cyan]Initial Capital:[/cyan] ${initial_capital:,.2f}"
-                        )
+                        portfolio_info.append(f"[cyan]Initial Capital:[/cyan] ${initial_capital:,.2f}")
 
                     # Add date information if available
                     start_date = results.get("start_date") or results.get("start")
@@ -916,36 +876,23 @@ def print_results(
                 fetcher = container.data_fetcher()
                 symbols = [asset.symbol for asset in all_assets]
                 try:
-                    current_prices = fetcher.get_current_prices(
-                        symbols, show_progress=False
-                    )
+                    current_prices = fetcher.get_current_prices(symbols, show_progress=False)
                     total_portfolio_value = sum(
-                        asset.quantity * current_prices.get(asset.symbol, 0)
-                        for asset in all_assets
+                        asset.quantity * current_prices.get(asset.symbol, 0) for asset in all_assets
                     )
 
                     for asset in all_assets:
                         current_price = current_prices.get(asset.symbol, 0)
                         asset_value = asset.quantity * current_price
-                        allocation_pct = (
-                            (asset_value / total_portfolio_value * 100)
-                            if total_portfolio_value > 0
-                            else 0
-                        )
+                        allocation_pct = (asset_value / total_portfolio_value * 100) if total_portfolio_value > 0 else 0
 
                         # Determine status
-                        status = (
-                            "Hold Only"
-                            if asset.category in hold_only_categories
-                            else "Tradeable"
-                        )
+                        status = "Hold Only" if asset.category in hold_only_categories else "Tradeable"
                         status_color = "yellow" if status == "Hold Only" else "green"
 
                         table.add_row(
                             asset.symbol,
-                            asset.category.name
-                            if hasattr(asset.category, "name")
-                            else str(asset.category),
+                            asset.category.name if hasattr(asset.category, "name") else str(asset.category),
                             f"{asset.quantity:.2f}",
                             f"{allocation_pct:.1f}%",
                             f"${asset_value:,.2f}",
@@ -954,18 +901,12 @@ def print_results(
                 except Exception:
                     # Fallback if we can't get prices
                     for asset in all_assets:
-                        status = (
-                            "Hold Only"
-                            if asset.category in hold_only_categories
-                            else "Tradeable"
-                        )
+                        status = "Hold Only" if asset.category in hold_only_categories else "Tradeable"
                         status_color = "yellow" if status == "Hold Only" else "green"
 
                         table.add_row(
                             asset.symbol,
-                            asset.category.name
-                            if hasattr(asset.category, "name")
-                            else str(asset.category),
+                            asset.category.name if hasattr(asset.category, "name") else str(asset.category),
                             f"{asset.quantity:.2f}",
                             "N/A",
                             "N/A",
@@ -979,9 +920,7 @@ def print_results(
             console.print("\n[bold green]Ticker-Level Backtest Results[/bold green]")
 
             # Check if we have train/test results
-            has_train_test = any(
-                "train_results" in backtest for backtest in results["backtesting"]
-            )
+            has_train_test = any("train_results" in backtest for backtest in results["backtesting"])
 
             if has_train_test:
                 # Display train/test split results
@@ -997,18 +936,10 @@ def print_results(
 
                 for backtest in results["backtesting"]:
                     if "train_results" in backtest:
-                        train_return_str = (
-                            f"{backtest['train_results']['return_pct']:+.2f}%"
-                        )
-                        test_return_str = (
-                            f"{backtest['test_results']['return_pct']:+.2f}%"
-                        )
-                        train_sharpe_str = (
-                            f"{backtest['train_results']['sharpe_ratio']:.2f}"
-                        )
-                        test_sharpe_str = (
-                            f"{backtest['test_results']['sharpe_ratio']:.2f}"
-                        )
+                        train_return_str = f"{backtest['train_results']['return_pct']:+.2f}%"
+                        test_return_str = f"{backtest['test_results']['return_pct']:+.2f}%"
+                        train_sharpe_str = f"{backtest['train_results']['sharpe_ratio']:.2f}"
+                        test_sharpe_str = f"{backtest['test_results']['sharpe_ratio']:.2f}"
                         test_trades_str = str(backtest["test_results"]["num_trades"])
 
                         if backtest["test_results"]["win_rate"] is None or pd.isna(
@@ -1016,9 +947,7 @@ def print_results(
                         ):
                             test_win_rate_str = "N/A"
                         else:
-                            test_win_rate_str = (
-                                f"{backtest['test_results']['win_rate']:.1f}%"
-                            )
+                            test_win_rate_str = f"{backtest['test_results']['win_rate']:.1f}%"
 
                         table.add_row(
                             backtest["ticker"],
@@ -1056,17 +985,18 @@ def print_results(
                 console.print()  # Add blank line
 
                 # Show train/test periods
-                first_with_split = next(
-                    (b for b in results["backtesting"] if "train_period" in b), None
-                )
+                first_with_split = next((b for b in results["backtesting"] if "train_period" in b), None)
                 if first_with_split:
                     console.print("[bold cyan]Data Periods:[/bold cyan]")
-                    console.print(
-                        f"  Training: {first_with_split['train_period']['start']} to {first_with_split['train_period']['end']} ({first_with_split['train_period']['days']} days)"
-                    )
-                    console.print(
-                        f"  Testing:  {first_with_split['test_period']['start']} to {first_with_split['test_period']['end']} ({first_with_split['test_period']['days']} days)"
-                    )
+                    train_start = first_with_split["train_period"]["start"]
+                    train_end = first_with_split["train_period"]["end"]
+                    train_days = first_with_split["train_period"]["days"]
+                    test_start = first_with_split["test_period"]["start"]
+                    test_end = first_with_split["test_period"]["end"]
+                    test_days = first_with_split["test_period"]["days"]
+
+                    console.print(f"  Training: {train_start} to {train_end} ({train_days} days)")
+                    console.print(f"  Testing:  {test_start} to {test_end} ({test_days} days)")
                     console.print()
             else:
                 # Display traditional results without train/test split
@@ -1104,8 +1034,9 @@ def print_results(
                 console.print()  # Add blank line
 
             # Show summary message about strategies and stocks
+            unique_tickers = {b["ticker"] for b in results["backtesting"]}
             console.print(
-                f"Running [bold]{len(strategies)}[/bold] strategies across [bold]{len(set(b['ticker'] for b in results['backtesting']))}[/bold] stocks..."
+                f"Running [bold]{len(strategies)}[/bold] strategies across [bold]{len(unique_tickers)}[/bold] stocks..."
             )
             if len(strategies) > 1:
                 console.print("Detailed results will be shown per strategy below.")
@@ -1136,14 +1067,11 @@ def print_results(
             # Calculate return percentage for sorting
             for forecast in valid_forecasts:
                 forecast["return_pct"] = (
-                    (forecast["forecast_price"] - forecast["current_price"])
-                    / forecast["current_price"]
+                    (forecast["forecast_price"] - forecast["current_price"]) / forecast["current_price"]
                 ) * 100
 
             # Sort valid forecasts by return percentage (highest to lowest)
-            sorted_forecasts = sorted(
-                valid_forecasts, key=lambda f: f["return_pct"], reverse=True
-            )
+            sorted_forecasts = sorted(valid_forecasts, key=lambda f: f["return_pct"], reverse=True)
 
             # Combine sorted valid forecasts with error forecasts at the end
             all_forecasts = sorted_forecasts + error_forecasts
@@ -1163,9 +1091,7 @@ def print_results(
                     forecast_price = forecast["forecast_price"]
 
                     # Calculate return percentage
-                    return_pct = (
-                        (forecast_price - current_price) / current_price
-                    ) * 100
+                    return_pct = ((forecast_price - current_price) / current_price) * 100
 
                     # Color code forecast based on direction
                     forecast_color = (
@@ -1175,14 +1101,10 @@ def print_results(
                         if forecast_price < current_price
                         else "white"
                     )
-                    forecast_str = (
-                        f"[{forecast_color}]${forecast_price:.2f}[/{forecast_color}]"
-                    )
+                    forecast_str = f"[{forecast_color}]${forecast_price:.2f}[/{forecast_color}]"
 
                     # Format return percentage with color
-                    return_str = (
-                        f"[{forecast_color}]{return_pct:+.2f}%[/{forecast_color}]"
-                    )
+                    return_str = f"[{forecast_color}]{return_pct:+.2f}%[/{forecast_color}]"
 
                     table.add_row(
                         forecast["ticker"],
@@ -1196,13 +1118,9 @@ def print_results(
             console.print(table)
 
             # Display evaluation metrics if available
-            has_evaluation = any(
-                "evaluation" in f for f in results["forecasting"] if "error" not in f
-            )
+            has_evaluation = any("evaluation" in f for f in results["forecasting"] if "error" not in f)
             if has_evaluation:
-                console.print(
-                    "\n[bold cyan]=== Forecast Evaluation Metrics ===[/bold cyan]"
-                )
+                console.print("\n[bold cyan]=== Forecast Evaluation Metrics ===[/bold cyan]")
 
                 eval_table = Table(title="Model Performance on Test Data")
                 eval_table.add_column("Ticker", style="cyan", no_wrap=True)
@@ -1237,12 +1155,8 @@ def print_results(
 def main():
     """Main entry point."""
     parser = argparse.ArgumentParser(description="Stockula Trading Platform")
-    parser.add_argument(
-        "--config", "-c", type=str, help="Path to configuration file (YAML)"
-    )
-    parser.add_argument(
-        "--ticker", "-t", type=str, help="Override ticker symbol (single ticker mode)"
-    )
+    parser.add_argument("--config", "-c", type=str, help="Path to configuration file (YAML)")
+    parser.add_argument("--ticker", "-t", type=str, help="Override ticker symbol (single ticker mode)")
     parser.add_argument(
         "--mode",
         "-m",
@@ -1257,18 +1171,12 @@ def main():
         default="console",
         help="Output format",
     )
-    parser.add_argument(
-        "--save-config", type=str, help="Save current configuration to file"
-    )
+    parser.add_argument("--save-config", type=str, help="Save current configuration to file")
 
     # Add date range arguments
-    parser.add_argument(
-        "--train-start", type=str, help="Training start date (YYYY-MM-DD)"
-    )
+    parser.add_argument("--train-start", type=str, help="Training start date (YYYY-MM-DD)")
     parser.add_argument("--train-end", type=str, help="Training end date (YYYY-MM-DD)")
-    parser.add_argument(
-        "--test-start", type=str, help="Testing start date (YYYY-MM-DD)"
-    )
+    parser.add_argument("--test-start", type=str, help="Testing start date (YYYY-MM-DD)")
     parser.add_argument("--test-end", type=str, help="Testing end date (YYYY-MM-DD)")
 
     args = parser.parse_args()
@@ -1296,21 +1204,13 @@ def main():
 
     # Override date ranges if provided
     if args.train_start:
-        config.forecast.train_start_date = datetime.strptime(
-            args.train_start, "%Y-%m-%d"
-        ).date()
+        config.forecast.train_start_date = datetime.strptime(args.train_start, "%Y-%m-%d").date()
     if args.train_end:
-        config.forecast.train_end_date = datetime.strptime(
-            args.train_end, "%Y-%m-%d"
-        ).date()
+        config.forecast.train_end_date = datetime.strptime(args.train_end, "%Y-%m-%d").date()
     if args.test_start:
-        config.forecast.test_start_date = datetime.strptime(
-            args.test_start, "%Y-%m-%d"
-        ).date()
+        config.forecast.test_start_date = datetime.strptime(args.test_start, "%Y-%m-%d").date()
     if args.test_end:
-        config.forecast.test_end_date = datetime.strptime(
-            args.test_end, "%Y-%m-%d"
-        ).date()
+        config.forecast.test_end_date = datetime.strptime(args.test_end, "%Y-%m-%d").date()
 
     # Save configuration if requested
     if args.save_config:
@@ -1345,7 +1245,7 @@ def main():
     all_assets = portfolio.get_all_assets()
     for asset in all_assets:
         # Get symbol as string
-        symbol = str(asset.symbol) if hasattr(asset, "symbol") else "N/A"
+        symbol = asset.symbol if hasattr(asset, "symbol") else "N/A"
 
         # Get category name as string
         category_name = "N/A"
@@ -1357,7 +1257,7 @@ def main():
 
         # Handle quantity formatting - check if it's a real number
         quantity_str = "N/A"
-        if hasattr(asset, "quantity") and isinstance(asset.quantity, (int, float)):
+        if hasattr(asset, "quantity") and isinstance(asset.quantity, int | float):
             quantity_str = f"{asset.quantity:.2f}"
         elif hasattr(asset, "quantity"):
             # Try to convert to float if possible
@@ -1376,36 +1276,31 @@ def main():
 
     # Get prices at the start date if backtesting
     if args.mode in ["all", "backtest"] and config.data.start_date:
-        log_manager.debug(
-            f"\nFetching prices at start date ({config.data.start_date})..."
-        )
-        start_date_str = config.data.start_date.strftime("%Y-%m-%d")
+        log_manager.debug(f"\nFetching prices at start date ({config.data.start_date})...")
+        start_date_str = date_to_string(config.data.start_date)
         # Fetch one day of data at the start date to get opening prices
         start_prices = {}
         for symbol in symbols:
             try:
-                data = fetcher.get_stock_data(
-                    symbol, start=start_date_str, end=start_date_str
-                )
+                data = fetcher.get_stock_data(symbol, start=start_date_str, end=start_date_str)
                 if not data.empty:
                     start_prices[symbol] = data["Close"].iloc[0]
                 else:
                     # If no data on exact date, get the next available date
-                    end_date = (config.data.start_date + timedelta(days=7)).strftime(
-                        "%Y-%m-%d"
-                    )
-                    data = fetcher.get_stock_data(
-                        symbol, start=start_date_str, end=end_date
-                    )
+                    if isinstance(config.data.start_date, str):
+                        # Convert string to date for timedelta calculation
+                        start_dt = pd.to_datetime(config.data.start_date)
+                        end_date = (start_dt + timedelta(days=7)).strftime("%Y-%m-%d")
+                    else:
+                        end_date = (config.data.start_date + timedelta(days=7)).strftime("%Y-%m-%d")
+                    data = fetcher.get_stock_data(symbol, start=start_date_str, end=end_date)
                     if not data.empty:
                         start_prices[symbol] = data["Close"].iloc[0]
             except Exception as e:
                 log_manager.warning(f"Could not get start price for {symbol}: {e}")
 
         initial_portfolio_value = portfolio.get_portfolio_value(start_prices)
-        log_manager.info(
-            f"\nPortfolio Value at Start Date: ${initial_portfolio_value:,.2f}"
-        )
+        log_manager.info(f"\nPortfolio Value at Start Date: ${initial_portfolio_value:,.2f}")
     else:
         log_manager.debug("\nFetching current prices...")
         current_prices = fetcher.get_current_prices(symbols, show_progress=True)
@@ -1416,9 +1311,7 @@ def main():
     initial_return_pct = (initial_return / portfolio.initial_capital) * 100
 
     log_manager.info(f"Initial Capital: ${portfolio.initial_capital:,.2f}")
-    log_manager.info(
-        f"Return Since Inception: ${initial_return:,.2f} ({initial_return_pct:+.2f}%)"
-    )
+    log_manager.info(f"Return Since Inception: ${initial_return:,.2f} ({initial_return_pct:+.2f}%)")
 
     # Run operations
     results = {
@@ -1437,9 +1330,7 @@ def main():
         try:
             hold_only_categories.add(Category[category_name])
         except KeyError:
-            log_manager.warning(
-                f"Unknown category '{category_name}' in hold_only_categories"
-            )
+            log_manager.warning(f"Unknown category '{category_name}' in hold_only_categories")
 
     tradeable_assets = []
     hold_only_assets = []
@@ -1478,7 +1369,10 @@ def main():
                 if config.forecast.forecast_length is not None:
                     forecast_msg = f"• Forecasting {config.forecast.forecast_length} days into the future"
                 elif config.forecast.test_start_date and config.forecast.test_end_date:
-                    forecast_msg = f"• Evaluating forecast on test period: {config.forecast.test_start_date} to {config.forecast.test_end_date}"
+                    forecast_msg = (
+                        f"• Evaluating forecast on test period: "
+                        f"{config.forecast.test_start_date} to {config.forecast.test_end_date}"
+                    )
                 else:
                     forecast_msg = "• Forecast configuration error: neither forecast_length nor test dates specified"
 
@@ -1497,19 +1391,18 @@ def main():
             # Create progress tasks
             if will_backtest:
                 # Count tradeable assets for backtesting
-                tradeable_count = len(
-                    [a for a in all_assets if a.category not in hold_only_categories]
-                )
+                tradeable_count = len([a for a in all_assets if a.category not in hold_only_categories])
                 if tradeable_count > 0:
+                    num_strategies = len(config.backtest.strategies)
                     backtest_task = progress.add_task(
-                        f"[green]Backtesting {len(config.backtest.strategies)} strategies across {tradeable_count} stocks...",
-                        total=tradeable_count * len(config.backtest.strategies),
+                        f"[green]Backtesting {num_strategies} strategies across {tradeable_count} stocks...",
+                        total=tradeable_count * num_strategies,
                     )
                 else:
                     backtest_task = None
 
             # Process each ticker with progress tracking
-            for ticker_idx, ticker in enumerate(ticker_symbols):
+            for _ticker_idx, ticker in enumerate(ticker_symbols):
                 log_manager.debug(f"\nProcessing {ticker}...")
 
                 # Get the asset to check its category
@@ -1520,9 +1413,7 @@ def main():
                     if "technical_analysis" not in results:
                         results["technical_analysis"] = []
                     # Show progress for TA when it's the only operation or when running all
-                    show_ta_progress = (
-                        args.mode == "ta" or not will_backtest and not will_forecast
-                    )
+                    show_ta_progress = args.mode == "ta" or not will_backtest and not will_forecast
                     results["technical_analysis"].append(
                         run_technical_analysis(
                             ticker,
@@ -1537,9 +1428,7 @@ def main():
                         results["backtesting"] = []
 
                     # Update progress for each strategy
-                    for strategy_idx, strategy_config in enumerate(
-                        config.backtest.strategies
-                    ):
+                    for _strategy_idx, strategy_config in enumerate(config.backtest.strategies):
                         progress.update(
                             backtest_task,
                             description=f"[green]Backtesting {strategy_config.name.upper()} on {ticker}...",
@@ -1560,24 +1449,13 @@ def main():
                                 backtest_end = None
 
                                 # First check if backtest has specific dates
-                                if (
-                                    config.backtest.start_date
-                                    and config.backtest.end_date
-                                ):
-                                    backtest_start = (
-                                        config.backtest.start_date.strftime("%Y-%m-%d")
-                                    )
-                                    backtest_end = config.backtest.end_date.strftime(
-                                        "%Y-%m-%d"
-                                    )
+                                if config.backtest.start_date and config.backtest.end_date:
+                                    backtest_start = date_to_string(config.backtest.start_date)
+                                    backtest_end = date_to_string(config.backtest.end_date)
                                 # Fall back to general data dates
                                 elif config.data.start_date and config.data.end_date:
-                                    backtest_start = config.data.start_date.strftime(
-                                        "%Y-%m-%d"
-                                    )
-                                    backtest_end = config.data.end_date.strftime(
-                                        "%Y-%m-%d"
-                                    )
+                                    backtest_start = date_to_string(config.data.start_date)
+                                    backtest_end = date_to_string(config.data.end_date)
 
                                 backtest_result = runner.run_from_symbol(
                                     ticker,
@@ -1589,9 +1467,7 @@ def main():
                                 # Handle NaN values for win rate when there are no trades
                                 win_rate = backtest_result.get("Win Rate [%]", 0)
                                 if pd.isna(win_rate):
-                                    win_rate = (
-                                        None if backtest_result["# Trades"] == 0 else 0
-                                    )
+                                    win_rate = None if backtest_result["# Trades"] == 0 else 0
 
                                 result_entry = {
                                     "ticker": ticker,
@@ -1599,28 +1475,20 @@ def main():
                                     "parameters": strategy_config.parameters,
                                     "return_pct": backtest_result["Return [%]"],
                                     "sharpe_ratio": backtest_result["Sharpe Ratio"],
-                                    "max_drawdown_pct": backtest_result[
-                                        "Max. Drawdown [%]"
-                                    ],
+                                    "max_drawdown_pct": backtest_result["Max. Drawdown [%]"],
                                     "num_trades": backtest_result["# Trades"],
                                     "win_rate": win_rate,
                                 }
 
                                 # Add dates if available
                                 if "Start Date" in backtest_result:
-                                    result_entry["start_date"] = backtest_result[
-                                        "Start Date"
-                                    ]
+                                    result_entry["start_date"] = backtest_result["Start Date"]
                                 if "End Date" in backtest_result:
-                                    result_entry["end_date"] = backtest_result[
-                                        "End Date"
-                                    ]
+                                    result_entry["end_date"] = backtest_result["End Date"]
 
                                 results["backtesting"].append(result_entry)
                             except Exception as e:
-                                console.print(
-                                    f"[red]Error backtesting {strategy_config.name} on {ticker}: {e}[/red]"
-                                )
+                                console.print(f"[red]Error backtesting {strategy_config.name} on {ticker}: {e}[/red]")
 
                         # Advance progress
                         if backtest_task is not None:
@@ -1631,9 +1499,7 @@ def main():
 
             # Run sequential forecasting if needed
             if will_forecast and ticker_symbols:
-                console.print(
-                    "\n[bold blue]Starting sequential forecasting...[/bold blue]"
-                )
+                console.print("\n[bold blue]Starting sequential forecasting...[/bold blue]")
                 console.print(
                     f"[dim]Configuration: max_generations={config.forecast.max_generations}, "
                     f"num_validations={config.forecast.num_validations}[/dim]"
@@ -1668,19 +1534,14 @@ def main():
 
                         try:
                             # Check if test dates are provided for evaluation
-                            if (
-                                config.forecast.test_start_date
-                                and config.forecast.test_end_date
-                            ):
+                            if config.forecast.test_start_date and config.forecast.test_end_date:
                                 # Use the new evaluation method
                                 forecast_result = run_forecast_with_evaluation(
                                     symbol, config, container.stock_forecaster()
                                 )
                             else:
                                 # Use the original method
-                                forecast_result = run_forecast(
-                                    symbol, config, container.stock_forecaster()
-                                )
+                                forecast_result = run_forecast(symbol, config, container.stock_forecaster())
 
                             results["forecasting"].append(forecast_result)
 
@@ -1691,18 +1552,14 @@ def main():
                             )
 
                         except KeyboardInterrupt:
-                            log_manager.warning(
-                                f"Forecast for {symbol} interrupted by user"
-                            )
-                            results["forecasting"].append(
-                                {"ticker": symbol, "error": "Interrupted by user"}
-                            )
+                            if log_manager:
+                                log_manager.warning(f"Forecast for {symbol} interrupted by user")
+                            results["forecasting"].append({"ticker": symbol, "error": "Interrupted by user"})
                             break
                         except Exception as e:
-                            log_manager.error(f"Error forecasting {symbol}: {e}")
-                            results["forecasting"].append(
-                                {"ticker": symbol, "error": str(e)}
-                            )
+                            if log_manager:
+                                log_manager.error(f"Error forecasting {symbol}: {e}")
+                            results["forecasting"].append({"ticker": symbol, "error": str(e)})
 
                             # Update progress to show error
                             forecast_progress.update(
@@ -1751,13 +1608,11 @@ def main():
         # Add initial capital row with appropriate date
         if config.forecast.test_start_date:
             # Historical evaluation mode - use test start date
-            test_start = config.forecast.test_start_date.strftime("%Y-%m-%d")
+            test_start = date_to_string(config.forecast.test_start_date)
         else:
             # Future prediction mode - use today's date
             test_start = datetime.now().strftime("%Y-%m-%d")
-        portfolio_value_table.add_row(
-            "Observed Value", test_start, f"${portfolio.initial_capital:,.2f}"
-        )
+        portfolio_value_table.add_row("Observed Value", test_start, f"${portfolio.initial_capital:,.2f}")
 
         # Calculate forecasted portfolio value based on forecast results
         if "forecasting" in results and results["forecasting"]:
@@ -1766,9 +1621,7 @@ def main():
             valid_forecasts = 0
 
             # Check if we're in evaluation mode (have evaluation metrics)
-            is_evaluation_mode = any(
-                "evaluation" in f for f in results["forecasting"] if "error" not in f
-            )
+            is_evaluation_mode = any("evaluation" in f for f in results["forecasting"] if "error" not in f)
 
             for forecast in results["forecasting"]:
                 if "error" not in forecast:
@@ -1782,9 +1635,9 @@ def main():
                         asset_value = asset.quantity * forecast["current_price"]
 
                         # Calculate the forecasted change
-                        forecast_change = (
-                            forecast["forecast_price"] - forecast["current_price"]
-                        ) / forecast["current_price"]
+                        forecast_change = (forecast["forecast_price"] - forecast["current_price"]) / forecast[
+                            "current_price"
+                        ]
 
                         # Apply the change to the portfolio value
                         forecasted_value += asset_value * forecast_change
@@ -1798,7 +1651,7 @@ def main():
             # Add forecasted value row with appropriate end date
             test_end = None
             if config.forecast.test_end_date:
-                test_end = config.forecast.test_end_date.strftime("%Y-%m-%d")
+                test_end = date_to_string(config.forecast.test_end_date)
             else:
                 # Try to get end date from any forecast result
                 for forecast in results["forecasting"]:
@@ -1807,16 +1660,12 @@ def main():
                         break
 
             if test_end:
-                portfolio_value_table.add_row(
-                    "Predicted Value", test_end, f"${forecasted_value:,.2f}"
-                )
+                portfolio_value_table.add_row("Predicted Value", test_end, f"${forecasted_value:,.2f}")
 
             # Add average accuracy row only for evaluation mode
             if is_evaluation_mode and valid_forecasts > 0 and test_end:
                 avg_accuracy = total_accuracy / valid_forecasts
-                portfolio_value_table.add_row(
-                    "Accuracy", test_end, f"{avg_accuracy:.4f}%"
-                )
+                portfolio_value_table.add_row("Accuracy", test_end, f"{avg_accuracy:.4f}%")
 
         console.print(portfolio_value_table)
 
@@ -1840,9 +1689,7 @@ def main():
             return
 
         # Create structured backtest results
-        portfolio_backtest_results = create_portfolio_backtest_results(
-            results, config, strategy_results
-        )
+        portfolio_backtest_results = create_portfolio_backtest_results(results, config, strategy_results)
 
         # Ticker-level results already shown in print_results() above
 
@@ -1868,12 +1715,15 @@ def main():
                 ]:
                     broker_info = f"Broker: {broker_config.name} (zero-commission)"
                 elif broker_config.commission_type == "percentage":
-                    broker_info = f"Broker: {broker_config.name} ({broker_config.commission_value * 100:.1f}% commission"
+                    broker_info = (
+                        f"Broker: {broker_config.name} ({broker_config.commission_value * 100:.1f}% commission"
+                    )
                     if broker_config.min_commission:
                         broker_info += f", ${broker_config.min_commission:.2f} min"
                     broker_info += ")"
                 elif broker_config.commission_type == "per_share":
-                    broker_info = f"Broker: {broker_config.name} (${broker_config.per_share_commission or broker_config.commission_value:.3f}/share"
+                    per_share_comm = broker_config.per_share_commission or broker_config.commission_value
+                    broker_info = f"Broker: {broker_config.name} (${per_share_comm:.3f}/share"
                     if broker_config.min_commission:
                         broker_info += f", ${broker_config.min_commission:.2f} min"
                     broker_info += ")"
@@ -1890,41 +1740,26 @@ def main():
                 broker_info = f"Commission: {config.backtest.commission * 100:.1f}%"
 
             # Create rich panel for strategy summary
-            period_return = (
-                strategy_summary.final_portfolio_value
-                - strategy_summary.initial_portfolio_value
-            )
-            period_return_color = (
-                "green"
-                if period_return > 0
-                else "red"
-                if period_return < 0
-                else "white"
-            )
+            period_return = strategy_summary.final_portfolio_value - strategy_summary.initial_portfolio_value
+            period_return_color = "green" if period_return > 0 else "red" if period_return < 0 else "white"
 
             # Format dates - try multiple sources
-            start_date = "N/A"
-            end_date = "N/A"
+            start_date: str = "N/A"
+            end_date: str = "N/A"
 
             # First try backtest dates, then data dates, then results
             if config.backtest.start_date:
-                start_date = config.backtest.start_date.strftime("%Y-%m-%d")
+                start_date = date_to_string(config.backtest.start_date)
             elif config.data.start_date:
-                start_date = config.data.start_date.strftime("%Y-%m-%d")
-            elif (
-                portfolio_backtest_results.date_range
-                and portfolio_backtest_results.date_range.get("start")
-            ):
+                start_date = date_to_string(config.data.start_date)
+            elif portfolio_backtest_results.date_range and portfolio_backtest_results.date_range.get("start"):
                 start_date = portfolio_backtest_results.date_range["start"]
 
             if config.backtest.end_date:
-                end_date = config.backtest.end_date.strftime("%Y-%m-%d")
+                end_date = date_to_string(config.backtest.end_date)
             elif config.data.end_date:
-                end_date = config.data.end_date.strftime("%Y-%m-%d")
-            elif (
-                portfolio_backtest_results.date_range
-                and portfolio_backtest_results.date_range.get("end")
-            ):
+                end_date = date_to_string(config.data.end_date)
+            elif portfolio_backtest_results.date_range and portfolio_backtest_results.date_range.get("end"):
                 end_date = portfolio_backtest_results.date_range["end"]
 
             summary_content = f"""Start: {start_date}
@@ -1942,9 +1777,17 @@ Strategy Performance:
   Losing Stocks: {strategy_summary.losing_stocks}
   Total Trades: {strategy_summary.total_trades}
 
-Return During Period: [{period_return_color}]${period_return:,.2f} ({strategy_summary.total_return_pct:+.2f}%)[/{period_return_color}]
+Return During Period: [{period_return_color}]${period_return:,.2f} \
+({strategy_summary.total_return_pct:+.2f}%)[/{period_return_color}]
 
-Detailed report saved to: {save_detailed_report(strategy_summary.strategy_name, [r.model_dump() for r in strategy_summary.detailed_results], results, config)}"""
+Detailed report saved to: {
+                save_detailed_report(
+                    strategy_summary.strategy_name,
+                    [r.model_dump() for r in strategy_summary.detailed_results],
+                    results,
+                    config,
+                )
+            }"""
 
             console.print(
                 Panel(
@@ -1974,21 +1817,13 @@ Portfolio Value at End (Current): ${final_value:,.2f}""")
         category_allocations = portfolio.get_allocation_by_category(final_prices)
         if category_allocations:
             print("\nAllocation by Category:")
-            for category, data in sorted(
-                category_allocations.items(), key=lambda x: x[1]["value"], reverse=True
-            ):
-                print(
-                    f"  {category}: ${data['value']:,.2f} ({data['percentage']:.1f}%)"
-                )
+            for category, data in sorted(category_allocations.items(), key=lambda x: x[1]["value"], reverse=True):
+                print(f"  {category}: ${data['value']:,.2f} ({data['percentage']:.1f}%)")
 
         # Show performance breakdown by category
         if args.mode in ["all", "backtest"] and config.data.start_date:
-            start_category_allocations = portfolio.get_allocation_by_category(
-                start_prices
-            )
-            final_category_allocations = portfolio.get_allocation_by_category(
-                final_prices
-            )
+            start_category_allocations = portfolio.get_allocation_by_category(start_prices)
+            final_category_allocations = portfolio.get_allocation_by_category(final_prices)
 
             print("\nPerformance Breakdown By Category:")
             for category in final_category_allocations.keys():
@@ -1996,9 +1831,7 @@ Portfolio Value at End (Current): ${final_value:,.2f}""")
                     start_value = start_category_allocations[category]["value"]
                     final_value = final_category_allocations[category]["value"]
                     category_return = final_value - start_value
-                    category_return_pct = (
-                        (category_return / start_value) * 100 if start_value > 0 else 0
-                    )
+                    category_return_pct = (category_return / start_value) * 100 if start_value > 0 else 0
 
                     print(f"""  {category}:
     Start Value: ${start_value:,.2f}
@@ -2018,16 +1851,10 @@ Portfolio Value at End (Current): ${final_value:,.2f}""")
             print("\nAsset Type Breakdown:")
 
             # Calculate hold-only assets value
-            hold_only_value = sum(
-                asset.get_value(final_prices.get(asset.symbol, 0))
-                for asset in hold_only_assets
-            )
+            hold_only_value = sum(asset.get_value(final_prices.get(asset.symbol, 0)) for asset in hold_only_assets)
 
             # Calculate tradeable assets value
-            tradeable_value = sum(
-                asset.get_value(final_prices.get(asset.symbol, 0))
-                for asset in tradeable_assets
-            )
+            tradeable_value = sum(asset.get_value(final_prices.get(asset.symbol, 0)) for asset in tradeable_assets)
 
             print(f"""  Hold-only Assets: ${hold_only_value:,.2f}
   Tradeable Assets: ${tradeable_value:,.2f}
@@ -2036,15 +1863,11 @@ Portfolio Value at End (Current): ${final_value:,.2f}""")
         # Calculate and show total trades from backtesting results
         total_trades = 0
         if "backtesting" in results:
-            total_trades = sum(
-                backtest.get("num_trades", 0) for backtest in results["backtesting"]
-            )
+            total_trades = sum(backtest.get("num_trades", 0) for backtest in results["backtesting"])
             print(f"\nTotal Trades Executed: {total_trades}")
 
         # Show return during period at the very end
-        print(
-            f"Return During Period: ${period_return:,.2f} ({period_return_pct:+.2f}%)"
-        )
+        print(f"Return During Period: ${period_return:,.2f} ({period_return_pct:+.2f}%)")
 
     # Save results if configured
     if config.output.get("save_results", False):

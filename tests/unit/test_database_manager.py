@@ -27,7 +27,7 @@ class TestDatabaseManagerInitialization:
     def test_initialization_creates_tables(self, tmp_path):
         """Test that initialization creates all required tables."""
         db_path = tmp_path / "test.db"
-        db = DatabaseManager(str(db_path))
+        DatabaseManager(str(db_path))
 
         # Check tables exist
         with sqlite3.connect(db_path) as conn:
@@ -49,7 +49,7 @@ class TestDatabaseManagerInitialization:
     def test_initialization_creates_indexes(self, tmp_path):
         """Test that initialization creates indexes."""
         db_path = tmp_path / "test.db"
-        db = DatabaseManager(str(db_path))
+        DatabaseManager(str(db_path))
 
         # Check indexes exist
         with sqlite3.connect(db_path) as conn:
@@ -175,9 +175,7 @@ class TestPriceHistoryOperations:
 
         # Verify data was stored
         with db_manager.get_connection() as conn:
-            cursor = conn.execute(
-                "SELECT COUNT(*) FROM price_history WHERE symbol = ?", ("TEST",)
-            )
+            cursor = conn.execute("SELECT COUNT(*) FROM price_history WHERE symbol = ?", ("TEST",))
             count = cursor.fetchone()[0]
 
         assert count == len(sample_price_data)
@@ -188,9 +186,7 @@ class TestPriceHistoryOperations:
 
         # Verify interval was stored
         with db_manager.get_connection() as conn:
-            cursor = conn.execute(
-                "SELECT interval FROM price_history WHERE symbol = ? LIMIT 1", ("TEST",)
-            )
+            cursor = conn.execute("SELECT interval FROM price_history WHERE symbol = ? LIMIT 1", ("TEST",))
             interval = cursor.fetchone()[0]
 
         assert interval == "1h"
@@ -203,10 +199,7 @@ class TestPriceHistoryOperations:
 
         assert isinstance(retrieved, pd.DataFrame)
         assert len(retrieved) == len(sample_price_data)
-        assert all(
-            col in retrieved.columns
-            for col in ["Open", "High", "Low", "Close", "Volume"]
-        )
+        assert all(col in retrieved.columns for col in ["Open", "High", "Low", "Close", "Volume"])
 
     def test_get_price_history_with_date_range(self, db_manager, sample_price_data):
         """Test retrieving price history with date range."""
@@ -275,9 +268,7 @@ class TestDividendsAndSplits:
 
     def test_get_dividends_with_date_range(self, db_manager):
         """Test retrieving dividends with date range."""
-        dividend_dates = pd.to_datetime(
-            ["2023-01-15", "2023-04-15", "2023-07-15", "2023-10-15"]
-        )
+        dividend_dates = pd.to_datetime(["2023-01-15", "2023-04-15", "2023-07-15", "2023-10-15"])
         dividends = pd.Series([0.25, 0.25, 0.30, 0.30], index=dividend_dates)
 
         db_manager.store_dividends("TEST", dividends)
@@ -340,12 +331,8 @@ class TestOptionsData:
 
         # Verify data was stored
         with db_manager.get_connection() as conn:
-            calls_count = conn.execute(
-                "SELECT COUNT(*) FROM options_calls WHERE symbol = ?", ("TEST",)
-            ).fetchone()[0]
-            puts_count = conn.execute(
-                "SELECT COUNT(*) FROM options_puts WHERE symbol = ?", ("TEST",)
-            ).fetchone()[0]
+            calls_count = conn.execute("SELECT COUNT(*) FROM options_calls WHERE symbol = ?", ("TEST",)).fetchone()[0]
+            puts_count = conn.execute("SELECT COUNT(*) FROM options_puts WHERE symbol = ?", ("TEST",)).fetchone()[0]
 
         assert calls_count == len(calls)
         assert puts_count == len(puts)
@@ -357,9 +344,7 @@ class TestOptionsData:
 
         db_manager.store_options_chain("TEST", calls, puts, expiration)
 
-        retrieved_calls, retrieved_puts = db_manager.get_options_chain(
-            "TEST", expiration
-        )
+        retrieved_calls, retrieved_puts = db_manager.get_options_chain("TEST", expiration)
 
         assert isinstance(retrieved_calls, pd.DataFrame)
         assert isinstance(retrieved_puts, pd.DataFrame)
@@ -557,8 +542,8 @@ class TestConnectionManagement:
         with pytest.raises(sqlite3.IntegrityError):
             with db_manager.get_connection() as conn:
                 conn.execute(
-                    """INSERT INTO price_history 
-                    (symbol, date, close_price, volume) 
+                    """INSERT INTO price_history
+                    (symbol, date, close_price, volume)
                     VALUES (?, ?, ?, ?)""",
                     ("NOTEXIST", "2023-01-01", 100.0, 1000000),
                 )
@@ -608,11 +593,13 @@ class TestErrorHandling:
         # Manually insert invalid JSON
         with db_manager.get_connection() as conn:
             conn.execute(
-                "INSERT INTO stocks (symbol, name, created_at, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
+                "INSERT INTO stocks (symbol, name, created_at, updated_at) "
+                "VALUES (?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
                 ("TEST", "Test Company"),
             )
             conn.execute(
-                "INSERT INTO stock_info (symbol, info_json, created_at, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
+                "INSERT INTO stock_info (symbol, info_json, created_at, updated_at) "
+                "VALUES (?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
                 ("TEST", "{invalid json}"),
             )
             conn.commit()

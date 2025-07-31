@@ -151,7 +151,7 @@ fi
 if command -v docker-compose &> /dev/null || docker compose version &> /dev/null; then
     echo ""
     echo "Testing Docker Compose configuration..."
-    
+
     # Validate docker-compose.yml syntax
     if [ -f "docker-compose.yml" ]; then
         if docker-compose config > /dev/null 2>&1 || docker compose config > /dev/null 2>&1; then

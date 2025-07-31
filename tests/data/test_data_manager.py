@@ -74,13 +74,13 @@ class TestDataManager:
                 df = ticker_obj.history(period=period, interval=interval)
 
                 if df.empty:
-                    warnings.warn(f"No data retrieved for {ticker}")
+                    warnings.warn(f"No data retrieved for {ticker}", stacklevel=2)
                     continue
 
                 # Ensure we have all required columns
                 required_cols = ["Open", "High", "Low", "Close", "Volume"]
                 if not all(col in df.columns for col in required_cols):
-                    warnings.warn(f"Missing required columns for {ticker}")
+                    warnings.warn(f"Missing required columns for {ticker}", stacklevel=2)
                     continue
 
                 # Clean the data
@@ -94,14 +94,12 @@ class TestDataManager:
                 print(f"Saved {len(df)} rows for {ticker}")
 
             except Exception as e:
-                warnings.warn(f"Failed to fetch data for {ticker}: {e}")
+                warnings.warn(f"Failed to fetch data for {ticker}: {e}", stacklevel=2)
                 continue
 
         return data
 
-    def load_data(
-        self, ticker: str, period: str = "2y", interval: str = "1d"
-    ) -> pd.DataFrame | None:
+    def load_data(self, ticker: str, period: str = "2y", interval: str = "1d") -> pd.DataFrame | None:
         """Load test data from pickle file.
 
         Args:
@@ -121,7 +119,7 @@ class TestDataManager:
             with open(filepath, "rb") as f:
                 return pickle.load(f)
         except Exception as e:
-            warnings.warn(f"Failed to load data for {ticker}: {e}")
+            warnings.warn(f"Failed to load data for {ticker}: {e}", stacklevel=2)
             return None
 
     def get_test_data_subset(
@@ -174,9 +172,7 @@ class TestDataManager:
         np.random.seed(seed)
 
         # Generate dates
-        dates = pd.date_range(
-            start=datetime.now() - timedelta(days=days), periods=days, freq="D"
-        )
+        dates = pd.date_range(start=datetime.now() - timedelta(days=days), periods=days, freq="D")
 
         # Generate price series with trend and volatility
         returns = np.random.normal(trend, volatility, days)

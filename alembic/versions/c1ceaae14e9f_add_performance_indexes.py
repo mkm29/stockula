@@ -6,9 +6,9 @@ Create Date: 2025-07-28
 
 """
 
-from alembic import op
 import sqlalchemy as sa
 
+from alembic import op  # type: ignore[attr-defined]
 
 # revision identifiers, used by Alembic.
 revision = "c1ceaae14e9f"
@@ -29,7 +29,7 @@ def upgrade() -> None:
         try:
             indexes = inspector.get_indexes(table_name)
             return any(idx["name"] == index_name for idx in indexes)
-        except:
+        except Exception:
             return False
 
     # Composite index for price_history queries that filter by symbol, date, and interval
@@ -42,9 +42,7 @@ def upgrade() -> None:
 
     # Index for date range queries on price_history
     if not index_exists("price_history", "idx_price_history_symbol_interval"):
-        op.create_index(
-            "idx_price_history_symbol_interval", "price_history", ["symbol", "interval"]
-        )
+        op.create_index("idx_price_history_symbol_interval", "price_history", ["symbol", "interval"])
 
     # Composite index for options queries
     if not index_exists("options_calls", "idx_options_calls_symbol_exp_strike"):
@@ -87,7 +85,7 @@ def downgrade() -> None:
         try:
             indexes = inspector.get_indexes(table_name)
             return any(idx["name"] == index_name for idx in indexes)
-        except:
+        except Exception:
             return False
 
     # Only drop indexes that exist

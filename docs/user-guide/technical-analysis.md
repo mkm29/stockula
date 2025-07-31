@@ -80,12 +80,12 @@ technical_analysis:
 technical_analysis:
   # Core indicators
   indicators: [sma, ema, rsi, macd, bbands, atr, adx, stoch, williams, cci]
-  
+
   # Moving averages
   sma_periods: [10, 20, 50, 100, 200]
   ema_periods: [8, 12, 21, 26, 50]
   wma_periods: [20, 50]
-  
+
   # Oscillators
   rsi_period: 14
   stoch_params:
@@ -95,7 +95,7 @@ technical_analysis:
   williams_period: 14
   cci_period: 20
   mfi_period: 14
-  
+
   # Trend indicators
   macd_params:
     period_fast: 12
@@ -106,13 +106,13 @@ technical_analysis:
   psar_params:
     af: 0.02
     max_af: 0.2
-  
+
   # Volatility
   bbands_params:
     period: 20
     std: 2
   atr_period: 14
-  
+
   # Volume
   cmf_period: 20
   emv_period: 14
@@ -153,7 +153,7 @@ macd = ta.calculate_macd(data, fast=12, slow=26, signal=9)
 
 # Calculate multiple indicators at once
 indicators = ta.calculate_indicators(
-    data, 
+    data,
     indicators=["sma", "ema", "rsi", "macd", "bbands"],
     sma_periods=[20, 50],
     ema_periods=[12, 26]
@@ -193,7 +193,7 @@ for asset in portfolio.assets:
 ### Technical Analysis Results Table
 
 ```
-                    Technical Analysis Results                     
+                    Technical Analysis Results
 ┏━━━━━━━━┳━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━┓
 ┃ Ticker ┃ SMA_20        ┃ RSI_14         ┃ MACD             ┃
 ┡━━━━━━━━╇━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━┩
@@ -335,21 +335,21 @@ bbands_wide = ta.calculate_bbands(data, period=20, std=2.5)
 def generate_signals(data, indicators):
     """Generate buy/sell signals from indicators."""
     signals = pd.DataFrame(index=data.index)
-    
+
     # RSI signals
     signals['rsi_buy'] = indicators['rsi'] < 30
     signals['rsi_sell'] = indicators['rsi'] > 70
-    
+
     # MACD signals
     signals['macd_buy'] = (indicators['macd'] > indicators['macd_signal']) & \
                          (indicators['macd'].shift(1) <= indicators['macd_signal'].shift(1))
     signals['macd_sell'] = (indicators['macd'] < indicators['macd_signal']) & \
                           (indicators['macd'].shift(1) >= indicators['macd_signal'].shift(1))
-    
+
     # Combined signals
     signals['buy'] = signals['rsi_buy'] & signals['macd_buy']
     signals['sell'] = signals['rsi_sell'] & signals['macd_sell']
-    
+
     return signals
 ```
 
@@ -359,15 +359,15 @@ def generate_signals(data, indicators):
 def screen_stocks(tickers, criteria):
     """Screen stocks based on technical criteria."""
     results = []
-    
+
     for ticker in tickers:
         data = fetcher.get_stock_data(ticker)
         indicators = ta.calculate_indicators(data, indicators=["rsi", "macd", "sma"])
-        
+
         latest = indicators.iloc[-1]
-        
+
         # Apply screening criteria
-        if (latest['rsi'] < criteria['max_rsi'] and 
+        if (latest['rsi'] < criteria['max_rsi'] and
             latest['macd'] > 0 and
             latest['close'] > latest['sma_50']):
             results.append({
@@ -376,7 +376,7 @@ def screen_stocks(tickers, criteria):
                 'macd': latest['macd'],
                 'price_vs_sma': (latest['close'] - latest['sma_50']) / latest['sma_50']
             })
-    
+
     return results
 ```
 
@@ -390,7 +390,7 @@ from stockula.backtesting.strategies import TechnicalStrategy
 class RSIStrategy(TechnicalStrategy):
     def init(self):
         self.rsi = self.I(ta.calculate_rsi, self.data.Close, period=14)
-    
+
     def next(self):
         if self.rsi[-1] < 30 and not self.position:
             self.buy()
@@ -425,12 +425,12 @@ For large datasets, consider chunking:
 def calculate_indicators_chunked(data, chunk_size=1000):
     """Calculate indicators in chunks for large datasets."""
     results = []
-    
+
     for i in range(0, len(data), chunk_size):
         chunk = data.iloc[i:i+chunk_size]
         chunk_indicators = ta.calculate_indicators(chunk, indicators=["sma", "rsi"])
         results.append(chunk_indicators)
-    
+
     return pd.concat(results)
 ```
 

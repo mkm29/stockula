@@ -11,11 +11,9 @@ class Ticker:
     symbol_init: InitVar[str]
     sector_init: InitVar[str | None] = None
     market_cap_init: InitVar[float | None] = None  # in billions
-    category_init: InitVar[str | None] = (
-        None  # momentum, growth, value, speculative, etc.
-    )
+    category_init: InitVar[str | None] = None  # momentum, growth, value, speculative, etc.
     price_range_init: InitVar[dict[str, float] | None] = None  # open, high, low, close
-    metadata_init: InitVar[dict[str, Any]] = None
+    metadata_init: InitVar[dict[str, Any] | None] = None
     _symbol: str = field(init=False, repr=False)
     _sector: str | None = field(init=False, repr=False)
     _market_cap: float | None = field(init=False, repr=False)
@@ -118,6 +116,7 @@ class TickerRegistry:
     """Singleton registry for managing ticker instances."""
 
     _instances: dict[type, "TickerRegistry"] = {}
+    _tickers: dict[str, Ticker]
 
     def __new__(cls):
         """Ensure only one instance exists per class."""

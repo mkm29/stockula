@@ -4,6 +4,10 @@ This directory contains technical documentation for developers working on Stocku
 
 ## Contents
 
+### [CI/CD](ci-cd.md)
+
+Complete guide to the continuous integration and deployment setup, including GitHub Actions workflows, release automation, and Docker builds.
+
 ### [AutoTS Threading Considerations](autots-threading-considerations.md)
 
 Guidelines for working with AutoTS's threading limitations and recommendations for implementing reliable forecasting.

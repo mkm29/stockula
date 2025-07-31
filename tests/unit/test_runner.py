@@ -25,9 +25,7 @@ class TestBacktestRunnerInitialization:
 
     def test_initialization_with_custom_params(self, mock_data_fetcher):
         """Test BacktestRunner initialization with custom parameters."""
-        runner = BacktestRunner(
-            cash=50000, commission=0.001, margin=2.0, data_fetcher=mock_data_fetcher
-        )
+        runner = BacktestRunner(cash=50000, commission=0.001, margin=2.0, data_fetcher=mock_data_fetcher)
         assert runner.cash == 50000
         assert runner.commission == 0.001
         assert runner.margin == 2.0
@@ -105,9 +103,7 @@ class TestBacktestRunnerRun:
         mock_backtest.run.assert_called_once_with(fast_period=5, slow_period=15)
 
     @patch("stockula.backtesting.runner.Backtest")
-    def test_run_with_insufficient_data_warning(
-        self, mock_backtest_class, sample_data, capsys
-    ):
+    def test_run_with_insufficient_data_warning(self, mock_backtest_class, sample_data, capsys):
         """Test warning when insufficient data for strategy."""
         # Create strategy mock with period requirements
         mock_strategy = Mock()
@@ -136,9 +132,7 @@ class TestBacktestRunnerRun:
         mock_backtest.run.return_value = {}
         mock_backtest_class.return_value = mock_backtest
 
-        runner = BacktestRunner(
-            cash=25000, commission=0.005, margin=1.5, data_fetcher=None
-        )
+        runner = BacktestRunner(cash=25000, commission=0.005, margin=1.5, data_fetcher=None)
         runner.run(sample_data, SMACrossStrategy)
 
         # Verify custom parameters were used
@@ -201,9 +195,7 @@ class TestBacktestRunnerOptimize:
         )
 
         # Verify optimize was called with parameters
-        mock_backtest.optimize.assert_called_once_with(
-            fast_period=range(5, 15), slow_period=range(15, 25)
-        )
+        mock_backtest.optimize.assert_called_once_with(fast_period=range(5, 15), slow_period=range(15, 25))
 
         assert results == mock_results
 
@@ -303,9 +295,7 @@ class TestBacktestRunnerFromSymbol:
         )
 
         # Verify dates were passed correctly
-        mock_data_fetcher.get_stock_data.assert_called_once_with(
-            "TSLA", "2023-01-01", "2023-12-31"
-        )
+        mock_data_fetcher.get_stock_data.assert_called_once_with("TSLA", "2023-01-01", "2023-12-31")
 
         # Verify strategy kwargs were passed
         mock_backtest.run.assert_called_once_with(fast_period=8)
@@ -324,9 +314,7 @@ class TestBacktestRunnerStats:
     def test_get_stats_with_results(self):
         """Test get_stats with available results."""
         runner = BacktestRunner(data_fetcher=None)
-        mock_results = pd.Series(
-            {"Return [%]": 15.5, "Sharpe Ratio": 1.25, "Max. Drawdown [%]": -8.3}
-        )
+        mock_results = pd.Series({"Return [%]": 15.5, "Sharpe Ratio": 1.25, "Max. Drawdown [%]": -8.3})
         runner.results = mock_results
 
         stats = runner.get_stats()
@@ -544,9 +532,7 @@ class TestBacktestRunnerDynamicRiskFreeRate:
         return rates
 
     @patch("stockula.backtesting.runner.Backtest")
-    def test_run_with_dynamic_risk_free_rate(
-        self, mock_backtest_class, sample_data, treasury_rates
-    ):
+    def test_run_with_dynamic_risk_free_rate(self, mock_backtest_class, sample_data, treasury_rates):
         """Test run with dynamic risk-free rate."""
         mock_backtest = Mock()
         mock_results = Mock()
@@ -564,9 +550,7 @@ class TestBacktestRunnerDynamicRiskFreeRate:
 
         runner = BacktestRunner(data_fetcher=None, risk_free_rate=treasury_rates)
 
-        with patch.object(
-            runner, "_enhance_results_with_dynamic_metrics"
-        ) as mock_enhance:
+        with patch.object(runner, "_enhance_results_with_dynamic_metrics") as mock_enhance:
             runner.run(sample_data, SMACrossStrategy)
 
             # Verify treasury rates were stored
@@ -586,9 +570,7 @@ class TestBacktestRunnerDynamicRiskFreeRate:
 
         runner = BacktestRunner(data_fetcher=None)
 
-        with patch.object(
-            runner, "_enhance_results_with_dynamic_metrics"
-        ) as mock_enhance:
+        with patch.object(runner, "_enhance_results_with_dynamic_metrics") as mock_enhance:
             runner.run(sample_data, SMACrossStrategy)
 
             # Verify treasury rates were not stored
@@ -625,9 +607,7 @@ class TestBacktestRunnerDynamicRiskFreeRate:
         with patch.object(runner, "run") as mock_run:
             mock_run.return_value = {"Return [%]": 10.0}
 
-            runner.run_from_symbol(
-                "AAPL", SMACrossStrategy, use_dynamic_risk_free_rate=True
-            )
+            runner.run_from_symbol("AAPL", SMACrossStrategy, use_dynamic_risk_free_rate=True)
 
             # Verify treasury rates were fetched
             mock_data_fetcher.get_treasury_rates.assert_called_once()
@@ -654,9 +634,7 @@ class TestBacktestRunnerDynamicRiskFreeRate:
         with patch.object(runner, "run") as mock_run:
             mock_run.return_value = {"Return [%]": 10.0}
 
-            runner.run_from_symbol(
-                "AAPL", SMACrossStrategy, use_dynamic_risk_free_rate=False
-            )
+            runner.run_from_symbol("AAPL", SMACrossStrategy, use_dynamic_risk_free_rate=False)
 
             # Verify treasury rates were not fetched
             mock_data_fetcher.get_treasury_rates.assert_not_called()
@@ -691,17 +669,11 @@ class TestBacktestRunnerDynamicRiskFreeRate:
         with patch.object(runner, "run") as mock_run:
             mock_run.return_value = {"Return [%]": 10.0}
 
-            runner.run_with_dynamic_risk_free_rate(
-                "AAPL", SMACrossStrategy, "2023-01-01", "2023-02-19"
-            )
+            runner.run_with_dynamic_risk_free_rate("AAPL", SMACrossStrategy, "2023-01-01", "2023-02-19")
 
             # Verify data and treasury rates were fetched
-            mock_data_fetcher.get_stock_data.assert_called_once_with(
-                "AAPL", "2023-01-01", "2023-02-19"
-            )
-            mock_data_fetcher.get_treasury_rates.assert_called_once_with(
-                "2023-01-01", "2023-02-19", "3_month"
-            )
+            mock_data_fetcher.get_stock_data.assert_called_once_with("AAPL", "2023-01-01", "2023-02-19")
+            mock_data_fetcher.get_treasury_rates.assert_called_once_with("2023-01-01", "2023-02-19", "3_month")
 
             # Verify risk-free rate was set
             pd.testing.assert_series_equal(runner.risk_free_rate, treasury_rates)
@@ -729,17 +701,13 @@ class TestBacktestRunnerDynamicMetrics:
         runner._treasury_rates = treasury_rates
 
         # Create equity curve as pandas Series
-        equity_curve = pd.Series(
-            10000 + np.random.randn(50).cumsum() * 100, index=treasury_rates.index
-        )
+        equity_curve = pd.Series(10000 + np.random.randn(50).cumsum() * 100, index=treasury_rates.index)
         runner._equity_curve = equity_curve
 
         # Create mock results
         runner.results = {"Return [%]": 10.0, "Sharpe Ratio": 1.0}
 
-        with patch(
-            "stockula.backtesting.metrics.enhance_backtest_metrics"
-        ) as mock_enhance:
+        with patch("stockula.backtesting.metrics.enhance_backtest_metrics") as mock_enhance:
             mock_enhance.return_value = {
                 "Sharpe Ratio (Dynamic)": 1.5,
                 "Sortino Ratio (Dynamic)": 1.8,
@@ -769,9 +737,7 @@ class TestBacktestRunnerDynamicMetrics:
 
         runner.results = {"Return [%]": 10.0}
 
-        with patch(
-            "stockula.backtesting.metrics.enhance_backtest_metrics"
-        ) as mock_enhance:
+        with patch("stockula.backtesting.metrics.enhance_backtest_metrics") as mock_enhance:
             mock_enhance.return_value = {"Sharpe Ratio (Dynamic)": 1.5}
 
             runner._enhance_results_with_dynamic_metrics()
@@ -798,9 +764,7 @@ class TestBacktestRunnerDynamicMetrics:
 
         runner.results = {"Return [%]": 10.0}
 
-        with patch(
-            "stockula.backtesting.metrics.enhance_backtest_metrics"
-        ) as mock_enhance:
+        with patch("stockula.backtesting.metrics.enhance_backtest_metrics") as mock_enhance:
             mock_enhance.return_value = {"Sharpe Ratio (Dynamic)": 1.5}
 
             runner._enhance_results_with_dynamic_metrics()
@@ -824,9 +788,7 @@ class TestBacktestRunnerDynamicMetrics:
 
         runner.results = {"Return [%]": 10.0}
 
-        with patch(
-            "stockula.backtesting.metrics.enhance_backtest_metrics"
-        ) as mock_enhance:
+        with patch("stockula.backtesting.metrics.enhance_backtest_metrics") as mock_enhance:
             mock_enhance.return_value = {"Sharpe Ratio (Dynamic)": 1.5}
 
             runner._enhance_results_with_dynamic_metrics()
@@ -847,9 +809,7 @@ class TestBacktestRunnerDynamicMetrics:
         runner.results = {"Return [%]": 10.0}
 
         # Should return early without calling enhance_backtest_metrics
-        with patch(
-            "stockula.backtesting.metrics.enhance_backtest_metrics"
-        ) as mock_enhance:
+        with patch("stockula.backtesting.metrics.enhance_backtest_metrics") as mock_enhance:
             runner._enhance_results_with_dynamic_metrics()
             mock_enhance.assert_not_called()
 
@@ -861,9 +821,7 @@ class TestBacktestRunnerDynamicMetrics:
         runner.results = {"Return [%]": 10.0}
 
         # Should return early without calling enhance_backtest_metrics
-        with patch(
-            "stockula.backtesting.metrics.enhance_backtest_metrics"
-        ) as mock_enhance:
+        with patch("stockula.backtesting.metrics.enhance_backtest_metrics") as mock_enhance:
             runner._enhance_results_with_dynamic_metrics()
             mock_enhance.assert_not_called()
 
@@ -887,9 +845,7 @@ class TestBacktestRunnerDynamicMetrics:
         runner._treasury_rates = treasury_rates
 
         # Mock object that has __len__ but fails list() conversion
-        mock_equity = Mock(
-            spec_set=["__len__", "__iter__"]
-        )  # Only allow these attributes
+        mock_equity = Mock(spec_set=["__len__", "__iter__"])  # Only allow these attributes
         mock_equity.__len__ = Mock(return_value=50)
 
         # Make list() conversion fail by making it non-iterable
@@ -910,9 +866,7 @@ class TestBacktestRunnerDynamicMetrics:
         """Test enhancement when metrics calculation fails."""
         runner = BacktestRunner(data_fetcher=None)
         runner._treasury_rates = treasury_rates
-        runner._equity_curve = pd.Series(
-            [10000, 10100, 10200], index=treasury_rates.index[:3]
-        )
+        runner._equity_curve = pd.Series([10000, 10100, 10200], index=treasury_rates.index[:3])
         runner.results = {"Return [%]": 10.0}
 
         with patch(
@@ -922,10 +876,7 @@ class TestBacktestRunnerDynamicMetrics:
             runner._enhance_results_with_dynamic_metrics()
 
             captured = capsys.readouterr()
-            assert (
-                "Could not calculate dynamic metrics: Calculation failed"
-                in captured.out
-            )
+            assert "Could not calculate dynamic metrics: Calculation failed" in captured.out
 
 
 class TestBacktestRunnerIntegration:

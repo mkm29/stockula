@@ -53,9 +53,7 @@ class LoggingManager:
                 fmt="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
                 datefmt="%Y-%m-%d %H:%M:%S",
             )
-            simple_formatter = logging.Formatter(
-                fmt="%(asctime)s - %(levelname)s - %(message)s", datefmt="%H:%M:%S"
-            )
+            simple_formatter = logging.Formatter(fmt="%(asctime)s - %(levelname)s - %(message)s", datefmt="%H:%M:%S")
             log_level = getattr(logging, config.logging.level.upper(), logging.INFO)
 
             # Use simple formatter for console, detailed for file

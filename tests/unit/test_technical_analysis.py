@@ -44,9 +44,7 @@ class TestTechnicalIndicators:
         ta = TechnicalIndicators(sample_data)
         assert ta.data is sample_data
         assert isinstance(ta.data, pd.DataFrame)
-        assert all(
-            col in ta.data.columns for col in ["Open", "High", "Low", "Close", "Volume"]
-        )
+        assert all(col in ta.data.columns for col in ["Open", "High", "Low", "Close", "Volume"])
 
     def test_sma(self, ta_indicators):
         """Test Simple Moving Average calculation."""
@@ -96,9 +94,7 @@ class TestTechnicalIndicators:
         sma_12 = ta_indicators.sma(period=12)
 
         # After significant price movement, EMA should differ from SMA
-        assert not np.allclose(
-            ema_12.iloc[20:].values, sma_12.iloc[20:].values, rtol=0.001
-        )
+        assert not np.allclose(ema_12.iloc[20:].values, sma_12.iloc[20:].values, rtol=0.001)
 
     def test_rsi(self, ta_indicators):
         """Test Relative Strength Index calculation."""
@@ -174,18 +170,12 @@ class TestTechnicalIndicators:
 
         # Upper band should be above middle, lower below
         valid_idx = ~bbands["BB_MIDDLE"].isna()
-        assert (
-            bbands.loc[valid_idx, "BB_UPPER"] > bbands.loc[valid_idx, "BB_MIDDLE"]
-        ).all()
-        assert (
-            bbands.loc[valid_idx, "BB_LOWER"] < bbands.loc[valid_idx, "BB_MIDDLE"]
-        ).all()
+        assert (bbands.loc[valid_idx, "BB_UPPER"] > bbands.loc[valid_idx, "BB_MIDDLE"]).all()
+        assert (bbands.loc[valid_idx, "BB_LOWER"] < bbands.loc[valid_idx, "BB_MIDDLE"]).all()
 
         # Bands should contain most price action
         close_prices = ta_indicators.data["Close"]
-        within_bands = (close_prices >= bbands["BB_LOWER"]) & (
-            close_prices <= bbands["BB_UPPER"]
-        )
+        within_bands = (close_prices >= bbands["BB_LOWER"]) & (close_prices <= bbands["BB_UPPER"])
         # Approximately 95% of prices should be within 2 std bands
         assert within_bands.sum() / within_bands.dropna().count() > 0.7
 

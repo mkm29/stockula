@@ -42,12 +42,13 @@ class BacktestRunner:
         self.margin = margin
         self.trade_on_close = trade_on_close
         self.exclusive_orders = exclusive_orders
-        self.results = None
+        self.results: Any = None
         self.data_fetcher = data_fetcher
         self.broker_config = broker_config
         self.risk_free_rate = risk_free_rate
         self._equity_curve = None
         self._treasury_rates = None
+        self.commission: float | Callable[[float, float], float]
 
         # If broker_config is provided, use it to create commission function
         if broker_config:
@@ -81,21 +82,22 @@ class BacktestRunner:
 
             # Calculate base commission based on type
             if broker_config.commission_type == "percentage":
-                commission = trade_value * broker_config.commission_value
+                if isinstance(broker_config.commission_value, int | float):
+                    commission = trade_value * broker_config.commission_value
             elif broker_config.commission_type == "fixed":
-                commission = broker_config.commission_value
+                if isinstance(broker_config.commission_value, int | float):
+                    commission = broker_config.commission_value
             elif broker_config.commission_type == "per_share":
-                per_share = (
-                    broker_config.per_share_commission or broker_config.commission_value
-                )
-                commission = abs(quantity) * per_share
+                per_share = broker_config.per_share_commission
+                if per_share is None and isinstance(broker_config.commission_value, int | float):
+                    per_share = broker_config.commission_value
+                if per_share is not None:
+                    commission = abs(quantity) * per_share
             elif broker_config.commission_type == "tiered":
                 # For tiered commissions, we need to track total volume
                 # For simplicity, using the lowest tier rate
                 if isinstance(broker_config.commission_value, dict):
-                    tiers = sorted(
-                        [(int(k), v) for k, v in broker_config.commission_value.items()]
-                    )
+                    tiers = sorted([(int(k), v) for k, v in broker_config.commission_value.items()])
                     # Use first tier rate (could be enhanced to track monthly volume)
                     commission = abs(quantity) * tiers[0][1]
 
@@ -140,18 +142,15 @@ class BacktestRunner:
             Backtest results dictionary with enhanced metrics if dynamic rates provided
         """
         # Validate data sufficiency for strategies with period requirements
-        if hasattr(strategy, "slow_period") and hasattr(
-            strategy, "min_trading_days_buffer"
-        ):
+        if hasattr(strategy, "slow_period") and hasattr(strategy, "min_trading_days_buffer"):
             total_days = len(data)
-            required_days = strategy.slow_period + getattr(
-                strategy, "min_trading_days_buffer", 20
-            )
+            required_days = strategy.slow_period + getattr(strategy, "min_trading_days_buffer", 20)
 
             if total_days < required_days:
                 print(
                     f"Warning: {strategy.__name__} requires at least {required_days} days of data "
-                    f"({strategy.slow_period} for indicators + {getattr(strategy, 'min_trading_days_buffer', 20)} buffer), "
+                    f"({strategy.slow_period} for indicators + "
+                    f"{getattr(strategy, 'min_trading_days_buffer', 20)} buffer), "
                     f"but only {total_days} days available."
                 )
 
@@ -171,8 +170,8 @@ class BacktestRunner:
 
         # Run backtest with static risk-free rate
         # Suppress progress output by redirecting stderr
-        import sys
         import os
+        import sys
 
         # Save current stderr
         old_stderr = sys.stderr
@@ -208,12 +207,8 @@ class BacktestRunner:
                         self.results["Calendar Days"] = calendar_days
                     elif hasattr(data.index[0], "date"):
                         # Pandas datetime index
-                        self.results["Start Date"] = (
-                            data.index[0].date().strftime("%Y-%m-%d")
-                        )
-                        self.results["End Date"] = (
-                            data.index[-1].date().strftime("%Y-%m-%d")
-                        )
+                        self.results["Start Date"] = data.index[0].date().strftime("%Y-%m-%d")
+                        self.results["End Date"] = data.index[-1].date().strftime("%Y-%m-%d")
 
                         # Calculate trading period in days
                         trading_days = len(data)
@@ -225,17 +220,12 @@ class BacktestRunner:
                     self.results["Trading Days"] = len(data)
 
         # If dynamic rates provided, enhance results with dynamic metrics
-        if (
-            isinstance(self.risk_free_rate, pd.Series)
-            and self._equity_curve is not None
-        ):
+        if isinstance(self.risk_free_rate, pd.Series) and self._equity_curve is not None:
             self._enhance_results_with_dynamic_metrics()
 
         return self.results
 
-    def optimize(
-        self, data: pd.DataFrame, strategy: type, **param_ranges
-    ) -> dict[str, Any]:
+    def optimize(self, data: pd.DataFrame, strategy: type, **param_ranges) -> dict[str, Any]:
         """Optimize strategy parameters.
 
         Args:
@@ -257,8 +247,8 @@ class BacktestRunner:
         )
 
         # Suppress progress output by redirecting stderr
-        import sys
         import os
+        import sys
 
         # Save current stderr
         old_stderr = sys.stderr
@@ -304,17 +294,13 @@ class BacktestRunner:
             Dictionary with both training and testing results
         """
         if not self.data_fetcher:
-            raise ValueError(
-                "Data fetcher not configured. Ensure DI container is properly set up."
-            )
+            raise ValueError("Data fetcher not configured. Ensure DI container is properly set up.")
 
         # Fetch data for the entire period
         all_start_date = train_start_date or test_start_date
         all_end_date = test_end_date or train_end_date
 
-        all_data = self.data_fetcher.get_stock_data(
-            symbol, all_start_date, all_end_date
-        )
+        all_data = self.data_fetcher.get_stock_data(symbol, all_start_date, all_end_date)
 
         # Split data into train and test sets
         train_data = None
@@ -342,36 +328,32 @@ class BacktestRunner:
             test_data = train_data  # Use train data for both if no test data
 
         # Fetch Treasury rates if requested
-        if use_dynamic_risk_free_rate and not isinstance(
-            self.risk_free_rate, pd.Series
-        ):
+        if use_dynamic_risk_free_rate and not isinstance(self.risk_free_rate, pd.Series):
             if all_start_date and all_end_date:
-                treasury_rates = self.data_fetcher.get_treasury_rates(
-                    all_start_date, all_end_date, treasury_duration
-                )
+                treasury_rates = self.data_fetcher.get_treasury_rates(all_start_date, all_end_date, treasury_duration)
                 if not treasury_rates.empty:
                     self.risk_free_rate = treasury_rates
 
-        results = {
+        results: dict[str, Any] = {
             "symbol": symbol,
             "strategy": strategy.__name__,
             "train_period": {
                 "start": train_data.index[0].strftime("%Y-%m-%d")
-                if len(train_data) > 0
+                if train_data is not None and len(train_data) > 0
                 else None,
                 "end": train_data.index[-1].strftime("%Y-%m-%d")
-                if len(train_data) > 0
+                if train_data is not None and len(train_data) > 0
                 else None,
-                "days": len(train_data),
+                "days": len(train_data) if train_data is not None else 0,
             },
             "test_period": {
                 "start": test_data.index[0].strftime("%Y-%m-%d")
-                if len(test_data) > 0
+                if test_data is not None and len(test_data) > 0
                 else None,
                 "end": test_data.index[-1].strftime("%Y-%m-%d")
-                if len(test_data) > 0
+                if test_data is not None and len(test_data) > 0
                 else None,
-                "days": len(test_data),
+                "days": len(test_data) if test_data is not None else 0,
             },
         }
 
@@ -383,41 +365,44 @@ class BacktestRunner:
             optimized_result = self.optimize(train_data, strategy, **param_ranges)
 
             # Extract optimized parameters
-            optimized_params = {
-                k: v
-                for k, v in optimized_result._asdict().items()
-                if k
-                not in [
-                    "Start",
-                    "End",
-                    "Duration",
-                    "Exposure Time [%]",
-                    "Equity Final [$]",
-                    "Equity Peak [$]",
-                    "Return [%]",
-                    "Buy & Hold Return [%]",
-                    "Max. Drawdown [%]",
-                    "Avg. Drawdown [%]",
-                    "Max. Drawdown Duration",
-                    "Avg. Drawdown Duration",
-                    "# Trades",
-                    "Win Rate [%]",
-                    "Best Trade [%]",
-                    "Worst Trade [%]",
-                    "Avg. Trade [%]",
-                    "Max. Trade Duration",
-                    "Avg. Trade Duration",
-                    "Profit Factor",
-                    "Expectancy [%]",
-                    "SQN",
-                    "Sharpe Ratio",
-                    "Sortino Ratio",
-                    "Calmar Ratio",
-                    "_strategy",
-                    "_equity_curve",
-                    "_trades",
-                ]
-            }
+            if hasattr(optimized_result, "items"):
+                optimized_params = {
+                    k: v
+                    for k, v in optimized_result.items()
+                    if k
+                    not in [
+                        "Start",
+                        "End",
+                        "Duration",
+                        "Exposure Time [%]",
+                        "Equity Final [$]",
+                        "Equity Peak [$]",
+                        "Return [%]",
+                        "Buy & Hold Return [%]",
+                        "Max. Drawdown [%]",
+                        "Avg. Drawdown [%]",
+                        "Max. Drawdown Duration",
+                        "Avg. Drawdown Duration",
+                        "# Trades",
+                        "Win Rate [%]",
+                        "Best Trade [%]",
+                        "Worst Trade [%]",
+                        "Avg. Trade [%]",
+                        "Max. Trade Duration",
+                        "Avg. Trade Duration",
+                        "Profit Factor",
+                        "Expectancy [%]",
+                        "SQN",
+                        "Sharpe Ratio",
+                        "Sortino Ratio",
+                        "Calmar Ratio",
+                        "_strategy",
+                        "_equity_curve",
+                        "_trades",
+                    ]
+                }
+            else:
+                optimized_params = {}
 
             results["optimized_parameters"] = optimized_params
 
@@ -441,18 +426,12 @@ class BacktestRunner:
         if results["train_results"]["return_pct"] != 0:
             results["performance_degradation"] = {
                 "return_pct": (
-                    (
-                        results["test_results"]["return_pct"]
-                        - results["train_results"]["return_pct"]
-                    )
+                    (results["test_results"]["return_pct"] - results["train_results"]["return_pct"])
                     / abs(results["train_results"]["return_pct"])
                     * 100
                 ),
                 "sharpe_ratio": (
-                    (
-                        results["test_results"]["sharpe_ratio"]
-                        - results["train_results"]["sharpe_ratio"]
-                    )
+                    (results["test_results"]["sharpe_ratio"] - results["train_results"]["sharpe_ratio"])
                     / abs(results["train_results"]["sharpe_ratio"])
                     * 100
                     if results["train_results"]["sharpe_ratio"] != 0
@@ -508,17 +487,13 @@ class BacktestRunner:
             Backtest results with dynamic risk-free rate metrics by default
         """
         if not self.data_fetcher:
-            raise ValueError(
-                "Data fetcher not configured. Ensure DI container is properly set up."
-            )
+            raise ValueError("Data fetcher not configured. Ensure DI container is properly set up.")
 
         # Fetch stock data
         stock_data = self.data_fetcher.get_stock_data(symbol, start_date, end_date)
 
         # Automatically fetch dynamic Treasury rates if enabled and not already provided
-        if use_dynamic_risk_free_rate and not isinstance(
-            self.risk_free_rate, pd.Series
-        ):
+        if use_dynamic_risk_free_rate and not isinstance(self.risk_free_rate, pd.Series):
             # Determine date range from stock data if not provided
             if start_date is None and hasattr(stock_data.index[0], "strftime"):
                 start_date = stock_data.index[0].strftime("%Y-%m-%d")
@@ -528,9 +503,7 @@ class BacktestRunner:
             # Only fetch Treasury rates if we have valid dates
             if start_date and end_date:
                 # Fetch Treasury rates for the same period
-                treasury_rates = self.data_fetcher.get_treasury_rates(
-                    start_date, end_date, treasury_duration
-                )
+                treasury_rates = self.data_fetcher.get_treasury_rates(start_date, end_date, treasury_duration)
 
                 # Set dynamic risk-free rates
                 if not treasury_rates.empty:
@@ -571,9 +544,7 @@ class BacktestRunner:
             if self._equity_curve.ndim > 1:
                 # For multi-dimensional arrays, take the first column (equity values)
                 equity_values = (
-                    self._equity_curve[:, 0]
-                    if self._equity_curve.shape[1] > 0
-                    else self._equity_curve.flatten()
+                    self._equity_curve[:, 0] if self._equity_curve.shape[1] > 0 else self._equity_curve.flatten()
                 )
             else:
                 equity_values = self._equity_curve
@@ -587,26 +558,18 @@ class BacktestRunner:
             # Convert whatever type to pandas Series
             if isinstance(self._equity_curve, pd.DataFrame):
                 # It's a DataFrame - extract the first column (equity values)
-                equity_series = pd.Series(
-                    self._equity_curve.iloc[:, 0], index=self._equity_curve.index
-                )
+                equity_series = pd.Series(self._equity_curve.iloc[:, 0], index=self._equity_curve.index)
             elif isinstance(self._equity_curve, pd.Series):
                 # It's already a Series
                 equity_series = self._equity_curve
-            elif hasattr(self._equity_curve, "values") and hasattr(
-                self._equity_curve, "index"
-            ):
+            elif hasattr(self._equity_curve, "values") and hasattr(self._equity_curve, "index"):
                 # It's some other pandas object - try to convert
                 if hasattr(self._equity_curve, "iloc"):
                     # Has iloc, probably DataFrame-like
-                    equity_series = pd.Series(
-                        self._equity_curve.iloc[:, 0], index=self._equity_curve.index
-                    )
+                    equity_series = pd.Series(self._equity_curve.iloc[:, 0], index=self._equity_curve.index)
                 else:
                     # Try direct conversion
-                    equity_series = pd.Series(
-                        self._equity_curve.values, index=self._equity_curve.index
-                    )
+                    equity_series = pd.Series(self._equity_curve.values, index=self._equity_curve.index)
             elif hasattr(self._equity_curve, "__len__"):
                 # It's array-like, convert to Series with treasury rates index
                 try:
@@ -616,7 +579,8 @@ class BacktestRunner:
                     )
                 except Exception as e:
                     print(
-                        f"Warning: Could not convert equity curve to pandas Series. Type: {type(self._equity_curve)}, Error: {e}"
+                        f"Warning: Could not convert equity curve to pandas Series. "
+                        f"Type: {type(self._equity_curve)}, Error: {e}"
                     )
                     return
             else:
@@ -626,16 +590,12 @@ class BacktestRunner:
 
         # Ensure it's definitely a pandas Series
         if not isinstance(equity_series, pd.Series):
-            print(
-                f"Warning: Could not convert equity curve to pandas Series. Type: {type(equity_series)}"
-            )
+            print(f"Warning: Could not convert equity curve to pandas Series. Type: {type(equity_series)}")
             return
 
         # Enhance results with dynamic metrics
         try:
-            enhanced_stats = enhance_backtest_metrics(
-                self.results, equity_series, self._treasury_rates
-            )
+            enhanced_stats = enhance_backtest_metrics(self.results, equity_series, self._treasury_rates)
         except Exception as e:
             print(f"Warning: Could not calculate dynamic metrics: {e}")
             return
@@ -668,9 +628,7 @@ class BacktestRunner:
             Backtest results with enhanced dynamic metrics
         """
         if not self.data_fetcher:
-            raise ValueError(
-                "Data fetcher not configured. Ensure DI container is properly set up."
-            )
+            raise ValueError("Data fetcher not configured. Ensure DI container is properly set up.")
 
         # Fetch stock data
         stock_data = self.data_fetcher.get_stock_data(symbol, start_date, end_date)
@@ -681,9 +639,7 @@ class BacktestRunner:
         if end_date is None:
             end_date = stock_data.index[-1].strftime("%Y-%m-%d")
 
-        treasury_rates = self.data_fetcher.get_treasury_rates(
-            start_date, end_date, treasury_duration
-        )
+        treasury_rates = self.data_fetcher.get_treasury_rates(start_date, end_date, treasury_duration)
 
         # Set dynamic risk-free rates
         self.risk_free_rate = treasury_rates

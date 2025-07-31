@@ -3,7 +3,7 @@
 from pathlib import Path
 from typing import Any
 
-import yaml
+import yaml  # type: ignore[import-untyped]
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -26,9 +26,7 @@ class Settings(BaseSettings):
         case_sensitive=False,
     )
 
-    config_file: str | None = Field(
-        default=None, description="Path to YAML configuration file"
-    )
+    config_file: str | None = Field(default=None, description="Path to YAML configuration file")
     debug: bool = Field(default=False, description="Enable debug mode")
     log_level: str = Field(default="INFO", description="Logging level")
 

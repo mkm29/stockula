@@ -4,11 +4,11 @@
 import sys
 from pathlib import Path
 
+from test_data_manager import setup_test_data
+
 # Add the project root to the path
 project_root = Path(__file__).parent.parent.parent / "src"
 sys.path.insert(0, str(project_root))
-
-from test_data_manager import setup_test_data
 
 
 def main():

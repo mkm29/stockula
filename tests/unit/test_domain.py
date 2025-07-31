@@ -61,10 +61,7 @@ class TestTicker:
         """Test ticker string representation."""
         ticker = Ticker(symbol="AAPL", sector="Technology")
         assert str(ticker) == "Ticker(AAPL)"
-        assert (
-            repr(ticker)
-            == "Ticker(symbol='AAPL', sector='Technology', market_cap=None, category=None)"
-        )
+        assert repr(ticker) == "Ticker(symbol='AAPL', sector='Technology', market_cap=None, category=None)"
 
 
 class TestTickerRegistry:
@@ -113,8 +110,8 @@ class TestTickerRegistry:
 
         # Create multiple tickers
         ticker1 = registry.get_or_create("AAPL")
-        ticker2 = registry.get_or_create("GOOGL")
-        ticker3 = registry.get_or_create("MSFT")
+        registry.get_or_create("GOOGL")
+        registry.get_or_create("MSFT")
 
         all_tickers = registry.all()
         assert len(all_tickers) == 3
@@ -140,13 +137,13 @@ class TestAsset:
 
     def test_asset_creation(self, sample_ticker):
         """Test creating an asset."""
-        asset = Asset(ticker=sample_ticker, quantity=10.0, category=Category.MOMENTUM)
+        asset = Asset(ticker_init=sample_ticker, quantity_init=10.0, category_init=Category.MOMENTUM)
         assert asset.ticker == sample_ticker
         assert asset.quantity == 10.0
         assert asset.category == Category.MOMENTUM
         assert asset.symbol == "AAPL"
 
-    def test_asset_without_category(self, sample_ticker):
+    def test_asset_without_category(self):
         """Test asset without explicit category is None."""
         ticker_with_category = Ticker(
             "NVDA",  # symbol_init
@@ -156,10 +153,10 @@ class TestAsset:
             None,  # price_range_init
             None,  # metadata_init
         )
-        asset = Asset(ticker_with_category, quantity=5.0, category=None)
+        asset = Asset(ticker_init=ticker_with_category, quantity_init=5.0, category_init=None)
         assert asset.category is None  # Asset doesn't inherit ticker category
 
-    def test_asset_category_override(self, sample_ticker):
+    def test_asset_category_override(self):
         """Test asset can have its own category."""
         ticker_with_category = Ticker(
             "SPY",  # symbol_init
@@ -170,16 +167,16 @@ class TestAsset:
             None,  # metadata_init
         )
         asset = Asset(
-            ticker=ticker_with_category,
-            quantity=20.0,
-            category=Category.GROWTH,  # Asset's own category
+            ticker_init=ticker_with_category,
+            quantity_init=20.0,
+            category_init=Category.GROWTH,  # Asset's own category
         )
         assert asset.category == Category.GROWTH
         assert ticker_with_category.category == "INDEX"  # Ticker unchanged
 
     def test_asset_value_calculation(self, sample_ticker):
         """Test asset value calculation."""
-        asset = Asset(ticker=sample_ticker, quantity=10.0)
+        asset = Asset(ticker_init=sample_ticker, quantity_init=10.0)
 
         # Test with different prices
         assert asset.get_value(150.0) == 1500.0
@@ -188,7 +185,7 @@ class TestAsset:
 
     def test_asset_string_representation(self, sample_ticker):
         """Test asset string representation."""
-        asset = Asset(ticker=sample_ticker, quantity=10.0)
+        asset = Asset(ticker_init=sample_ticker, quantity_init=10.0)
         # Asset.__str__ returns: Asset(symbol, quantity shares[, category])
         assert "AAPL" in str(asset)
         assert "10.00 shares" in str(asset)
@@ -231,9 +228,9 @@ class TestPortfolio:
     def test_portfolio_creation(self):
         """Test creating a portfolio."""
         portfolio = Portfolio(
-            name="Test Portfolio",
-            initial_capital=100000.0,
-            allocation_method="equal_weight",
+            name_init="Test Portfolio",
+            initial_capital_init=100000.0,
+            allocation_method_init="equal_weight",
             max_position_size=25.0,
             stop_loss_pct=10.0,
         )
@@ -255,7 +252,7 @@ class TestPortfolio:
         sample_portfolio.add_asset(sample_asset)
 
         # Try to add same ticker again
-        duplicate_asset = Asset(ticker=sample_asset.ticker, quantity=5.0)
+        duplicate_asset = Asset(ticker_init=sample_asset.ticker, quantity_init=5.0)
         with pytest.raises(ValueError, match="already exists"):
             sample_portfolio.add_asset(duplicate_asset)
 
@@ -340,9 +337,7 @@ class TestPortfolio:
             None,  # price_range_init
             None,  # metadata_init
         )
-        expensive_asset = Asset(
-            ticker=expensive_ticker, quantity=1.0, category=Category.VALUE
-        )
+        expensive_asset = Asset(ticker_init=expensive_ticker, quantity_init=1.0, category_init=Category.VALUE)
 
         sample_portfolio.add_asset(sample_asset)
         sample_portfolio.add_asset(expensive_asset)
@@ -392,9 +387,7 @@ class TestDomainFactory:
         assert portfolio.initial_capital == 100000.0
         assert len(portfolio.assets) == 4
 
-    def test_create_portfolio_with_dynamic_allocation(
-        self, dynamic_allocation_config, mock_data_fetcher
-    ):
+    def test_create_portfolio_with_dynamic_allocation(self, dynamic_allocation_config, mock_data_fetcher):
         """Test creating portfolio with dynamic allocation."""
         config = StockulaConfig(portfolio=dynamic_allocation_config)
         factory = DomainFactory(fetcher=mock_data_fetcher)
@@ -411,9 +404,7 @@ class TestDomainFactory:
         googl_asset = portfolio.get_asset_by_symbol("GOOGL")
         assert googl_asset.quantity == pytest.approx(83.33, rel=0.01)
 
-    def test_create_portfolio_with_auto_allocation(
-        self, auto_allocation_config, mock_data_fetcher
-    ):
+    def test_create_portfolio_with_auto_allocation(self, auto_allocation_config, mock_data_fetcher):
         """Test creating portfolio with auto allocation."""
         config = StockulaConfig(portfolio=auto_allocation_config)
         factory = DomainFactory(fetcher=mock_data_fetcher)
@@ -441,7 +432,7 @@ class TestDomainFactory:
 
         # This should raise validation error at config creation time
         with pytest.raises(ValidationError, match="must specify exactly one"):
-            config = StockulaConfig(
+            StockulaConfig(
                 portfolio=PortfolioConfig(
                     name="Test",
                     initial_capital=10000,
@@ -525,9 +516,7 @@ class TestDomainFactoryAdvanced:
         }
         assert categories == expected_categories
 
-    def test_create_portfolio_dynamic_allocation_error_handling(
-        self, mock_data_fetcher
-    ):
+    def test_create_portfolio_dynamic_allocation_error_handling(self, mock_data_fetcher):
         """Test error handling in dynamic allocation."""
         # Patch the get_current_prices method to raise an exception
         with patch.object(
@@ -547,8 +536,9 @@ class TestDomainFactoryAdvanced:
             factory = DomainFactory(fetcher=mock_data_fetcher)
 
             # Should handle price fetch errors gracefully or raise appropriate error
-            with pytest.raises(Exception):
+            with pytest.raises(Exception) as exc_info:
                 factory.create_portfolio(config)
+            assert "Price fetch failed" in str(exc_info.value)
 
     def test_create_portfolio_auto_allocation_categories(self, mock_data_fetcher):
         """Test auto allocation with category ratios."""
@@ -621,7 +611,7 @@ class TestDomainFactoryAdvanced:
 
         with patch.object(Portfolio, "validate_capital_sufficiency"):
             with patch.object(Portfolio, "validate_allocation_constraints"):
-                portfolio = factory.create_portfolio(config)
+                factory.create_portfolio(config)
 
         # Check that tickers were added to registry
         all_tickers = factory.get_all_tickers()
@@ -658,12 +648,8 @@ class TestDomainFactoryAdvanced:
                     initial_capital=100000.0,
                     dynamic_allocation=True,
                     tickers=[
-                        TickerConfig(
-                            symbol="AAPL", allocation_amount=15000.0
-                        ),  # $15k / $150 = 100 shares
-                        TickerConfig(
-                            symbol="GOOGL", allocation_amount=5000.0
-                        ),  # $5k / $2500 = 2 shares
+                        TickerConfig(symbol="AAPL", allocation_amount=15000.0),  # $15k / $150 = 100 shares
+                        TickerConfig(symbol="GOOGL", allocation_amount=5000.0),  # $5k / $2500 = 2 shares
                     ],
                 )
             )
@@ -692,12 +678,8 @@ class TestDomainFactoryAdvanced:
                     initial_capital=60000.0,
                     dynamic_allocation=True,
                     tickers=[
-                        TickerConfig(
-                            symbol="VTI", allocation_pct=60.0
-                        ),  # 60% of $60k = $36k / $200 = 180 shares
-                        TickerConfig(
-                            symbol="QQQ", allocation_pct=40.0
-                        ),  # 40% of $60k = $24k / $300 = 80 shares
+                        TickerConfig(symbol="VTI", allocation_pct=60.0),  # 60% of $60k = $36k / $200 = 180 shares
+                        TickerConfig(symbol="QQQ", allocation_pct=40.0),  # 40% of $60k = $24k / $300 = 80 shares
                     ],
                 )
             )
@@ -721,7 +703,7 @@ class TestDomainFactoryErrorScenarios:
 
         # Zero capital should be caught by pydantic validation
         with pytest.raises(ValidationError):
-            config = StockulaConfig(
+            StockulaConfig(
                 portfolio=PortfolioConfig(
                     name="Zero Capital",
                     initial_capital=0.0,  # This should fail validation
@@ -773,9 +755,7 @@ class TestDomainFactoryErrorScenarios:
                     dynamic_allocation=True,
                     tickers=[
                         TickerConfig(symbol="AAPL", allocation_amount=5000.0),
-                        TickerConfig(
-                            symbol="GOOGL", allocation_amount=5000.0
-                        ),  # Price missing
+                        TickerConfig(symbol="GOOGL", allocation_amount=5000.0),  # Price missing
                     ],
                 )
             )
@@ -807,9 +787,7 @@ class TestTickerRegistryAdvanced:
         assert ticker1.market_cap == 3000.0
 
         # Update with new data - use all required parameters
-        ticker2 = registry.get_or_create(
-            "AAPL", sector="Tech", market_cap=3100.0, category=None, price_range=None
-        )
+        ticker2 = registry.get_or_create("AAPL", sector="Tech", market_cap=3100.0, category=None, price_range=None)
         # Since Ticker is immutable, a new instance is created with updated values
         assert ticker2 is not ticker1  # Different object due to immutability
         assert ticker2.symbol == ticker1.symbol  # Same symbol
@@ -846,7 +824,7 @@ class TestTickerRegistryAdvanced:
 
         # All should be unique
         assert len(tickers) == 10
-        assert len(set(ticker.symbol for ticker in tickers)) == 10
+        assert len({ticker.symbol for ticker in tickers}) == 10
 
         # Registry should contain all
         all_tickers = registry.all()
@@ -859,7 +837,7 @@ class TestAssetAdvanced:
     def test_asset_value_edge_cases(self):
         """Test asset value calculation edge cases."""
         ticker = Ticker("TEST")
-        asset = Asset(ticker=ticker, quantity=10.0)
+        asset = Asset(ticker_init=ticker, quantity_init=10.0)
 
         # Test with negative price (should handle gracefully)
         value = asset.get_value(-50.0)
@@ -886,15 +864,15 @@ class TestAssetAdvanced:
         )
 
         # Fractional shares
-        fractional_asset = Asset(ticker=ticker, quantity=0.5)
+        fractional_asset = Asset(ticker_init=ticker, quantity_init=0.5)
         assert fractional_asset.get_value(100.0) == 50.0
 
         # Assets must have positive quantity, so test minimum positive value
-        min_asset = Asset(ticker=ticker, quantity=0.001)
+        min_asset = Asset(ticker_init=ticker, quantity_init=0.001)
         assert min_asset.get_value(100.0) == 0.1
 
         # Very large quantity
-        large_asset = Asset(ticker=ticker, quantity=1e6)
+        large_asset = Asset(ticker_init=ticker, quantity_init=1e6)
         assert large_asset.get_value(100.0) == 1e8
 
     def test_asset_category_precedence(self):
@@ -902,8 +880,6 @@ class TestAssetAdvanced:
         ticker_with_category = Ticker("TEST", category=Category.INDEX)
 
         # Asset category should override ticker category
-        asset = Asset(
-            ticker=ticker_with_category, quantity=10.0, category=Category.GROWTH
-        )
+        asset = Asset(ticker_init=ticker_with_category, quantity_init=10.0, category_init=Category.GROWTH)
         assert asset.category == Category.GROWTH
         assert ticker_with_category.category == Category.INDEX  # Unchanged

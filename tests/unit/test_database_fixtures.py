@@ -1,8 +1,5 @@
 """Test database fixtures to ensure they work correctly."""
 
-import pytest
-from datetime import date, timedelta
-import pandas as pd
 from sqlalchemy import text
 
 
@@ -10,11 +7,7 @@ def test_database_fixture_creates_tables(test_database):
     """Test that database fixture creates all required tables."""
     # Get table names from the database
     with test_database.get_session() as session:
-        result = session.exec(
-            text(
-                "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"
-            )
-        )
+        result = session.exec(text("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"))
         tables = {row[0] for row in result}
 
     # Check that all expected tables exist

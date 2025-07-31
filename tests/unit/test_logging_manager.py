@@ -86,9 +86,7 @@ class TestLoggingManagerSetup:
         manager = LoggingManager()
         self.config.logging.enabled = True
 
-        with patch(
-            "stockula.utils.logging_manager.logging.StreamHandler"
-        ) as mock_handler_class:
+        with patch("stockula.utils.logging_manager.logging.StreamHandler") as mock_handler_class:
             mock_handler = Mock()
             mock_handler.level = 20  # Set as integer, not Mock
             mock_handler_class.return_value = mock_handler
@@ -103,9 +101,7 @@ class TestLoggingManagerSetup:
         manager = LoggingManager()
         self.config.logging.enabled = False
 
-        with patch(
-            "stockula.utils.logging_manager.logging.StreamHandler"
-        ) as mock_handler:
+        with patch("stockula.utils.logging_manager.logging.StreamHandler") as mock_handler:
             manager.setup(self.config)
             mock_handler.assert_called()  # StreamHandler is always created, but with WARNING level
 
@@ -119,9 +115,7 @@ class TestLoggingManagerSetup:
             self.config.logging.log_file = tmp_file.name
 
             try:
-                with patch(
-                    "stockula.utils.logging_manager.RotatingFileHandler"
-                ) as mock_handler_class:
+                with patch("stockula.utils.logging_manager.RotatingFileHandler") as mock_handler_class:
                     mock_handler = Mock()
                     mock_handler.level = 20  # Set as integer
                     mock_handler_class.return_value = mock_handler
@@ -178,30 +172,22 @@ class TestLoggingManagerMethods:
     def test_error_method_without_exc_info(self):
         """Test error logging method without exception info."""
         self.manager.error("Error message")
-        self.manager.logger.error.assert_called_once_with(
-            "Error message", exc_info=False
-        )
+        self.manager.logger.error.assert_called_once_with("Error message", exc_info=False)
 
     def test_error_method_with_exc_info(self):
         """Test error logging method with exception info."""
         self.manager.error("Error message", exc_info=True)
-        self.manager.logger.error.assert_called_once_with(
-            "Error message", exc_info=True
-        )
+        self.manager.logger.error.assert_called_once_with("Error message", exc_info=True)
 
     def test_critical_method_without_exc_info(self):
         """Test critical logging method without exception info."""
         self.manager.critical("Critical message")
-        self.manager.logger.critical.assert_called_once_with(
-            "Critical message", exc_info=False
-        )
+        self.manager.logger.critical.assert_called_once_with("Critical message", exc_info=False)
 
     def test_critical_method_with_exc_info(self):
         """Test critical logging method with exception info."""
         self.manager.critical("Critical message", exc_info=True)
-        self.manager.logger.critical.assert_called_once_with(
-            "Critical message", exc_info=True
-        )
+        self.manager.logger.critical.assert_called_once_with("Critical message", exc_info=True)
 
 
 class TestLoggingManagerHandlers:
@@ -214,9 +200,7 @@ class TestLoggingManagerHandlers:
         config.logging.enabled = True
         config.logging.level = "INFO"
 
-        with patch(
-            "stockula.utils.logging_manager.logging.StreamHandler"
-        ) as mock_handler_class:
+        with patch("stockula.utils.logging_manager.logging.StreamHandler") as mock_handler_class:
             mock_handler = Mock()
             mock_handler.level = 20  # Set level attribute as integer
             mock_handler_class.return_value = mock_handler
@@ -240,9 +224,7 @@ class TestLoggingManagerHandlers:
             config.logging.log_file = tmp_file.name
 
             try:
-                with patch(
-                    "stockula.utils.logging_manager.RotatingFileHandler"
-                ) as mock_handler_class:
+                with patch("stockula.utils.logging_manager.RotatingFileHandler") as mock_handler_class:
                     mock_handler = Mock()
                     mock_handler.level = 10  # Set level attribute as integer
                     mock_handler_class.return_value = mock_handler
@@ -265,16 +247,12 @@ class TestLoggingManagerHandlers:
         config = StockulaConfig()
         config.logging.enabled = True
 
-        with patch(
-            "stockula.utils.logging_manager.logging.StreamHandler"
-        ) as mock_handler_class:
+        with patch("stockula.utils.logging_manager.logging.StreamHandler") as mock_handler_class:
             mock_handler = Mock()
             mock_handler.level = 20  # Set level attribute as integer
             mock_handler_class.return_value = mock_handler
 
-            with patch(
-                "stockula.utils.logging_manager.logging.Formatter"
-            ) as mock_formatter_class:
+            with patch("stockula.utils.logging_manager.logging.Formatter") as mock_formatter_class:
                 mock_formatter = Mock()
                 mock_formatter_class.return_value = mock_formatter
 
@@ -309,9 +287,7 @@ class TestLoggingManagerEdgeCases:
         config = StockulaConfig()
         config.logging.log_to_file = True
         config.logging.enabled = True
-        config.logging.log_file = (
-            "/root/nonexistent/test.log"  # Should fail on most systems
-        )
+        config.logging.log_file = "/root/nonexistent/test.log"  # Should fail on most systems
 
         # This should not raise an exception
         try:
@@ -347,9 +323,7 @@ class TestLoggingManagerIntegration:
 
     def test_real_logging_output(self):
         """Test that logging actually produces output."""
-        with tempfile.NamedTemporaryFile(
-            mode="w+", suffix=".log", delete=False
-        ) as tmp_file:
+        with tempfile.NamedTemporaryFile(mode="w+", suffix=".log", delete=False) as tmp_file:
             try:
                 manager = LoggingManager("integration_test")
                 config = StockulaConfig()
@@ -406,7 +380,7 @@ class TestLoggingManagerIntegration:
     def test_logger_hierarchy(self):
         """Test logger hierarchy behavior."""
         parent_manager = LoggingManager("parent")
-        child_manager = LoggingManager("parent.child")
+        LoggingManager("parent.child")
 
         config = StockulaConfig()
         config.logging.level = "DEBUG"

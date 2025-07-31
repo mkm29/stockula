@@ -11,9 +11,7 @@ class BacktestResult(BaseModel):
 
     ticker: str = Field(description="Asset ticker symbol")
     strategy: str = Field(description="Strategy name")
-    parameters: dict[str, Any] = Field(
-        default_factory=dict, description="Strategy parameters used"
-    )
+    parameters: dict[str, Any] = Field(default_factory=dict, description="Strategy parameters used")
     return_pct: float = Field(description="Return percentage")
     sharpe_ratio: float = Field(description="Sharpe ratio")
     max_drawdown_pct: float = Field(description="Maximum drawdown percentage")
@@ -25,22 +23,16 @@ class StrategyBacktestSummary(BaseModel):
     """Summary of backtest results for a single strategy across all assets."""
 
     strategy_name: str = Field(description="Strategy name")
-    parameters: dict[str, Any] = Field(
-        default_factory=dict, description="Strategy parameters"
-    )
+    parameters: dict[str, Any] = Field(default_factory=dict, description="Strategy parameters")
     initial_portfolio_value: float = Field(description="Initial portfolio value")
-    final_portfolio_value: float = Field(
-        description="Final portfolio value after backtest"
-    )
+    final_portfolio_value: float = Field(description="Final portfolio value after backtest")
     total_return_pct: float = Field(description="Total portfolio return percentage")
     total_trades: int = Field(description="Total trades across all assets")
     winning_stocks: int = Field(description="Number of stocks with positive returns")
     losing_stocks: int = Field(description="Number of stocks with negative returns")
     average_return_pct: float = Field(description="Average return across all assets")
     average_sharpe_ratio: float = Field(description="Average Sharpe ratio")
-    detailed_results: list[BacktestResult] = Field(
-        default_factory=list, description="Per-asset results"
-    )
+    detailed_results: list[BacktestResult] = Field(default_factory=list, description="Per-asset results")
 
 
 class PortfolioBacktestResults(BaseModel):
@@ -53,9 +45,7 @@ class PortfolioBacktestResults(BaseModel):
     strategy_summaries: list[StrategyBacktestSummary] = Field(
         default_factory=list, description="Summary results for each strategy"
     )
-    timestamp: datetime = Field(
-        default_factory=datetime.now, description="When backtest was run"
-    )
+    timestamp: datetime = Field(default_factory=datetime.now, description="When backtest was run")
 
 
 class TickerConfig(BaseModel):
@@ -79,9 +69,7 @@ class TickerConfig(BaseModel):
         description="Fixed dollar amount to allocate to this asset (for dynamic allocation)",
     )
     # Optional market data fields that can be populated
-    market_cap: float | None = Field(
-        default=None, description="Market capitalization in billions"
-    )
+    market_cap: float | None = Field(default=None, description="Market capitalization in billions")
     price_range: dict[str, float] | None = Field(
         default=None,
         description="Price range with 'open', 'high', 'low', 'close' keys",
@@ -106,7 +94,8 @@ class TickerConfig(BaseModel):
 
         if sum(allocation_methods) != 1:
             raise ValueError(
-                f"Ticker {self.symbol} must specify exactly one of: quantity, allocation_pct, allocation_amount, or just category (for auto-allocation)"
+                f"Ticker {self.symbol} must specify exactly one of: quantity, allocation_pct, "
+                f"allocation_amount, or just category (for auto-allocation)"
             )
 
 
@@ -116,9 +105,7 @@ class PortfolioConfig(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
     name: str = Field(default="Main Portfolio", description="Portfolio name")
-    initial_capital: float = Field(
-        default=10000.0, gt=0, description="Initial portfolio capital"
-    )
+    initial_capital: float = Field(default=10000.0, gt=0, description="Initial portfolio capital")
     allocation_method: str = Field(
         default="equal_weight",
         description="Allocation method: 'equal_weight', 'market_cap', 'custom', 'dynamic', 'auto'",
@@ -133,7 +120,8 @@ class PortfolioConfig(BaseModel):
     )
     category_ratios: dict[str, float] | None = Field(
         default=None,
-        description="Target allocation ratios by category (e.g., {'INDEX': 0.35, 'MOMENTUM': 0.475, 'SPECULATIVE': 0.175})",
+        description="Target allocation ratios by category "
+        "(e.g., {'INDEX': 0.35, 'MOMENTUM': 0.475, 'SPECULATIVE': 0.175})",
     )
     allow_fractional_shares: bool = Field(
         default=False,
@@ -176,7 +164,8 @@ class PortfolioConfig(BaseModel):
         # Validate dynamic allocation settings
         if self.dynamic_allocation and self.allocation_method != "dynamic":
             print(
-                "Warning: dynamic_allocation=True but allocation_method is not 'dynamic'. Setting allocation_method to 'dynamic'."
+                "Warning: dynamic_allocation=True but allocation_method is not 'dynamic'. "
+                "Setting allocation_method to 'dynamic'."
             )
             # Note: Cannot modify field here due to frozen model, but validation should catch this
 
@@ -185,15 +174,14 @@ class PortfolioConfig(BaseModel):
             for ticker in self.tickers:
                 if ticker.quantity is not None:
                     print(
-                        f"Warning: Ticker {ticker.symbol} has quantity specified but dynamic_allocation is enabled. Quantity will be ignored."
+                        f"Warning: Ticker {ticker.symbol} has quantity specified but dynamic_allocation is enabled. "
+                        f"Quantity will be ignored."
                     )
 
         # Validate auto-allocation settings
         if self.auto_allocate:
             if not self.category_ratios:
-                raise ValueError(
-                    "auto_allocate=True requires category_ratios to be specified"
-                )
+                raise ValueError("auto_allocate=True requires category_ratios to be specified")
 
             total_ratio = sum(self.category_ratios.values())
             if abs(total_ratio - 1.0) > 0.01:  # Allow small tolerance
@@ -201,24 +189,17 @@ class PortfolioConfig(BaseModel):
 
         # Check that total percentage allocations don't exceed 100%
         if self.dynamic_allocation:
-            total_pct = sum(
-                ticker.allocation_pct
-                for ticker in self.tickers
-                if ticker.allocation_pct is not None
-            )
+            total_pct = sum(ticker.allocation_pct for ticker in self.tickers if ticker.allocation_pct is not None)
             if total_pct > 100:
-                raise ValueError(
-                    f"Total allocation percentages ({total_pct}%) exceed 100%"
-                )
+                raise ValueError(f"Total allocation percentages ({total_pct}%) exceed 100%")
 
             total_amount = sum(
-                ticker.allocation_amount
-                for ticker in self.tickers
-                if ticker.allocation_amount is not None
+                ticker.allocation_amount for ticker in self.tickers if ticker.allocation_amount is not None
             )
             if total_amount > self.initial_capital:
                 raise ValueError(
-                    f"Total allocation amounts (${total_amount:,.2f}) exceed initial capital (${self.initial_capital:,.2f})"
+                    f"Total allocation amounts (${total_amount:,.2f}) exceed "
+                    f"initial capital (${self.initial_capital:,.2f})"
                 )
 
 
@@ -226,22 +207,14 @@ class DataConfig(BaseModel):
     """Configuration for data fetching."""
 
     # General date range for data fetching
-    start_date: str | date | None = Field(
-        default=None, description="Start date for historical data (YYYY-MM-DD)"
-    )
-    end_date: str | date | None = Field(
-        default=None, description="End date for historical data (YYYY-MM-DD)"
-    )
+    start_date: str | date | None = Field(default=None, description="Start date for historical data (YYYY-MM-DD)")
+    end_date: str | date | None = Field(default=None, description="End date for historical data (YYYY-MM-DD)")
     interval: str = Field(
         default="1d",
         description="Data interval (1m, 2m, 5m, 15m, 30m, 60m, 90m, 1h, 1d, 5d, 1wk, 1mo, 3mo)",
     )
-    use_cache: bool = Field(
-        default=True, description="Use database caching for fetched data"
-    )
-    db_path: str = Field(
-        default="stockula.db", description="Path to SQLite database file for caching"
-    )
+    use_cache: bool = Field(default=True, description="Use database caching for fetched data")
+    db_path: str = Field(default="stockula.db", description="Path to SQLite database file for caching")
 
     @field_validator(
         "start_date",
@@ -271,9 +244,7 @@ class StrategyConfig(BaseModel):
     """Base configuration for trading strategies."""
 
     name: str = Field(description="Strategy name")
-    parameters: dict[str, Any] = Field(
-        default_factory=dict, description="Strategy-specific parameters"
-    )
+    parameters: dict[str, Any] = Field(default_factory=dict, description="Strategy-specific parameters")
 
 
 class SMACrossConfig(BaseModel):
@@ -294,20 +265,14 @@ class RSIConfig(BaseModel):
     """Configuration for RSI strategy."""
 
     period: int = Field(default=14, ge=1, description="RSI period")
-    oversold_threshold: float = Field(
-        default=30.0, ge=0, le=100, description="Oversold threshold"
-    )
-    overbought_threshold: float = Field(
-        default=70.0, ge=0, le=100, description="Overbought threshold"
-    )
+    oversold_threshold: float = Field(default=30.0, ge=0, le=100, description="Oversold threshold")
+    overbought_threshold: float = Field(default=70.0, ge=0, le=100, description="Overbought threshold")
 
     @field_validator("overbought_threshold")
     @classmethod
     def validate_thresholds(cls, v, info):
         if "oversold_threshold" in info.data and v <= info.data["oversold_threshold"]:
-            raise ValueError(
-                "overbought_threshold must be greater than oversold_threshold"
-            )
+            raise ValueError("overbought_threshold must be greater than oversold_threshold")
         return v
 
 
@@ -329,9 +294,7 @@ class MACDConfig(BaseModel):
 class BrokerConfig(BaseModel):
     """Configuration for broker-specific fees and commissions."""
 
-    name: str = Field(
-        default="custom", description="Broker name or 'custom' for custom fee structure"
-    )
+    name: str = Field(default="custom", description="Broker name or 'custom' for custom fee structure")
     commission_type: str = Field(
         default="percentage",
         description="Commission type: 'percentage', 'fixed', 'tiered', 'per_share'",
@@ -340,18 +303,10 @@ class BrokerConfig(BaseModel):
         default=0.002,
         description="Commission value (float for simple types, dict for tiered)",
     )
-    min_commission: float | None = Field(
-        default=None, description="Minimum commission per trade"
-    )
-    max_commission: float | None = Field(
-        default=None, description="Maximum commission per trade"
-    )
-    per_share_commission: float | None = Field(
-        default=None, description="Commission per share (for per_share type)"
-    )
-    regulatory_fees: float = Field(
-        default=0.0, description="Additional regulatory fees (SEC, FINRA) as percentage"
-    )
+    min_commission: float | None = Field(default=None, description="Minimum commission per trade")
+    max_commission: float | None = Field(default=None, description="Maximum commission per trade")
+    per_share_commission: float | None = Field(default=None, description="Commission per share (for per_share type)")
+    regulatory_fees: float = Field(default=0.0, description="Additional regulatory fees (SEC, FINRA) as percentage")
     exchange_fees: float = Field(default=0.0, description="Exchange fees per trade")
 
     @classmethod
@@ -417,38 +372,22 @@ class BrokerConfig(BaseModel):
 class BacktestConfig(BaseModel):
     """Configuration for backtesting."""
 
-    initial_cash: float = Field(
-        default=10000.0, gt=0, description="Initial cash amount for backtesting"
-    )
+    initial_cash: float = Field(default=10000.0, gt=0, description="Initial cash amount for backtesting")
 
     # Backtest-specific date range
-    start_date: str | date | None = Field(
-        default=None, description="Start date for backtesting (YYYY-MM-DD)"
-    )
-    end_date: str | date | None = Field(
-        default=None, description="End date for backtesting (YYYY-MM-DD)"
-    )
+    start_date: str | date | None = Field(default=None, description="Start date for backtesting (YYYY-MM-DD)")
+    end_date: str | date | None = Field(default=None, description="End date for backtesting (YYYY-MM-DD)")
     commission: float = Field(
         default=0.002,
         ge=0,
         le=1,
         description="Commission per trade (0.002 = 0.2%) - deprecated, use broker_config",
     )
-    broker_config: BrokerConfig | None = Field(
-        default=None, description="Broker-specific fee configuration"
-    )
-    margin: float = Field(
-        default=1.0, ge=0, description="Margin requirement for leveraged trading"
-    )
-    strategies: list[StrategyConfig] = Field(
-        default_factory=list, description="List of strategies to backtest"
-    )
-    optimize: bool = Field(
-        default=False, description="Whether to optimize strategy parameters"
-    )
-    optimization_params: dict[str, Any] | None = Field(
-        default=None, description="Parameter ranges for optimization"
-    )
+    broker_config: BrokerConfig | None = Field(default=None, description="Broker-specific fee configuration")
+    margin: float = Field(default=1.0, ge=0, description="Margin requirement for leveraged trading")
+    strategies: list[StrategyConfig] = Field(default_factory=list, description="List of strategies to backtest")
+    optimize: bool = Field(default=False, description="Whether to optimize strategy parameters")
+    optimization_params: dict[str, Any] | None = Field(default=None, description="Parameter ranges for optimization")
     hold_only_categories: list[str] = Field(
         default=["INDEX", "BOND"],
         description="Categories of assets to exclude from backtesting (buy-and-hold only)",
@@ -492,25 +431,15 @@ class ForecastConfig(BaseModel):
     )
 
     # Train/test split for forecast evaluation
-    train_start_date: str | date | None = Field(
-        default=None, description="Start date for training data (YYYY-MM-DD)"
-    )
-    train_end_date: str | date | None = Field(
-        default=None, description="End date for training data (YYYY-MM-DD)"
-    )
-    test_start_date: str | date | None = Field(
-        default=None, description="Start date for testing data (YYYY-MM-DD)"
-    )
-    test_end_date: str | date | None = Field(
-        default=None, description="End date for testing data (YYYY-MM-DD)"
-    )
+    train_start_date: str | date | None = Field(default=None, description="Start date for training data (YYYY-MM-DD)")
+    train_end_date: str | date | None = Field(default=None, description="End date for training data (YYYY-MM-DD)")
+    test_start_date: str | date | None = Field(default=None, description="Start date for testing data (YYYY-MM-DD)")
+    test_end_date: str | date | None = Field(default=None, description="End date for testing data (YYYY-MM-DD)")
     frequency: str = Field(
         default="infer",
         description="Time series frequency ('D', 'W', 'M', etc.), 'infer' to auto-detect",
     )
-    prediction_interval: float = Field(
-        default=0.9, ge=0, le=1, description="Confidence interval for predictions"
-    )
+    prediction_interval: float = Field(default=0.9, ge=0, le=1, description="Confidence interval for predictions")
     model_list: str = Field(
         default="fast",
         description="Model subset to use ('fast', 'default', 'slow', 'parallel', 'financial')",
@@ -523,19 +452,13 @@ class ForecastConfig(BaseModel):
         default=True,
         description="Use financial-appropriate models to avoid statsmodels warnings",
     )
-    max_generations: int = Field(
-        default=2, ge=1, description="Maximum generations for model search"
-    )
-    num_validations: int = Field(
-        default=1, ge=1, description="Number of validation splits"
-    )
+    max_generations: int = Field(default=2, ge=1, description="Maximum generations for model search")
+    num_validations: int = Field(default=1, ge=1, description="Number of validation splits")
     validation_method: str = Field(
         default="backwards",
         description="Validation method ('backwards', 'seasonal', 'similarity')",
     )
-    max_workers: int = Field(
-        default=1, ge=1, description="Maximum parallel workers for forecasting"
-    )
+    max_workers: int = Field(default=1, ge=1, description="Maximum parallel workers for forecasting")
 
     @field_validator(
         "train_start_date",
@@ -556,9 +479,7 @@ class ForecastConfig(BaseModel):
     def validate_date_ranges(self):
         """Validate date ranges and ensure mutual exclusivity."""
         # Check mutual exclusivity between forecast_length and test dates
-        has_test_dates = (
-            self.test_start_date is not None and self.test_end_date is not None
-        )
+        has_test_dates = self.test_start_date is not None and self.test_end_date is not None
         has_forecast_length = self.forecast_length is not None
 
         if has_test_dates and has_forecast_length:
@@ -568,12 +489,8 @@ class ForecastConfig(BaseModel):
             )
 
         # If using test dates, train dates are required
-        if has_test_dates and (
-            self.train_start_date is None or self.train_end_date is None
-        ):
-            raise ValueError(
-                "When using test dates for evaluation, train dates must also be specified."
-            )
+        if has_test_dates and (self.train_start_date is None or self.train_end_date is None):
+            raise ValueError("When using test dates for evaluation, train dates must also be specified.")
 
         # Validate training date range
         if self.train_start_date and self.train_end_date:
@@ -588,9 +505,7 @@ class ForecastConfig(BaseModel):
         # Validate that test period comes after training period
         if self.train_end_date and self.test_start_date:
             if self.test_start_date < self.train_end_date:
-                raise ValueError(
-                    "test_start_date must be after or equal to train_end_date"
-                )
+                raise ValueError("test_start_date must be after or equal to train_end_date")
 
         return self
 
@@ -602,20 +517,14 @@ class TechnicalAnalysisConfig(BaseModel):
         default=["sma", "ema", "rsi", "macd", "bbands", "atr"],
         description="List of indicators to calculate",
     )
-    sma_periods: list[int] = Field(
-        default=[20, 50, 200], description="SMA periods to calculate"
-    )
-    ema_periods: list[int] = Field(
-        default=[12, 26], description="EMA periods to calculate"
-    )
+    sma_periods: list[int] = Field(default=[20, 50, 200], description="SMA periods to calculate")
+    ema_periods: list[int] = Field(default=[12, 26], description="EMA periods to calculate")
     rsi_period: int = Field(default=14, description="RSI period")
     macd_params: dict[str, int] = Field(
         default={"period_fast": 12, "period_slow": 26, "signal": 9},
         description="MACD parameters",
     )
-    bbands_params: dict[str, int] = Field(
-        default={"period": 20, "std": 2}, description="Bollinger Bands parameters"
-    )
+    bbands_params: dict[str, int] = Field(default={"period": 20, "std": 2}, description="Bollinger Bands parameters")
     atr_period: int = Field(default=14, description="ATR period")
 
 
@@ -623,25 +532,19 @@ class LoggingConfig(BaseModel):
     """Configuration for logging and debug output."""
 
     enabled: bool = Field(default=False, description="Enable verbose logging output")
-    level: str = Field(
-        default="INFO", description="Logging level (DEBUG, INFO, WARNING, ERROR)"
-    )
+    level: str = Field(default="INFO", description="Logging level (DEBUG, INFO, WARNING, ERROR)")
     show_allocation_details: bool = Field(
         default=True,
         description="Show detailed allocation calculations when logging enabled",
     )
-    show_price_fetching: bool = Field(
-        default=True, description="Show price fetching details when logging enabled"
-    )
+    show_price_fetching: bool = Field(default=True, description="Show price fetching details when logging enabled")
     log_to_file: bool = Field(default=False, description="Enable logging to file")
     log_file: str = Field(default="stockula.log", description="Log file path")
     max_log_size: int = Field(
         default=10_485_760,  # 10MB
         description="Maximum log file size in bytes before rotation",
     )
-    backup_count: int = Field(
-        default=3, description="Number of backup log files to keep"
-    )
+    backup_count: int = Field(default=3, description="Number of backup log files to keep")
 
 
 class StockulaConfig(BaseModel):
@@ -651,9 +554,7 @@ class StockulaConfig(BaseModel):
     portfolio: PortfolioConfig = Field(default_factory=PortfolioConfig)
     backtest: BacktestConfig = Field(default_factory=BacktestConfig)
     forecast: ForecastConfig = Field(default_factory=ForecastConfig)
-    technical_analysis: TechnicalAnalysisConfig = Field(
-        default_factory=TechnicalAnalysisConfig
-    )
+    technical_analysis: TechnicalAnalysisConfig = Field(default_factory=TechnicalAnalysisConfig)
     output: dict[str, Any] = Field(
         default_factory=lambda: {
             "format": "console",
@@ -662,6 +563,4 @@ class StockulaConfig(BaseModel):
         },
         description="Output configuration",
     )
-    logging: LoggingConfig = Field(
-        default_factory=LoggingConfig, description="Logging configuration"
-    )
+    logging: LoggingConfig = Field(default_factory=LoggingConfig, description="Logging configuration")

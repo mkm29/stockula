@@ -36,7 +36,7 @@ def init(self):
     """Initialize indicators."""
     # This method is called by the framework
     # Contains indicator calculations that are tightly coupled to framework's I() method
-    
+
 def next(self):
     """Execute trading logic."""
     # This method is called by the framework for each data point

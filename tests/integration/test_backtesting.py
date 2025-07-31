@@ -53,7 +53,7 @@ class TestBacktestRunner:
         assert "# Trades" in results.index
 
         # Results should be numeric
-        assert isinstance(results["Return [%]"], (int, float))
+        assert isinstance(results["Return [%]"], int | float)
         assert isinstance(results["# Trades"], int)
 
     def test_run_from_symbol(self, mock_data_fetcher, backtest_data):
@@ -81,9 +81,7 @@ class TestBacktestRunner:
             "slow_period": range(20, 30, 5),  # [20, 25]
         }
 
-        optimal_results = runner.optimize(
-            backtest_data, SMACrossStrategy, **param_ranges
-        )
+        optimal_results = runner.optimize(backtest_data, SMACrossStrategy, **param_ranges)
 
         # Check result - optimize returns a Series with the best backtest result
         assert isinstance(optimal_results, pd.Series)
@@ -159,7 +157,7 @@ class TestRSIStrategy:
         results = runner.run(backtest_data, RSIStrategy)
 
         # Check results
-        assert isinstance(results["Return [%]"], (int, float))
+        assert isinstance(results["Return [%]"], int | float)
         assert isinstance(results["# Trades"], int)
 
 
@@ -178,7 +176,7 @@ class TestMACDStrategy:
         results = runner.run(backtest_data, MACDStrategy)
 
         # Check results
-        assert isinstance(results["Return [%]"], (int, float))
+        assert isinstance(results["Return [%]"], int | float)
         assert results["Max. Drawdown [%]"] <= 0  # Drawdown is negative
 
 
@@ -202,10 +200,7 @@ class TestDoubleEMACrossStrategy:
         start_date = DoubleEMACrossStrategy.get_recommended_start_date(end_date)
 
         # Should be at least min_days before end date
-        days_diff = (
-            datetime.strptime(end_date, "%Y-%m-%d")
-            - datetime.strptime(start_date, "%Y-%m-%d")
-        ).days
+        days_diff = (datetime.strptime(end_date, "%Y-%m-%d") - datetime.strptime(start_date, "%Y-%m-%d")).days
         assert days_diff >= min_days
 
     def test_insufficient_data_warning(self):
@@ -384,8 +379,8 @@ class TestBacktestingEdgeCases:
         results = runner.run(volatile_data, RSIStrategy)
 
         # Should handle without errors
-        assert isinstance(results["Return [%]"], (int, float))
-        assert isinstance(results["Max. Drawdown [%]"], (int, float))
+        assert isinstance(results["Return [%]"], int | float)
+        assert isinstance(results["Max. Drawdown [%]"], int | float)
 
     def test_commission_impact(self, backtest_data):
         """Test impact of commission on results."""
@@ -434,7 +429,7 @@ class TestBacktestingEdgeCases:
 
         assert backtest_result.ticker == "TEST"
         assert backtest_result.strategy == "SMACross"
-        assert isinstance(backtest_result.return_pct, (int, float))
+        assert isinstance(backtest_result.return_pct, int | float)
         assert isinstance(backtest_result.num_trades, int)
 
 
@@ -464,9 +459,7 @@ class TestBacktestDataStructures:
                 sharpe_ratio=results["Sharpe Ratio"],
                 max_drawdown_pct=results["Max. Drawdown [%]"],
                 num_trades=results["# Trades"],
-                win_rate=results.get("Win Rate [%]")
-                if results["# Trades"] > 0
-                else None,
+                win_rate=results.get("Win Rate [%]") if results["# Trades"] > 0 else None,
             )
 
             # Create strategy summary
@@ -528,16 +521,11 @@ class TestBacktestDataStructures:
                 sharpe_ratio=results["Sharpe Ratio"],
                 max_drawdown_pct=results["Max. Drawdown [%]"],
                 num_trades=results["# Trades"],
-                win_rate=results.get("Win Rate [%]")
-                if results["# Trades"] > 0
-                else None,
+                win_rate=results.get("Win Rate [%]") if results["# Trades"] > 0 else None,
             )
 
         # Verify different brokers may have different results due to fees
         # Interactive Brokers has per-share fees, others are zero commission
         if results_by_broker["robinhood"].num_trades > 0:
             # IB should have lower returns due to commission
-            assert (
-                results_by_broker["interactive_brokers"].return_pct
-                <= results_by_broker["robinhood"].return_pct
-            )
+            assert results_by_broker["interactive_brokers"].return_pct <= results_by_broker["robinhood"].return_pct

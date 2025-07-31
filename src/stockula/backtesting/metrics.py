@@ -18,9 +18,7 @@ def calculate_dynamic_sharpe_ratio(
         Dynamic Sharpe ratio
     """
     # Align the series by date
-    aligned_data = pd.DataFrame(
-        {"returns": returns, "rf_rates": risk_free_rates}
-    ).dropna()
+    aligned_data = pd.DataFrame({"returns": returns, "rf_rates": risk_free_rates}).dropna()
 
     if len(aligned_data) == 0:
         return np.nan
@@ -69,12 +67,8 @@ def calculate_rolling_sharpe_ratio(
     aligned_data["excess_returns"] = aligned_data["returns"] - aligned_data["daily_rf"]
 
     # Calculate rolling statistics
-    rolling_mean = (
-        aligned_data["excess_returns"].rolling(window).mean() * periods_per_year
-    )
-    rolling_std = aligned_data["excess_returns"].rolling(window).std() * np.sqrt(
-        periods_per_year
-    )
+    rolling_mean = aligned_data["excess_returns"].rolling(window).mean() * periods_per_year
+    rolling_std = aligned_data["excess_returns"].rolling(window).std() * np.sqrt(periods_per_year)
 
     # Calculate rolling Sharpe ratio
     rolling_sharpe = rolling_mean / rolling_std
@@ -96,9 +90,7 @@ def calculate_sortino_ratio_dynamic(
         Dynamic Sortino ratio
     """
     # Align the series
-    aligned_data = pd.DataFrame(
-        {"returns": returns, "rf_rates": risk_free_rates}
-    ).dropna()
+    aligned_data = pd.DataFrame({"returns": returns, "rf_rates": risk_free_rates}).dropna()
 
     if len(aligned_data) == 0:
         return np.nan
@@ -114,9 +106,7 @@ def calculate_sortino_ratio_dynamic(
 
     # Calculate annualized excess return and downside deviation
     mean_excess_return = excess_returns.mean() * periods_per_year
-    downside_deviation = np.sqrt(np.mean(downside_returns**2)) * np.sqrt(
-        periods_per_year
-    )
+    downside_deviation = np.sqrt(np.mean(downside_returns**2)) * np.sqrt(periods_per_year)
 
     # Handle zero or near-zero downside deviation
     if downside_deviation == 0 or np.isclose(downside_deviation, 0, atol=1e-10):
@@ -154,25 +144,17 @@ def enhance_backtest_metrics(
     returns = equity_curve.pct_change(fill_method=None).dropna()
 
     # Calculate dynamic metrics
-    dynamic_sharpe = calculate_dynamic_sharpe_ratio(
-        returns, treasury_rates, periods_per_year
-    )
-    dynamic_sortino = calculate_sortino_ratio_dynamic(
-        returns, treasury_rates, periods_per_year
-    )
+    dynamic_sharpe = calculate_dynamic_sharpe_ratio(returns, treasury_rates, periods_per_year)
+    dynamic_sortino = calculate_sortino_ratio_dynamic(returns, treasury_rates, periods_per_year)
 
     # Create enhanced results
     enhanced_results = backtest_results.copy()
 
     # Add dynamic metrics
     enhanced_results["Sharpe Ratio (Dynamic)"] = dynamic_sharpe
-    enhanced_results["Sharpe Ratio (Static)"] = backtest_results.get(
-        "Sharpe Ratio", np.nan
-    )
+    enhanced_results["Sharpe Ratio (Static)"] = backtest_results.get("Sharpe Ratio", np.nan)
     enhanced_results["Sortino Ratio (Dynamic)"] = dynamic_sortino
-    enhanced_results["Sortino Ratio (Static)"] = backtest_results.get(
-        "Sortino Ratio", np.nan
-    )
+    enhanced_results["Sortino Ratio (Static)"] = backtest_results.get("Sortino Ratio", np.nan)
 
     # Calculate average risk-free rate for the period
     avg_rf_rate = treasury_rates.mean()

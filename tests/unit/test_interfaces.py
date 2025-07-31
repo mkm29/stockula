@@ -64,7 +64,7 @@ class TestIDataFetcher:
         """Test that IDataFetcher cannot be instantiated directly."""
         try:
             IDataFetcher()
-            assert False, "Should not be able to instantiate abstract class"
+            raise AssertionError("Should not be able to instantiate abstract class")
         except TypeError:
             pass  # Expected
 
@@ -87,7 +87,7 @@ class TestIDatabaseManager:
         """Test that IDatabaseManager cannot be instantiated directly."""
         try:
             IDatabaseManager()
-            assert False, "Should not be able to instantiate abstract class"
+            raise AssertionError("Should not be able to instantiate abstract class")
         except TypeError:
             pass
 
@@ -207,7 +207,7 @@ class TestITechnicalIndicators:
         """Test that ITechnicalIndicators cannot be instantiated directly."""
         try:
             ITechnicalIndicators()
-            assert False, "Should not be able to instantiate abstract class"
+            raise AssertionError("Should not be able to instantiate abstract class")
         except TypeError:
             pass
 
@@ -287,9 +287,7 @@ class TestInterfaceUsage:
 
         # Create a mock implementation
         class MockDataFetcher(IDataFetcher):
-            def get_stock_data(
-                self, symbol, start=None, end=None, interval="1d", force_refresh=False
-            ):
+            def get_stock_data(self, symbol, start=None, end=None, interval="1d", force_refresh=False):
                 return pd.DataFrame()
 
             def get_current_prices(self, symbols, show_progress=True):
@@ -297,6 +295,9 @@ class TestInterfaceUsage:
 
             def get_info(self, symbol, force_refresh=False):
                 return {}
+
+            def get_treasury_rates(self, start_date=None, end_date=None, duration="3_month"):
+                return pd.Series()
 
         # Should be able to instantiate the implementation
         mock_fetcher = MockDataFetcher()

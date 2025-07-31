@@ -107,7 +107,7 @@ backtest:
 When running forecasts in evaluation mode (with train/test split), Stockula provides accuracy metrics:
 
 ```bash
-               Portfolio Value               
+               Portfolio Value
 ┏━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━┳━━━━━━━━━━━━┓
 ┃ Metric          ┃ Date       ┃ Value      ┃
 ┡━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━╇━━━━━━━━━━━━┩
@@ -306,6 +306,36 @@ Strategy summaries are displayed in descending order by "Return During Period" (
 ╰─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ```
 
+## 🚀 CI/CD
+
+### Continuous Integration
+
+Stockula uses GitHub Actions for automated testing and deployment:
+
+- **Testing** (`test.yml`): Runs on all pull requests and pushes to main
+  - **Linting**: Code style checks with `ruff`
+  - **Unit Tests**: Fast, isolated tests with coverage reporting
+  - **Integration Tests**: Currently disabled, will test with SQLite database
+
+- **Release Management** (`release-please.yml`): Automated versioning and releases
+  - Monitors commits using [Conventional Commits](https://www.conventionalcommits.org/)
+  - Creates release PRs automatically
+  - Publishes to PyPI on release
+
+- **Docker Builds** (`docker-build.yml`): Multi-platform container images
+  - Triggers on version tags (`v*`)
+  - Builds for `linux/amd64` and `linux/arm64/v8`
+  - Publishes to GitHub Container Registry
+
+### Commit Guidelines
+
+This project uses [Conventional Commits](https://www.conventionalcommits.org/):
+- `feat:` New features
+- `fix:` Bug fixes
+- `chore:` Maintenance tasks
+- `docs:` Documentation updates
+- `test:` Test additions or changes
+
 ## 🔗 Links
 
 - **📖 Full Documentation**: [docs/](docs/)
@@ -320,7 +350,34 @@ MIT License - see [LICENSE](LICENSE) file for details.
 
 Contributions are welcome! Please see our [Contributing Guide](CONTRIBUTING.md) for development setup and guidelines.
 
-This project uses [Conventional Commits](https://www.conventionalcommits.org/) and [Release Please](https://github.com/googleapis/release-please) for automated releases.
+### Development Setup
+
+1. **Install pre-commit hooks**:
+   ```bash
+   uv run pre-commit install
+   ```
+
+2. **Run tests and linting**:
+   ```bash
+   # Run tests
+   uv run pytest
+
+   # Run linting
+   uv run ruff check src tests
+
+   # Format code
+   uv run ruff format src tests
+   ```
+
+3. **Manual pre-commit run**:
+   ```bash
+   uv run pre-commit run --all-files
+   ```
+
+This project uses:
+- [Conventional Commits](https://www.conventionalcommits.org/) for commit messages
+- [Release Please](https://github.com/googleapis/release-please) for automated releases
+- [pre-commit](https://pre-commit.com/) for code quality checks
 
 ______________________________________________________________________
 

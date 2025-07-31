@@ -3,7 +3,7 @@
 import logging
 from dataclasses import InitVar, dataclass, field
 from functools import lru_cache
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Any
 
 from .asset import Asset
 from .category import Category
@@ -39,24 +39,26 @@ def _calculate_allocations_cached(
 class Portfolio:
     """Represents a complete investment portfolio with assets."""
 
-    name: InitVar[str] = "Main Portfolio"
-    initial_capital: InitVar[float]
-    allocation_method: InitVar[str] = "equal_weight"  # equal_weight, market_cap, custom
-    rebalance_frequency: str | None = "monthly"
-    max_position_size: float | None = None  # Max % per position
-    stop_loss_pct: float | None = None  # Global stop loss %
+    # InitVar fields without defaults must come before those with defaults
+    initial_capital_init: InitVar[float]
+    name_init: InitVar[str] = "Main Portfolio"
+    allocation_method_init: InitVar[str] = "equal_weight"  # equal_weight, market_cap, custom
+    # Regular fields
     _name: str = field(init=False, repr=False)
     _initial_capital: float = field(init=False, repr=False)
     _allocation_method: str = field(init=False, repr=False)
     assets: list[Asset] = field(default_factory=list)
+    rebalance_frequency: str | None = "monthly"
+    max_position_size: float | None = None  # Max % per position
+    stop_loss_pct: float | None = None  # Global stop loss %
 
-    def __post_init__(self, name: str, initial_capital: float, allocation_method: str):
+    def __post_init__(self, initial_capital_init: float, name_init: str, allocation_method_init: str):
         """Validate portfolio constraints and set private attributes."""
-        self._name = name
-        if initial_capital <= 0:
+        self._name = name_init
+        if initial_capital_init <= 0:
             raise ValueError("Initial capital must be positive")
-        self._initial_capital = initial_capital
-        self._allocation_method = allocation_method
+        self._initial_capital = initial_capital_init
+        self._allocation_method = allocation_method_init
 
         if self.max_position_size is not None:
             if not 0 < self.max_position_size <= 100:
@@ -67,17 +69,17 @@ class Portfolio:
                 raise ValueError("Stop loss percentage must be between 0 and 100")
 
     @property
-    def name(self) -> str:  # noqa: F811
+    def name(self) -> str:
         """Get portfolio name (read-only)."""
         return self._name
 
     @property
-    def initial_capital(self) -> float:  # noqa: F811
+    def initial_capital(self) -> float:
         """Get initial portfolio capital (read-only)."""
         return self._initial_capital
 
     @property
-    def allocation_method(self) -> str:  # noqa: F811
+    def allocation_method(self) -> str:
         """Get allocation method (read-only)."""
         return self._allocation_method
 
@@ -85,9 +87,7 @@ class Portfolio:
         """Add an asset to the portfolio."""
         # Check for duplicate
         if self.has_asset(asset.symbol):
-            raise ValueError(
-                f"Asset with symbol {asset.symbol} already exists in portfolio"
-            )
+            raise ValueError(f"Asset with symbol {asset.symbol} already exists in portfolio")
         self.assets.append(asset)
 
     def get_asset(self, symbol: str) -> Asset | None:
@@ -142,9 +142,7 @@ class Portfolio:
                 total += asset.get_value(prices[asset.symbol])
         return total
 
-    def get_asset_allocations(
-        self, prices: dict[str, float]
-    ) -> dict[str, dict[str, float]]:
+    def get_asset_allocations(self, prices: dict[str, float]) -> dict[str, dict[str, float]]:
         """Calculate current allocation percentages for all assets.
 
         Args:
@@ -164,9 +162,7 @@ class Portfolio:
         assets_tuple = tuple(sorted(assets_data))
         return _calculate_allocations_cached(assets_tuple, total_value)
 
-    def get_asset_percentage(
-        self, symbol: str, prices: dict[str, float]
-    ) -> float | None:
+    def get_asset_percentage(self, symbol: str, prices: dict[str, float]) -> float | None:
         """Get the current percentage allocation of an asset by symbol.
 
         Args:
@@ -194,7 +190,7 @@ class Portfolio:
         allocations = self.get_asset_allocations(prices)
         return {symbol: data["percentage"] for symbol, data in allocations.items()}
 
-    def get_portfolio_summary(self, prices: dict[str, float]) -> dict[str, any]:
+    def get_portfolio_summary(self, prices: dict[str, float]) -> dict[str, Any]:
         """Get comprehensive portfolio summary.
 
         Args:
@@ -210,18 +206,13 @@ class Portfolio:
             "total_value": total_value,
             "initial_capital": self._initial_capital,
             "total_return": total_value - self._initial_capital,
-            "return_percentage": (
-                (total_value - self._initial_capital) / self._initial_capital
-            )
-            * 100,
+            "return_percentage": ((total_value - self._initial_capital) / self._initial_capital) * 100,
             "allocations": allocations,
             "asset_count": len(self.assets),
             "by_category": self.get_allocation_by_category(prices),
         }
 
-    def get_allocation_by_category(
-        self, prices: dict[str, float]
-    ) -> dict[str, dict[str, float]]:
+    def get_allocation_by_category(self, prices: dict[str, float]) -> dict[str, dict[str, Any]]:
         """Calculate allocations grouped by category.
 
         Args:
@@ -230,16 +221,14 @@ class Portfolio:
         Returns:
             Dictionary with categories as keys and allocation info as values
         """
-        category_allocations = {}
+        category_allocations: dict[str, dict[str, Any]] = {}
         total_value = self.get_portfolio_value(prices)
 
         # Group assets by category
         for asset in self.assets:
             if asset.symbol in prices:
                 value = asset.get_value(prices[asset.symbol])
-                category_name = (
-                    str(asset.category) if asset.category else "Uncategorized"
-                )
+                category_name = str(asset.category) if asset.category else "Uncategorized"
 
                 if category_name not in category_allocations:
                     category_allocations[category_name] = {
@@ -255,9 +244,7 @@ class Portfolio:
 
         # Calculate percentages
         for category_data in category_allocations.values():
-            category_data["percentage"] = (
-                (category_data["value"] / total_value * 100) if total_value > 0 else 0.0
-            )
+            category_data["percentage"] = (category_data["value"] / total_value * 100) if total_value > 0 else 0.0
 
         return category_allocations
 
@@ -266,7 +253,7 @@ class Portfolio:
         """Get list of all ticker symbols in the portfolio."""
         return [asset.symbol for asset in self.assets]
 
-    def get_current_value(self, fetcher: Optional["IDataFetcher"] = None) -> float:
+    def get_current_value(self, fetcher: "IDataFetcher | None" = None) -> float:
         """Get current portfolio value by fetching latest prices.
 
         This is a convenience method that fetches current prices.
@@ -282,15 +269,16 @@ class Portfolio:
         if fetcher is None:
             from ..data.fetcher import DataFetcher
 
-            fetcher = DataFetcher()
-
-        prices = fetcher.get_current_prices(self.symbols)
+            data_fetcher = DataFetcher()
+            prices = data_fetcher.get_current_prices(self.symbols)
+        else:
+            prices = fetcher.get_current_prices(self.symbols)
         return self.get_portfolio_value(prices)
 
     def validate_capital_sufficiency(
         self,
         validation_prices: dict[str, float] | None = None,
-        fetcher: Optional["IDataFetcher"] = None,
+        fetcher: "IDataFetcher | None" = None,
     ) -> None:
         """Validate that initial capital is sufficient to cover the specified asset quantities.
 
@@ -310,9 +298,10 @@ class Portfolio:
             if fetcher is None:
                 from ..data.fetcher import DataFetcher
 
-                fetcher = DataFetcher()
-
-            validation_prices = fetcher.get_current_prices(self.symbols)
+                data_fetcher = DataFetcher()
+                validation_prices = data_fetcher.get_current_prices(self.symbols)
+            else:
+                validation_prices = fetcher.get_current_prices(self.symbols)
 
         # Calculate required capital based on asset quantities
         required_capital = self.get_portfolio_value(validation_prices)
@@ -340,7 +329,7 @@ class Portfolio:
     def validate_allocation_constraints(
         self,
         prices: dict[str, float] | None = None,
-        fetcher: Optional["IDataFetcher"] = None,
+        fetcher: "IDataFetcher | None" = None,
     ) -> None:
         """Validate portfolio allocation constraints against risk management rules.
 
@@ -358,9 +347,10 @@ class Portfolio:
             if fetcher is None:
                 from ..data.fetcher import DataFetcher
 
-                fetcher = DataFetcher()
-
-            prices = fetcher.get_current_prices(self.symbols)
+                data_fetcher = DataFetcher()
+                prices = data_fetcher.get_current_prices(self.symbols)
+            else:
+                prices = fetcher.get_current_prices(self.symbols)
 
         if not prices:
             logger.warning("Could not fetch prices for allocation validation")
@@ -378,13 +368,10 @@ class Portfolio:
                     )
 
         # Validate total allocation doesn't exceed 100% (with small tolerance for rounding)
-        total_allocation = sum(
-            data["percentage"] for data in self.get_asset_allocations(prices).values()
-        )
+        total_allocation = sum(data["percentage"] for data in self.get_asset_allocations(prices).values())
         if total_allocation > 100.1:  # 0.1% tolerance for rounding
             logger.warning(
-                f"Total allocation ({total_allocation:.1f}%) exceeds 100%. "
-                f"This may indicate overleveraging."
+                f"Total allocation ({total_allocation:.1f}%) exceeds 100%. This may indicate overleveraging."
             )
 
         # Check if we have sufficient capital utilization (warn if too low)
@@ -399,7 +386,4 @@ class Portfolio:
 
     def __str__(self):
         """String representation."""
-        return (
-            f"Portfolio(name='{self._name}', capital=${self._initial_capital:,.2f}, "
-            f"{len(self.assets)} assets)"
-        )
+        return f"Portfolio(name='{self._name}', capital=${self._initial_capital:,.2f}, {len(self.assets)} assets)"

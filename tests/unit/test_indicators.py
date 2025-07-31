@@ -39,9 +39,7 @@ class TestBasicIndicators:
         """Set up test data."""
         # Create simple test data
         self.prices = pd.Series([100, 102, 101, 103, 105, 104, 106, 108, 107, 109])
-        self.dates = pd.date_range(
-            start="2023-01-01", periods=len(self.prices), freq="D"
-        )
+        self.dates = pd.date_range(start="2023-01-01", periods=len(self.prices), freq="D")
         self.prices.index = self.dates
 
     def test_sma_calculation(self):
@@ -103,9 +101,7 @@ class TestMACDIndicator:
         # Create trending data
         prices = pd.Series(np.linspace(100, 120, 50))
 
-        macd_line, signal_line, histogram = calculate_macd(
-            prices, fast_period=12, slow_period=26, signal_period=9
-        )
+        macd_line, signal_line, histogram = calculate_macd(prices, fast_period=12, slow_period=26, signal_period=9)
 
         # Check all components returned
         assert len(macd_line) == len(prices)
@@ -117,10 +113,7 @@ class TestMACDIndicator:
         assert macd_line.iloc[-1] > 0
 
         # Histogram = MACD - Signal
-        assert (
-            abs(histogram.iloc[-1] - (macd_line.iloc[-1] - signal_line.iloc[-1]))
-            < 0.001
-        )
+        assert abs(histogram.iloc[-1] - (macd_line.iloc[-1] - signal_line.iloc[-1])) < 0.001
 
     def test_macd_crossovers(self):
         """Test MACD crossover detection."""
@@ -176,7 +169,7 @@ class TestATRIndicator:
         assert atr.iloc[4] > 0  # ATR should be positive
 
         # ATR after the gap should be elevated
-        pre_gap_atr = atr.iloc[2] if not pd.isna(atr.iloc[2]) else 0
+        atr.iloc[2] if not pd.isna(atr.iloc[2]) else 0
         post_gap_atr = atr.iloc[4]  # After gap has worked through the period
 
         # Just verify ATR is working, not specific comparison
@@ -258,11 +251,11 @@ class TestAdaptiveIndicators:
         if pd.notna(high_vol_period):
             # Compare VIDYA to SMA responsiveness
             sma = calculate_sma(self.data["Close"], 12)
-            price_change = self.data["Close"].diff()
+            self.data["Close"].diff()
 
             # During high volatility, VIDYA should track price more closely
-            vidya_error = abs(vidya - self.data["Close"])
-            sma_error = abs(sma - self.data["Close"])
+            abs(vidya - self.data["Close"])
+            abs(sma - self.data["Close"])
 
             # VIDYA adapts to volatility but may not always be closer
             # Just verify it calculated properly
@@ -271,9 +264,7 @@ class TestAdaptiveIndicators:
 
     def test_kama_calculation(self):
         """Test KAMA calculation."""
-        kama = calculate_kama(
-            self.data["Close"], er_period=10, fast_period=2, slow_period=30
-        )
+        kama = calculate_kama(self.data["Close"], er_period=10, fast_period=2, slow_period=30)
 
         # Check basic properties
         assert len(kama) == len(self.data)
@@ -288,8 +279,8 @@ class TestAdaptiveIndicators:
         if trending_periods.sum() > 0:
             # KAMA should closely follow price in trends
             kama_error = abs(kama - self.data["Close"])
-            avg_error_trending = kama_error[trending_periods].mean()
-            avg_error_overall = kama_error.mean()
+            kama_error[trending_periods].mean()
+            kama_error.mean()
 
             # In trending periods, KAMA should respond more quickly
             # Just verify KAMA is working
@@ -347,7 +338,7 @@ class TestAdaptiveIndicators:
         assert not frama.iloc[-1] != frama.iloc[-1]  # Not NaN
 
         # FRAMA should adapt based on fractal dimension
-        fd = calculate_fractal_dimension(self.data["Close"], period=16)
+        calculate_fractal_dimension(self.data["Close"], period=16)
 
         # When FD is low (trending), FRAMA should be more responsive
         # When FD is high (choppy), FRAMA should be smoother
@@ -407,7 +398,7 @@ class TestCrossoverDetection:
         crossovers = detect_crossover(series1, series2)
 
         # Should detect crossover at index 2 (3 > 2, previous 2 <= 2)
-        assert crossovers.iloc[2] == True
+        assert crossovers.iloc[2]
         assert crossovers.sum() == 1
 
     def test_crossunder_detection(self):
@@ -419,7 +410,7 @@ class TestCrossoverDetection:
         crossunders = detect_crossunder(series1, series2)
 
         # Should detect crossunder at index 2 (1 < 2, previous 2 >= 2)
-        assert crossunders.iloc[2] == True
+        assert crossunders.iloc[2]
         assert crossunders.sum() == 1
 
     def test_multiple_crossovers(self):

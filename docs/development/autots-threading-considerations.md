@@ -43,20 +43,20 @@ from stockula.forecasting.forecaster import StockForecaster
 
 def forecast_portfolio_sequential(symbols, config, data_fetcher):
     results = {}
-    
+
     for symbol in symbols:
         forecaster = StockForecaster(
             forecast_length=config.forecast.forecast_length,
             model_list=config.forecast.model_list,
             data_fetcher=data_fetcher
         )
-        
+
         try:
             forecast = forecaster.forecast_from_symbol(symbol)
             results[symbol] = forecast
         except Exception as e:
             results[symbol] = {"error": str(e)}
-    
+
     return results
 ```
 
@@ -99,7 +99,7 @@ Current configuration supports both approaches:
 forecast:
   # Threading configuration (currently limited)
   max_workers: 1  # Set to 1 due to AutoTS limitations
-  
+
   # Alternative: Use sequential processing
   # sequential: true  # Future option
 ```

@@ -10,7 +10,7 @@ import pandas as pd
 from sqlalchemy import event
 from sqlmodel import Session, SQLModel, create_engine, select
 
-from alembic import command
+from alembic import command  # type: ignore[attr-defined]
 from alembic.config import Config
 
 from .models import (
@@ -37,9 +37,7 @@ class DatabaseManager:
         self.db_url = f"sqlite:///{self.db_path}"
 
         # Create engine with foreign key support
-        self.engine = create_engine(
-            self.db_url, connect_args={"check_same_thread": False}, echo=False
-        )
+        self.engine = create_engine(self.db_url, connect_args={"check_same_thread": False}, echo=False)
 
         # Enable foreign keys for SQLite
         @event.listens_for(self.engine, "connect")
@@ -133,9 +131,7 @@ class DatabaseManager:
             session.add(stock_info)
             session.commit()
 
-    def store_price_history(
-        self, symbol: str, data: pd.DataFrame, interval: str = "1d"
-    ) -> None:
+    def store_price_history(self, symbol: str, data: pd.DataFrame, interval: str = "1d") -> None:
         """Store historical price data.
 
         Args:
@@ -163,9 +159,7 @@ class DatabaseManager:
                 price_history = session.exec(stmt).first()
 
                 if not price_history:
-                    price_history = PriceHistory(
-                        symbol=symbol, date=date.date(), interval=interval
-                    )
+                    price_history = PriceHistory(symbol=symbol, date=date.date(), interval=interval)
 
                 # Update values
                 price_history.open_price = row.get("Open")
@@ -197,15 +191,11 @@ class DatabaseManager:
 
             for date, amount in dividends.items():
                 # Check if record exists
-                stmt = select(Dividend).where(
-                    Dividend.symbol == symbol, Dividend.date == date.date()
-                )
+                stmt = select(Dividend).where(Dividend.symbol == symbol, Dividend.date == date.date())
                 dividend = session.exec(stmt).first()
 
                 if not dividend:
-                    dividend = Dividend(
-                        symbol=symbol, date=date.date(), amount=float(amount)
-                    )
+                    dividend = Dividend(symbol=symbol, date=date.date(), amount=float(amount))
                 else:
                     dividend.amount = float(amount)
 
@@ -232,9 +222,7 @@ class DatabaseManager:
 
             for date, ratio in splits.items():
                 # Check if record exists
-                stmt = select(Split).where(
-                    Split.symbol == symbol, Split.date == date.date()
-                )
+                stmt = select(Split).where(Split.symbol == symbol, Split.date == date.date())
                 split = session.exec(stmt).first()
 
                 if not split:
@@ -246,9 +234,7 @@ class DatabaseManager:
 
             session.commit()
 
-    def store_options_chain(
-        self, symbol: str, calls: pd.DataFrame, puts: pd.DataFrame, expiration_date: str
-    ) -> None:
+    def store_options_chain(self, symbol: str, calls: pd.DataFrame, puts: pd.DataFrame, expiration_date: str) -> None:
         """Store options chain data.
 
         Args:
@@ -349,9 +335,7 @@ class DatabaseManager:
             DataFrame with historical price data
         """
         with self.get_session() as session:
-            stmt = select(PriceHistory).where(
-                PriceHistory.symbol == symbol, PriceHistory.interval == interval
-            )
+            stmt = select(PriceHistory).where(PriceHistory.symbol == symbol, PriceHistory.interval == interval)
 
             if start_date:
                 start = datetime.strptime(start_date, "%Y-%m-%d").date()
@@ -475,9 +459,7 @@ class DatabaseManager:
             data = {pd.to_datetime(row.date): row.ratio for row in results}
             return pd.Series(data)
 
-    def get_options_chain(
-        self, symbol: str, expiration_date: str
-    ) -> tuple[pd.DataFrame, pd.DataFrame]:
+    def get_options_chain(self, symbol: str, expiration_date: str) -> tuple[pd.DataFrame, pd.DataFrame]:
         """Retrieve options chain data.
 
         Args:
@@ -570,12 +552,9 @@ class DatabaseManager:
             Latest close price or None if not found
         """
         with self.get_session() as session:
-            stmt = (
-                select(PriceHistory)
-                .where(PriceHistory.symbol == symbol)
-                .order_by(PriceHistory.date.desc())
-                .limit(1)
-            )
+            from sqlalchemy import desc
+
+            stmt = select(PriceHistory).where(PriceHistory.symbol == symbol).order_by(desc(PriceHistory.date)).limit(1)
 
             result = session.exec(stmt).first()
             if result:
@@ -631,10 +610,12 @@ class DatabaseManager:
     def get_latest_price_date(self, symbol: str) -> datetime | None:
         """Get latest price date for a symbol."""
         with self.get_session() as session:
+            from sqlalchemy import desc
+
             stmt = (
                 select(PriceHistory.date)
                 .where(PriceHistory.symbol == symbol)
-                .order_by(PriceHistory.date.desc())
+                .order_by(desc(PriceHistory.date))
                 .limit(1)
             )
 
@@ -691,13 +672,9 @@ class DatabaseManager:
             return deleted_count
 
     # Backward compatibility methods
-    def add_stock(
-        self, symbol: str, name: str, sector: str = "", market_cap: float = None
-    ):
+    def add_stock(self, symbol: str, name: str, sector: str = "", market_cap: float | None = None):
         """Add stock to database (backward compatibility)."""
-        self.store_stock_info(
-            symbol, {"longName": name, "sector": sector, "marketCap": market_cap}
-        )
+        self.store_stock_info(symbol, {"longName": name, "sector": sector, "marketCap": market_cap})
 
     def add_price_data(
         self,

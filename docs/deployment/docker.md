@@ -60,7 +60,7 @@ make help
 # Build production image
 docker build --target production -t stockula:latest .
 
-# Build development image  
+# Build development image
 docker build --target development -t stockula:dev .
 
 # Build CLI image
@@ -110,7 +110,7 @@ docker-compose run --rm stockula-cli
 
 # Run specific example
 make run-example-dynamic
-# or 
+# or
 docker run --rm \
   -v stockula-data:/app/data \
   -v stockula-results:/app/results \
@@ -243,7 +243,7 @@ Run the provided examples to test functionality:
 # Dynamic Treasury rates example
 make run-example-dynamic
 
-# Treasury rates fetching example  
+# Treasury rates fetching example
 make run-example-treasury
 
 # Dynamic Sharpe ratio calculation example
@@ -351,13 +351,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-      
+
       - name: Build test image
         run: docker build --target test -t stockula:test .
-      
+
       - name: Run tests
         run: docker run --rm stockula:test
-      
+
       - name: Build production image
         run: docker build --target production -t stockula:latest .
 ```
@@ -368,7 +368,7 @@ jobs:
 # Tag for registry
 make tag-version VERSION=v1.0.0
 
-# Push to registry  
+# Push to registry
 make push-version VERSION=v1.0.0
 
 # Deploy to production

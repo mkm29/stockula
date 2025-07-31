@@ -18,9 +18,7 @@ class TestDynamicSharpeRatio:
         """Test basic dynamic Sharpe ratio calculation."""
         # Create sample data
         dates = pd.date_range(start="2023-01-01", periods=252, freq="D")
-        returns = pd.Series(
-            np.random.normal(0.0005, 0.01, 252), index=dates
-        )  # Daily returns
+        returns = pd.Series(np.random.normal(0.0005, 0.01, 252), index=dates)  # Daily returns
         risk_free_rates = pd.Series(0.04, index=dates)  # 4% annual rate
 
         sharpe = calculate_dynamic_sharpe_ratio(returns, risk_free_rates)
@@ -82,9 +80,7 @@ class TestRollingSharpeRatio:
         returns = pd.Series(np.random.normal(0.0005, 0.01, 504), index=dates)
         risk_free_rates = pd.Series(0.04, index=dates)
 
-        rolling_sharpe = calculate_rolling_sharpe_ratio(
-            returns, risk_free_rates, window=252
-        )
+        rolling_sharpe = calculate_rolling_sharpe_ratio(returns, risk_free_rates, window=252)
 
         assert isinstance(rolling_sharpe, pd.Series)
         assert len(rolling_sharpe) == len(returns)
@@ -99,9 +95,7 @@ class TestRollingSharpeRatio:
         returns = pd.Series(np.random.normal(0.0005, 0.01, 100), index=dates)
         risk_free_rates = pd.Series(0.04, index=dates)
 
-        rolling_sharpe = calculate_rolling_sharpe_ratio(
-            returns, risk_free_rates, window=20
-        )
+        rolling_sharpe = calculate_rolling_sharpe_ratio(returns, risk_free_rates, window=20)
 
         assert len(rolling_sharpe) == len(returns)
         assert rolling_sharpe.iloc[:19].isna().all()
@@ -153,16 +147,12 @@ class TestEnhanceBacktestMetrics:
 
         # Create equity curve
         dates = pd.date_range(start="2023-01-01", periods=252, freq="D")
-        equity_curve = pd.Series(
-            10000 * (1 + np.cumsum(np.random.normal(0.0005, 0.01, 252))), index=dates
-        )
+        equity_curve = pd.Series(10000 * (1 + np.cumsum(np.random.normal(0.0005, 0.01, 252))), index=dates)
 
         # Create Treasury rates
         treasury_rates = pd.Series(np.linspace(0.03, 0.05, 252), index=dates)
 
-        enhanced = enhance_backtest_metrics(
-            original_results, equity_curve, treasury_rates
-        )
+        enhanced = enhance_backtest_metrics(original_results, equity_curve, treasury_rates)
 
         # Check that original metrics are preserved
         assert enhanced["Return [%]"] == 25.5

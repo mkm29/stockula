@@ -81,9 +81,7 @@ def calculate_macd(
     return macd_line, signal_line, histogram
 
 
-def calculate_atr(
-    high: pd.Series, low: pd.Series, close: pd.Series, period: int = 14
-) -> pd.Series:
+def calculate_atr(high: pd.Series, low: pd.Series, close: pd.Series, period: int = 14) -> pd.Series:
     """Calculate Average True Range.
 
     Args:
@@ -147,9 +145,7 @@ def calculate_trima(prices: pd.Series, period: int) -> pd.Series:
     return trima
 
 
-def calculate_vidya(
-    prices: pd.Series, cmo_period: int = 9, smoothing_period: int = 12
-) -> pd.Series:
+def calculate_vidya(prices: pd.Series, cmo_period: int = 9, smoothing_period: int = 12) -> pd.Series:
     """Calculate Variable Index Dynamic Average.
 
     Args:
@@ -187,17 +183,12 @@ def calculate_vidya(
     # Calculate VIDYA using adaptive alpha
     for i in range(smoothing_period, len(prices)):
         if pd.notna(vidya_values.iloc[i - 1]) and pd.notna(alpha.iloc[i]):
-            vidya_values.iloc[i] = (
-                alpha.iloc[i] * prices.iloc[i]
-                + (1 - alpha.iloc[i]) * vidya_values.iloc[i - 1]
-            )
+            vidya_values.iloc[i] = alpha.iloc[i] * prices.iloc[i] + (1 - alpha.iloc[i]) * vidya_values.iloc[i - 1]
 
     return vidya_values
 
 
-def calculate_kama(
-    prices: pd.Series, er_period: int = 10, fast_period: int = 2, slow_period: int = 30
-) -> pd.Series:
+def calculate_kama(prices: pd.Series, er_period: int = 10, fast_period: int = 2, slow_period: int = 30) -> pd.Series:
     """Calculate Kaufman's Adaptive Moving Average.
 
     Args:
@@ -233,9 +224,7 @@ def calculate_kama(
     # Calculate KAMA
     for i in range(er_period, len(prices)):
         if pd.notna(kama.iloc[i - 1]):
-            kama.iloc[i] = kama.iloc[i - 1] + sc.iloc[i] * (
-                prices.iloc[i] - kama.iloc[i - 1]
-            )
+            kama.iloc[i] = kama.iloc[i - 1] + sc.iloc[i] * (prices.iloc[i] - kama.iloc[i - 1])
 
     return kama
 
@@ -301,9 +290,7 @@ def calculate_fractal_dimension(prices: pd.Series, period: int = 16) -> pd.Serie
     mask = (range1 > 0) & (range2 > 0) & (range_full > 0) & (range1 + range2 > 0)
 
     # Calculate fractal dimension where valid
-    dimension[mask] = (
-        np.log(range1[mask] + range2[mask]) - np.log(range_full[mask])
-    ) / np.log(2)
+    dimension[mask] = (np.log(range1[mask] + range2[mask]) - np.log(range_full[mask])) / np.log(2)
 
     # Ensure dimension is between 1 and 2
     dimension = dimension.clip(1, 2)
@@ -336,16 +323,12 @@ def calculate_frama(prices: pd.Series, period: int = 16) -> pd.Series:
     # Calculate FRAMA
     for i in range(period, len(prices)):
         if pd.notna(frama.iloc[i - 1]) and pd.notna(alpha.iloc[i]):
-            frama.iloc[i] = (
-                alpha.iloc[i] * prices.iloc[i] + (1 - alpha.iloc[i]) * frama.iloc[i - 1]
-            )
+            frama.iloc[i] = alpha.iloc[i] * prices.iloc[i] + (1 - alpha.iloc[i]) * frama.iloc[i - 1]
 
     return frama
 
 
-def calculate_vama(
-    prices: pd.Series, volumes: pd.Series, period: int = 20
-) -> pd.Series:
+def calculate_vama(prices: pd.Series, volumes: pd.Series, period: int = 20) -> pd.Series:
     """Calculate Volume Adjusted Moving Average.
 
     Args:
@@ -365,17 +348,12 @@ def calculate_vama(
 
     # Weighted moving average
     weighted_prices = prices * volume_ratio
-    vama = (
-        weighted_prices.rolling(window=period).sum()
-        / volume_ratio.rolling(window=period).sum()
-    )
+    vama = weighted_prices.rolling(window=period).sum() / volume_ratio.rolling(window=period).sum()
 
     return vama
 
 
-def detect_crossover(
-    series1: pd.Series, series2: pd.Series, shift: int = 1
-) -> pd.Series:
+def detect_crossover(series1: pd.Series, series2: pd.Series, shift: int = 1) -> pd.Series:
     """Detect when series1 crosses above series2.
 
     Args:
@@ -389,9 +367,7 @@ def detect_crossover(
     return (series1 > series2) & (series1.shift(shift) <= series2.shift(shift))
 
 
-def detect_crossunder(
-    series1: pd.Series, series2: pd.Series, shift: int = 1
-) -> pd.Series:
+def detect_crossunder(series1: pd.Series, series2: pd.Series, shift: int = 1) -> pd.Series:
     """Detect when series1 crosses below series2.
 
     Args:

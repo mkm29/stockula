@@ -1,19 +1,21 @@
 """Stockula - Financial trading and analysis library"""
 
-# Suppress warnings at package import time
+# All module-level imports must be at the top
 import logging
+import os
+import warnings
 
+# Configure logging
 logging.getLogger("alembic.runtime.migration").setLevel(logging.WARNING)
 logging.getLogger("alembic").setLevel(logging.WARNING)
 
-import warnings
-
+# Configure warnings
 warnings.filterwarnings("ignore", category=UserWarning)
 
-import os
-
+# Configure environment
 os.environ["JOBLIB_TEMP_FOLDER"] = "/tmp"
 
+# Package imports
 from .backtesting import (
     BacktestRunner,
     BaseStrategy,

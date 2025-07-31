@@ -62,7 +62,7 @@ portfolio:
   tickers:
     - symbol: AAPL
       quantity: 10
-    - symbol: GOOGL  
+    - symbol: GOOGL
       quantity: 5
     - symbol: MSFT
       quantity: 8
@@ -139,7 +139,7 @@ Clean, formatted tables for results:
 ##### Technical Analysis
 
 ```
-                    Technical Analysis Results                     
+                    Technical Analysis Results
 ┏━━━━━━━━┳━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━┓
 ┃ Ticker ┃ SMA_20        ┃ RSI_14         ┃ MACD             ┃
 ┡━━━━━━━━╇━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━┩
@@ -161,7 +161,7 @@ Portfolio Information:
   Trading Days: 252
   Calendar Days: 365
 
-                         Backtesting Results                          
+                         Backtesting Results
 ┏━━━━━━━━┳━━━━━━━━━━━┳━━━━━━━━━━━━┳━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━┓
 ┃ Ticker ┃ Strategy  ┃ Return     ┃ Sharpe Ratio   ┃ Max Drawdown   ┃
 ┡━━━━━━━━╇━━━━━━━━━━━╇━━━━━━━━━━━━╇━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━┩

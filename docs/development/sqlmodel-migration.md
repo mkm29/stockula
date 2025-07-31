@@ -52,7 +52,7 @@ conn.execute("""
 # Inserting data
 conn.execute(
     """
-    INSERT OR REPLACE INTO stocks 
+    INSERT OR REPLACE INTO stocks
     (symbol, name, sector, industry, market_cap, exchange, currency, updated_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
     """,
@@ -120,7 +120,7 @@ SQLModel allows us to create base models with common fields, eliminating code du
 ```python
 class TimestampMixin(SQLModel):
     """Mixin for adding created_at and updated_at timestamps to models."""
-    
+
     created_at: datetime = Field(
         default_factory=lambda: datetime.now(timezone.utc),
         sa_column=Column(SQLADateTime, server_default=func.current_timestamp()),
@@ -139,9 +139,9 @@ class TimestampMixin(SQLModel):
 
 class BaseModel(TimestampMixin):
     """Base model with common fields for all database models."""
-    
+
     id: Optional[int] = Field(
-        default=None, 
+        default=None,
         primary_key=True,
         description="Primary key"
     )
@@ -182,12 +182,12 @@ def store_price_history(self, symbol: str, data: pd.DataFrame, interval: str = "
         for date, row in data.iterrows():
             conn.execute(
                 """
-                INSERT OR REPLACE INTO price_history 
+                INSERT OR REPLACE INTO price_history
                 (symbol, date, open_price, high_price, low_price, close_price, volume, interval)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 """,
-                (symbol, date.strftime("%Y-%m-%d"), row.get("Open"), 
-                 row.get("High"), row.get("Low"), row.get("Close"), 
+                (symbol, date.strftime("%Y-%m-%d"), row.get("Open"),
+                 row.get("High"), row.get("Low"), row.get("Close"),
                  row.get("Volume"), interval)
             )
 ```
@@ -220,7 +220,7 @@ SQLModel automatically handles relationships:
 class Stock(SQLModel, table=True):
     symbol: str = Field(primary_key=True)
     # ... other fields ...
-    
+
     # Automatic relationships
     price_history: List["PriceHistory"] = Relationship(back_populates="stock")
     dividends: List["Dividend"] = Relationship(back_populates="stock")
@@ -229,7 +229,7 @@ class PriceHistory(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     symbol: str = Field(foreign_key="stocks.symbol")
     # ... other fields ...
-    
+
     # Back reference
     stock: Stock = Relationship(back_populates="price_history")
 ```

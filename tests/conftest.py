@@ -11,19 +11,13 @@ import pytest
 # pytest-xdist support
 def pytest_configure(config):
     """Configure pytest with xdist-specific markers."""
-    config.addinivalue_line(
-        "markers", "xdist_group(name): mark test to run in the same xdist worker"
-    )
+    config.addinivalue_line("markers", "xdist_group(name): mark test to run in the same xdist worker")
 
 
 @pytest.fixture(scope="session")
 def worker_id(request):
     """Get the xdist worker id for parallel test execution."""
-    return (
-        request.config.workerinput.get("workerid", "master")
-        if hasattr(request.config, "workerinput")
-        else "master"
-    )
+    return request.config.workerinput.get("workerid", "master") if hasattr(request.config, "workerinput") else "master"
 
 
 from stockula.backtesting import BacktestRunner
@@ -130,9 +124,7 @@ def sample_stockula_config(sample_portfolio_config, sample_data_config):
     return StockulaConfig(
         portfolio=sample_portfolio_config,
         data=sample_data_config,
-        backtest=BacktestConfig(
-            initial_cash=10000.0, commission=0.002, hold_only_categories=["INDEX"]
-        ),
+        backtest=BacktestConfig(initial_cash=10000.0, commission=0.002, hold_only_categories=["INDEX"]),
         forecast=ForecastConfig(forecast_length=30, model_list="fast"),
     )
 
@@ -157,21 +149,21 @@ def sample_ticker():
 @pytest.fixture(scope="function")
 def sample_asset(sample_ticker):
     """Create a sample asset."""
-    return Asset(ticker=sample_ticker, quantity=10.0, category=Category.MOMENTUM)
+    return Asset(ticker_init=sample_ticker, quantity_init=10.0, category_init=Category.MOMENTUM)
 
 
 @pytest.fixture(scope="function")
 def sample_portfolio():
     """Create a sample portfolio."""
     return Portfolio(
-        name="Test Portfolio",
-        initial_capital=100000.0,
-        allocation_method="equal_weight",
+        name_init="Test Portfolio",
+        initial_capital_init=100000.0,
+        allocation_method_init="equal_weight",
     )
 
 
 @pytest.fixture(scope="function")
-def populated_portfolio(sample_portfolio, sample_ticker_configs, mock_data_fetcher):
+def populated_portfolio(sample_ticker_configs, mock_data_fetcher):
     """Create a portfolio with multiple assets."""
     factory = DomainFactory(fetcher=mock_data_fetcher)
     config = StockulaConfig(
@@ -236,7 +228,7 @@ def mock_yfinance_ticker():
     # Mock history method
     def mock_history(**kwargs):
         period = kwargs.get("period", "1mo")
-        interval = kwargs.get("interval", "1d")
+        kwargs.get("interval", "1d")
 
         if period == "1mo":
             dates = pd.date_range(end=datetime.now(), periods=22, freq="D")
@@ -268,12 +260,21 @@ def mock_data_fetcher(mock_yfinance_ticker, sample_prices):
         fetcher = DataFetcher(use_cache=False)
 
         # Mock get_current_prices to return our sample prices
-        def mock_get_current_prices(symbols, show_progress=True):
+        def mock_get_current_prices(symbols, _show_progress=True):
             if isinstance(symbols, str):
                 symbols = [symbols]
             return {s: sample_prices.get(s, 100.0) for s in symbols}
 
         fetcher.get_current_prices = mock_get_current_prices
+
+        # Mock get_treasury_rates to return sample rates
+        def mock_get_treasury_rates(start_date=None, end_date=None, duration="3_month"):
+            # Return a simple Series with sample treasury rates
+            dates = pd.date_range(start="2023-01-01", end="2023-12-31", freq="D")
+            rates = pd.Series([0.05] * len(dates), index=dates)  # 5% rate
+            return rates
+
+        fetcher.get_treasury_rates = mock_get_treasury_rates
 
         yield fetcher
 
@@ -409,8 +410,6 @@ def _seed_test_database(db: DatabaseManager):
 
     for symbol, base_price in base_prices.items():
         # Create realistic price movement
-        import numpy as np
-
         np.random.seed(hash(symbol) % 2**32)  # Consistent random data per symbol
 
         # Generate price data with trend and volatility
@@ -444,9 +443,7 @@ def _seed_test_database(db: DatabaseManager):
             last_date = dates[-1].date() if hasattr(dates[-1], "date") else dates[-1]
             valid_dates = [d for d in dividend_dates if d.date() <= last_date]
             if valid_dates:
-                dividends = pd.Series(
-                    dividend_amounts[: len(valid_dates)], index=valid_dates
-                )
+                dividends = pd.Series(dividend_amounts[: len(valid_dates)], index=valid_dates)
                 db.store_dividends(symbol, dividends)
 
         # Add a stock split for AAPL
@@ -527,13 +524,9 @@ def temp_config_file(tmp_path, sample_stockula_config):
     config_dict = sample_stockula_config.model_dump()
     # Convert dates to strings for YAML serialization
     if config_dict["data"]["start_date"]:
-        config_dict["data"]["start_date"] = config_dict["data"]["start_date"].strftime(
-            "%Y-%m-%d"
-        )
+        config_dict["data"]["start_date"] = config_dict["data"]["start_date"].strftime("%Y-%m-%d")
     if config_dict["data"]["end_date"]:
-        config_dict["data"]["end_date"] = config_dict["data"]["end_date"].strftime(
-            "%Y-%m-%d"
-        )
+        config_dict["data"]["end_date"] = config_dict["data"]["end_date"].strftime("%Y-%m-%d")
 
     with open(config_path, "w") as f:
         yaml.dump(config_dict, f)
@@ -560,9 +553,7 @@ def backtest_data():
 
     # Create trending data with some noise
     trend = pd.Series(range(len(dates)), index=dates) * 0.5
-    noise = pd.Series(
-        [(-1) ** i * (i % 5) * 0.2 for i in range(len(dates))], index=dates
-    )
+    noise = pd.Series([(-1) ** i * (i % 5) * 0.2 for i in range(len(dates))], index=dates)
     base_price = 100.0
 
     close_prices = base_price + trend + noise
@@ -589,9 +580,7 @@ def forecast_data():
 
     # Add trend, seasonality, and noise
     trend = pd.Series(range(len(dates)), index=dates) * 0.1
-    seasonal = pd.Series(
-        [10 * np.sin(2 * np.pi * i / 30) for i in range(len(dates))], index=dates
-    )
+    seasonal = pd.Series([10 * np.sin(2 * np.pi * i / 30) for i in range(len(dates))], index=dates)
     noise = pd.Series(np.random.normal(0, 2, len(dates)), index=dates)
 
     values = 100 + trend + seasonal + noise

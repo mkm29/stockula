@@ -66,12 +66,12 @@ class TestMyIndicator:
         result = calculate_my_indicator(prices, period=3)
         assert len(result) == len(prices)
         assert not result.iloc[-1] != result.iloc[-1]  # Not NaN
-    
+
     def test_edge_cases(self):
         """Test edge cases."""
         # Empty series
         assert len(calculate_my_indicator(pd.Series([]))) == 0
-        
+
         # Single value
         single = pd.Series([100])
         assert len(calculate_my_indicator(single)) == 1
@@ -117,10 +117,10 @@ def test_insufficient_data_warning(self):
     """Test warning for insufficient data."""
     with warnings.catch_warnings(record=True) as w:
         warnings.simplefilter("always")
-        
+
         # Code that should trigger warning
         strategy = create_strategy_with_insufficient_data()
-        
+
         # Verify warning
         assert len(w) > 0
         assert "Insufficient data" in str(w[0].message)
@@ -136,11 +136,11 @@ def test_strategy_logic(self):
     mock_strategy.position = None
     mock_strategy.sma_short = Mock()
     mock_strategy.sma_long = Mock()
-    
+
     # Set up indicator values
     mock_strategy.sma_short.__getitem__ = Mock(return_value=55)
     mock_strategy.sma_long.__getitem__ = Mock(return_value=50)
-    
+
     # Test logic
     # Note: Direct testing of init() and next() is not possible
 ```
@@ -152,7 +152,7 @@ def test_indicator_properties(self):
     """Test indicator mathematical properties."""
     prices = create_test_prices()
     indicator = calculate_my_indicator(prices)
-    
+
     # Test properties
     assert indicator.min() >= prices.min() * 0.9  # Within bounds
     assert indicator.max() <= prices.max() * 1.1
@@ -229,7 +229,7 @@ When adding new functionality:
 def test_fast_calculation(self):
     # Use 100 data points, not 10,000
     data = create_test_data(days=100)
-    
+
 # Mark slow tests
 @pytest.mark.slow
 def test_comprehensive_backtest(self):
@@ -252,17 +252,55 @@ def test_with_fixture(market_data):
 
 ## Continuous Integration
 
-Tests are automatically run on:
+### GitHub Actions Workflow
 
-- Every commit
-- Pull requests
-- Before deployment
+Tests are automatically run through the `test.yml` workflow:
+
+- **Triggers**: All pull requests and pushes to main
+- **Jobs**:
+  1. **Linting**: Code style checks with `ruff`
+  2. **Unit Tests**: Fast, isolated tests with coverage
+  3. **Integration Tests**: Currently disabled, will test with SQLite
+
+### Running Tests Locally
+
+```bash
+# Run linting (same as CI)
+uv run ruff check src tests
+uv run ruff format --check src tests
+
+# Run unit tests with coverage (same as CI)
+uv run pytest tests/unit -v --cov=stockula --cov-report=xml --cov-report=term-missing
+
+# Run integration tests (when enabled)
+DATABASE_URL=sqlite:///./test_stockula.db STOCKULA_ENV=test uv run pytest tests/integration -v
+```
+
+### Test Organization
+
+```
+tests/
+├── unit/           # Fast, isolated tests
+│   ├── test_strategies.py
+│   ├── test_indicators.py
+│   └── ...
+└── integration/    # Tests with database/external services
+    ├── test_data_fetching.py
+    └── ...
+```
+
+### Coverage Requirements
+
+- Unit tests report to Codecov with `unit` flag
+- Integration tests report with `integration` flag
+- Coverage reports are optional (won't fail CI)
 
 Ensure your tests:
 
 - Are deterministic (same result every time)
-- Don't depend on external services
-- Complete within reasonable time (\<5 minutes total)
+- Don't depend on external services (for unit tests)
+- Complete within reasonable time (<5 minutes total)
+- Follow the existing test structure
 
 ## Getting Help
 

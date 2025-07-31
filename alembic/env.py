@@ -5,10 +5,12 @@ from pathlib import Path
 
 from sqlalchemy import engine_from_config, pool
 
-from alembic import context
+from alembic import context  # type: ignore[attr-defined]
 
 # Add the project root to the Python path
 sys.path.insert(0, str(Path(__file__).parents[2]))
+
+from stockula.database.models import SQLModel
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
@@ -18,9 +20,6 @@ config = context.config
 # This line sets up loggers basically.
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
-
-# Import models metadata for autogenerate support
-from stockula.database.models import SQLModel
 
 target_metadata = SQLModel.metadata
 
@@ -72,9 +71,7 @@ def run_migrations_online() -> None:
         prefix="sqlalchemy.",
         poolclass=pool.NullPool,
         pool_pre_ping=True,
-        connect_args={"check_same_thread": False}
-        if "sqlite" in config.get_main_option("sqlalchemy.url")
-        else {},
+        connect_args={"check_same_thread": False} if "sqlite" in config.get_main_option("sqlalchemy.url") else {},
     )
 
     with connectable.connect() as connection:

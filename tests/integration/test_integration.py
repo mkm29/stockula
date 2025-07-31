@@ -54,9 +54,7 @@ class TestEndToEndWorkflow:
             assert not mock_yf.called  # Should not call API
             assert len(data2) == len(data1)
 
-    def test_full_analysis_workflow(
-        self, sample_stockula_config, mock_data_fetcher, backtest_data, mock_container
-    ):
+    def test_full_analysis_workflow(self, sample_stockula_config, mock_data_fetcher, backtest_data, mock_container):
         """Test complete analysis workflow."""
         # Mock the container to use our mock data fetcher
         mock_data_fetcher.get_stock_data.return_value = backtest_data
@@ -162,13 +160,8 @@ class TestConfigurationIntegration:
 
         # Compare key fields
         assert loaded_config.portfolio.name == sample_stockula_config.portfolio.name
-        assert (
-            loaded_config.portfolio.initial_capital
-            == sample_stockula_config.portfolio.initial_capital
-        )
-        assert len(loaded_config.portfolio.tickers) == len(
-            sample_stockula_config.portfolio.tickers
-        )
+        assert loaded_config.portfolio.initial_capital == sample_stockula_config.portfolio.initial_capital
+        assert len(loaded_config.portfolio.tickers) == len(sample_stockula_config.portfolio.tickers)
 
     def test_environment_override(self, tmp_path, monkeypatch):
         """Test environment variable overrides."""
@@ -207,9 +200,7 @@ class TestPerformanceIntegration:
             )
 
         config = StockulaConfig(
-            portfolio=PortfolioConfig(
-                name="Large Portfolio", initial_capital=1000000.0, tickers=tickers
-            )
+            portfolio=PortfolioConfig(name="Large Portfolio", initial_capital=1000000.0, tickers=tickers)
         )
 
         factory = DomainFactory()

@@ -5,7 +5,6 @@ import sys
 from io import StringIO
 from unittest.mock import Mock, patch
 
-from stockula.config import StockulaConfig
 from stockula.main import (
     get_strategy_class,
     main,
@@ -184,9 +183,7 @@ class TestBacktest:
         from stockula.config.models import StrategyConfig
 
         sample_stockula_config.backtest.strategies = [
-            StrategyConfig(
-                name="smacross", parameters={"fast_period": 10, "slow_period": 20}
-            )
+            StrategyConfig(name="smacross", parameters={"fast_period": 10, "slow_period": 20})
         ]
 
         # Create mock runner
@@ -273,9 +270,7 @@ class TestForecast:
         """Test forecast error handling."""
         # Create mock forecaster that raises an error
         mock_forecaster_instance = Mock()
-        mock_forecaster_instance.forecast_from_symbol.side_effect = Exception(
-            "Forecast failed"
-        )
+        mock_forecaster_instance.forecast_from_symbol.side_effect = Exception("Forecast failed")
 
         # Create container and override dependencies
         from stockula.container import Container
@@ -323,9 +318,7 @@ class TestPrintResults:
 
     def test_print_results_json(self):
         """Test JSON output format."""
-        results = {
-            "technical_analysis": [{"ticker": "AAPL", "indicators": {"SMA_20": 150.0}}]
-        }
+        results = {"technical_analysis": [{"ticker": "AAPL", "indicators": {"SMA_20": 150.0}}]}
 
         with patch("sys.stdout", new_callable=StringIO) as mock_stdout:
             print_results(results, "json")

@@ -327,9 +327,7 @@ class TestStrategyDataRequirements:
         for strategy in strategies_with_method:
             if hasattr(strategy, "get_recommended_start_date"):
                 assert callable(strategy.get_recommended_start_date)
-                recommended = strategy.get_recommended_start_date(
-                    target_date.strftime("%Y-%m-%d")
-                )
+                recommended = strategy.get_recommended_start_date(target_date.strftime("%Y-%m-%d"))
                 # The function returns a string, not datetime
                 assert isinstance(recommended, str)
                 # Convert back to datetime for comparison
@@ -392,11 +390,7 @@ class TestStrategyCalculationFunctions:
 
         for strategy in strategies_with_atr:
             source = inspect.getsource(strategy)
-            assert (
-                "ATR" in source
-                or "atr" in source
-                or "average_true_range" in source.lower()
-            )
+            assert "ATR" in source or "atr" in source or "average_true_range" in source.lower()
 
 
 class TestStrategyCrossoverLogic:
@@ -570,13 +564,7 @@ class TestStrategyEdgeCases:
         for strategy in division_strategies:
             source = inspect.getsource(strategy)
             # Should have some form of zero checking or safe division
-            assert (
-                "!= 0" in source
-                or "== 0" in source
-                or "max(" in source
-                or "np.where" in source
-                or "if" in source
-            )
+            assert "!= 0" in source or "== 0" in source or "max(" in source or "np.where" in source or "if" in source
 
 
 class TestStrategyIntegration:

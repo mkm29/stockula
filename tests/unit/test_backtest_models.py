@@ -336,7 +336,4 @@ class TestPortfolioBacktestResults:
         )
 
         assert len(portfolio_results.strategy_summaries) == 0
-        assert (
-            portfolio_results.initial_portfolio_value
-            == portfolio_results.initial_capital
-        )
+        assert portfolio_results.initial_portfolio_value == portfolio_results.initial_capital
