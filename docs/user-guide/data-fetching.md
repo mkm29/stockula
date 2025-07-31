@@ -127,18 +127,18 @@ data:
   start_date: "2020-01-01"
   end_date: "2024-01-01"
   interval: "1d"
-  
+
   # Caching settings
   use_cache: true
   db_path: "stockula.db"
   cache_expiry_hours: 6
   max_cache_size_mb: 500
-  
+
   # API settings
   request_delay: 0.1          # Delay between API requests
   max_retries: 3
   timeout_seconds: 30
-  
+
   # Data validation
   validate_data: true
   drop_invalid_rows: true
@@ -227,15 +227,15 @@ def fetch_data_in_chunks(symbol, start_date, end_date, chunk_months=6):
     """Fetch data in smaller chunks to manage memory."""
     current_date = start_date
     all_data = []
-    
+
     while current_date < end_date:
         chunk_end = min(current_date + timedelta(days=30*chunk_months), end_date)
-        chunk_data = fetcher.get_stock_data(symbol, 
+        chunk_data = fetcher.get_stock_data(symbol,
                                           start_date=current_date,
                                           end_date=chunk_end)
         all_data.append(chunk_data)
         current_date = chunk_end
-    
+
     return pd.concat(all_data)
 ```
 
@@ -277,7 +277,7 @@ data = fetcher.get_stock_data("AAPL", validate=True)
 missing_dates = fetcher.find_missing_dates("AAPL", "2023-01-01", "2023-12-31")
 
 # Fill missing data
-complete_data = fetcher.get_stock_data("AAPL", 
+complete_data = fetcher.get_stock_data("AAPL",
                                      start_date="2023-01-01",
                                      fill_missing=True)
 ```
@@ -302,7 +302,7 @@ from stockula.backtesting.runner import BacktestRunner
 
 # Backtest runner uses cached data automatically
 runner = BacktestRunner()
-results = runner.run_backtest("AAPL", strategy="smacross", 
+results = runner.run_backtest("AAPL", strategy="smacross",
                             start_date="2023-01-01")
 ```
 
@@ -333,7 +333,7 @@ Multi-symbol progress tracking:
 ✓ AAPL: 252 days cached
 ⠋ GOOGL: Fetching from API... ━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 60% 0:00:03
 ⠋ MSFT: Queued
-⠋ AMZN: Queued  
+⠋ AMZN: Queued
 ⠋ TSLA: Queued
 ```
 

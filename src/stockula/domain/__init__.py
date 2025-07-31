@@ -4,7 +4,6 @@ from .asset import Asset
 from .category import Category
 from .factory import DomainFactory
 from .portfolio import Portfolio
-from .ticker import Ticker as _TickerClass
 from .ticker import TickerRegistry
 from .ticker_wrapper import Ticker
 

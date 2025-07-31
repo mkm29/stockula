@@ -1,7 +1,8 @@
 """Factory for creating domain objects from configuration."""
 
 import logging
-from typing import TYPE_CHECKING, Optional
+from datetime import date
+from typing import TYPE_CHECKING
 
 from ..config import StockulaConfig, TickerConfig
 from .asset import Asset
@@ -16,13 +17,22 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+def date_to_string(date_value: str | date | None) -> str | None:
+    """Convert date or string to string format."""
+    if date_value is None:
+        return None
+    if isinstance(date_value, str):
+        return date_value
+    return date_value.strftime("%Y-%m-%d")
+
+
 class DomainFactory:
     """Factory for creating domain objects from configuration."""
 
     def __init__(
         self,
         config: StockulaConfig | None = None,
-        fetcher: Optional["IDataFetcher"] = None,
+        fetcher: "IDataFetcher | None" = None,
         ticker_registry: TickerRegistry | None = None,
     ):
         """Initialize factory with dependencies.
@@ -53,9 +63,7 @@ class DomainFactory:
             price_range=ticker_config.price_range,
         )
 
-    def _create_asset(
-        self, ticker_config: TickerConfig, calculated_quantity: float | None = None
-    ) -> Asset:
+    def _create_asset(self, ticker_config: TickerConfig, calculated_quantity: float | None = None) -> Asset:
         """Create asset from ticker configuration (internal method).
 
         Args:
@@ -78,16 +86,12 @@ class DomainFactory:
                 pass
 
         # Use calculated quantity if provided, otherwise use configured quantity
-        quantity = (
-            calculated_quantity
-            if calculated_quantity is not None
-            else ticker_config.quantity
-        )
+        quantity = calculated_quantity if calculated_quantity is not None else ticker_config.quantity
 
         if quantity is None:
             raise ValueError(f"No quantity specified for ticker {ticker_config.symbol}")
 
-        return Asset(ticker=ticker, quantity=quantity, category=category)
+        return Asset(ticker_init=ticker, quantity_init=quantity, category_init=category)
 
     def _calculate_dynamic_quantities(
         self, config: StockulaConfig, tickers_to_add: list[TickerConfig]
@@ -103,11 +107,13 @@ class DomainFactory:
         """
         # Use injected fetcher
         fetcher = self.fetcher
+        if fetcher is None:
+            raise ValueError("Data fetcher not configured")
         symbols = [ticker.symbol for ticker in tickers_to_add]
 
         if config.data.start_date:
             # Use start date prices for backtesting to ensure portfolio value matches at start
-            start_date_str = config.data.start_date.strftime("%Y-%m-%d")
+            start_date_str = date_to_string(config.data.start_date)
             logger.debug(
                 f"Calculating quantities using start date prices ({start_date_str}) for accurate portfolio value..."
             )
@@ -115,21 +121,21 @@ class DomainFactory:
             calculation_prices = {}
             for symbol in symbols:
                 try:
-                    data = fetcher.get_stock_data(
-                        symbol, start=start_date_str, end=start_date_str
-                    )
+                    data = fetcher.get_stock_data(symbol, start=start_date_str, end=start_date_str)
                     if not data.empty:
                         calculation_prices[symbol] = data["Close"].iloc[0]
                     else:
                         # Fallback to a few days later if no data on exact date
                         from datetime import timedelta
 
-                        end_date = (
-                            config.data.start_date + timedelta(days=7)
-                        ).strftime("%Y-%m-%d")
-                        data = fetcher.get_stock_data(
-                            symbol, start=start_date_str, end=end_date
-                        )
+                        import pandas as pd
+
+                        if isinstance(config.data.start_date, str):
+                            start_dt = pd.to_datetime(config.data.start_date)
+                            end_date = (start_dt + timedelta(days=7)).strftime("%Y-%m-%d")
+                        else:
+                            end_date = (config.data.start_date + timedelta(days=7)).strftime("%Y-%m-%d")
+                        data = fetcher.get_stock_data(symbol, start=start_date_str, end=end_date)
                         if not data.empty:
                             calculation_prices[symbol] = data["Close"].iloc[0]
                         else:
@@ -137,9 +143,7 @@ class DomainFactory:
                             current_prices = fetcher.get_current_prices([symbol])
                             if symbol in current_prices:
                                 calculation_prices[symbol] = current_prices[symbol]
-                                logger.warning(
-                                    f"Using current price for {symbol} (no historical data available)"
-                                )
+                                logger.warning(f"Using current price for {symbol} (no historical data available)")
                 except Exception as e:
                     logger.error(f"Error fetching start date price for {symbol}: {e}")
                     # Fallback to current prices
@@ -160,9 +164,7 @@ class DomainFactory:
 
             # Calculate allocation amount
             if ticker_config.allocation_pct is not None:
-                allocation_amount = (
-                    ticker_config.allocation_pct / 100.0
-                ) * config.portfolio.initial_capital
+                allocation_amount = (ticker_config.allocation_pct / 100.0) * config.portfolio.initial_capital
             elif ticker_config.allocation_amount is not None:
                 allocation_amount = ticker_config.allocation_amount
             else:
@@ -199,33 +201,33 @@ class DomainFactory:
 
         # Use injected fetcher
         fetcher = self.fetcher
+        if fetcher is None:
+            raise ValueError("Data fetcher not configured")
         symbols = [ticker.symbol for ticker in tickers_to_add]
 
         if config.data.start_date:
             # Use start date prices for backtesting to ensure portfolio value matches at start
-            start_date_str = config.data.start_date.strftime("%Y-%m-%d")
-            logger.debug(
-                f"Using start date prices ({start_date_str}) for auto-allocation calculations..."
-            )
+            start_date_str = date_to_string(config.data.start_date)
+            logger.debug(f"Using start date prices ({start_date_str}) for auto-allocation calculations...")
 
             calculation_prices = {}
             for symbol in symbols:
                 try:
-                    data = fetcher.get_stock_data(
-                        symbol, start=start_date_str, end=start_date_str
-                    )
+                    data = fetcher.get_stock_data(symbol, start=start_date_str, end=start_date_str)
                     if not data.empty:
                         calculation_prices[symbol] = data["Close"].iloc[0]
                     else:
                         # Fallback to a few days later if no data on exact date
                         from datetime import timedelta
 
-                        end_date = (
-                            config.data.start_date + timedelta(days=7)
-                        ).strftime("%Y-%m-%d")
-                        data = fetcher.get_stock_data(
-                            symbol, start=start_date_str, end=end_date
-                        )
+                        import pandas as pd
+
+                        if isinstance(config.data.start_date, str):
+                            start_dt = pd.to_datetime(config.data.start_date)
+                            end_date = (start_dt + timedelta(days=7)).strftime("%Y-%m-%d")
+                        else:
+                            end_date = (config.data.start_date + timedelta(days=7)).strftime("%Y-%m-%d")
+                        data = fetcher.get_stock_data(symbol, start=start_date_str, end=end_date)
                         if not data.empty:
                             calculation_prices[symbol] = data["Close"].iloc[0]
                         else:
@@ -233,9 +235,7 @@ class DomainFactory:
                             current_prices = fetcher.get_current_prices([symbol])
                             if symbol in current_prices:
                                 calculation_prices[symbol] = current_prices[symbol]
-                                logger.warning(
-                                    f"Using current price for {symbol} (no historical data available)"
-                                )
+                                logger.warning(f"Using current price for {symbol} (no historical data available)")
                 except Exception as e:
                     logger.error(f"Error fetching start date price for {symbol}: {e}")
                     # Fallback to current prices
@@ -247,15 +247,13 @@ class DomainFactory:
             calculation_prices = fetcher.get_current_prices(symbols)
 
         # Group tickers by category
-        tickers_by_category = {}
+        tickers_by_category: dict[str, list[TickerConfig]] = {}
         for ticker_config in tickers_to_add:
             if ticker_config.symbol not in calculation_prices:
                 raise ValueError(f"Could not fetch price for {ticker_config.symbol}")
 
             if not ticker_config.category:
-                raise ValueError(
-                    f"Ticker {ticker_config.symbol} must have category specified for auto-allocation"
-                )
+                raise ValueError(f"Ticker {ticker_config.symbol} must have category specified for auto-allocation")
 
             category = ticker_config.category.upper()
             if category not in tickers_by_category:
@@ -263,18 +261,16 @@ class DomainFactory:
             tickers_by_category[category].append(ticker_config)
 
         # Calculate target capital per category
-        target_capital = (
-            config.portfolio.initial_capital
-            * config.portfolio.capital_utilization_target
-        )
-        calculated_quantities = {}
+        target_capital = config.portfolio.initial_capital * config.portfolio.capital_utilization_target
+        calculated_quantities: dict[str, float] = {}
 
         # Initialize all tickers with 0 quantity
         for ticker_config in tickers_to_add:
-            calculated_quantities[ticker_config.symbol] = 0
+            calculated_quantities[ticker_config.symbol] = 0.0
 
         logger.debug(
-            f"Auto-allocation target capital: ${target_capital:,.2f} ({config.portfolio.capital_utilization_target:.1%} of ${config.portfolio.initial_capital:,.2f})"
+            f"Auto-allocation target capital: ${target_capital:,.2f} "
+            f"({config.portfolio.capital_utilization_target:.1%} of ${config.portfolio.initial_capital:,.2f})"
         )
 
         # First pass: Calculate basic allocations per category
@@ -299,44 +295,41 @@ class DomainFactory:
             }
 
             logger.debug(
-                f"\n{category} allocation: ${category_capital:,.2f} ({ratio:.1%}) across {len(category_tickers)} tickers"
+                f"\n{category} allocation: ${category_capital:,.2f} ({ratio:.1%}) "
+                f"across {len(category_tickers)} tickers"
             )
 
         # Aggressive allocation algorithm to maximize capital utilization
         total_allocated = 0
-        category_unused = {}
+        category_unused: dict[str, float] = {}
 
         # First pass: Allocate within each category
         for category, allocation_info in category_allocations.items():
-            category_capital = allocation_info["capital"]
-            category_tickers = allocation_info["tickers"]
+            cat_capital: float = allocation_info["capital"]  # type: ignore[assignment]
+            cat_tickers: list[TickerConfig] = allocation_info["tickers"]  # type: ignore[assignment]
 
             if config.portfolio.allow_fractional_shares:
                 # Simple equal allocation for fractional shares
-                capital_per_ticker = category_capital / len(category_tickers)
-                for ticker_config in category_tickers:
+                capital_per_ticker = cat_capital / len(cat_tickers)
+                for ticker_config in cat_tickers:
                     price = calculation_prices[ticker_config.symbol]
                     quantity = capital_per_ticker / price
                     calculated_quantities[ticker_config.symbol] = quantity
                     actual_cost = quantity * price
                     total_allocated += actual_cost
-                    logger.debug(
-                        f"  {ticker_config.symbol}: {quantity:.4f} shares × ${price:.2f} = ${actual_cost:.2f}"
-                    )
-                category_unused[category] = (
-                    0  # No unused capital with fractional shares
-                )
+                    logger.debug(f"  {ticker_config.symbol}: {quantity:.4f} shares × ${price:.2f} = ${actual_cost:.2f}")
+                category_unused[category] = 0  # No unused capital with fractional shares
             else:
                 # Integer shares: optimize allocation for balanced portfolio
-                remaining_capital = category_capital
+                remaining_capital = cat_capital
                 ticker_quantities = {}
 
                 # Calculate target value per ticker for balanced allocation
-                target_value_per_ticker = category_capital / len(category_tickers)
+                target_value_per_ticker = cat_capital / len(cat_tickers)
 
                 # Sort tickers by price to allocate more expensive ones first
                 sorted_tickers = sorted(
-                    category_tickers,
+                    cat_tickers,
                     key=lambda t: calculation_prices[t.symbol],
                     reverse=True,
                 )
@@ -370,7 +363,7 @@ class DomainFactory:
                 # Second pass: Distribute remaining capital more evenly
                 # Sort by how far each ticker is from its target value
                 ticker_distances = []
-                for ticker_config in category_tickers:
+                for ticker_config in cat_tickers:
                     symbol = ticker_config.symbol
                     price = calculation_prices[symbol]
                     current_value = ticker_quantities[symbol] * price
@@ -389,7 +382,7 @@ class DomainFactory:
                         distance -= price
 
                 # Store results and calculate actual costs
-                for ticker_config in category_tickers:
+                for ticker_config in cat_tickers:
                     symbol = ticker_config.symbol
                     quantity = ticker_quantities[symbol]
                     price = calculation_prices[symbol]
@@ -397,9 +390,7 @@ class DomainFactory:
 
                     calculated_quantities[symbol] = quantity
                     total_allocated += actual_cost
-                    logger.debug(
-                        f"  {symbol}: {quantity:.0f} shares × ${price:.2f} = ${actual_cost:.2f}"
-                    )
+                    logger.debug(f"  {symbol}: {quantity:.0f} shares × ${price:.2f} = ${actual_cost:.2f}")
 
                 category_unused[category] = remaining_capital
                 logger.debug(f"  Category unused capital: ${remaining_capital:.2f}")
@@ -407,10 +398,8 @@ class DomainFactory:
         # Second pass: Redistribute remaining capital for better balance
         if not config.portfolio.allow_fractional_shares:
             # Calculate remaining capital from initial investment (not just category leftovers)
-            remaining_capital = config.portfolio.initial_capital - total_allocated
-            logger.debug(
-                f"\nRedistributing remaining capital for balance: ${remaining_capital:.2f}"
-            )
+            remaining_capital = float(config.portfolio.initial_capital - total_allocated)
+            logger.debug(f"\nRedistributing remaining capital for balance: ${remaining_capital:.2f}")
 
             # Calculate current portfolio values and identify underweight positions
             ticker_values = {}
@@ -422,9 +411,7 @@ class DomainFactory:
                     total_value += value
 
             # Calculate average position value (excluding zero positions)
-            positions_with_shares = sum(
-                1 for q in calculated_quantities.values() if q > 0
-            )
+            positions_with_shares = sum(1 for q in calculated_quantities.values() if q > 0)
             if positions_with_shares > 0:
                 avg_position_value = total_value / positions_with_shares
             else:
@@ -445,29 +432,22 @@ class DomainFactory:
                         price = calculation_prices[symbol]
 
                         # Check if below average and we can afford more
-                        if (
-                            current_value < avg_position_value * 0.9
-                            and price <= remaining_capital
-                        ):
+                        if current_value < avg_position_value * 0.9 and price <= remaining_capital:
                             distance_from_avg = avg_position_value - current_value
-                            underweight_positions.append(
-                                (symbol, distance_from_avg, price)
-                            )
+                            underweight_positions.append((symbol, distance_from_avg, price))
 
                 # Sort by distance from average (most underweight first)
                 underweight_positions.sort(key=lambda x: x[1], reverse=True)
 
                 # Add shares to most underweight positions
-                for symbol, distance, price in underweight_positions:
+                for symbol, _distance, price in underweight_positions:
                     if price <= remaining_capital:
                         calculated_quantities[symbol] += 1
                         remaining_capital -= price
                         total_allocated += price
                         ticker_values[symbol] += price
                         any_allocation = True
-                        logger.debug(
-                            f"  Balanced redistribution: +1 {symbol} share (${price:.2f})"
-                        )
+                        logger.debug(f"  Balanced redistribution: +1 {symbol} share (${price:.2f})")
                         break  # Recalculate after each addition
 
                 if not any_allocation:
@@ -476,8 +456,7 @@ class DomainFactory:
                         [
                             (s, ticker_values.get(s, 0), calculation_prices[s])
                             for s in calculated_quantities.keys()
-                            if calculated_quantities[s] > 0
-                            and calculation_prices[s] <= remaining_capital
+                            if calculated_quantities[s] > 0 and calculation_prices[s] <= remaining_capital
                         ],
                         key=lambda x: x[1],
                     )
@@ -488,9 +467,7 @@ class DomainFactory:
                         remaining_capital -= price
                         total_allocated += price
                         ticker_values[symbol] = current_value + price
-                        logger.debug(
-                            f"  Final redistribution: +1 {symbol} share (${price:.2f})"
-                        )
+                        logger.debug(f"  Final redistribution: +1 {symbol} share (${price:.2f})")
                     else:
                         break  # Can't afford any more shares
 
@@ -501,9 +478,7 @@ class DomainFactory:
 
         logger.info(f"\nTotal portfolio cost: ${total_allocated:,.2f}")
         logger.info(f"Capital utilization: {actual_utilization:.1%}")
-        logger.info(
-            f"Remaining cash: ${config.portfolio.initial_capital - total_allocated:,.2f}"
-        )
+        logger.info(f"Remaining cash: ${config.portfolio.initial_capital - total_allocated:,.2f}")
 
         return calculated_quantities
 
@@ -517,9 +492,9 @@ class DomainFactory:
             Portfolio instance
         """
         portfolio = Portfolio(
-            name=config.portfolio.name,
-            initial_capital=config.portfolio.initial_capital,
-            allocation_method=config.portfolio.allocation_method,
+            name_init=config.portfolio.name,
+            initial_capital_init=config.portfolio.initial_capital,
+            allocation_method_init=config.portfolio.allocation_method,
             rebalance_frequency=config.portfolio.rebalance_frequency,
             max_position_size=config.portfolio.max_position_size,
             stop_loss_pct=config.portfolio.stop_loss_pct,
@@ -527,41 +502,34 @@ class DomainFactory:
 
         # Add tickers from portfolio config
         tickers_to_add = config.portfolio.tickers
+        calculated_quantity: float | None = None
 
         # Handle different allocation modes
         if config.portfolio.auto_allocate:
             logger.info(
-                "Using auto-allocation - optimizing quantities based on category ratios and capital utilization target..."
+                "Using auto-allocation - optimizing quantities based on category ratios "
+                "and capital utilization target..."
             )
-            calculated_quantities = self._calculate_auto_allocation_quantities(
-                config, tickers_to_add
-            )
+            calculated_quantities = self._calculate_auto_allocation_quantities(config, tickers_to_add)
 
             for ticker_config in tickers_to_add:
-                calculated_quantity = calculated_quantities.get(ticker_config.symbol, 0)
+                calculated_quantity = calculated_quantities.get(ticker_config.symbol, 0.0)
                 # Skip tickers with 0 allocation (e.g., from categories with 0% ratio)
                 if calculated_quantity > 0:
                     asset = self._create_asset(ticker_config, calculated_quantity)
                     portfolio.add_asset(asset)
                 else:
-                    logger.debug(
-                        f"Skipping {ticker_config.symbol} - 0 shares allocated"
-                    )
+                    logger.debug(f"Skipping {ticker_config.symbol} - 0 shares allocated")
         elif config.portfolio.dynamic_allocation:
-            logger.info(
-                "Using dynamic allocation - calculating quantities based on allocation percentages/amounts..."
-            )
-            calculated_quantities = self._calculate_dynamic_quantities(
-                config, tickers_to_add
-            )
+            logger.info("Using dynamic allocation - calculating quantities based on allocation percentages/amounts...")
+            calculated_quantities = self._calculate_dynamic_quantities(config, tickers_to_add)
 
             for ticker_config in tickers_to_add:
                 calculated_quantity = calculated_quantities.get(ticker_config.symbol)
                 asset = self._create_asset(ticker_config, calculated_quantity)
                 portfolio.add_asset(asset)
-                logger.debug(
-                    f"  {ticker_config.symbol}: {calculated_quantity:.4f} shares"
-                )
+                if calculated_quantity is not None:
+                    logger.debug(f"  {ticker_config.symbol}: {calculated_quantity:.4f} shares")
         else:
             # Use static quantities from configuration
             for ticker_config in tickers_to_add:

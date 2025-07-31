@@ -107,7 +107,7 @@ backtest:
 When running forecasts in evaluation mode (with train/test split), Stockula provides accuracy metrics:
 
 ```bash
-               Portfolio Value               
+               Portfolio Value
 ┏━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━┳━━━━━━━━━━━━┓
 ┃ Metric          ┃ Date       ┃ Value      ┃
 ┡━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━╇━━━━━━━━━━━━┩
@@ -350,7 +350,34 @@ MIT License - see [LICENSE](LICENSE) file for details.
 
 Contributions are welcome! Please see our [Contributing Guide](CONTRIBUTING.md) for development setup and guidelines.
 
-This project uses [Conventional Commits](https://www.conventionalcommits.org/) and [Release Please](https://github.com/googleapis/release-please) for automated releases.
+### Development Setup
+
+1. **Install pre-commit hooks**:
+   ```bash
+   uv run pre-commit install
+   ```
+
+2. **Run tests and linting**:
+   ```bash
+   # Run tests
+   uv run pytest
+
+   # Run linting
+   uv run ruff check src tests
+
+   # Format code
+   uv run ruff format src tests
+   ```
+
+3. **Manual pre-commit run**:
+   ```bash
+   uv run pre-commit run --all-files
+   ```
+
+This project uses:
+- [Conventional Commits](https://www.conventionalcommits.org/) for commit messages
+- [Release Please](https://github.com/googleapis/release-please) for automated releases
+- [pre-commit](https://pre-commit.com/) for code quality checks
 
 ______________________________________________________________________
 

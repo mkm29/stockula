@@ -22,7 +22,7 @@ from sqlmodel import (
 )
 
 
-class Stock(SQLModel, table=True):
+class Stock(SQLModel, table=True):  # type: ignore[call-arg]
     """Basic stock metadata."""
 
     __tablename__ = "stocks"
@@ -50,25 +50,15 @@ class Stock(SQLModel, table=True):
     )
 
     # Relationships
-    price_history: list["PriceHistory"] = Relationship(
-        back_populates="stock", cascade_delete=True
-    )
-    dividends: list["Dividend"] = Relationship(
-        back_populates="stock", cascade_delete=True
-    )
+    price_history: list["PriceHistory"] = Relationship(back_populates="stock", cascade_delete=True)
+    dividends: list["Dividend"] = Relationship(back_populates="stock", cascade_delete=True)
     splits: list["Split"] = Relationship(back_populates="stock", cascade_delete=True)
-    options_calls: list["OptionsCall"] = Relationship(
-        back_populates="stock", cascade_delete=True
-    )
-    options_puts: list["OptionsPut"] = Relationship(
-        back_populates="stock", cascade_delete=True
-    )
-    stock_info: Optional["StockInfo"] = Relationship(
-        back_populates="stock", cascade_delete=True
-    )
+    options_calls: list["OptionsCall"] = Relationship(back_populates="stock", cascade_delete=True)
+    options_puts: list["OptionsPut"] = Relationship(back_populates="stock", cascade_delete=True)
+    stock_info: Optional["StockInfo"] = Relationship(back_populates="stock", cascade_delete=True)
 
 
-class PriceHistory(SQLModel, table=True):
+class PriceHistory(SQLModel, table=True):  # type: ignore[call-arg]
     """Historical OHLCV price data."""
 
     __tablename__ = "price_history"
@@ -105,7 +95,7 @@ class PriceHistory(SQLModel, table=True):
     stock: Stock = Relationship(back_populates="price_history")
 
 
-class Dividend(SQLModel, table=True):
+class Dividend(SQLModel, table=True):  # type: ignore[call-arg]
     """Dividend payment history."""
 
     __tablename__ = "dividends"
@@ -137,7 +127,7 @@ class Dividend(SQLModel, table=True):
     stock: Stock = Relationship(back_populates="dividends")
 
 
-class Split(SQLModel, table=True):
+class Split(SQLModel, table=True):  # type: ignore[call-arg]
     """Stock split history."""
 
     __tablename__ = "splits"
@@ -169,7 +159,7 @@ class Split(SQLModel, table=True):
     stock: Stock = Relationship(back_populates="splits")
 
 
-class OptionsCall(SQLModel, table=True):
+class OptionsCall(SQLModel, table=True):  # type: ignore[call-arg]
     """Call options data."""
 
     __tablename__ = "options_calls"
@@ -193,15 +183,9 @@ class OptionsCall(SQLModel, table=True):
     ask: float | None = Field(default=None, description="Ask price")
     volume: int | None = Field(default=None, description="Trading volume")
     open_interest: int | None = Field(default=None, description="Open interest")
-    implied_volatility: float | None = Field(
-        default=None, description="Implied volatility"
-    )
-    in_the_money: bool | None = Field(
-        default=None, description="Whether option is in the money"
-    )
-    contract_symbol: str | None = Field(
-        default=None, description="Option contract symbol"
-    )
+    implied_volatility: float | None = Field(default=None, description="Implied volatility")
+    in_the_money: bool | None = Field(default=None, description="Whether option is in the money")
+    contract_symbol: str | None = Field(default=None, description="Option contract symbol")
     created_at: datetime = Field(
         default_factory=lambda: datetime.now(UTC),
         sa_column=Column(SQLADateTime, server_default=func.current_timestamp()),
@@ -221,7 +205,7 @@ class OptionsCall(SQLModel, table=True):
     stock: Stock = Relationship(back_populates="options_calls")
 
 
-class OptionsPut(SQLModel, table=True):
+class OptionsPut(SQLModel, table=True):  # type: ignore[call-arg]
     """Put options data."""
 
     __tablename__ = "options_puts"
@@ -245,15 +229,9 @@ class OptionsPut(SQLModel, table=True):
     ask: float | None = Field(default=None, description="Ask price")
     volume: int | None = Field(default=None, description="Trading volume")
     open_interest: int | None = Field(default=None, description="Open interest")
-    implied_volatility: float | None = Field(
-        default=None, description="Implied volatility"
-    )
-    in_the_money: bool | None = Field(
-        default=None, description="Whether option is in the money"
-    )
-    contract_symbol: str | None = Field(
-        default=None, description="Option contract symbol"
-    )
+    implied_volatility: float | None = Field(default=None, description="Implied volatility")
+    in_the_money: bool | None = Field(default=None, description="Whether option is in the money")
+    contract_symbol: str | None = Field(default=None, description="Option contract symbol")
     created_at: datetime = Field(
         default_factory=lambda: datetime.now(UTC),
         sa_column=Column(SQLADateTime, server_default=func.current_timestamp()),
@@ -273,14 +251,12 @@ class OptionsPut(SQLModel, table=True):
     stock: Stock = Relationship(back_populates="options_puts")
 
 
-class StockInfo(SQLModel, table=True):
+class StockInfo(SQLModel, table=True):  # type: ignore[call-arg]
     """Raw yfinance info data stored as JSON."""
 
     __tablename__ = "stock_info"
 
-    symbol: str = Field(
-        foreign_key="stocks.symbol", primary_key=True, description="Stock ticker symbol"
-    )
+    symbol: str = Field(foreign_key="stocks.symbol", primary_key=True, description="Stock ticker symbol")
     info_json: str = Field(
         sa_column=Column(Text, nullable=False),
         description="JSON-encoded stock information from yfinance",

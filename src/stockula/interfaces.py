@@ -22,15 +22,25 @@ class IDataFetcher(ABC):
         pass
 
     @abstractmethod
-    def get_current_prices(
-        self, symbols: list[str] | str, show_progress: bool = True
-    ) -> dict[str, float]:
+    def get_current_prices(self, symbols: list[str] | str, show_progress: bool = True) -> dict[str, float]:
         """Get current prices for symbols."""
         pass
 
     @abstractmethod
     def get_info(self, symbol: str, force_refresh: bool = False) -> dict[str, Any]:
         """Get stock information."""
+        pass
+
+    @abstractmethod
+    def get_treasury_rates(
+        self,
+        start_date: str,
+        end_date: str,
+        duration: str = "3_month",
+        force_refresh: bool = False,
+        as_decimal: bool = True,
+    ) -> pd.Series:
+        """Get Treasury rates for a date range."""
         pass
 
 
@@ -49,9 +59,7 @@ class IDatabaseManager(ABC):
         pass
 
     @abstractmethod
-    def store_price_history(
-        self, symbol: str, data: pd.DataFrame, interval: str = "1d"
-    ) -> None:
+    def store_price_history(self, symbol: str, data: pd.DataFrame, interval: str = "1d") -> None:
         """Store price history in database."""
         pass
 
@@ -134,13 +142,24 @@ class IBacktestRunner(ABC):
 
     @abstractmethod
     def run_from_symbol(
+        self, symbol: str, strategy, start_date: str | None = None, end_date: str | None = None, **kwargs
+    ) -> dict[str, Any]:
+        """Run backtest for a symbol."""
+        pass
+
+    @abstractmethod
+    def run_with_train_test_split(
         self,
         symbol: str,
         strategy,
-        start: str | None = None,
-        end: str | None = None,
+        train_start_date: str | None = None,
+        train_end_date: str | None = None,
+        test_start_date: str | None = None,
+        test_end_date: str | None = None,
+        optimize_on_train: bool = True,
+        **kwargs,
     ) -> dict[str, Any]:
-        """Run backtest for a symbol."""
+        """Run backtest with train/test split."""
         pass
 
 
@@ -148,9 +167,7 @@ class IStockForecaster(ABC):
     """Interface for forecasting operations."""
 
     @abstractmethod
-    def forecast(
-        self, data: pd.DataFrame, forecast_length: int | None = None
-    ) -> pd.DataFrame:
+    def forecast(self, data: pd.DataFrame, forecast_length: int | None = None) -> pd.DataFrame:
         """Generate forecast from data."""
         pass
 
@@ -159,10 +176,33 @@ class IStockForecaster(ABC):
         self,
         symbol: str,
         forecast_length: int | None = None,
-        start: str | None = None,
-        end: str | None = None,
+        start_date: str | None = None,
+        end_date: str | None = None,
+        model_list: str | list[str] | None = None,
+        ensemble: str | None = None,
+        max_generations: int | None = None,
+        **kwargs,
     ) -> pd.DataFrame:
         """Generate forecast for a symbol."""
+        pass
+
+    @abstractmethod
+    def forecast_from_symbol_with_evaluation(
+        self,
+        symbol: str,
+        train_start_date: str | None = None,
+        train_end_date: str | None = None,
+        test_start_date: str | None = None,
+        test_end_date: str | None = None,
+        target_column: str = "Close",
+        **kwargs,
+    ) -> dict[str, Any]:
+        """Forecast with evaluation on test data."""
+        pass
+
+    @abstractmethod
+    def get_best_model(self) -> dict[str, Any]:
+        """Get information about the best model found."""
         pass
 
 

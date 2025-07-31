@@ -15,9 +15,7 @@ def main():
     print("Example 1: Current 3-month T-bill rate")
     current_rate = fetcher.get_current_treasury_rate("3_month")
     if current_rate:
-        print(
-            f"Current 3-month T-bill rate: {current_rate:.4f} ({current_rate * 100:.2f}%)"
-        )
+        print(f"Current 3-month T-bill rate: {current_rate:.4f} ({current_rate * 100:.2f}%)")
     else:
         print("Could not fetch current rate")
 
@@ -28,9 +26,7 @@ def main():
     specific_date = datetime(2024, 1, 15)
     rate = fetcher.get_treasury_rate(specific_date, "3_month")
     if rate:
-        print(
-            f"3-month T-bill rate on {specific_date.date()}: {rate:.4f} ({rate * 100:.2f}%)"
-        )
+        print(f"3-month T-bill rate on {specific_date.date()}: {rate:.4f} ({rate * 100:.2f}%)")
     else:
         print(f"Could not fetch rate for {specific_date.date()}")
 
@@ -42,9 +38,7 @@ def main():
     end_date = datetime(2023, 12, 31)
     avg_rate = fetcher.get_average_treasury_rate(start_date, end_date, "3_month")
     if avg_rate:
-        print(
-            f"Average 3-month T-bill rate for 2023: {avg_rate:.4f} ({avg_rate * 100:.2f}%)"
-        )
+        print(f"Average 3-month T-bill rate for 2023: {avg_rate:.4f} ({avg_rate * 100:.2f}%)")
     else:
         print("Could not calculate average rate")
 
@@ -74,7 +68,7 @@ def main():
     print("Example 5: Using Treasury rates in backtesting")
     print("""
 # In your backtest configuration or code:
-    
+
 # Option 1: Use average rate for the entire backtest period
 backtest_start = datetime(2023, 1, 1)
 backtest_end = datetime(2023, 12, 31)

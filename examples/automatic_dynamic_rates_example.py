@@ -2,7 +2,7 @@
 """Example of automatic dynamic Treasury rate usage in backtesting."""
 
 from stockula import BacktestRunner, SMACrossStrategy
-from stockula.container import get_container
+from stockula.container import create_container
 
 
 def main():
@@ -12,7 +12,7 @@ def main():
     print("=" * 60)
 
     # Get DI container and fetch data fetcher
-    container = get_container()
+    container = create_container()
     data_fetcher = container.data_fetcher()
 
     # Create backtest runner
@@ -25,9 +25,7 @@ def main():
     print("3. Calculate both static and dynamic risk-adjusted metrics")
 
     # Run backtest - dynamic rates are now used by default!
-    results = runner.run_from_symbol(
-        "AAPL", SMACrossStrategy, start_date="2023-01-01", end_date="2023-12-31"
-    )
+    results = runner.run_from_symbol("AAPL", SMACrossStrategy, start_date="2023-01-01", end_date="2023-12-31")
 
     print("\nBacktest Results:")
     print(f"Return: {results.get('Return [%]', 'N/A'):.2f}%")
@@ -44,9 +42,7 @@ def main():
     if "Avg. Risk-Free Rate [%]" in results:
         print("\nTreasury Rate Statistics:")
         print(f"Average Risk-Free Rate: {results['Avg. Risk-Free Rate [%]']:.3f}%")
-        print(
-            f"Risk-Free Rate Volatility: {results['Risk-Free Rate Volatility [%]']:.3f}%"
-        )
+        print(f"Risk-Free Rate Volatility: {results['Risk-Free Rate Volatility [%]']:.3f}%")
 
     print(f"\n{'=' * 60}")
     print("Dynamic Treasury rates are now used automatically!")

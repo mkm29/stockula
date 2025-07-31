@@ -14,33 +14,33 @@ class Asset:
     and an optional category for classification.
     """
 
-    ticker: InitVar[Ticker]
-    quantity: InitVar[float]  # Number of shares
-    category: InitVar[Category | None] = None  # Asset category
+    ticker_init: InitVar[Ticker]
+    quantity_init: InitVar[float]  # Number of shares
+    category_init: InitVar[Category | None] = None  # Asset category
     _ticker: Ticker = field(init=False, repr=False)
     _quantity: float = field(init=False, repr=False)
     _category: Category | None = field(init=False, repr=False)
 
-    def __post_init__(self, ticker: Ticker, quantity: float, category: Category | None):
+    def __post_init__(self, ticker_init: Ticker, quantity_init: float, category_init: Category | None):
         """Validate constraints and set private attributes."""
-        self._ticker = ticker
-        if quantity <= 0:
-            raise ValueError(f"Asset {ticker.symbol} quantity must be positive")
-        self._quantity = quantity
-        self._category = category
+        self._ticker = ticker_init
+        if quantity_init <= 0:
+            raise ValueError(f"Asset {ticker_init.symbol} quantity must be positive")
+        self._quantity = quantity_init
+        self._category = category_init
 
     @property
-    def ticker(self) -> Ticker:  # noqa: F811
+    def ticker(self) -> Ticker:
         """Get ticker reference (read-only)."""
         return self._ticker
 
     @property
-    def quantity(self) -> float:  # noqa: F811
+    def quantity(self) -> float:
         """Get number of shares (read-only)."""
         return self._quantity
 
     @property
-    def category(self) -> Category | None:  # noqa: F811
+    def category(self) -> Category | None:
         """Get asset category (read-only)."""
         return self._category
 
@@ -77,9 +77,7 @@ class Asset:
     def __str__(self):
         """String representation."""
         category_str = f", {self._category}" if self._category else ""
-        return (
-            f"Asset({self._ticker.symbol}, {self._quantity:.2f} shares{category_str})"
-        )
+        return f"Asset({self._ticker.symbol}, {self._quantity:.2f} shares{category_str})"
 
     def __repr__(self):
         """Detailed representation."""

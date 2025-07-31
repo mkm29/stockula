@@ -39,48 +39,30 @@ class Container(containers.DeclarativeContainer):
     # Data fetcher with injected database manager
     data_fetcher = providers.Singleton(
         DataFetcher,
-        use_cache=providers.Callable(
-            lambda config: config.data.use_cache, stockula_config
-        ),
+        use_cache=providers.Callable(lambda config: config.data.use_cache, stockula_config),
         db_path=providers.Callable(lambda config: config.data.db_path, stockula_config),
         database_manager=database_manager,
     )
 
     # Domain factory
-    domain_factory = providers.Singleton(
-        DomainFactory, config=stockula_config, fetcher=data_fetcher
-    )
+    domain_factory = providers.Singleton(DomainFactory, config=stockula_config, fetcher=data_fetcher)
 
     # Backtesting runner
     backtest_runner = providers.Factory(
         BacktestRunner,
-        cash=providers.Callable(
-            lambda config: config.backtest.initial_cash, stockula_config
-        ),
-        commission=providers.Callable(
-            lambda config: config.backtest.commission, stockula_config
-        ),
-        broker_config=providers.Callable(
-            lambda config: config.backtest.broker_config, stockula_config
-        ),
+        cash=providers.Callable(lambda config: config.backtest.initial_cash, stockula_config),
+        commission=providers.Callable(lambda config: config.backtest.commission, stockula_config),
+        broker_config=providers.Callable(lambda config: config.backtest.broker_config, stockula_config),
         data_fetcher=data_fetcher,
     )
 
     # Stock forecaster
     stock_forecaster = providers.Factory(
         StockForecaster,
-        forecast_length=providers.Callable(
-            lambda config: config.forecast.forecast_length, stockula_config
-        ),
-        frequency=providers.Callable(
-            lambda config: config.forecast.frequency, stockula_config
-        ),
-        model_list=providers.Callable(
-            lambda config: config.forecast.model_list, stockula_config
-        ),
-        prediction_interval=providers.Callable(
-            lambda config: config.forecast.prediction_interval, stockula_config
-        ),
+        forecast_length=providers.Callable(lambda config: config.forecast.forecast_length, stockula_config),
+        frequency=providers.Callable(lambda config: config.forecast.frequency, stockula_config),
+        model_list=providers.Callable(lambda config: config.forecast.model_list, stockula_config),
+        prediction_interval=providers.Callable(lambda config: config.forecast.prediction_interval, stockula_config),
         data_fetcher=data_fetcher,
     )
 
@@ -88,7 +70,7 @@ class Container(containers.DeclarativeContainer):
     technical_indicators = providers.Factory(TechnicalIndicators)
 
 
-def create_container(config_path: str = None) -> Container:
+def create_container(config_path: str | None = None) -> Container:
     """Create and configure the DI container.
 
     Args:

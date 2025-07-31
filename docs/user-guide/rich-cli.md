@@ -70,7 +70,7 @@ AutoTS forecasting shows:
 ### Technical Analysis Results
 
 ```
-                    Technical Analysis Results                     
+                    Technical Analysis Results
 ┏━━━━━━━━┳━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━┓
 ┃ Ticker ┃ SMA_20        ┃ RSI_14         ┃ MACD             ┃
 ┡━━━━━━━━╇━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━┩
@@ -107,7 +107,7 @@ Portfolio Information:
 #### Results Table
 
 ```
-                         Backtesting Results                          
+                         Backtesting Results
 ┏━━━━━━━━┳━━━━━━━━━━━┳━━━━━━━━━━━━┳━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━┓
 ┃ Ticker ┃ Strategy  ┃ Return     ┃ Sharpe Ratio   ┃ Max Drawdown   ┃
 ┡━━━━━━━━╇━━━━━━━━━━━╇━━━━━━━━━━━━╇━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━┩
@@ -133,7 +133,7 @@ The portfolio value table adapts based on forecast mode:
 **Future Prediction Mode:**
 
 ```
-               Portfolio Value               
+               Portfolio Value
 ┏━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━┳━━━━━━━━━━━━┓
 ┃ Metric          ┃ Date       ┃ Value      ┃
 ┡━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━╇━━━━━━━━━━━━┩
@@ -145,7 +145,7 @@ The portfolio value table adapts based on forecast mode:
 **Historical Evaluation Mode:**
 
 ```
-               Portfolio Value               
+               Portfolio Value
 ┏━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━┳━━━━━━━━━━━━┓
 ┃ Metric          ┃ Date       ┃ Value      ┃
 ┡━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━╇━━━━━━━━━━━━┩
@@ -158,7 +158,7 @@ The portfolio value table adapts based on forecast mode:
 #### Individual Stock Forecasts
 
 ```
-                    Price Forecasts                     
+                    Price Forecasts
 ┏━━━━━━━━┳━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━┓
 ┃ Ticker ┃ Current Price ┃ Forecast Price ┃ Confidence Range ┃
 ┡━━━━━━━━╇━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━┩
@@ -213,7 +213,7 @@ Panel features:
 ## Portfolio Summary
 
 ```
-          Portfolio Summary           
+          Portfolio Summary
 ┏━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━┓
 ┃ Property          ┃ Value          ┃
 ┡━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━┩
@@ -227,7 +227,7 @@ Panel features:
 ## Current Portfolio Value
 
 ```
-         Current Portfolio Value         
+         Current Portfolio Value
 ┏━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━┓
 ┃ Metric                  ┃ Value       ┃
 ┡━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━┩
@@ -344,7 +344,7 @@ Rich CLI features can be controlled via configuration:
 ```yaml
 output:
   format: "console"        # or "json" for plain output
-  
+
 logging:
   enabled: true           # Shows detailed Rich status messages
   level: "INFO"           # Controls verbosity of Rich output

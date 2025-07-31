@@ -50,9 +50,7 @@ class TechnicalIndicators:
             return pd.Series(dtype=float)
         return TA.RSI(self.df, period)
 
-    def macd(
-        self, period_fast: int = 12, period_slow: int = 26, signal: int = 9
-    ) -> pd.DataFrame:
+    def macd(self, period_fast: int = 12, period_slow: int = 26, signal: int = 9) -> pd.DataFrame:
         """Calculate MACD indicator."""
         if len(self.df) == 0:
             return pd.DataFrame(columns=["MACD", "MACD_SIGNAL", "MACD_DIFF"])
@@ -92,9 +90,7 @@ class TechnicalIndicators:
         """Calculate Commodity Channel Index."""
         return TA.CCI(self.df, period)
 
-    def stochastic(
-        self, period: int = 14, smooth_k: int = 3, smooth_d: int = 3
-    ) -> pd.DataFrame:
+    def stochastic(self, period: int = 14, smooth_k: int = 3, smooth_d: int = 3) -> pd.DataFrame:
         """Calculate Stochastic Oscillator (alias for stoch)."""
         return self.stoch(period)
 
@@ -102,9 +98,7 @@ class TechnicalIndicators:
         """Calculate On Balance Volume."""
         return TA.OBV(self.df)
 
-    def ichimoku(
-        self, tenkan: int = 9, kijun: int = 26, senkou: int = 52
-    ) -> pd.DataFrame:
+    def ichimoku(self, tenkan: int = 9, kijun: int = 26, senkou: int = 52) -> pd.DataFrame:
         """Calculate Ichimoku Cloud."""
         result = TA.ICHIMOKU(self.df, tenkan, kijun, senkou)
         # Rename columns to match test expectations

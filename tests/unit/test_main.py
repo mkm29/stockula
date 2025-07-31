@@ -139,9 +139,7 @@ class TestRunTechnicalAnalysis:
 
         # Create a mock data fetcher
         mock_data_fetcher = Mock()
-        mock_data = pd.DataFrame(
-            {"Close": [100] * 50}, index=pd.date_range("2023-01-01", periods=50)
-        )
+        mock_data = pd.DataFrame({"Close": [100] * 50}, index=pd.date_range("2023-01-01", periods=50))
         mock_data_fetcher.get_stock_data.return_value = mock_data
 
         # Mock technical indicators
@@ -149,9 +147,7 @@ class TestRunTechnicalAnalysis:
         mock_ta.sma.return_value = pd.Series([100.0] * 50)
         mock_ta.ema.return_value = pd.Series([99.5] * 50)
         mock_ta.rsi.return_value = pd.Series([55.0] * 50)
-        mock_ta.macd.return_value = pd.DataFrame(
-            {"MACD": [0.5] * 50, "MACD_SIGNAL": [0.3] * 50}
-        )
+        mock_ta.macd.return_value = pd.DataFrame({"MACD": [0.5] * 50, "MACD_SIGNAL": [0.3] * 50})
         mock_ta.bbands.return_value = pd.DataFrame(
             {"BB_UPPER": [102] * 50, "BB_MIDDLE": [100] * 50, "BB_LOWER": [98] * 50}
         )
@@ -414,9 +410,7 @@ class TestPrintResults:
 
         captured = capsys.readouterr()
         # Check for key elements in output
-        assert (
-            "Technical Analysis" in captured.out or "technical" in captured.out.lower()
-        )
+        assert "Technical Analysis" in captured.out or "technical" in captured.out.lower()
         assert "AAPL" in captured.out
         assert "SMA_20" in captured.out or "sma" in captured.out.lower()
         assert "150.50" in captured.out or "150.5" in captured.out
@@ -434,9 +428,7 @@ class TestPrintResults:
 
     def test_print_results_json_format(self, capsys):
         """Test printing results in JSON format."""
-        results = {
-            "technical_analysis": [{"ticker": "TEST", "indicators": {"SMA_20": 100.0}}]
-        }
+        results = {"technical_analysis": [{"ticker": "TEST", "indicators": {"SMA_20": 100.0}}]}
 
         print_results(results, "json")
 
@@ -490,11 +482,7 @@ class TestPrintResults:
         assert "22" in captured.out  # Trading days
         assert "29" in captured.out  # Calendar days
         # Check for N/A or equivalent for None win rate
-        assert (
-            "N/A" in captured.out
-            or "n/a" in captured.out.lower()
-            or "-" in captured.out
-        )
+        assert "N/A" in captured.out or "n/a" in captured.out.lower() or "-" in captured.out
 
 
 class TestMainFunction:
@@ -645,9 +633,7 @@ class TestMainFunction:
         ]
 
         # Mock save_detailed_report to return a path
-        mock_save_report.return_value = (
-            "results/reports/strategy_report_smacross_20250727_123456.json"
-        )
+        mock_save_report.return_value = "results/reports/strategy_report_smacross_20250727_123456.json"
 
         main()
 
@@ -713,9 +699,7 @@ class TestMainIntegration:
         # Simulate ticker override
         ticker_override = "TSLA"
         if ticker_override:
-            config.portfolio.tickers = [
-                TickerConfig(symbol=ticker_override, quantity=1.0)
-            ]
+            config.portfolio.tickers = [TickerConfig(symbol=ticker_override, quantity=1.0)]
 
         assert len(config.portfolio.tickers) == 1
         assert config.portfolio.tickers[0].symbol == "TSLA"
@@ -1149,18 +1133,14 @@ class TestMainAdvanced:
         mock_asset1.symbol = "AAPL"
         mock_asset1.category = Mock()
         mock_asset1.get_value = Mock(
-            side_effect=lambda p: 10 * p
-            if isinstance(p, int | float)
-            else 10 * p.get("AAPL", 0)
+            side_effect=lambda p: 10 * p if isinstance(p, int | float) else 10 * p.get("AAPL", 0)
         )
 
         mock_asset2 = Mock()
         mock_asset2.symbol = "SPY"
         mock_asset2.category = Mock()
         mock_asset2.get_value = Mock(
-            side_effect=lambda p: 20 * p
-            if isinstance(p, int | float)
-            else 20 * p.get("SPY", 0)
+            side_effect=lambda p: 20 * p if isinstance(p, int | float) else 20 * p.get("SPY", 0)
         )
 
         mock_portfolio = Mock()
@@ -1190,9 +1170,7 @@ class TestMainAdvanced:
         }
 
         mock_portfolio.get_allocation_by_category = Mock(
-            side_effect=lambda p: start_allocations
-            if isinstance(p, dict) and p.get("AAPL") == 150
-            else end_allocations
+            side_effect=lambda p: start_allocations if isinstance(p, dict) and p.get("AAPL") == 150 else end_allocations
         )
 
         mock_factory = Mock()
@@ -1226,24 +1204,17 @@ class TestMainAdvanced:
 
         # Check output contains key message elements
         captured = capsys.readouterr()
-        assert (
-            "No backtesting results" in captured.out
-            or "no results" in captured.out.lower()
-        )
+        assert "No backtesting results" in captured.out or "no results" in captured.out.lower()
 
     @patch("stockula.main.create_container")
     @patch("sys.argv", ["stockula", "--config", "test.yaml"])
     def test_main_with_default_config_search(self, mock_create_container):
         """Test main searches for default config files."""
         # Mock container creation to raise FileNotFoundError for config loading
-        mock_create_container.side_effect = FileNotFoundError(
-            "Configuration file not found: test.yaml"
-        )
+        mock_create_container.side_effect = FileNotFoundError("Configuration file not found: test.yaml")
 
         # Should propagate the FileNotFoundError
-        with pytest.raises(
-            FileNotFoundError, match="Configuration file not found: test.yaml"
-        ):
+        with pytest.raises(FileNotFoundError, match="Configuration file not found: test.yaml"):
             main()
 
     def test_main_entry_point(self):
@@ -1329,9 +1300,7 @@ class TestMainAdvanced:
         mock_container.backtest_runner.return_value = mock_runner
 
         # Mock save_detailed_report to return a path
-        mock_save_report.return_value = (
-            "results/reports/strategy_report_test_20250727_123456.json"
-        )
+        mock_save_report.return_value = "results/reports/strategy_report_test_20250727_123456.json"
 
         # Mock run_backtest function to return results for tradeable asset
         with patch("stockula.main.run_backtest") as mock_backtest:
@@ -1520,9 +1489,7 @@ class TestMainAdvanced:
         container.stock_forecaster.return_value = Mock()
 
         # Mock save_detailed_report to return a path
-        mock_save_report.return_value = (
-            "results/reports/strategy_report_smacross_20250727_123456.json"
-        )
+        mock_save_report.return_value = "results/reports/strategy_report_smacross_20250727_123456.json"
 
         # Setup backtest results with proper structure
         mock_backtest.return_value = [
@@ -1552,9 +1519,7 @@ class TestMainAdvanced:
     @patch("stockula.main.setup_logging")
     @patch("stockula.main.print_results")
     @patch("sys.argv", ["stockula"])
-    def test_main_no_default_config_found(
-        self, mock_print, mock_logging, mock_create_container, mock_log_manager
-    ):
+    def test_main_no_default_config_found(self, mock_print, mock_logging, mock_create_container, mock_log_manager):
         """Test main when no default config files are found."""
         # Create mock container
         mock_container = Mock()
@@ -1904,9 +1869,7 @@ class TestCreatePortfolioBacktestResults:
         }
 
         # Create portfolio results
-        portfolio_results = create_portfolio_backtest_results(
-            results, config, strategy_results
-        )
+        portfolio_results = create_portfolio_backtest_results(results, config, strategy_results)
 
         # Verify structure
         assert isinstance(portfolio_results, PortfolioBacktestResults)
@@ -1972,9 +1935,7 @@ class TestCreatePortfolioBacktestResults:
             ],
         }
 
-        portfolio_results = create_portfolio_backtest_results(
-            results, config, strategy_results
-        )
+        portfolio_results = create_portfolio_backtest_results(results, config, strategy_results)
 
         # Check multiple strategies
         assert len(portfolio_results.strategy_summaries) == 2
@@ -2000,9 +1961,7 @@ class TestCreatePortfolioBacktestResults:
         config.data.end_date = datetime(2025, 7, 25)
         strategy_results = {}
 
-        portfolio_results = create_portfolio_backtest_results(
-            results, config, strategy_results
-        )
+        portfolio_results = create_portfolio_backtest_results(results, config, strategy_results)
 
         assert len(portfolio_results.strategy_summaries) == 0
         assert portfolio_results.initial_portfolio_value == 10000.0
@@ -2039,9 +1998,7 @@ class TestSaveDetailedReport:
         config.data.end_date = datetime(2025, 7, 25)
 
         # Call function
-        report_path = save_detailed_report(
-            "SMACross", strategy_results, results, config
-        )
+        report_path = save_detailed_report("SMACross", strategy_results, results, config)
 
         # Verify
         assert "SMACross" in report_path
@@ -2050,9 +2007,7 @@ class TestSaveDetailedReport:
     @patch("stockula.main.Path")
     @patch("builtins.open", create=True)
     @patch("stockula.main.json.dump")
-    def test_save_detailed_report_with_portfolio_results(
-        self, mock_json_dump, mock_open, mock_path
-    ):
+    def test_save_detailed_report_with_portfolio_results(self, mock_json_dump, mock_open, mock_path):
         """Test saving detailed report with portfolio results."""
         # Setup mocks
         mock_reports_dir = Mock()

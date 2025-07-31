@@ -155,9 +155,7 @@ class TestPortfolioConfig:
                 initial_capital=10000.0,
                 tickers=[
                     TickerConfig(symbol="AAPL", allocation_amount=6000.0),
-                    TickerConfig(
-                        symbol="GOOGL", allocation_amount=5000.0
-                    ),  # Total 11000 > 10000
+                    TickerConfig(symbol="GOOGL", allocation_amount=5000.0),  # Total 11000 > 10000
                 ],
             )
 
@@ -173,9 +171,7 @@ class TestDataConfig:
 
     def test_data_config_with_dates(self):
         """Test data configuration with date strings."""
-        config = DataConfig(
-            start_date="2023-01-01", end_date="2023-12-31", interval="1d"
-        )
+        config = DataConfig(start_date="2023-01-01", end_date="2023-12-31", interval="1d")
         assert config.start_date == date(2023, 1, 1)
         assert config.end_date == date(2023, 12, 31)
         assert config.interval == "1d"
@@ -212,9 +208,7 @@ class TestStrategyConfigs:
 
     def test_rsi_config(self):
         """Test RSI strategy configuration."""
-        config = RSIConfig(
-            period=14, oversold_threshold=30.0, overbought_threshold=70.0
-        )
+        config = RSIConfig(period=14, oversold_threshold=30.0, overbought_threshold=70.0)
         assert config.period == 14
         assert config.oversold_threshold == 30.0
         assert config.overbought_threshold == 70.0
@@ -233,9 +227,7 @@ class TestStrategyConfigs:
 
     def test_strategy_config(self):
         """Test generic strategy configuration."""
-        config = StrategyConfig(
-            name="CustomStrategy", parameters={"param1": 10, "param2": "value"}
-        )
+        config = StrategyConfig(name="CustomStrategy", parameters={"param1": 10, "param2": "value"})
         assert config.name == "CustomStrategy"
         assert config.parameters["param1"] == 10
         assert config.parameters["param2"] == "value"
@@ -257,9 +249,7 @@ class TestBacktestConfig:
         config = BacktestConfig(
             initial_cash=50000.0,
             strategies=[
-                StrategyConfig(
-                    name="SMACross", parameters={"fast_period": 10, "slow_period": 20}
-                ),
+                StrategyConfig(name="SMACross", parameters={"fast_period": 10, "slow_period": 20}),
                 StrategyConfig(name="RSI", parameters={"period": 14}),
             ],
         )
@@ -299,9 +289,7 @@ class TestForecastConfig:
     def test_forecast_length_and_test_dates_mutual_exclusivity(self):
         """Test that forecast_length and test dates are mutually exclusive."""
         # Should raise error when both forecast_length and test dates are provided
-        with pytest.raises(
-            ValueError, match="Cannot specify both forecast_length and test dates"
-        ):
+        with pytest.raises(ValueError, match="Cannot specify both forecast_length and test dates"):
             ForecastConfig(
                 forecast_length=14,
                 train_start_date="2025-01-01",
@@ -452,10 +440,7 @@ class TestConfigLoading:
         # Load it back
         loaded_config = load_config(str(config_path))
         assert loaded_config.portfolio.name == sample_stockula_config.portfolio.name
-        assert (
-            loaded_config.portfolio.initial_capital
-            == sample_stockula_config.portfolio.initial_capital
-        )
+        assert loaded_config.portfolio.initial_capital == sample_stockula_config.portfolio.initial_capital
 
     def test_config_yaml_serialization(self, sample_stockula_config):
         """Test that configuration can be serialized to YAML."""

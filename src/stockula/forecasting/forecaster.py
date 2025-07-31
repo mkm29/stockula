@@ -7,7 +7,7 @@ import sys
 import time
 import warnings
 from contextlib import contextmanager
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any
 
 import pandas as pd
 from autots import AutoTS
@@ -56,30 +56,18 @@ class SuppressAutoTSOutput:
         warnings.filterwarnings("ignore", message="Data frequency is:")
 
         # Suppress matplotlib font cache warnings
-        warnings.filterwarnings(
-            "ignore", message="Matplotlib is building the font cache"
-        )
+        warnings.filterwarnings("ignore", message="Matplotlib is building the font cache")
         # Ignore prophet plotly warnings
         warnings.filterwarnings("ignore", message="Importing plotly failed")
 
         # Prophet warnings
-        warnings.filterwarnings(
-            "ignore", message=".*Optimization terminated abnormally.*", module="prophet"
-        )
+        warnings.filterwarnings("ignore", message=".*Optimization terminated abnormally.*", module="prophet")
 
         # Suppress numerical warnings from sklearn, numpy, and statsmodels
-        warnings.filterwarnings(
-            "ignore", category=RuntimeWarning, message="divide by zero encountered"
-        )
-        warnings.filterwarnings(
-            "ignore", category=RuntimeWarning, message="overflow encountered"
-        )
-        warnings.filterwarnings(
-            "ignore", category=RuntimeWarning, message="invalid value encountered"
-        )
-        warnings.filterwarnings(
-            "ignore", category=RuntimeWarning, message="Mean of empty slice"
-        )
+        warnings.filterwarnings("ignore", category=RuntimeWarning, message="divide by zero encountered")
+        warnings.filterwarnings("ignore", category=RuntimeWarning, message="overflow encountered")
+        warnings.filterwarnings("ignore", category=RuntimeWarning, message="invalid value encountered")
+        warnings.filterwarnings("ignore", category=RuntimeWarning, message="Mean of empty slice")
 
         # Suppress sklearn specific warnings
         warnings.filterwarnings(
@@ -328,7 +316,7 @@ class StockForecaster:
         model_list: str | list[str] = "fast",
         max_generations: int = 5,
         no_negatives: bool = True,
-        data_fetcher: Optional["DataFetcher"] = None,
+        data_fetcher: "DataFetcher | None" = None,
     ):
         """Initialize the stock forecaster.
 
@@ -339,7 +327,8 @@ class StockForecaster:
             ensemble: Ensemble method or None
             num_validations: Number of validation splits
             validation_method: Validation method ('backwards', 'even', 'similarity')
-            model_list: List of models or preset ('fast', 'superfast', 'parallel', 'statistical', 'probabilistic', 'multivariate')
+            model_list: List of models or preset ('fast', 'superfast', 'parallel', 'statistical',
+                'probabilistic', 'multivariate')
             max_generations: Maximum generations for model search
             no_negatives: Constraint predictions to be non-negative
             data_fetcher: Optional DataFetcher instance for retrieving stock data
@@ -357,9 +346,7 @@ class StockForecaster:
         self.model = None
         self.prediction = None
 
-    def _get_model_list(
-        self, model_list: str | list[str], target_column: str = "Close"
-    ) -> list[str] | str:
+    def _get_model_list(self, model_list: str | list[str], target_column: str = "Close") -> list[str] | str:
         """Get the appropriate model list based on input.
 
         Args:
@@ -374,9 +361,7 @@ class StockForecaster:
 
         # Map our presets to model lists
         if model_list == "ultra_fast":
-            logger.info(
-                f"Using ultra-fast model list ({len(self.ULTRA_FAST_MODEL_LIST)} models) for {target_column}"
-            )
+            logger.info(f"Using ultra-fast model list ({len(self.ULTRA_FAST_MODEL_LIST)} models) for {target_column}")
             return self.ULTRA_FAST_MODEL_LIST
         elif model_list == "financial":
             return self.FINANCIAL_MODEL_LIST
@@ -417,12 +402,14 @@ class StockForecaster:
             raise ValueError(f"Target column '{target_column}' not found in data")
 
         # Use provided parameters or defaults
-        model_list = model_list or self.model_list
+        model_list_to_use = model_list if model_list is not None else self.model_list
         ensemble = ensemble if ensemble is not None else self.ensemble
         max_generations = max_generations or self.max_generations
 
         # Get actual model list
-        actual_model_list = self._get_model_list(model_list, target_column)
+        actual_model_list = self._get_model_list(model_list_to_use, target_column)
+        if actual_model_list is None:
+            actual_model_list = self.model_list
 
         # Prepare data for AutoTS
         data_for_model = data[[target_column]].copy()
@@ -432,9 +419,7 @@ class StockForecaster:
         data_for_model.columns = ["date", target_column]
 
         logger.debug(f"Fitting model on {len(data_for_model)} data points")
-        logger.debug(
-            f"Date range: {data_for_model['date'].min()} to {data_for_model['date'].max()}"
-        )
+        logger.debug(f"Date range: {data_for_model['date'].min()} to {data_for_model['date'].max()}")
 
         try:
             # Set signal handler for graceful interruption
@@ -452,14 +437,10 @@ class StockForecaster:
                     console=console,
                     transient=True,
                 ) as progress:
-                    task = progress.add_task(
-                        "[cyan]Training models on historical data...", total=None
-                    )
+                    task = progress.add_task("[cyan]Training models on historical data...", total=None)
 
                     # Use a default forecast length if None (will be overridden in evaluation mode)
-                    forecast_length_to_use = (
-                        self.forecast_length if self.forecast_length is not None else 14
-                    )
+                    forecast_length_to_use = self.forecast_length if self.forecast_length is not None else 14
 
                     # Try to infer frequency from data if set to 'infer'
                     freq_to_use = self.frequency
@@ -494,8 +475,13 @@ class StockForecaster:
                         model_interrupt=False,
                     )
 
+                    model_list_info = (
+                        actual_model_list if isinstance(actual_model_list, str) else f"{len(actual_model_list)} models"
+                    )
                     logger.debug(
-                        f"Fitting AutoTS with parameters: model_list={actual_model_list if isinstance(actual_model_list, str) else f'{len(actual_model_list)} models'}, max_generations={max_generations}"
+                        f"Fitting AutoTS with parameters: "
+                        f"model_list={model_list_info}, "
+                        f"max_generations={max_generations}"
                     )
 
                     # Fit the model
@@ -503,9 +489,9 @@ class StockForecaster:
                         # Run fit in a separate thread to allow progress updates
                         import concurrent.futures
 
-                        with concurrent.futures.ThreadPoolExecutor(
-                            max_workers=1
-                        ) as executor:
+                        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+                            if self.model is None:
+                                raise ValueError("Model not initialized")
                             future = executor.submit(
                                 self.model.fit,
                                 data_for_model,
@@ -525,7 +511,9 @@ class StockForecaster:
                                 time.sleep(0.2)  # Small sleep to control update rate
 
                             # Get the result (raises any exceptions from the thread)
-                            self.model = future.result()
+                            result = future.result()
+                            if result is not None:
+                                self.model = result
 
                         complete_msg = "[green]✓ Model training completed"
                         progress.update(task, description=complete_msg)
@@ -534,9 +522,7 @@ class StockForecaster:
                 n_jobs_value = "auto"
 
                 # Use a default forecast length if None (will be overridden in evaluation mode)
-                forecast_length_to_use = (
-                    self.forecast_length if self.forecast_length is not None else 14
-                )
+                forecast_length_to_use = self.forecast_length if self.forecast_length is not None else 14
 
                 # Try to infer frequency from data if set to 'infer'
                 freq_to_use = self.frequency
@@ -562,9 +548,7 @@ class StockForecaster:
                     max_generations=max_generations,
                     num_validations=self.num_validations,
                     validation_method=self.validation_method,
-                    verbose=1
-                    if logger.isEnabledFor(logging.DEBUG)
-                    else 0,  # Verbose only in debug mode
+                    verbose=1 if logger.isEnabledFor(logging.DEBUG) else 0,  # Verbose only in debug mode
                     no_negatives=True,  # Stock prices can't be negative
                     drop_most_recent=0,  # Don't drop recent data
                     n_jobs=n_jobs_value,  # Limit to 1 in worker threads
@@ -573,17 +557,26 @@ class StockForecaster:
                     model_interrupt=False,  # Don't interrupt on errors
                 )
 
+                model_list_info = (
+                    actual_model_list if isinstance(actual_model_list, str) else f"{len(actual_model_list)} models"
+                )
                 logger.debug(
-                    f"Fitting AutoTS with parameters: model_list={actual_model_list if isinstance(actual_model_list, str) else f'{len(actual_model_list)} models'}, max_generations={max_generations}, n_jobs={n_jobs_value}"
+                    f"Fitting AutoTS with parameters: "
+                    f"model_list={model_list_info}, "
+                    f"max_generations={max_generations}, n_jobs={n_jobs_value}"
                 )
 
                 # Fit the model directly without progress
-                self.model = self.model.fit(
+                if self.model is None:
+                    raise ValueError("Model not initialized")
+                result = self.model.fit(
                     data_for_model,
                     date_col="date",
                     value_col=target_column,
                     id_col=None,
                 )
+                if result is not None:
+                    self.model = result
 
             logger.debug("Model fitting completed")
 
@@ -630,9 +623,7 @@ class StockForecaster:
 
         return result
 
-    def fit_predict(
-        self, data: pd.DataFrame, target_column: str = "Close", **kwargs
-    ) -> pd.DataFrame:
+    def fit_predict(self, data: pd.DataFrame, target_column: str = "Close", **kwargs) -> pd.DataFrame:
         """Fit model and generate predictions in one step.
 
         Args:
@@ -674,9 +665,7 @@ class StockForecaster:
             raise ValueError("Data fetcher not configured")
 
         # Fetch training data
-        train_data = self.data_fetcher.get_stock_data(
-            symbol, train_start_date, train_end_date
-        )
+        train_data = self.data_fetcher.get_stock_data(symbol, train_start_date, train_end_date)
 
         if train_data.empty:
             raise ValueError(f"No training data available for symbol {symbol}")
@@ -684,9 +673,7 @@ class StockForecaster:
         # Fetch test data if dates provided
         test_data = None
         if test_start_date and test_end_date:
-            test_data = self.data_fetcher.get_stock_data(
-                symbol, test_start_date, test_end_date
-            )
+            test_data = self.data_fetcher.get_stock_data(symbol, test_start_date, test_end_date)
 
             # If forecast_length is None (evaluation mode), calculate it from test period
             if self.forecast_length is None:
@@ -700,9 +687,7 @@ class StockForecaster:
                 business_days = pd.bdate_range(start=test_start, end=test_end)
                 temp_forecast_length = len(business_days)
 
-                logger.debug(
-                    f"Calculated forecast length from test period: {temp_forecast_length} business days"
-                )
+                logger.debug(f"Calculated forecast length from test period: {temp_forecast_length} business days")
 
                 # Temporarily set forecast length for this evaluation
                 original_forecast_length = self.forecast_length
@@ -741,10 +726,7 @@ class StockForecaster:
                 mae = mean_absolute_error(actual_values, forecast_values)
                 mse = mean_squared_error(actual_values, forecast_values)
                 rmse = np.sqrt(mse)
-                mape = (
-                    np.mean(np.abs((actual_values - forecast_values) / actual_values))
-                    * 100
-                )
+                mape = np.mean(np.abs((actual_values - forecast_values) / actual_values)) * 100
 
                 evaluation_metrics = {
                     "mae": mae,
@@ -766,12 +748,8 @@ class StockForecaster:
                 "size": len(train_data),
             },
             "test_period": {
-                "start": test_data.index[0].strftime("%Y-%m-%d")
-                if test_data is not None
-                else None,
-                "end": test_data.index[-1].strftime("%Y-%m-%d")
-                if test_data is not None
-                else None,
+                "start": test_data.index[0].strftime("%Y-%m-%d") if test_data is not None else None,
+                "end": test_data.index[-1].strftime("%Y-%m-%d") if test_data is not None else None,
                 "size": len(test_data) if test_data is not None else 0,
             }
             if test_data is not None
@@ -830,9 +808,7 @@ class StockForecaster:
 
         return model_info
 
-    def plot_forecast(
-        self, historical_data: pd.DataFrame | None = None, n_historical: int = 100
-    ) -> None:
+    def plot_forecast(self, historical_data: pd.DataFrame | None = None, n_historical: int = 100) -> None:
         """Plot the forecast with historical data.
 
         Args:
@@ -849,9 +825,7 @@ class StockForecaster:
             start_date=(-n_historical if n_historical else None),
         )
 
-    def forecast(
-        self, data: pd.DataFrame, target_column: str = "Close", **kwargs
-    ) -> pd.DataFrame:
+    def forecast(self, data: pd.DataFrame, target_column: str = "Close", **kwargs) -> pd.DataFrame:
         """Alias for fit_predict method.
 
         Args:
@@ -864,9 +838,7 @@ class StockForecaster:
         """
         return self.fit_predict(data, target_column, **kwargs)
 
-    def evaluate_forecast(
-        self, actual_data: pd.DataFrame, target_column: str = "Close"
-    ) -> dict[str, float]:
+    def evaluate_forecast(self, actual_data: pd.DataFrame, target_column: str = "Close") -> dict[str, float]:
         """Evaluate forecast accuracy against actual data.
 
         Args:

@@ -37,10 +37,7 @@ class TestDataFetcher:
 
             assert isinstance(data, pd.DataFrame)
             assert not data.empty
-            assert all(
-                col in data.columns
-                for col in ["Open", "High", "Low", "Close", "Volume"]
-            )
+            assert all(col in data.columns for col in ["Open", "High", "Low", "Close", "Volume"])
 
     def test_get_stock_data_with_dates(self, mock_yfinance_ticker):
         """Test fetching stock data with specific date range."""
@@ -62,9 +59,7 @@ class TestDataFetcher:
         # Should have data for January 2023 (approximately 22 trading days)
         assert len(data) > 0
         assert len(data) <= 31  # Max days in January
-        assert all(
-            col in data.columns for col in ["Open", "High", "Low", "Close", "Volume"]
-        )
+        assert all(col in data.columns for col in ["Open", "High", "Low", "Close", "Volume"])
 
         # Verify data integrity
         assert (data["High"] >= data["Close"]).all()
@@ -96,9 +91,7 @@ class TestDataFetcher:
                     index=pd.date_range("2023-01-01", periods=3),
                 )
                 mock_history.return_value = sample_data
-                fetcher.get_stock_data(
-                    "AAPL", start=start_date, end=end_date, force_refresh=True
-                )
+                fetcher.get_stock_data("AAPL", start=start_date, end=end_date, force_refresh=True)
 
                 assert mock_history.called
 
@@ -131,9 +124,7 @@ class TestDataFetcher:
 
         with patch("yfinance.Ticker", return_value=mock_ticker):
             fetcher = DataFetcher(use_cache=False)
-            prices = fetcher.get_current_prices(
-                ["AAPL", "GOOGL", "MSFT"], show_progress=False
-            )
+            prices = fetcher.get_current_prices(["AAPL", "GOOGL", "MSFT"], show_progress=False)
 
             assert isinstance(prices, dict)
             assert len(prices) == 3
@@ -149,7 +140,7 @@ class TestDataFetcher:
             assert isinstance(prices, dict)
             assert "AAPL" in prices
             # Price should be from the last close in the history
-            assert isinstance(prices["AAPL"], (int, float))
+            assert isinstance(prices["AAPL"], int | float)
             assert prices["AAPL"] > 0
 
     def test_get_current_prices_with_errors(self):
@@ -159,9 +150,7 @@ class TestDataFetcher:
 
         with patch("yfinance.Ticker", return_value=mock_ticker):
             fetcher = DataFetcher(use_cache=False)
-            prices = fetcher.get_current_prices(
-                ["AAPL", "INVALID"], show_progress=False
-            )
+            prices = fetcher.get_current_prices(["AAPL", "INVALID"], show_progress=False)
 
             assert isinstance(prices, dict)
             # Should handle missing prices gracefully
@@ -173,15 +162,13 @@ class TestDataFetcher:
             price = fetcher.get_realtime_price("AAPL")
 
             # Price should be from the last close in the history (minute data)
-            assert isinstance(price, (int, float))
+            assert isinstance(price, int | float)
             assert price > 0
 
     def test_get_dividends(self):
         """Test fetching dividend data."""
         mock_ticker = Mock()
-        mock_dividends = pd.Series(
-            [0.22, 0.23, 0.24], index=pd.date_range("2023-01-01", periods=3, freq="Q")
-        )
+        mock_dividends = pd.Series([0.22, 0.23, 0.24], index=pd.date_range("2023-01-01", periods=3, freq="Q"))
         mock_ticker.dividends = mock_dividends
 
         with patch("yfinance.Ticker", return_value=mock_ticker):
@@ -195,9 +182,7 @@ class TestDataFetcher:
     def test_get_splits(self):
         """Test fetching stock split data."""
         mock_ticker = Mock()
-        mock_splits = pd.Series(
-            [2.0, 4.0], index=pd.date_range("2020-01-01", periods=2, freq="Y")
-        )
+        mock_splits = pd.Series([2.0, 4.0], index=pd.date_range("2020-01-01", periods=2, freq="Y"))
         mock_ticker.splits = mock_splits
 
         with patch("yfinance.Ticker", return_value=mock_ticker):
@@ -287,7 +272,7 @@ class TestDataFetcherErrorHandling:
         with patch("yfinance.Ticker", return_value=mock_ticker):
             fetcher = DataFetcher(use_cache=False)
 
-            with pytest.raises(Exception):
+            with pytest.raises(ValueError):
                 fetcher.get_stock_data("AAPL")
 
     def test_database_error(self, temp_db_path):
@@ -295,9 +280,7 @@ class TestDataFetcherErrorHandling:
         fetcher = DataFetcher(use_cache=True, db_path=temp_db_path)
 
         # Mock database error
-        with patch.object(
-            fetcher.db, "get_price_history", side_effect=Exception("DB error")
-        ):
+        with patch.object(fetcher.db, "get_price_history", side_effect=Exception("DB error")):
             # Should fall back to yfinance
             with patch("yfinance.Ticker") as mock_yf:
                 mock_ticker = Mock()

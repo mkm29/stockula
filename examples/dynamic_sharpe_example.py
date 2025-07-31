@@ -37,9 +37,7 @@ def main():
 
     # Fetch Treasury rates for the period
     treasury_rates = fetcher.get_treasury_rates(start_date, end_date, "3_month")
-    print(
-        f"Treasury rate range: {treasury_rates.min() * 100:.2f}% - {treasury_rates.max() * 100:.2f}%"
-    )
+    print(f"Treasury rate range: {treasury_rates.min() * 100:.2f}% - {treasury_rates.max() * 100:.2f}%")
     print(f"Treasury rate volatility: {treasury_rates.std() * 100:.2f}%")
 
     runner2 = BacktestRunner(
@@ -79,9 +77,7 @@ def main():
     if "Sharpe Ratio (Dynamic)" in results3 and "Sharpe Ratio (Static)" in results3:
         diff = results3["Sharpe Ratio (Dynamic)"] - results3["Sharpe Ratio (Static)"]
         print(f"\nDifference in Sharpe Ratio (Dynamic - Static): {diff:.4f}")
-        print(
-            f"This represents a {abs(diff / results3['Sharpe Ratio (Static)']) * 100:.1f}% difference"
-        )
+        print(f"This represents a {abs(diff / results3['Sharpe Ratio (Static)']) * 100:.1f}% difference")
 
     # Example of calculating rolling Sharpe ratio
     print("\n" + "=" * 60)

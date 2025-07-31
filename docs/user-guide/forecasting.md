@@ -7,7 +7,7 @@ Stockula provides advanced time series forecasting capabilities using AutoTS, en
 The forecasting module offers:
 
 - **AutoTS Integration**: Automated model selection and optimization
-- **Multiple Models**: Ensemble of forecasting algorithms
+- **Multiple Models**: Ensemble of forecasting algorithms optimized for financial data
 - **Confidence Intervals**: Statistical uncertainty quantification
 - **Model Validation**: Cross-validation and backtesting
 - **Train/Test Evaluation**: Historical accuracy assessment with RMSE, MAE, and MAPE metrics
@@ -16,50 +16,62 @@ The forecasting module offers:
 
 ## AutoTS Models
 
-### Fast Models (Default)
+Stockula uses AutoTS for time series forecasting with carefully curated model lists optimized for financial data. The system automatically selects appropriate models based on the data type and configuration.
 
-Optimized for speed while maintaining reasonable accuracy:
+### Model Lists
 
-- **Naive**: Simple baseline forecasts
-- **SeasonalNaive**: Seasonal pattern repetition
-- **Linear Regression**: Trend-based linear models
-- **Exponential Smoothing**: Simple ETS models
+#### Fast Financial Models (Default)
 
-### Default Models
+The `FAST_FINANCIAL_MODEL_LIST` contains 6 carefully selected models that provide the best balance of speed and accuracy for stock price forecasting:
 
-Balanced performance and accuracy:
+| Model                 | Description                                       | Speed             | Best For                                     |
+| --------------------- | ------------------------------------------------- | ----------------- | -------------------------------------------- |
+| **LastValueNaive**    | Uses the last observed value as the forecast      | Very Fast (< 1s)  | Baseline predictions, volatile stocks        |
+| **AverageValueNaive** | Uses a moving average of recent values            | Very Fast (< 1s)  | Smoothing short-term volatility              |
+| **SeasonalNaive**     | Captures and projects seasonal patterns           | Fast (< 5s)       | Stocks with clear weekly/monthly patterns    |
+| **ETS**               | Exponential Smoothing (Error, Trend, Seasonality) | Fast (5-10s)      | Trending stocks with seasonal components     |
+| **ARIMA**             | AutoRegressive Integrated Moving Average          | Moderate (10-20s) | Well-behaved time series with clear patterns |
+| **Theta**             | Statistical decomposition method                  | Fast (5-10s)      | Robust general-purpose forecasting           |
 
-- **ARIMA**: Auto-regressive integrated moving average
-- **ETS**: Error, trend, seasonality models
-- **Theta**: Theta forecasting method
-- **TBATS**: Complex seasonality handling
+**Total execution time**: 15-30 seconds per symbol with default settings
 
-### Slow Models
+#### Full Financial Models
 
-Maximum accuracy with longer computation time:
+The `FINANCIAL_MODEL_LIST` includes 16 models for more comprehensive analysis:
 
-- **Prophet**: Facebook's forecasting algorithm
-- **LSTM**: Long short-term memory neural networks
-- **VAR**: Vector autoregression
-- **VECM**: Vector error correction models
+- All models from the fast list, plus:
+- **GLS** - Generalized Least Squares
+- **RollingRegression** - Adaptive regression over time windows
+- **WindowRegression** - Fixed window regression analysis
+- **VAR** - Vector Autoregression for multivariate series
+- **VECM** - Vector Error Correction for cointegrated series
+- **DynamicFactor** - Captures underlying market factors
+- **MotifSimulation** - Pattern-based forecasting
+- **SectionalMotif** - Cross-sectional pattern analysis
+- **NVAR** - Neural Vector Autoregression
 
-### Financial Models
+**Total execution time**: 2-5 minutes per symbol with default settings
 
-When `use_financial_models` is enabled (default), Stockula uses a curated list of models optimized for stock price data:
+### Why These Models?
 
-- **LastValueNaive**: Simple but effective for financial data
-- **AverageValueNaive**: Moving average approach
-- **SeasonalNaive**: Captures seasonal patterns
-- **ARIMA**: Classic time series model
-- **ETS**: Exponential smoothing
-- **DynamicFactor**: Good for capturing trends
-- **VAR**: Vector autoregression
-- **Regression Models**: Univariate, Multivariate, Window, and Datepart regression
-- **NVAR**: Neural VAR for complex patterns
-- **Theta**: Theta method
-- **ARDL**: Autoregressive distributed lag
+#### Models We Avoid
 
-Note: Motif models (pattern recognition) have been excluded to avoid warnings with small datasets.
+AutoTS includes many models that are problematic for stock data:
+
+- **GLM with Gamma/InversePower** - Causes domain errors with financial data
+- **FBProphet** - Permission issues with cmdstanpy, slow execution
+- **ARDL** - Numerical stability issues with stock prices
+- **Neural Network Models** - Often overfit on financial time series
+- **Models using binary metrics** - Cause DataConversionWarning with continuous data
+
+#### Selection Criteria
+
+Our financial models were selected based on:
+
+1. **Numerical Stability** - No domain errors or convergence issues
+2. **Speed** - Complete forecasts in reasonable time
+3. **Accuracy** - Proven track record with financial time series
+4. **Robustness** - Handle missing data and outliers gracefully
 
 ## Configuration
 
@@ -68,14 +80,14 @@ Note: Motif models (pattern recognition) have been excluded to avoid warnings wi
 Stockula supports two mutually exclusive forecast modes:
 
 1. **Future Prediction Mode**: Forecast N days into the future from today
-1. **Historical Evaluation Mode**: Train on historical data and evaluate accuracy on a test period
+2. **Historical Evaluation Mode**: Train on historical data and evaluate accuracy on a test period
 
 ### Future Prediction Mode
 
 ```yaml
 forecast:
   forecast_length: 30           # Days to forecast from today
-  model_list: "fast"            # fast, default, slow
+  model_list: "fast"            # fast, financial, or slow
   prediction_interval: 0.95     # 95% confidence interval
   # Note: Do NOT specify test dates when using forecast_length
 ```
@@ -86,11 +98,11 @@ forecast:
 forecast:
   # Train/test split for historical evaluation
   train_start_date: "2025-01-01"   # Training data start
-  train_end_date: "2025-03-31"     # Training data end  
+  train_end_date: "2025-03-31"     # Training data end
   test_start_date: "2025-04-01"    # Test data start (for evaluation)
   test_end_date: "2025-06-30"      # Test data end
-  
-  model_list: "fast"            # fast, default, slow
+
+  model_list: "fast"            # fast, financial, or slow
   prediction_interval: 0.95     # 95% confidence interval
   # Note: Do NOT specify forecast_length when using train/test dates
 ```
@@ -103,121 +115,123 @@ forecast:
 forecast:
   # Mode 1: Future prediction (choose one)
   forecast_length: 30           # Days ahead to forecast from today
-  
+
   # Mode 2: Historical evaluation (choose one)
   # train_start_date: "2025-01-01"
   # train_end_date: "2025-03-31"
   # test_start_date: "2025-04-01"
   # test_end_date: "2025-06-30"
-  
+
   # Common parameters
   frequency: "infer"            # D, W, M, or infer from data
   prediction_interval: 0.95     # Confidence interval (0.8, 0.9, 0.95, 0.99)
-  
+
   # Model selection
-  model_list: "fast"            # fast, default, slow, or custom list
+  model_list: "fast"            # fast (default), financial, slow, or custom list
   ensemble: "auto"              # auto, simple, distance, horizontal
   max_generations: 5            # Genetic algorithm iterations
   num_validations: 2            # Cross-validation folds
   validation_method: "backwards" # backwards, seasonal, similarity
-  
+
   # Performance optimization
+  max_workers: 4                # Parallel workers for forecasting
   drop_most_recent: 0           # Drop recent data points
   drop_data_older_than_periods: 1000  # Limit historical data
   constraint: null              # Constraints on forecasts
   holiday_country: "US"         # Holiday effects
   subset: null                  # Subset of models to try
-  
+
   # Advanced settings
   transformer_list: "auto"      # Data transformations
   transformer_max_depth: 5      # Transformation complexity
   models_mode: "default"        # Model generation mode
-  num_validations: 2            # Number of validation rounds
   models_to_validate: 0.15      # Fraction of models to validate
 ```
 
-### Performance Optimization
-
-For faster forecasting:
+### Using Model Lists
 
 ```yaml
 forecast:
-  forecast_length: 14           # Shorter forecasts
-  model_list: "fast"            # Only fast models
-  max_generations: 2            # Fewer iterations
-  num_validations: 1            # Single validation
-  ensemble: "simple"            # Simpler ensemble
-  transformer_list: "fast"      # Basic transformations
+  model_list: "fast"          # Automatically uses FAST_FINANCIAL_MODEL_LIST for stock data
+  max_generations: 2          # Reduced for speed
+  num_validations: 1          # Minimal validation
 ```
-
-For maximum accuracy:
 
 ```yaml
 forecast:
-  forecast_length: 30
-  model_list: "slow"            # All available models
-  max_generations: 10           # More genetic iterations
-  num_validations: 5            # Extensive validation
-  ensemble: "auto"              # Best ensemble method
-  transformer_list: "all"       # All transformations
+  model_list: "financial"     # Uses complete FINANCIAL_MODEL_LIST
+  max_generations: 3          # More thorough search
+  num_validations: 2          # Better validation
 ```
-
-## Choosing Between Forecast Modes
-
-### When to Use Future Prediction Mode
-
-Use `forecast_length` when you want to:
-
-- Predict future stock prices from today
-- Make trading decisions based on expected future prices
-- Generate forecasts for portfolio planning
-- Create alerts for expected price movements
-
-Example:
 
 ```yaml
 forecast:
-  forecast_length: 14  # Predict 14 days into the future
+  model_list: "slow"          # WARNING: May include models unsuitable for financial data
 ```
 
-### When to Use Historical Evaluation Mode
+## Performance Optimization
 
-Use train/test dates when you want to:
+### Speed Tips
 
-- Evaluate model accuracy on historical data
-- Compare different forecasting models
-- Backtest forecast-based trading strategies
-- Understand model performance before using it for real predictions
+1. **Use Fast Models**: Default `model_list="fast"` for quick results
+2. **Reduce Generations**: Set `max_generations=1` for fastest execution
+3. **Increase Workers**: Set `max_workers=8` if you have 8+ CPU cores
+4. **Limit Data**: Use only necessary historical data (e.g., 1 year)
 
-Example:
+### Accuracy Tips
 
-```yaml
-forecast:
-  train_start_date: "2024-01-01"
-  train_end_date: "2024-12-31"
-  test_start_date: "2025-01-01"
-  test_end_date: "2025-01-31"
-```
+1. **Use Full Models**: Set `model_list="financial"` for best results
+2. **Increase Generations**: Set `max_generations=5` for thorough search
+3. **Add Validations**: Set `num_validations=3` for better model selection
+4. **More Data**: Use 2-3 years of historical data
 
 ## Usage Examples
 
 ### Command Line Usage
 
+#### Quick Forecast (15-30 seconds)
+
 ```bash
-# Basic forecasting
-uv run python -m stockula.main --ticker AAPL --mode forecast
-
-# With custom configuration
-uv run python -m stockula.main --config examples/config.forecast.yaml --mode forecast
-
-# Portfolio forecasting
-uv run python -m stockula.main --config myconfig.yaml --mode forecast
+# Using defaults optimized for speed
+uv run python -m stockula.main --config config.yaml --mode forecast
 ```
+
+#### Thorough Forecast (2-5 minutes)
+
+```yaml
+# config.yaml
+forecast:
+  model_list: "financial"
+  max_generations: 5
+  num_validations: 3
+  max_workers: 8
+```
+
+```bash
+uv run python -m stockula.main --config config.yaml --mode forecast
+```
+
+### Understanding the Output
+
+When forecasting starts, you'll see:
+
+```
+Starting parallel forecasting...
+Configuration: max_workers=4, max_generations=2, num_validations=1
+Using fast financial model list (6 models) for Close
+```
+
+This confirms:
+
+- Number of parallel workers processing symbols
+- Model evolution generations
+- Validation splits for model selection
+- Which model list is being used
 
 ### Programmatic Usage
 
 ```python
-from stockula.forecasting.forecaster import Forecaster
+from stockula.forecasting.forecaster import StockForecaster
 from stockula.data.fetcher import DataFetcher
 from stockula.config.settings import load_config
 
@@ -227,14 +241,19 @@ data = fetcher.get_stock_data("AAPL", start_date="2023-01-01")
 
 # Create forecaster
 config = load_config("myconfig.yaml")
-forecaster = Forecaster(config)
+forecaster = StockForecaster(
+    forecast_length=30,
+    model_list="fast",
+    max_generations=2,
+    data_fetcher=fetcher
+)
 
 # Generate forecast
-forecast_result = forecaster.forecast_price("AAPL", forecast_length=30)
+forecast_result = forecaster.fit_predict(data, target_column="Close")
 
-print(f"Current Price: ${forecast_result['current_price']:.2f}")
-print(f"Forecast Price: ${forecast_result['forecast_price']:.2f}")
-print(f"Confidence Range: ${forecast_result['lower_bound']:.2f} - ${forecast_result['upper_bound']:.2f}")
+print(f"Forecast: {forecast_result['forecast'].iloc[-1]:.2f}")
+print(f"Lower Bound: {forecast_result['lower_bound'].iloc[-1]:.2f}")
+print(f"Upper Bound: {forecast_result['upper_bound'].iloc[-1]:.2f}")
 ```
 
 ### Batch Forecasting
@@ -248,14 +267,25 @@ factory = DomainFactory(config)
 portfolio = factory.create_portfolio()
 
 # Forecast entire portfolio
-forecaster = Forecaster(config)
+forecaster = StockForecaster(
+    forecast_length=30,
+    model_list="fast",
+    data_fetcher=factory.data_fetcher
+)
+
 portfolio_forecasts = {}
 
 for asset in portfolio.assets:
     try:
-        forecast = forecaster.forecast_price(asset.ticker, forecast_length=30)
-        portfolio_forecasts[asset.ticker] = forecast
-        print(f"{asset.ticker}: {forecast['forecast_price']:.2f} ({forecast['direction']})")
+        data = factory.data_fetcher.get_stock_data(asset.ticker)
+        forecast = forecaster.fit_predict(data)
+        portfolio_forecasts[asset.ticker] = {
+            'current_price': data['Close'].iloc[-1],
+            'forecast_price': forecast['forecast'].iloc[-1],
+            'lower_bound': forecast['lower_bound'].iloc[-1],
+            'upper_bound': forecast['upper_bound'].iloc[-1]
+        }
+        print(f"{asset.ticker}: ${forecast['forecast'].iloc[-1]:.2f}")
     except Exception as e:
         print(f"Error forecasting {asset.ticker}: {e}")
 ```
@@ -299,7 +329,7 @@ The portfolio value table shows different information based on the forecast mode
 #### Future Prediction Mode
 
 ```
-               Portfolio Value               
+               Portfolio Value
 ┏━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━┳━━━━━━━━━━━━┓
 ┃ Metric          ┃ Date       ┃ Value      ┃
 ┡━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━╇━━━━━━━━━━━━┩
@@ -311,7 +341,7 @@ The portfolio value table shows different information based on the forecast mode
 #### Historical Evaluation Mode
 
 ```
-               Portfolio Value               
+               Portfolio Value
 ┏━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━┳━━━━━━━━━━━━┓
 ┃ Metric          ┃ Date       ┃ Value      ┃
 ┡━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━╇━━━━━━━━━━━━┩
@@ -330,7 +360,7 @@ The portfolio value table shows different information based on the forecast mode
 Forecast results are displayed in descending order by expected return percentage (highest returns first):
 
 ```
-                    Price Forecasts                     
+                    Price Forecasts
 ┏━━━━━━━━┳━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━┓
 ┃ Ticker ┃ Current Price ┃ Forecast Price ┃ Confidence Range ┃
 ┡━━━━━━━━╇━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━┩
@@ -349,7 +379,7 @@ Note: In this example, NVDA shows the highest expected return (+5.1%), followed 
 When train/test dates are configured, you'll also see accuracy metrics:
 
 ```
-                         Model Performance on Test Data                         
+                         Model Performance on Test Data
 ┏━━━━━━━━┳━━━━━━━━┳━━━━━━━━┳━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━┓
 ┃ Ticker ┃   RMSE ┃    MAE ┃ MAPE % ┃ Train Period       ┃ Test Period         ┃
 ┡━━━━━━━━╇━━━━━━━━╇━━━━━━━━╇━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━┩
@@ -367,36 +397,7 @@ When train/test dates are configured, you'll also see accuracy metrics:
 AutoTS provides detailed progress information:
 
 ```
-⠋ Training fast models with 5 generations... (AutoTS is working...)
-⠋ Generation 1/5: Testing 45 models... ━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 60% 0:01:23
-⠋ Generation 2/5: Testing 32 models... ━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 80% 0:00:45
-⠋ Validating best models... ━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 95% 0:00:15
-⠋ Building ensemble forecast... ━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100% 0:00:05
-✓ Forecasting completed for AAPL
-```
-
-### Detailed Forecast Information
-
-```
-╭─────────────────────── FORECAST: AAPL ───────────────────────╮
-│                                                              │
-│  Current Price: $150.25                                      │
-│  30-day Forecast: $155.80 (+3.7%)                            │
-│                                                              │
-│  Confidence Interval (95%): $145.20 - $165.40               │
-│  Expected Range: ±6.8%                                       │
-│                                                              │
-│  Model Performance:                                          │
-│    Best Model: ETS (AAA)                                     │
-│    Ensemble Score: 0.84                                      │
-│    Validation MAE: $2.15                                     │
-│                                                              │
-│  Forecast Details:                                           │
-│    Trend: Bullish ↗                                         │
-│    Volatility: Moderate                                      │
-│    Seasonality: Weak                                         │
-│                                                              │
-╰──────────────────────────────────────────────────────────────╯
+⠋ Training models on historical data...
 ```
 
 ## Train/Test Evaluation
@@ -404,9 +405,9 @@ AutoTS provides detailed progress information:
 When using Historical Evaluation Mode (train/test dates configured without forecast_length), Stockula automatically:
 
 1. **Trains models** on historical data from `train_start_date` to `train_end_date`
-1. **Makes predictions** for the period from `test_start_date` to `test_end_date`
-1. **Compares predictions** to actual prices during the test period
-1. **Calculates accuracy metrics**:
+2. **Makes predictions** for the period from `test_start_date` to `test_end_date`
+3. **Compares predictions** to actual prices during the test period
+4. **Calculates accuracy metrics**:
    - **RMSE (Root Mean Square Error)**: Average prediction error in dollars
    - **MAE (Mean Absolute Error)**: Average absolute error in dollars
    - **MAPE (Mean Absolute Percentage Error)**: Average percentage error
@@ -418,10 +419,10 @@ When using Historical Evaluation Mode (train/test dates configured without forec
 forecast:
   # Historical evaluation mode - NO forecast_length specified
   train_start_date: "2025-01-01"   # 3 months of training data
-  train_end_date: "2025-03-31"     
+  train_end_date: "2025-03-31"
   test_start_date: "2025-04-01"    # 3 months of test data
-  test_end_date: "2025-06-30"      
-  
+  test_end_date: "2025-06-30"
+
   # Model configuration
   model_list: "fast"
   prediction_interval: 0.95
@@ -455,6 +456,7 @@ The portfolio-level accuracy shown in the summary is the average of individual s
 
 ### Model Quality Indicators
 
+- **Best Model**: The model selected by AutoTS based on validation performance
 - **Ensemble Score**: 0.0-1.0, higher is better
 - **Validation MAE**: Mean Absolute Error on validation data
 - **Cross-validation Score**: Performance across multiple periods
@@ -466,12 +468,12 @@ The portfolio-level accuracy shown in the summary is the average of individual s
 ```yaml
 forecast:
   model_list:
-    - "Naive"
+    - "LastValueNaive"
     - "SeasonalNaive"
-    - "LinearRegression"
-    - "ETS"
     - "ARIMA"
+    - "ETS"
     - "Theta"
+    - "WindowRegression"
 ```
 
 ### Ensemble Methods
@@ -515,26 +517,30 @@ def compare_forecast_models(symbol, forecast_length=30):
     """Compare different model configurations."""
     configs = {
         'fast': {'model_list': 'fast', 'max_generations': 2},
-        'default': {'model_list': 'default', 'max_generations': 5},
+        'financial': {'model_list': 'financial', 'max_generations': 3},
         'slow': {'model_list': 'slow', 'max_generations': 10}
     }
-    
+
     results = {}
-    
+
     for name, config_params in configs.items():
-        config = load_config()
-        config.forecast.update(config_params)
-        
-        forecaster = Forecaster(config)
-        forecast = forecaster.forecast_price(symbol, forecast_length)
-        
+        # Create forecaster with specific config
+        forecaster = StockForecaster(
+            forecast_length=forecast_length,
+            model_list=config_params['model_list'],
+            max_generations=config_params['max_generations'],
+            data_fetcher=fetcher
+        )
+
+        data = fetcher.get_stock_data(symbol)
+        forecast = forecaster.fit_predict(data)
+
         results[name] = {
-            'forecast_price': forecast['forecast_price'],
-            'confidence_width': forecast['upper_bound'] - forecast['lower_bound'],
-            'ensemble_score': forecast.get('ensemble_score', 0),
-            'computation_time': forecast.get('computation_time', 0)
+            'forecast_price': forecast['forecast'].iloc[-1],
+            'confidence_width': forecast['upper_bound'].iloc[-1] - forecast['lower_bound'].iloc[-1],
+            'best_model': forecaster.get_best_model()['model_name']
         }
-    
+
     return results
 ```
 
@@ -544,31 +550,37 @@ def compare_forecast_models(symbol, forecast_length=30):
 def track_forecast_accuracy(symbol, days_back=90, forecast_length=7):
     """Track historical forecast accuracy."""
     data = fetcher.get_stock_data(symbol, start_date="2023-01-01")
-    
+
     accuracies = []
-    
+
     for i in range(days_back, len(data) - forecast_length):
         # Historical data up to point i
         historical_data = data.iloc[:i]
-        
+
         # Make forecast
-        forecast = forecaster.forecast_from_data(historical_data, forecast_length)
-        
+        forecaster = StockForecaster(
+            forecast_length=forecast_length,
+            model_list="fast",
+            data_fetcher=fetcher
+        )
+        forecast = forecaster.fit_predict(historical_data)
+
         # Actual prices
         actual_prices = data.iloc[i:i+forecast_length]['Close']
-        
+        forecast_prices = forecast['forecast']
+
         # Calculate accuracy
-        mae = np.mean(np.abs(forecast['forecast'] - actual_prices))
-        mape = np.mean(np.abs((forecast['forecast'] - actual_prices) / actual_prices)) * 100
-        
+        mae = np.mean(np.abs(forecast_prices - actual_prices))
+        mape = np.mean(np.abs((forecast_prices - actual_prices) / actual_prices)) * 100
+
         accuracies.append({
             'date': data.index[i],
             'mae': mae,
             'mape': mape,
-            'direction_correct': np.sign(forecast['forecast'][-1] - forecast['forecast'][0]) == 
+            'direction_correct': np.sign(forecast_prices.iloc[-1] - forecast_prices.iloc[0]) ==
                                np.sign(actual_prices.iloc[-1] - actual_prices.iloc[0])
         })
-    
+
     return pd.DataFrame(accuracies)
 ```
 
@@ -581,33 +593,38 @@ from stockula.backtesting.strategies import BaseStrategy
 
 class ForecastStrategy(BaseStrategy):
     """Trade based on price forecasts."""
-    
+
+    forecast_days = 7
+    confidence_threshold = 0.8
+
     def init(self):
-        self.forecaster = Forecaster(self.config)
-        self.forecast_length = 7
-        self.confidence_threshold = 0.8
-    
+        # Initialize forecaster
+        from stockula.forecasting.forecaster import StockForecaster
+        self.forecaster = StockForecaster(
+            forecast_length=self.forecast_days,
+            model_list="fast",
+            max_generations=2
+        )
+
     def next(self):
         # Get recent data for forecasting
         recent_data = self.data.df.iloc[-252:]  # Last year of data
-        
+
         try:
             # Generate forecast
-            forecast = self.forecaster.forecast_from_data(recent_data, self.forecast_length)
-            
+            forecast = self.forecaster.fit_predict(recent_data)
+
             current_price = self.data.Close[-1]
-            forecast_price = forecast['forecast_price']
-            confidence = forecast['ensemble_score']
-            
+            forecast_price = forecast['forecast'].iloc[-1]
+
             # Trading logic
-            if confidence > self.confidence_threshold:
-                price_change = (forecast_price - current_price) / current_price
-                
-                if price_change > 0.03 and not self.position:  # 3% upside
-                    self.buy()
-                elif price_change < -0.03 and self.position:   # 3% downside
-                    self.sell()
-                    
+            price_change = (forecast_price - current_price) / current_price
+
+            if price_change > 0.03 and not self.position:  # 3% upside
+                self.buy()
+            elif price_change < -0.03 and self.position:   # 3% downside
+                self.sell()
+
         except Exception as e:
             # Handle forecasting errors gracefully
             pass
@@ -619,12 +636,16 @@ class ForecastStrategy(BaseStrategy):
 def forecast_based_rebalancing(portfolio, forecaster, rebalance_threshold=0.05):
     """Rebalance portfolio based on forecasts."""
     forecasts = {}
-    
+
     # Generate forecasts for all assets
     for asset in portfolio.assets:
-        forecast = forecaster.forecast_price(asset.ticker, forecast_length=30)
-        forecasts[asset.ticker] = forecast
-    
+        data = forecaster.data_fetcher.get_stock_data(asset.ticker)
+        forecast = forecaster.fit_predict(data)
+        forecasts[asset.ticker] = {
+            'current_price': data['Close'].iloc[-1],
+            'forecast_price': forecast['forecast'].iloc[-1]
+        }
+
     # Calculate expected returns
     expected_returns = {}
     for ticker, forecast in forecasts.items():
@@ -632,19 +653,19 @@ def forecast_based_rebalancing(portfolio, forecaster, rebalance_threshold=0.05):
         forecast_price = forecast['forecast_price']
         expected_return = (forecast_price - current_price) / current_price
         expected_returns[ticker] = expected_return
-    
+
     # Rank assets by expected return
     ranked_assets = sorted(expected_returns.items(), key=lambda x: x[1], reverse=True)
-    
+
     # Rebalance if significant differences
     top_return = ranked_assets[0][1]
     bottom_return = ranked_assets[-1][1]
-    
+
     if top_return - bottom_return > rebalance_threshold:
         # Overweight top performers, underweight bottom performers
-        new_allocations = calculate_new_allocations(ranked_assets)
-        return new_allocations
-    
+        print(f"Rebalancing recommended: {top_return:.2%} spread")
+        return ranked_assets
+
     return None  # No rebalancing needed
 ```
 
@@ -653,58 +674,71 @@ def forecast_based_rebalancing(portfolio, forecaster, rebalance_threshold=0.05):
 ### Data Quality
 
 1. **Sufficient History**: Use at least 2-3 years of data for training
-1. **Data Frequency**: Match forecast frequency to your use case
-1. **Handle Gaps**: Clean missing data before forecasting
-1. **Outlier Treatment**: Consider removing extreme outliers
+2. **Data Frequency**: Match forecast frequency to your use case
+3. **Handle Gaps**: Clean missing data before forecasting
+4. **Outlier Treatment**: Consider removing extreme outliers
 
 ### Model Selection
 
 1. **Start with Fast Models**: Test feasibility before using slow models
-1. **Cross-Validate**: Always validate on out-of-sample data
-1. **Ensemble Benefits**: Use ensemble methods for better robustness
-1. **Regular Retraining**: Update models with new data periodically
+2. **Use Financial Models**: Default `model_list="fast"` uses optimized financial models
+3. **Cross-Validate**: Always validate on out-of-sample data
+4. **Ensemble Benefits**: Use ensemble methods for better robustness
+5. **Regular Retraining**: Update models with new data periodically
 
 ### Forecast Interpretation
 
 1. **Confidence Intervals**: Always consider uncertainty ranges
-1. **Direction vs. Magnitude**: Focus on direction for trading decisions
-1. **Validation Scores**: Trust forecasts with better validation performance
-1. **Market Context**: Consider current market conditions
+2. **Direction vs. Magnitude**: Focus on direction for trading decisions
+3. **Validation Scores**: Trust forecasts with better validation performance
+4. **Market Context**: Consider current market conditions
 
 ### Production Usage
 
 1. **Error Handling**: Gracefully handle forecast failures
-1. **Performance Monitoring**: Track forecast accuracy over time
-1. **Model Decay**: Retrain models when accuracy degrades
-1. **Computational Resources**: Balance accuracy vs. computation time
+2. **Performance Monitoring**: Track forecast accuracy over time
+3. **Model Decay**: Retrain models when accuracy degrades
+4. **Computational Resources**: Balance accuracy vs. computation time
 
 ## Troubleshooting
 
-### Common Warnings
+### Forecasts Taking Too Long
+
+- Check if `model_list="fast"` is set
+- Reduce `max_generations` to 1
+- Ensure you're using financial models (check logs)
+
+### Getting Warnings
+
+- Financial models automatically suppress most warnings
+- If warnings persist, check you're forecasting "Close" or "Price" columns
+- Custom model lists may include problematic models
+
+### Poor Forecast Quality
+
+- Try `model_list="financial"` for more models
+- Increase `max_generations` to 3-5
+- Ensure sufficient historical data (200+ days)
+
+### Common Issues and Solutions
 
 1. **"Frequency is 'None'! Data frequency not recognized."**
-
    - This warning appears when AutoTS cannot automatically detect the data frequency
-   - Solution: Ensure your data has consistent date intervals or explicitly set `frequency` in config
-   - Default behavior: Stockula now defaults to 'D' (daily) frequency and attempts to infer the actual frequency from your data automatically
+   - Solution: Stockula now defaults to 'D' (daily) frequency and attempts to infer the actual frequency automatically
 
-1. **"k too large for size of data in motif"**
-
+2. **"k too large for size of data in motif"**
    - This warning occurred with Motif pattern recognition models when pattern length exceeded data size
    - Solution: Already fixed - Motif models have been removed from the default financial model list
-   - If using custom model lists, avoid UnivariateMotif and MultivariateMotif with small datasets
 
-1. **Alembic migration warnings**
-
+3. **Alembic migration warnings**
    - These warnings indicate database schema updates
    - Solution: The migrations now check for existing indexes before creating them
-   - The warnings should no longer appear after the fix
 
 ### Performance Tips
 
 1. **Reduce model search time**: Use `model_list: "fast"` and lower `max_generations`
-1. **Handle small datasets**: Ensure at least 2-3 years of historical data for best results
-1. **Memory usage**: For large portfolios, consider forecasting in batches
-1. **Parallel processing**: Set `max_workers` > 1 for concurrent forecasting (use cautiously)
+2. **Handle small datasets**: Ensure at least 1-2 years of historical data for best results
+3. **Memory usage**: For large portfolios, consider forecasting in batches
+4. **Parallel processing**: Set `max_workers` > 1 for concurrent forecasting
 
 The forecasting module provides a powerful foundation for predictive analysis while maintaining ease of use through AutoTS automation and Rich CLI integration.

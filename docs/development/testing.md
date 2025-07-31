@@ -38,10 +38,10 @@ class TestMyStrategy(unittest.TestCase):
             'Close': [10, 11, 12, 13, 14, 15]
         })
         expected_sma_3 = pd.Series([None, None, 11.0, 12.0, 13.0, 14.0])
-        
+
         strategy = MyStrategy()
         calculated_sma = strategy.calculate_sma(data, 3)
-        
+
         pd.testing.assert_series_equal(calculated_sma, expected_sma_3, check_dtype=False)
 
 if __name__ == '__main__':
@@ -63,10 +63,10 @@ def test_injected_function(self):
     container = Container()
     mock_data_fetcher = Mock()
     container.data_fetcher.override(mock_data_fetcher)
-    
+
     # IMPORTANT: Wire the container to enable injection
     container.wire(modules=["stockula.main"])
-    
+
     # Now you can call the injected function
     result = run_technical_analysis("AAPL", config)
 ```
@@ -99,7 +99,7 @@ def test_foreign_key_constraint(self, test_database):
     test_database.add_price_data(
         "NEWSTOCK", datetime.now(), 100.0, 101.0, 99.0, 100.5, 1000000, "1d"
     )
-    
+
     # Verify the stock was auto-created
     with test_database.get_session() as session:
         stock = session.query(Stock).filter_by(symbol="NEWSTOCK").first()

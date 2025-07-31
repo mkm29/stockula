@@ -80,7 +80,7 @@ class DataFetcher:
             end = datetime.now().strftime("%Y-%m-%d")
 
         # Try to get data from cache first
-        if self.use_cache and not force_refresh:
+        if self.use_cache and not force_refresh and self.db is not None:
             try:
                 cached_data = self.db.get_price_history(symbol, start, end, interval)
                 if not cached_data.empty:
@@ -116,7 +116,7 @@ class DataFetcher:
         data = data[available_cols]
 
         # Store in database if caching is enabled
-        if self.use_cache and not data.empty:
+        if self.use_cache and not data.empty and self.db is not None:
             self.db.store_price_history(symbol, data, interval)
 
         return data
@@ -148,9 +148,7 @@ class DataFetcher:
 
         return data
 
-    def get_current_prices(
-        self, symbols: list[str] | str, show_progress: bool = True
-    ) -> dict[str, float]:
+    def get_current_prices(self, symbols: list[str] | str, show_progress: bool = True) -> dict[str, float]:
         """Get current prices for multiple symbols.
 
         Args:
@@ -183,9 +181,7 @@ class DataFetcher:
                 )
 
                 for symbol in symbols:
-                    progress.update(
-                        task, description=f"[magenta]Fetching price for {symbol}..."
-                    )
+                    progress.update(task, description=f"[magenta]Fetching price for {symbol}...")
                     try:
                         ticker = yf.Ticker(symbol)
                         # Get the most recent price
@@ -200,13 +196,9 @@ class DataFetcher:
                             elif "regularMarketPrice" in info:
                                 prices[symbol] = info["regularMarketPrice"]
                             else:
-                                console.print(
-                                    f"[yellow]Warning: Could not get current price for {symbol}[/yellow]"
-                                )
+                                console.print(f"[yellow]Warning: Could not get current price for {symbol}[/yellow]")
                     except Exception as e:
-                        console.print(
-                            f"[red]Error fetching price for {symbol}: {e}[/red]"
-                        )
+                        console.print(f"[red]Error fetching price for {symbol}: {e}[/red]")
 
                     progress.advance(task)
         else:
@@ -226,9 +218,7 @@ class DataFetcher:
                         elif "regularMarketPrice" in info:
                             prices[symbol] = info["regularMarketPrice"]
                         else:
-                            console.print(
-                                f"[yellow]Warning: Could not get current price for {symbol}[/yellow]"
-                            )
+                            console.print(f"[yellow]Warning: Could not get current price for {symbol}[/yellow]")
                 except Exception as e:
                     console.print(f"[red]Error fetching price for {symbol}: {e}[/red]")
 
@@ -245,7 +235,7 @@ class DataFetcher:
             Dictionary with stock information
         """
         # Try to get from cache first
-        if self.use_cache and not force_refresh:
+        if self.use_cache and not force_refresh and self.db is not None:
             cached_info = self.db.get_stock_info(symbol)
             if cached_info:
                 return cached_info
@@ -255,12 +245,12 @@ class DataFetcher:
         info = ticker.info
 
         # Store in database if caching is enabled
-        if self.use_cache and info:
+        if self.use_cache and info and self.db is not None:
             self.db.store_stock_info(symbol, info)
 
         return info
 
-    def get_realtime_price(self, symbol: str) -> float:
+    def get_realtime_price(self, symbol: str) -> float | None:
         """Get current price for a stock.
 
         Args:
@@ -300,10 +290,8 @@ class DataFetcher:
             expiration_date = options_dates[0]
 
         # Try to get from cache first
-        if self.use_cache and not force_refresh:
-            cached_calls, cached_puts = self.db.get_options_chain(
-                symbol, expiration_date
-            )
+        if self.use_cache and not force_refresh and self.db is not None:
+            cached_calls, cached_puts = self.db.get_options_chain(symbol, expiration_date)
             if not cached_calls.empty or not cached_puts.empty:
                 return cached_calls, cached_puts
 
@@ -313,7 +301,7 @@ class DataFetcher:
             calls, puts = opt.calls, opt.puts
 
             # Store in database if caching is enabled
-            if self.use_cache:
+            if self.use_cache and self.db is not None:
                 self.db.store_options_chain(symbol, calls, puts, expiration_date)
 
             return calls, puts
@@ -340,7 +328,7 @@ class DataFetcher:
             Series with dividend history
         """
         # Try to get from cache first
-        if self.use_cache and not force_refresh:
+        if self.use_cache and not force_refresh and self.db is not None:
             cached_dividends = self.db.get_dividends(symbol, start, end)
             if not cached_dividends.empty:
                 return cached_dividends
@@ -350,7 +338,7 @@ class DataFetcher:
         dividends = ticker.dividends
 
         # Store in database if caching is enabled
-        if self.use_cache and not dividends.empty:
+        if self.use_cache and not dividends.empty and self.db is not None:
             self.db.store_dividends(symbol, dividends)
 
         # Filter by date range if specified
@@ -381,7 +369,7 @@ class DataFetcher:
             Series with split history
         """
         # Try to get from cache first
-        if self.use_cache and not force_refresh:
+        if self.use_cache and not force_refresh and self.db is not None:
             cached_splits = self.db.get_splits(symbol, start, end)
             if not cached_splits.empty:
                 return cached_splits
@@ -391,7 +379,7 @@ class DataFetcher:
         splits = ticker.splits
 
         # Store in database if caching is enabled
-        if self.use_cache and not splits.empty:
+        if self.use_cache and not splits.empty and self.db is not None:
             self.db.store_splits(symbol, splits)
 
         # Filter by date range if specified
@@ -427,9 +415,7 @@ class DataFetcher:
         symbols_to_fetch = []
         for symbol in symbols:
             if self.use_cache:
-                cached_data = self.get_stock_data(
-                    symbol, start_date, end_date, interval
-                )
+                cached_data = self.get_stock_data(symbol, start_date, end_date, interval)
                 if not cached_data.empty:
                     results[symbol] = cached_data
                     continue
@@ -458,24 +444,19 @@ class DataFetcher:
                     if not data.empty:
                         results[symbol] = data
                         # Store in cache
-                        if self.use_cache:
+                        if self.use_cache and self.db is not None:
                             self.db.store_price_history(symbol, data, interval)
                 else:
                     # Multiple symbols returns multi-level columns
                     for symbol in symbols_to_fetch:
                         try:
                             symbol_data = data[symbol]
-                            if (
-                                not symbol_data.empty
-                                and not symbol_data.isna().all().all()
-                            ):
+                            if not symbol_data.empty and not symbol_data.isna().all().all():
                                 symbol_data = symbol_data.dropna(how="all")
                                 results[symbol] = symbol_data
                                 # Store in cache
-                                if self.use_cache:
-                                    self.db.store_price_history(
-                                        symbol, symbol_data, interval
-                                    )
+                                if self.use_cache and self.db is not None:
+                                    self.db.store_price_history(symbol, symbol_data, interval)
                         except KeyError:
                             logger.warning(f"No data returned for {symbol}")
 
@@ -484,9 +465,7 @@ class DataFetcher:
                 # Fall back to individual downloads
                 for symbol in symbols_to_fetch:
                     try:
-                        data = self.get_stock_data(
-                            symbol, start_date, end_date, interval
-                        )
+                        data = self.get_stock_data(symbol, start_date, end_date, interval)
                         if not data.empty:
                             results[symbol] = data
                     except Exception as e:
@@ -525,19 +504,15 @@ class DataFetcher:
                 logger.error(f"Error getting price for {symbol}: {e}")
                 # Try individual fetch as fallback
                 try:
-                    individual_prices = self.get_current_prices(
-                        symbol, show_progress=False
-                    )
+                    individual_prices = self.get_current_prices(symbol, show_progress=False)
                     if symbol in individual_prices:
                         prices[symbol] = individual_prices[symbol]
-                except:
+                except Exception:
                     pass
 
         return prices
 
-    def fetch_and_store_all_data(
-        self, symbol: str, start: str | None = None, end: str | None = None
-    ) -> None:
+    def fetch_and_store_all_data(self, symbol: str, start: str | None = None, end: str | None = None) -> None:
         """Fetch and store all available data for a symbol.
 
         Args:
@@ -589,9 +564,7 @@ class DataFetcher:
         try:
             calls, puts = self.get_options_chain(symbol, force_refresh=True)
             if not calls.empty or not puts.empty:
-                print(
-                    f"  ✓ Options chain stored ({len(calls)} calls, {len(puts)} puts)"
-                )
+                print(f"  ✓ Options chain stored ({len(calls)} calls, {len(puts)} puts)")
             else:
                 print("  ○ No options chain found")
         except Exception as e:
@@ -603,7 +576,7 @@ class DataFetcher:
         Returns:
             Dictionary with table row counts
         """
-        if not self.use_cache:
+        if not self.use_cache or self.db is None:
             return {}
         return self.db.get_database_stats()
 
@@ -613,7 +586,7 @@ class DataFetcher:
         Args:
             days_to_keep: Number of days of data to keep
         """
-        if not self.use_cache:
+        if not self.use_cache or self.db is None:
             print("Warning: Caching is disabled, no data to clean up")
             return
         self.db.cleanup_old_data(days_to_keep)
@@ -625,7 +598,7 @@ class DataFetcher:
         Returns:
             List of symbols with cached data
         """
-        if not self.use_cache:
+        if not self.use_cache or self.db is None:
             return []
         return self.db.get_all_symbols()
 
@@ -661,25 +634,29 @@ class DataFetcher:
         Returns:
             Treasury rate or None if not available
         """
+        # Convert date to datetime if it's a string
+        date_obj: datetime
         if isinstance(date, str):
-            date = pd.to_datetime(date)
+            date_obj = pd.to_datetime(date)
+        else:
+            date_obj = date
 
         # Get ticker for requested duration
         ticker = self.TREASURY_TICKERS.get(duration, self.TREASURY_TICKERS["3_month"])
 
         # Try to get cached data first
         if self.use_cache and self.db and not force_refresh:
-            cached_data = self._get_cached_rate(ticker, date)
+            cached_data = self._get_cached_rate(ticker, date_obj)
             if cached_data is not None:
                 return cached_data if as_decimal else cached_data * 100
 
         # Fetch from yfinance
-        rate = self._fetch_rate_from_yfinance(ticker, date)
+        rate = self._fetch_rate_from_yfinance(ticker, date_obj)
 
         if rate is not None:
             # Cache the result
             if self.use_cache and self.db:
-                self._cache_rate(ticker, date, rate)
+                self._cache_rate(ticker, date_obj, rate)
 
             return rate if as_decimal else rate * 100
 
@@ -703,6 +680,7 @@ class DataFetcher:
         Returns:
             Average Treasury rate or None if not available
         """
+        # Type narrowing is handled in get_treasury_rates
         rates = self.get_treasury_rates(start_date, end_date, duration, as_decimal)
 
         if rates.empty:
@@ -730,23 +708,28 @@ class DataFetcher:
         Returns:
             Series of Treasury rates indexed by date
         """
+        # Convert to datetime objects
+        start_obj: datetime
+        end_obj: datetime
         if isinstance(start_date, str):
-            start_date = pd.to_datetime(start_date)
+            start_obj = pd.to_datetime(start_date)
+        else:
+            start_obj = start_date
         if isinstance(end_date, str):
-            end_date = pd.to_datetime(end_date)
+            end_obj = pd.to_datetime(end_date)
+        else:
+            end_obj = end_date
 
         ticker = self.TREASURY_TICKERS.get(duration, self.TREASURY_TICKERS["3_month"])
 
         # Try cache first
         if self.use_cache and self.db and not force_refresh:
-            cached_data = self._get_cached_rates(ticker, start_date, end_date)
+            cached_data = self._get_cached_rates(ticker, start_obj, end_obj)
             if not cached_data.empty:
                 return cached_data if as_decimal else cached_data * 100
 
         # Fetch from yfinance with progress indication
-        rates = self._fetch_rates_from_yfinance(
-            ticker, start_date, end_date, show_progress=True
-        )
+        rates = self._fetch_rates_from_yfinance(ticker, start_obj, end_obj, show_progress=True)
 
         # Cache the results
         if self.use_cache and self.db and not rates.empty:
@@ -798,16 +781,15 @@ class DataFetcher:
                     transient=True,
                 ) as progress:
                     task = progress.add_task(
-                        f"[yellow]Fetching Treasury rates ({ticker}) from {start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d')}...",
+                        f"[yellow]Fetching Treasury rates ({ticker}) from "
+                        f"{start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d')}...",
                         total=None,
                     )
 
                     ticker_obj = yf.Ticker(ticker)
                     data = ticker_obj.history(start=start_date, end=end_date)
 
-                    progress.update(
-                        task, description="[yellow]Processing Treasury rate data..."
-                    )
+                    progress.update(task, description="[yellow]Processing Treasury rate data...")
             else:
                 ticker_obj = yf.Ticker(ticker)
                 data = ticker_obj.history(start=start_date, end=end_date)
@@ -837,6 +819,8 @@ class DataFetcher:
         date_str = date.strftime("%Y-%m-%d")
 
         # Use the existing price history table for Treasury data
+        if self.db is None:
+            return None
         data = self.db.get_price_history(ticker, start_date=date_str, end_date=date_str)
 
         if not data.empty:
@@ -844,9 +828,7 @@ class DataFetcher:
 
         return None
 
-    def _get_cached_rates(
-        self, ticker: str, start_date: datetime, end_date: datetime
-    ) -> pd.Series:
+    def _get_cached_rates(self, ticker: str, start_date: datetime, end_date: datetime) -> pd.Series:
         """Get cached Treasury rates from database."""
         if not self.db:
             return pd.Series(dtype=float)
@@ -856,6 +838,8 @@ class DataFetcher:
         end_str = end_date.strftime("%Y-%m-%d")
 
         # Use the existing price history table for Treasury data
+        if self.db is None:
+            return pd.Series(dtype=float)
         data = self.db.get_price_history(ticker, start_date=start_str, end_date=end_str)
 
         if not data.empty:
@@ -881,10 +865,11 @@ class DataFetcher:
         )
 
         # Store as stock info (Treasury ticker)
-        self.db.store_stock_info(ticker, {"longName": f"Treasury Rate {ticker}"})
+        if self.db is not None:
+            self.db.store_stock_info(ticker, {"longName": f"Treasury Rate {ticker}"})
 
-        # Store rate data
-        self.db.store_price_history(ticker, df)
+            # Store rate data
+            self.db.store_price_history(ticker, df)
 
     def _cache_rates(self, ticker: str, rates: pd.Series) -> None:
         """Cache Treasury rates in database."""
@@ -903,10 +888,11 @@ class DataFetcher:
         )
 
         # Store as stock info (Treasury ticker)
-        self.db.store_stock_info(ticker, {"longName": f"Treasury Rate {ticker}"})
+        if self.db is not None:
+            self.db.store_stock_info(ticker, {"longName": f"Treasury Rate {ticker}"})
 
-        # Store rate data
-        self.db.store_price_history(ticker, df)
+            # Store rate data
+            self.db.store_price_history(ticker, df)
 
     def get_current_treasury_rate(self, duration: str = "3_month") -> float | None:
         """Get the most recent Treasury rate.
