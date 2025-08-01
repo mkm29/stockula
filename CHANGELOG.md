@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.4.2](https://github.com/mkm29/stockula/compare/v0.4.1...v0.4.2) (2025-08-01)
+
+
+### Bug Fixes
+
+* changed the tagging of docker images in docker-build.yml ([71f17e6](https://github.com/mkm29/stockula/commit/71f17e600160646609aacfe0d715742eaa4ddcaf))
+* reverted to previous docker build (only build cli) ([237ee63](https://github.com/mkm29/stockula/commit/237ee63ed6ba9b3cb5fc29a6b9352a99319517e6))
+
 ## [0.4.1](https://github.com/mkm29/stockula/compare/v0.4.0...v0.4.1) (2025-08-01)
 
 
