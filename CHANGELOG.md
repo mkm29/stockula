@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.3.2](https://github.com/mkm29/stockula/compare/v0.3.1...v0.3.2) (2025-08-01)
+
+
+### Bug Fixes
+
+* optimized Dockerfile and build workflow for running on GitHub Ac… ([f9f52ac](https://github.com/mkm29/stockula/commit/f9f52acb195a65dbbb8b3710491ae78cc1920ff9))
+* optimized Dockerfile and build workflow for running on GitHub Actions ([13106b6](https://github.com/mkm29/stockula/commit/13106b6bd2c7428ef16b655ed515b3b1cde8cdc6))
+
 ## [0.3.1](https://github.com/mkm29/stockula/compare/v0.3.0...v0.3.1) (2025-08-01)
 
 ### Bug Fixes
