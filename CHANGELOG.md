@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.3](https://github.com/mkm29/stockula/compare/v0.4.2...v0.4.3) (2025-08-01)
+
+
+### Bug Fixes
+
+* improve test coverage ([cfeafd1](https://github.com/mkm29/stockula/commit/cfeafd1caf2e2b78d1f90e7ed357149855b53410))
+
 ## [0.4.2](https://github.com/mkm29/stockula/compare/v0.4.1...v0.4.2) (2025-08-01)
 
 
