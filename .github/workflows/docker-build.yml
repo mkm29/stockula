@@ -67,13 +67,11 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-          flavor: |
-            suffix=-production,onlatest=true
           tags: |
-            type=ref,event=branch
-            type=ref,event=pr
-            type=ref,event=tag
-            type=semver,pattern={{version}}
+            type=ref,event=branch,suffix=-production
+            type=ref,event=pr,suffix=-production
+            type=semver,pattern={{version}}-production
+            type=semver,pattern={{major}}.{{minor}}-production
             type=raw,value=production,enable={{is_default_branch}}
 
       - name: Build and push production image
@@ -155,15 +153,13 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-          flavor: |
-            suffix=-cli,onlatest=true
           tags: |
-            type=ref,event=branch
-            type=ref,event=pr
-            type=ref,event=tag
-            type=semver,pattern={{version}}
-            type=raw,value=latest,enable={{is_default_branch}}
+            type=ref,event=branch,suffix=-cli
+            type=ref,event=pr,suffix=-cli
+            type=semver,pattern={{version}}-cli
+            type=semver,pattern={{major}}.{{minor}}-cli
             type=raw,value=cli,enable={{is_default_branch}}
+            type=raw,value=latest,enable={{is_default_branch}}
 
       - name: Build and push CLI image
         uses: docker/build-push-action@v5

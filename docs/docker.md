@@ -22,13 +22,13 @@ docker pull ghcr.io/mkm29/stockula:latest
 docker pull ghcr.io/mkm29/stockula:cli
 
 # Pull specific CLI version
-docker pull ghcr.io/mkm29/stockula:v0.3.1-cli
-docker pull ghcr.io/mkm29/stockula:0.3.1-cli
+docker pull ghcr.io/mkm29/stockula:0.4.1-cli
+docker pull ghcr.io/mkm29/stockula:0.4-cli
 
 # Pull production version (minimal, no extra tools)
 docker pull ghcr.io/mkm29/stockula:production
-docker pull ghcr.io/mkm29/stockula:v0.3.1-production
-docker pull ghcr.io/mkm29/stockula:0.3.1-production
+docker pull ghcr.io/mkm29/stockula:0.4.1-production
+docker pull ghcr.io/mkm29/stockula:0.4-production
 ```
 
 ### Run Container

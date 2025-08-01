@@ -84,7 +84,7 @@ Stockula uses GitHub Actions for automated testing, building, and deployment. Th
   - **Production**: Minimal runtime image (`-production` suffix)
   - **CLI**: Production + interactive tools (`-cli` suffix)
 - Automatic tagging:
-  - Version tags: `v0.1.0-production`, `v0.1.0-cli`
+  - Version tags: `0.4.1-production`, `0.4.1-cli`, `0.4-production`, `0.4-cli`
   - Latest tags: `latest` (CLI), `production`, `cli`
   - Branch/PR specific tags with appropriate suffixes
 
