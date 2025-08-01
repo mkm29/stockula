@@ -278,6 +278,9 @@ def mock_data_fetcher(mock_yfinance_ticker, sample_prices):
 
         yield fetcher
 
+        # Close the fetcher to clean up database connections
+        fetcher.close()
+
 
 # ===== Database Fixtures =====
 
@@ -331,6 +334,9 @@ def test_database_session(test_db_path):
     _seed_test_database(db)
 
     yield db
+
+    # Close database connections
+    db.close()
 
     # Cleanup: Remove test database after all tests
     if db_file.exists():
@@ -486,7 +492,8 @@ def in_memory_database():
 
     yield db
 
-    # No cleanup needed for in-memory database
+    # Close the database even for in-memory
+    db.close()
 
 
 @pytest.fixture(scope="function")

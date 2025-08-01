@@ -90,6 +90,19 @@ class DatabaseManager:
         except Exception as e:
             print(f"Warning: Could not run migrations: {e}")
 
+    def close(self) -> None:
+        """Close the database engine and dispose of all connections."""
+        if hasattr(self, "engine") and self.engine:
+            self.engine.dispose()
+
+    def __del__(self) -> None:
+        """Ensure database connections are closed when object is destroyed."""
+        try:
+            self.close()
+        except Exception:
+            # Ignore errors during cleanup
+            pass
+
     @contextmanager
     def get_session(self) -> Session:
         """Get a database session as context manager."""
