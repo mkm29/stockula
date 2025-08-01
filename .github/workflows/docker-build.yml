@@ -11,7 +11,7 @@ env:
   IMAGE_NAME: ${{ github.repository }}
 
 jobs:
-  build-production:
+  build:
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -62,128 +62,38 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Extract metadata for production
-        id: meta-prod
+      - name: Extract metadata
+        id: meta
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-          flavor: |
-            suffix=-production,onlatest=true
           tags: |
             type=ref,event=branch
             type=ref,event=pr
             type=ref,event=tag
             type=semver,pattern={{version}}
-            type=raw,value=production,enable={{is_default_branch}}
-
-      - name: Build and push production image
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          target: production
-          platforms: linux/amd64,linux/arm64/v8
-          push: ${{ github.event_name != 'pull_request' }}
-          tags: ${{ steps.meta-prod.outputs.tags }}
-          labels: ${{ steps.meta-prod.outputs.labels }}
-          cache-from: |
-            type=gha,scope=production
-            type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache-production
-          cache-to: |
-            type=gha,mode=max,scope=production
-            type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache-production,mode=max
-          build-args: |
-            VERSION=${{ github.ref_type == 'tag' && github.ref_name || 'dev' }}
-            BUILD_DATE=${{ fromJSON(steps.meta-prod.outputs.json).labels['org.opencontainers.image.created'] }}
-            GIT_COMMIT=${{ github.sha }}
-            GIT_URL=${{ github.event.repository.html_url }}
-          provenance: false
-          sbom: false
-
-  build-cli:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
-      id-token: write
-
-    steps:
-      - name: Free Disk Space (Ubuntu)
-        uses: jlumbroso/free-disk-space@main
-        with:
-          # this might remove tools that are actually needed,
-          # if set to "true" but frees about 6 GB
-          tool-cache: false
-          # all of these default to true, but feel free to set to
-          # "false" if necessary for your workflow
-          android: true
-          dotnet: true
-          haskell: true
-          large-packages: true
-          docker-images: true
-          swap-storage: true
-
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          lfs: true
-
-      - name: Check disk space
-        run: df -h
-
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-        with:
-          driver-opts: |
-            image=moby/buildkit:master
-            network=host
-          buildkitd-flags: '--allow-insecure-entitlement network.host'
-
-      - name: Log in to the Container registry
-        if: github.event_name != 'pull_request'
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Extract metadata for CLI
-        id: meta-cli
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-          flavor: |
-            suffix=-cli,onlatest=true
-          tags: |
-            type=ref,event=branch
-            type=ref,event=pr
-            type=ref,event=tag
-            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
             type=raw,value=latest,enable={{is_default_branch}}
-            type=raw,value=cli,enable={{is_default_branch}}
 
-      - name: Build and push CLI image
+      - name: Build and push Docker image
         uses: docker/build-push-action@v5
         with:
           context: .
           target: cli
           platforms: linux/amd64,linux/arm64/v8
           push: ${{ github.event_name != 'pull_request' }}
-          tags: ${{ steps.meta-cli.outputs.tags }}
-          labels: ${{ steps.meta-cli.outputs.labels }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
           cache-from: |
-            type=gha,scope=cli
-            type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache-cli
-            type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache-production
+            type=gha
+            type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache
+            type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
           cache-to: |
-            type=gha,mode=max,scope=cli
-            type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache-cli,mode=max
+            type=gha,mode=max
+            type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache,mode=max
           build-args: |
             VERSION=${{ github.ref_type == 'tag' && github.ref_name || 'dev' }}
-            BUILD_DATE=${{ fromJSON(steps.meta-cli.outputs.json).labels['org.opencontainers.image.created'] }}
+            BUILD_DATE=${{ fromJSON(steps.meta.outputs.json).labels['org.opencontainers.image.created'] }}
             GIT_COMMIT=${{ github.sha }}
             GIT_URL=${{ github.event.repository.html_url }}
           provenance: false

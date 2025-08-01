@@ -17,36 +17,27 @@ Stockula provides optimized Docker images for running the trading platform in co
 ### Pull Pre-built Image
 
 ```bash
-# Pull latest CLI version (default, includes interactive tools)
+# Pull latest version
 docker pull ghcr.io/mkm29/stockula:latest
-docker pull ghcr.io/mkm29/stockula:cli
 
-# Pull specific CLI version
-docker pull ghcr.io/mkm29/stockula:v0.3.1-cli
-docker pull ghcr.io/mkm29/stockula:0.3.1-cli
-
-# Pull production version (minimal, no extra tools)
-docker pull ghcr.io/mkm29/stockula:production
-docker pull ghcr.io/mkm29/stockula:v0.3.1-production
-docker pull ghcr.io/mkm29/stockula:0.3.1-production
+# Pull specific version
+docker pull ghcr.io/mkm29/stockula:v0.4.1
+docker pull ghcr.io/mkm29/stockula:0.4.1
+docker pull ghcr.io/mkm29/stockula:0.4
 ```
 
 ### Run Container
 
 ```bash
-# Run with default help (production image)
-docker run --rm ghcr.io/mkm29/stockula:production
+# Run with default help
+docker run --rm ghcr.io/mkm29/stockula:latest
 
-# Run analysis with production image
+# Run analysis
 docker run --rm -v $(pwd)/data:/app/data \
-  ghcr.io/mkm29/stockula:production \
+  ghcr.io/mkm29/stockula:latest \
   stockula.main --ticker AAPL --mode ta
 
-# Interactive shell with CLI image
-docker run -it --rm -v $(pwd)/data:/app/data \
-  ghcr.io/mkm29/stockula:cli bash
-
-# Or use latest (which is CLI)
+# Interactive shell
 docker run -it --rm -v $(pwd)/data:/app/data \
   ghcr.io/mkm29/stockula:latest bash
 ```
