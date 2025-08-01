@@ -73,6 +73,7 @@ Stockula uses GitHub Actions for automated testing, building, and deployment. Th
 **Triggers:**
 
 - Push of version tags (`v*`)
+- Manual workflow dispatch (for testing)
 
 **Features:**
 
@@ -82,6 +83,26 @@ Stockula uses GitHub Actions for automated testing, building, and deployment. Th
 - Automatic tagging:
   - Version tag (e.g., `v0.1.0`)
   - `latest` tag for most recent release
+
+**Optimizations:**
+
+- **Layer Caching**: Uses both GitHub Actions cache and registry cache
+- **BuildKit**: Latest BuildKit with performance optimizations
+- **Registry Cache**: Stores build cache in ghcr.io for persistence
+- **Optimized Dockerfile**:
+  - Cache mounts for package managers
+  - Separated dependency and source layers
+  - Compiled Python bytecode during build
+- **Reduced Context**: Comprehensive `.dockerignore` file
+
+**Performance:**
+
+- Initial build: ~30 minutes (multi-platform)
+- Subsequent builds: ~5-10 minutes (with warm cache)
+- Cache strategies:
+  - GitHub Actions cache (ephemeral, fast)
+  - Registry cache (persistent, shared across workflows)
+  - Base image caching from `:latest` tag
 
 ## Development Workflow
 
@@ -134,10 +155,11 @@ uv run ruff format src tests
    - PyPI API token for package publishing
    - Used in release workflow
 
-1. **`CODECOV_TOKEN`** (Optional)
+1. **`CODECOV_TOKEN`**
 
-   - For private repositories
-   - Public repos work without token
+   - Required for uploading coverage reports to Codecov
+   - Get token from: https://app.codecov.io/gh/mkm29/stockula/settings
+   - Used in test workflow for coverage reporting
 
 ### Optional Secrets
 
@@ -196,6 +218,11 @@ chore: bump pandas to 2.2.0
    - Check multi-platform compatibility
    - Ensure base images support all target architectures
    - Review build logs for architecture-specific issues
+   - Clear caches if encountering stale cache issues:
+     ```bash
+     # Clear GitHub Actions cache (automatic on workflow update)
+     # Clear registry cache by pushing new buildcache tag
+     ```
 
 1. **Test failures in CI but not locally**
 

@@ -110,3 +110,29 @@ Jenkinsfile
 # Note: These files are needed by Docker build, don't exclude them
 # uv.lock
 # pyproject.toml
+
+# Additional optimizations
+CLAUDE.md
+.claude/
+.pre-commit-config.yaml
+.release-please-manifest.json
+release-please-config.json
+mkdocs.yml
+CONTRIBUTING.md
+CODE_OF_CONDUCT.md
+CHANGELOG.md
+*.md
+!README.md
+
+# Test data
+tests/
+test_*.py
+
+# Development configurations
+.config.yaml
+config.yaml
+
+# Additional cache directories
+.uv/
+autots_cache/
+prophet_cache/
