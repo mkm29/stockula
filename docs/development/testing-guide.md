@@ -259,8 +259,8 @@ Tests are automatically run through the `test.yml` workflow:
 - **Triggers**: All pull requests and pushes to main
 - **Jobs**:
   1. **Linting**: Code style checks with `ruff`
-  2. **Unit Tests**: Fast, isolated tests with coverage
-  3. **Integration Tests**: Currently disabled, will test with SQLite
+  1. **Unit Tests**: Fast, isolated tests with coverage
+  1. **Integration Tests**: Currently disabled, will test with SQLite
 
 ### Running Tests Locally
 
@@ -299,7 +299,7 @@ Ensure your tests:
 
 - Are deterministic (same result every time)
 - Don't depend on external services (for unit tests)
-- Complete within reasonable time (<5 minutes total)
+- Complete within reasonable time (\<5 minutes total)
 - Follow the existing test structure
 
 ## Getting Help

@@ -11,13 +11,14 @@ Stockula is a comprehensive Python trading platform that provides tools for tech
     - [Installation](#installation)
     - [Basic Usage](#basic-usage)
     - [Configuration Example](#configuration-example)
+    - [Forecast Evaluation](#forecast-evaluation)
   - [📚 Documentation](#-documentation)
     - [🏁 Getting Started](#-getting-started)
     - [📖 User Guide](#-user-guide)
     - [🔧 API Reference](#-api-reference)
-    - [🛠️ Development](#%EF%B8%8F-development)
+    - [🛠️ Development](#️-development)
     - [🔍 Help](#-help)
-  - [🏗️ Architecture](#%EF%B8%8F-architecture)
+  - [🏗️ Architecture](#️-architecture)
   - [📋 Requirements](#-requirements)
     - [Key Dependencies](#key-dependencies)
   - [🎨 Rich CLI Examples](#-rich-cli-examples)
@@ -25,9 +26,13 @@ Stockula is a comprehensive Python trading platform that provides tools for tech
     - [Results Tables](#results-tables)
     - [Ticker-Level Backtest Results](#ticker-level-backtest-results)
     - [Strategy Summaries](#strategy-summaries)
+  - [🚀 CI/CD](#-cicd)
+    - [Continuous Integration](#continuous-integration)
+    - [Commit Guidelines](#commit-guidelines)
   - [🔗 Links](#-links)
   - [📝 License](#-license)
   - [🤝 Contributing](#-contributing)
+    - [Development Setup](#development-setup)
 
 ## ✨ Features
 
@@ -139,9 +144,9 @@ For comprehensive documentation, visit our [**MkDocs Documentation Site**](docs/
 
 ### 🏁 Getting Started
 
-- [**Installation Guide**](docs/getting-started/installation/) - Detailed setup instructions
-- [**Quick Start**](docs/getting-started/quick-start/) - Common workflows and examples
-- [**Configuration**](docs/getting-started/configuration/) - Complete configuration reference
+- [**Installation Guide**](docs/getting-started/installation.md) - Detailed setup instructions
+- [**Quick Start**](docs/getting-started/quick-start.md) - Common workflows and examples
+- [**Configuration**](docs/getting-started/configuration.md) - Complete configuration reference
 
 ### 📖 User Guide
 
@@ -156,19 +161,20 @@ For comprehensive documentation, visit our [**MkDocs Documentation Site**](docs/
 ### 🔧 API Reference
 
 - [**Strategies API**](docs/api/strategies.md) - Built-in and custom trading strategies
-- [**Broker Configuration**](docs/api/broker-config.md) - Commission structures and fee models
-- [**Data Models**](docs/api/data-models.md) - Pydantic models and validation
-- [**Database API**](docs/api/database.md) - SQLite operations and CLI
+- [**Broker Configuration**](docs/api) - _TODO_ Commission structures and fee models
+- [**Data Models**](docs/api/) - _TODO_ Pydantic models and validation
+- [**Database API**](docs/api/) - _TODO_ SQLite operations and CLI
 
 ### 🛠️ Development
 
-- [**Contributing**](docs/development/contributing) - Development setup and guidelines
-- [**Testing**](docs/development/testing/) - Test suite and coverage
-- [**Code Quality**](docs/development/code-quality/) - Linting and formatting
+- [**Testing**](docs/development/testing.md) - Test suite and coverage
+  - [**Guide**](docs/development/testing-guide.md) - Guide for writing and running tests for Stockula
+  - [**Strategies**](docs/development/testing-strategy.md) - Strategy testing best practices
+- [**CI/CD**](docs/development/ci-cd.md) - Continuous integration and deployment with GitHub Actions
 
 ### 🔍 Help
 
-- [**Troubleshooting**](docs/troubleshooting/) - Common issues and solutions
+- [**Troubleshooting**](docs/troubleshooting.md) - Common issues and solutions
 
 ## 🏗️ Architecture
 
@@ -313,16 +319,19 @@ Strategy summaries are displayed in descending order by "Return During Period" (
 Stockula uses GitHub Actions for automated testing and deployment:
 
 - **Testing** (`test.yml`): Runs on all pull requests and pushes to main
+
   - **Linting**: Code style checks with `ruff`
   - **Unit Tests**: Fast, isolated tests with coverage reporting
   - **Integration Tests**: Currently disabled, will test with SQLite database
 
 - **Release Management** (`release-please.yml`): Automated versioning and releases
+
   - Monitors commits using [Conventional Commits](https://www.conventionalcommits.org/)
   - Creates release PRs automatically
   - Publishes to PyPI on release
 
 - **Docker Builds** (`docker-build.yml`): Multi-platform container images
+
   - Triggers on version tags (`v*`)
   - Builds for `linux/amd64` and `linux/arm64/v8`
   - Publishes to GitHub Container Registry
@@ -330,6 +339,7 @@ Stockula uses GitHub Actions for automated testing and deployment:
 ### Commit Guidelines
 
 This project uses [Conventional Commits](https://www.conventionalcommits.org/):
+
 - `feat:` New features
 - `fix:` Bug fixes
 - `chore:` Maintenance tasks
@@ -353,11 +363,13 @@ Contributions are welcome! Please see our [Contributing Guide](CONTRIBUTING.md) 
 ### Development Setup
 
 1. **Install pre-commit hooks**:
+
    ```bash
    uv run pre-commit install
    ```
 
-2. **Run tests and linting**:
+1. **Run tests and linting**:
+
    ```bash
    # Run tests
    uv run pytest
@@ -369,12 +381,14 @@ Contributions are welcome! Please see our [Contributing Guide](CONTRIBUTING.md) 
    uv run ruff format src tests
    ```
 
-3. **Manual pre-commit run**:
+1. **Manual pre-commit run**:
+
    ```bash
    uv run pre-commit run --all-files
    ```
 
 This project uses:
+
 - [Conventional Commits](https://www.conventionalcommits.org/) for commit messages
 - [Release Please](https://github.com/googleapis/release-please) for automated releases
 - [pre-commit](https://pre-commit.com/) for code quality checks
