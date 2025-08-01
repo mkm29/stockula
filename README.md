@@ -2,6 +2,7 @@
 
 [![Python 3.13+](https://img.shields.io/badge/python-3.13+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![codecov](https://codecov.io/gh/mkm29/stockula/branch/main/graph/badge.svg)](https://codecov.io/gh/mkm29/stockula)
 
 Stockula is a comprehensive Python trading platform that provides tools for technical analysis, backtesting, data fetching, and price forecasting. Built with modern Python practices, it integrates popular financial libraries to offer a complete solution for quantitative trading strategy development.
 
@@ -16,9 +17,9 @@ Stockula is a comprehensive Python trading platform that provides tools for tech
     - [🏁 Getting Started](#-getting-started)
     - [📖 User Guide](#-user-guide)
     - [🔧 API Reference](#-api-reference)
-    - [🛠️ Development](#️-development)
+    - [🛠️ Development](#%EF%B8%8F-development)
     - [🔍 Help](#-help)
-  - [🏗️ Architecture](#️-architecture)
+  - [🏗️ Architecture](#%EF%B8%8F-architecture)
   - [📋 Requirements](#-requirements)
     - [Key Dependencies](#key-dependencies)
   - [🎨 Rich CLI Examples](#-rich-cli-examples)
