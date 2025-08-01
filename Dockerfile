@@ -1,11 +1,19 @@
-# Multi-stage Dockerfile for Stockula trading library
-# Based on best practices from:
-# - https://dev.to/kummerer94/multi-stage-docker-builds-for-pyton-projects-using-uv-223g
-# - https://pythonspeed.com/articles/multi-stage-docker-python/
-# - https://pythonspeed.com/articles/activate-virtualenv-dockerfile/
+# syntax=docker/dockerfile:1
+# Multi-stage Dockerfile for Stockula trading platform
+# 
+# Build stages:
+#   - base: System dependencies and build tools
+#   - dependencies: Python packages installation
+#   - source: Application source code
+#   - production: Minimal runtime image
+#   - cli: Production + interactive tools
+#
+# Usage:
+#   docker buildx build --target production -t stockula:prod .
+#   docker buildx build --target cli -t stockula:cli .
 
 # Stage 1: Base image with uv and system dependencies
-FROM ghcr.io/astral-sh/uv:python3.13-bookworm-slim AS base
+FROM ghcr.io/astral-sh/uv:0.5.21-python3.13-bookworm-slim AS base
 
 # Build arguments for labels
 ARG VERSION="0.0.0"
@@ -13,69 +21,57 @@ ARG BUILD_DATE
 ARG GIT_COMMIT
 ARG GIT_URL
 
+# Use bash with pipefail option for better error handling
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+
 # Set environment variables
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PIP_NO_CACHE_DIR=1 \
-    PIP_DISABLE_PIP_VERSION_CHECK=1
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    UV_SYSTEM_PYTHON=1 \
+    UV_COMPILE_BYTECODE=1
 
-# Install system dependencies
-RUN apt-get update && apt-get install -y \
+# Install system dependencies with cache mount
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     curl \
     git \
-    && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-# Install uv
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /bin/uv
+# Stage 2: Dependencies builder (cache Python packages)
+FROM base AS dependencies
 
-# Stage 2: Build stage - install dependencies
-FROM base AS builder
-
-# Set working directory
 WORKDIR /app
 
-# Copy uv configuration files and README (needed by hatchling)
+# Copy dependency files and README (required by pyproject.toml)
 COPY pyproject.toml uv.lock README.md ./
 
-# Create virtual environment and install dependencies
-RUN uv venv /opt/venv --python 3.13
-ENV VIRTUAL_ENV=/opt/venv
-ENV PATH="$VIRTUAL_ENV/bin:$PATH"
+# Create virtual environment and install dependencies with cache mount
+RUN --mount=type=cache,target=/root/.cache/uv,sharing=locked \
+    uv venv /opt/venv --python 3.13 && \
+    . /opt/venv/bin/activate && \
+    uv sync --frozen --no-dev --compile-bytecode
 
-# Install production dependencies
-RUN uv sync --frozen --no-dev
-
-# Stage 3: Development stage (for testing and development)
-FROM builder AS development
-
-# Install development dependencies
-RUN uv sync --frozen
+# Stage 3: Source builder
+FROM dependencies AS source
 
 # Copy source code
-COPY . .
+COPY README.md ./
+COPY src/ src/
+COPY alembic.ini ./
+COPY alembic/ alembic/
+COPY examples/ examples/
 
-# Install the package in editable mode
-RUN uv pip install -e .
+# Install the package
+RUN --mount=type=cache,target=/root/.cache/uv,sharing=locked \
+    . /opt/venv/bin/activate && \
+    uv pip install --no-deps -e .
 
-# Expose port for Jupyter
-EXPOSE 8888
-
-# Default command for development
-CMD ["uv", "run", "jupyter", "lab", "--ip=0.0.0.0", "--port=8888", "--no-browser", "--allow-root"]
-
-# Stage 4: Test stage
-FROM development AS test
-
-# Run tests
-RUN uv run pytest tests/ --verbose --cov=src/stockula --cov-report=term-missing
-
-# Run linting
-RUN uv run ruff check src/ tests/
-
-# Stage 5: Production stage - minimal runtime image
-FROM base AS production
+# Stage 4: Production runtime - minimal image
+FROM ghcr.io/astral-sh/uv:python3.13-bookworm-slim  AS production
 
 # Re-declare build arguments for this stage
 ARG VERSION=dev
@@ -83,108 +79,82 @@ ARG BUILD_DATE
 ARG GIT_COMMIT
 ARG GIT_URL
 
-# Add labels following OCI Image Format Specification
+# OCI Standard Labels (https://github.com/opencontainers/image-spec/blob/main/annotations.md)
 LABEL org.opencontainers.image.created="${BUILD_DATE}" \
-      org.opencontainers.image.authors="Stockula Contributors" \
-      org.opencontainers.image.url="${GIT_URL}" \
-      org.opencontainers.image.documentation="${GIT_URL}" \
+      org.opencontainers.image.authors="Stockula Contributors <https://github.com/mkm29/stockula>" \
+      org.opencontainers.image.url="https://github.com/mkm29/stockula" \
+      org.opencontainers.image.documentation="https://github.com/mkm29/stockula/tree/main/docs" \
       org.opencontainers.image.source="${GIT_URL}" \
       org.opencontainers.image.version="${VERSION}" \
       org.opencontainers.image.revision="${GIT_COMMIT}" \
-      org.opencontainers.image.vendor="Stockula" \
+      org.opencontainers.image.vendor="Stockula Project" \
       org.opencontainers.image.licenses="MIT" \
+      org.opencontainers.image.ref.name="${VERSION}" \
       org.opencontainers.image.title="Stockula" \
-      org.opencontainers.image.description="Quantitative trading platform with backtesting and forecasting"
+      org.opencontainers.image.description="A comprehensive Python trading platform for technical analysis, backtesting, and forecasting"
+
+# Custom Labels for additional metadata
+LABEL com.stockula.python.version="3.13" \
+      com.stockula.base.image="ghcr.io/astral-sh/uv:python3.13-bookworm-slim" \
+      com.stockula.build.stage="production" \
+      com.stockula.maintainer="mkm29"
+
+# Install minimal runtime dependencies
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
 
 # Create non-root user for security
+# Using specific UID/GID for consistency across environments
 RUN groupadd --gid 1000 stockula && \
     useradd --uid 1000 --gid stockula --shell /bin/bash --create-home stockula
 
-# Set working directory
 WORKDIR /app
 
-# Copy virtual environment from builder stage with correct ownership
-COPY --from=builder --chown=stockula:stockula /opt/venv /opt/venv
-
-# Copy source code and necessary files
-COPY --chown=stockula:stockula src/ src/
-COPY --chown=stockula:stockula pyproject.toml ./
-COPY --chown=stockula:stockula README.md ./
-COPY --chown=stockula:stockula alembic.ini ./
-COPY --chown=stockula:stockula alembic/ alembic/
-COPY --chown=stockula:stockula examples/ examples/
+# Copy virtual environment and source from builder
+COPY --from=source --chown=stockula:stockula /opt/venv /opt/venv
+COPY --from=source --chown=stockula:stockula /app /app
 
 # Set up environment
-ENV VIRTUAL_ENV=/opt/venv
-ENV PATH="$VIRTUAL_ENV/bin:$PATH"
-ENV STOCKULA_VERSION="${VERSION}"
+ENV VIRTUAL_ENV=/opt/venv \
+    PATH="/opt/venv/bin:$PATH" \
+    STOCKULA_VERSION="${VERSION}"
 
-# Install the package in editable mode using uv and create directories
-RUN uv pip install --python /opt/venv/bin/python -e . && \
-    mkdir -p /app/data /app/results && \
+# Create data directories
+RUN mkdir -p /app/data /app/results && \
     chown -R stockula:stockula /app
 
-# Switch to non-root user
 USER stockula
 
-# Set up volumes for persistent data
 VOLUME ["/app/data", "/app/results"]
 
-# Health check
+# Health check for container orchestration
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
     CMD python -c "import stockula; print('Stockula is healthy')" || exit 1
 
-# Default command
-CMD ["python", "-m", "stockula.main", "--help"]
+# Expose metadata about the image
+EXPOSE 8888/tcp
 
-# Stage 6: CLI stage - optimized for command-line usage
+# Default entrypoint and command
+ENTRYPOINT ["python", "-m"]
+CMD ["stockula.main", "--help"]
+
+# Stage 5: CLI stage - optimized for command-line usage
 FROM production AS cli
 
-# Install additional CLI tools if needed
+# Add stage-specific label
+LABEL com.stockula.build.stage="cli" \
+      org.opencontainers.image.description="Stockula CLI - Interactive command-line interface for trading analysis"
+
 USER root
-RUN apt-get update && apt-get install -y \
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    apt-get update && apt-get install -y --no-install-recommends \
     less \
     nano \
-    && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
 USER stockula
-
-# Default to interactive shell
 CMD ["/bin/bash"]
-
-# Stage 7: API stage - for running as a service (if API endpoints are added)
-FROM production AS api
-
-# Expose port for API
-EXPOSE 8000
-
-# Install additional production dependencies for API
-USER root
-RUN /opt/venv/bin/python -m pip install fastapi uvicorn
-
-USER stockula
-
-# Command for API server (placeholder for future API implementation)
-CMD ["python", "-c", "print('API service not yet implemented. Use CLI stage instead.')"]
-
-# Stage 8: Jupyter stage - for interactive analysis
-FROM production AS jupyter
-
-# Install Jupyter in production venv
-USER root
-RUN /opt/venv/bin/python -m pip install jupyter jupyterlab
-
-USER stockula
-
-# Create Jupyter config directory
-RUN mkdir -p /home/stockula/.jupyter
-
-# Copy notebook examples
-COPY --chown=stockula:stockula notebooks/ notebooks/
-
-# Expose Jupyter port
-EXPOSE 8888
-
-# Start Jupyter Lab
-CMD ["jupyter", "lab", "--ip=0.0.0.0", "--port=8888", "--no-browser", "--allow-root"]
