@@ -1,15 +1,11 @@
----
 name: Release Please
-
 on:
   push:
     branches:
       - main
-
 permissions:
   contents: write
   pull-requests: write
-
 jobs:
   release-please:
     runs-on: ubuntu-latest
@@ -23,27 +19,22 @@ jobs:
           token: ${{ secrets.RELEASE_PLEASE_TOKEN }}
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
-
       # The logic below handles the npm publication:
       - name: Checkout Repository
         if: ${{ steps.release.outputs.release_created }}
         uses: actions/checkout@v4
-
       - name: Setup Python
         if: ${{ steps.release.outputs.release_created }}
         uses: actions/setup-python@v5
         with:
           python-version: '3.13'
-
       - name: Install uv
         if: ${{ steps.release.outputs.release_created }}
         uses: astral-sh/setup-uv@v5
-
       - name: Build Package
         if: ${{ steps.release.outputs.release_created }}
         run: |
           uv build
-
       - name: Publish to PyPI
         if: ${{ steps.release.outputs.release_created }}
         env:

@@ -1,12 +1,9 @@
----
 # Example configuration using financial-appropriate models
 # This avoids statsmodels warnings by using models that work well with stock data
-
 data:
   start_date: "2025-01-01"
   end_date: "2025-07-25"
   use_cache: true
-
 portfolio:
   name: "Financial Models Portfolio"
   initial_capital: 10000
@@ -16,22 +13,18 @@ portfolio:
       quantity: 10
     - symbol: MSFT
       quantity: 10
-
 forecast:
   forecast_length: 14
-
   # Model list options:
   # - "fast": Uses FAST_FINANCIAL_MODEL_LIST (6 models, 15-30s per symbol)
   # - "financial": Uses full FINANCIAL_MODEL_LIST (16 models, 2-5min per symbol)
   # - "default"/"slow": Standard AutoTS models (may cause warnings with stock data)
-  model_list: "fast"  # Recommended for quick results
-
-  ensemble: "simple"          # Simple ensemble to avoid complex model combinations
-  max_generations: 2          # Reduced for speed (default: 2)
-  num_validations: 1          # Minimal validation for speed (default: 1)
-  max_workers: 4              # Parallel processing (adjust based on CPU cores)
-  use_financial_models: true  # Ensures financial models are used
-
+  model_list: "fast" # Recommended for quick results
+  ensemble: "simple" # Simple ensemble to avoid complex model combinations
+  max_generations: 2 # Reduced for speed (default: 2)
+  num_validations: 1 # Minimal validation for speed (default: 1)
+  max_workers: 4 # Parallel processing (adjust based on CPU cores)
+  use_financial_models: true # Ensures financial models are used
   # FAST_FINANCIAL_MODEL_LIST (15-30s per symbol):
   # - LastValueNaive: Very fast (<1s) - Uses last value as forecast
   # - AverageValueNaive: Very fast (<1s) - Moving average approach
