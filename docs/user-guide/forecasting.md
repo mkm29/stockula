@@ -69,9 +69,9 @@ AutoTS includes many models that are problematic for stock data:
 Our financial models were selected based on:
 
 1. **Numerical Stability** - No domain errors or convergence issues
-2. **Speed** - Complete forecasts in reasonable time
-3. **Accuracy** - Proven track record with financial time series
-4. **Robustness** - Handle missing data and outliers gracefully
+1. **Speed** - Complete forecasts in reasonable time
+1. **Accuracy** - Proven track record with financial time series
+1. **Robustness** - Handle missing data and outliers gracefully
 
 ## Configuration
 
@@ -80,7 +80,7 @@ Our financial models were selected based on:
 Stockula supports two mutually exclusive forecast modes:
 
 1. **Future Prediction Mode**: Forecast N days into the future from today
-2. **Historical Evaluation Mode**: Train on historical data and evaluate accuracy on a test period
+1. **Historical Evaluation Mode**: Train on historical data and evaluate accuracy on a test period
 
 ### Future Prediction Mode
 
@@ -174,16 +174,16 @@ forecast:
 ### Speed Tips
 
 1. **Use Fast Models**: Default `model_list="fast"` for quick results
-2. **Reduce Generations**: Set `max_generations=1` for fastest execution
-3. **Increase Workers**: Set `max_workers=8` if you have 8+ CPU cores
-4. **Limit Data**: Use only necessary historical data (e.g., 1 year)
+1. **Reduce Generations**: Set `max_generations=1` for fastest execution
+1. **Increase Workers**: Set `max_workers=8` if you have 8+ CPU cores
+1. **Limit Data**: Use only necessary historical data (e.g., 1 year)
 
 ### Accuracy Tips
 
 1. **Use Full Models**: Set `model_list="financial"` for best results
-2. **Increase Generations**: Set `max_generations=5` for thorough search
-3. **Add Validations**: Set `num_validations=3` for better model selection
-4. **More Data**: Use 2-3 years of historical data
+1. **Increase Generations**: Set `max_generations=5` for thorough search
+1. **Add Validations**: Set `num_validations=3` for better model selection
+1. **More Data**: Use 2-3 years of historical data
 
 ## Usage Examples
 
@@ -405,9 +405,9 @@ AutoTS provides detailed progress information:
 When using Historical Evaluation Mode (train/test dates configured without forecast_length), Stockula automatically:
 
 1. **Trains models** on historical data from `train_start_date` to `train_end_date`
-2. **Makes predictions** for the period from `test_start_date` to `test_end_date`
-3. **Compares predictions** to actual prices during the test period
-4. **Calculates accuracy metrics**:
+1. **Makes predictions** for the period from `test_start_date` to `test_end_date`
+1. **Compares predictions** to actual prices during the test period
+1. **Calculates accuracy metrics**:
    - **RMSE (Root Mean Square Error)**: Average prediction error in dollars
    - **MAE (Mean Absolute Error)**: Average absolute error in dollars
    - **MAPE (Mean Absolute Percentage Error)**: Average percentage error
@@ -674,31 +674,31 @@ def forecast_based_rebalancing(portfolio, forecaster, rebalance_threshold=0.05):
 ### Data Quality
 
 1. **Sufficient History**: Use at least 2-3 years of data for training
-2. **Data Frequency**: Match forecast frequency to your use case
-3. **Handle Gaps**: Clean missing data before forecasting
-4. **Outlier Treatment**: Consider removing extreme outliers
+1. **Data Frequency**: Match forecast frequency to your use case
+1. **Handle Gaps**: Clean missing data before forecasting
+1. **Outlier Treatment**: Consider removing extreme outliers
 
 ### Model Selection
 
 1. **Start with Fast Models**: Test feasibility before using slow models
-2. **Use Financial Models**: Default `model_list="fast"` uses optimized financial models
-3. **Cross-Validate**: Always validate on out-of-sample data
-4. **Ensemble Benefits**: Use ensemble methods for better robustness
-5. **Regular Retraining**: Update models with new data periodically
+1. **Use Financial Models**: Default `model_list="fast"` uses optimized financial models
+1. **Cross-Validate**: Always validate on out-of-sample data
+1. **Ensemble Benefits**: Use ensemble methods for better robustness
+1. **Regular Retraining**: Update models with new data periodically
 
 ### Forecast Interpretation
 
 1. **Confidence Intervals**: Always consider uncertainty ranges
-2. **Direction vs. Magnitude**: Focus on direction for trading decisions
-3. **Validation Scores**: Trust forecasts with better validation performance
-4. **Market Context**: Consider current market conditions
+1. **Direction vs. Magnitude**: Focus on direction for trading decisions
+1. **Validation Scores**: Trust forecasts with better validation performance
+1. **Market Context**: Consider current market conditions
 
 ### Production Usage
 
 1. **Error Handling**: Gracefully handle forecast failures
-2. **Performance Monitoring**: Track forecast accuracy over time
-3. **Model Decay**: Retrain models when accuracy degrades
-4. **Computational Resources**: Balance accuracy vs. computation time
+1. **Performance Monitoring**: Track forecast accuracy over time
+1. **Model Decay**: Retrain models when accuracy degrades
+1. **Computational Resources**: Balance accuracy vs. computation time
 
 ## Troubleshooting
 
@@ -723,22 +723,25 @@ def forecast_based_rebalancing(portfolio, forecaster, rebalance_threshold=0.05):
 ### Common Issues and Solutions
 
 1. **"Frequency is 'None'! Data frequency not recognized."**
+
    - This warning appears when AutoTS cannot automatically detect the data frequency
    - Solution: Stockula now defaults to 'D' (daily) frequency and attempts to infer the actual frequency automatically
 
-2. **"k too large for size of data in motif"**
+1. **"k too large for size of data in motif"**
+
    - This warning occurred with Motif pattern recognition models when pattern length exceeded data size
    - Solution: Already fixed - Motif models have been removed from the default financial model list
 
-3. **Alembic migration warnings**
+1. **Alembic migration warnings**
+
    - These warnings indicate database schema updates
    - Solution: The migrations now check for existing indexes before creating them
 
 ### Performance Tips
 
 1. **Reduce model search time**: Use `model_list: "fast"` and lower `max_generations`
-2. **Handle small datasets**: Ensure at least 1-2 years of historical data for best results
-3. **Memory usage**: For large portfolios, consider forecasting in batches
-4. **Parallel processing**: Set `max_workers` > 1 for concurrent forecasting
+1. **Handle small datasets**: Ensure at least 1-2 years of historical data for best results
+1. **Memory usage**: For large portfolios, consider forecasting in batches
+1. **Parallel processing**: Set `max_workers` > 1 for concurrent forecasting
 
 The forecasting module provides a powerful foundation for predictive analysis while maintaining ease of use through AutoTS automation and Rich CLI integration.
