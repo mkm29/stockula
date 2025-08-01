@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.3.1](https://github.com/mkm29/stockula/compare/v0.3.0...v0.3.1) (2025-08-01)
+
+
+### Bug Fixes
+
+* adjust versioning ([1db4132](https://github.com/mkm29/stockula/commit/1db41329608859e281c24c03923472598ec64971))
+
+
+### Miscellaneous Chores
+
+* downgrade release version to 0.2.0 in manifest ([0a69553](https://github.com/mkm29/stockula/commit/0a6955318686ea8675f3e0c95e308c3d8315ea8c))
+* update Codecov action to version 5 in test workflow ([7e985ac](https://github.com/mkm29/stockula/commit/7e985ac1d1a892b1e9c425a05a29c7f491fcc209))
+
 ## [0.3.0](https://github.com/mkm29/stockula/compare/v0.2.1...v0.3.0) (2025-08-01)
 
 
