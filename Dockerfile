@@ -71,7 +71,7 @@ RUN --mount=type=cache,target=/root/.cache/uv,sharing=locked \
     uv pip install --no-deps -e .
 
 # Stage 4: Production runtime - minimal image
-FROM ghcr.io/astral-sh/uv:python3.13-bookworm-slim  AS production
+FROM ghcr.io/astral-sh/uv:python3.13-bookworm-slim AS production
 
 # Re-declare build arguments for this stage
 ARG VERSION=dev

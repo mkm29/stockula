@@ -17,27 +17,38 @@ Stockula provides optimized Docker images for running the trading platform in co
 ### Pull Pre-built Image
 
 ```bash
-# Pull latest version
+# Pull latest CLI version (default, includes interactive tools)
 docker pull ghcr.io/mkm29/stockula:latest
+docker pull ghcr.io/mkm29/stockula:cli
 
-# Pull specific version
-docker pull ghcr.io/mkm29/stockula:v0.3.1
+# Pull specific CLI version
+docker pull ghcr.io/mkm29/stockula:v0.3.1-cli
+docker pull ghcr.io/mkm29/stockula:0.3.1-cli
+
+# Pull production version (minimal, no extra tools)
+docker pull ghcr.io/mkm29/stockula:production
+docker pull ghcr.io/mkm29/stockula:v0.3.1-production
+docker pull ghcr.io/mkm29/stockula:0.3.1-production
 ```
 
 ### Run Container
 
 ```bash
-# Run with default help
-docker run --rm ghcr.io/mkm29/stockula:latest
+# Run with default help (production image)
+docker run --rm ghcr.io/mkm29/stockula:production
 
-# Run analysis
+# Run analysis with production image
 docker run --rm -v $(pwd)/data:/app/data \
-  ghcr.io/mkm29/stockula:latest \
-  python -m stockula.main --ticker AAPL --mode ta
+  ghcr.io/mkm29/stockula:production \
+  stockula.main --ticker AAPL --mode ta
 
-# Interactive shell
+# Interactive shell with CLI image
 docker run -it --rm -v $(pwd)/data:/app/data \
   ghcr.io/mkm29/stockula:cli bash
+
+# Or use latest (which is CLI)
+docker run -it --rm -v $(pwd)/data:/app/data \
+  ghcr.io/mkm29/stockula:latest bash
 ```
 
 ## Building Images
@@ -63,8 +74,8 @@ The Dockerfile uses multiple stages for optimization:
 1. **base**: Base image with system dependencies
 1. **dependencies**: Python virtual environment with packages
 1. **source**: Application source code
-1. **production**: Minimal runtime image
-1. **cli**: Production + CLI tools (default)
+1. **production**: Minimal runtime image (default for automated tools)
+1. **cli**: Production + CLI tools (default for interactive use)
 
 ## Optimization Techniques
 

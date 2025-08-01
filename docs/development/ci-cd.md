@@ -80,9 +80,13 @@ Stockula uses GitHub Actions for automated testing, building, and deployment. Th
 - Multi-platform builds using buildx
 - Platforms: `linux/amd64`, `linux/arm64/v8`
 - Publishes to GitHub Container Registry (ghcr.io)
+- Builds two image variants:
+  - **Production**: Minimal runtime image (`-production` suffix)
+  - **CLI**: Production + interactive tools (`-cli` suffix)
 - Automatic tagging:
-  - Version tag (e.g., `v0.1.0`)
-  - `latest` tag for most recent release
+  - Version tags: `v0.1.0-production`, `v0.1.0-cli`
+  - Latest tags: `latest` (CLI), `production`, `cli`
+  - Branch/PR specific tags with appropriate suffixes
 
 **Optimizations:**
 
