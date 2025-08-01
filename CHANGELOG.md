@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.4.0](https://github.com/mkm29/stockula/compare/v0.3.2...v0.4.0) (2025-08-01)
+
+
+### Features
+
+* enhance Docker workflows and documentation for production and C… ([43c4523](https://github.com/mkm29/stockula/commit/43c4523a2870f62aa91300d1451a6b8887eccc02))
+* enhance Docker workflows and documentation for production and CLI images ([d96038d](https://github.com/mkm29/stockula/commit/d96038d4909fb9ce7c816508d013ec5bdac84eb2))
+
 ## [0.3.2](https://github.com/mkm29/stockula/compare/v0.3.1...v0.3.2) (2025-08-01)
 
 
