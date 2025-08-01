@@ -1,4 +1,3 @@
----
 # Docker Compose configuration for Stockula project
 # Provides different services for various use cases
 services:
@@ -13,7 +12,7 @@ services:
       - stockula-data:/app/data
       - stockula-results:/app/results
     ports:
-      - "8888:8888"  # Jupyter Lab
+      - "8888:8888" # Jupyter Lab
     environment:
       - PYTHONPATH=/app/src
       - STOCKULA_ENV=development
@@ -44,7 +43,7 @@ services:
       - stockula-results:/app/results
       - ./notebooks:/app/notebooks
     ports:
-      - "8889:8888"  # Different port to avoid conflicts
+      - "8889:8888" # Different port to avoid conflicts
     environment:
       - PYTHONPATH=/app/src
       - STOCKULA_ENV=production

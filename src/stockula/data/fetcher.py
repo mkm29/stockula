@@ -47,12 +47,28 @@ class DataFetcher:
             database_manager: Injected database manager instance
         """
         self.use_cache = use_cache
+        self._owns_db = False  # Track if we created the DB manager
 
         # Use injected database manager if provided, otherwise create one
         if database_manager is not None:
             self.db = database_manager if use_cache else None
         else:
             self.db = DatabaseManager(db_path) if use_cache else None
+            self._owns_db = use_cache  # We own it if we created it
+
+    def close(self) -> None:
+        """Close the database manager if we own it."""
+        if self._owns_db and self.db is not None:
+            self.db.close()
+            self.db = None
+
+    def __del__(self) -> None:
+        """Ensure database connections are closed when object is destroyed."""
+        try:
+            self.close()
+        except Exception:
+            # Ignore errors during cleanup
+            pass
 
     def get_stock_data(
         self,
@@ -605,7 +621,10 @@ class DataFetcher:
     def disable_cache(self) -> None:
         """Disable database caching for this session."""
         self.use_cache = False
+        if self._owns_db and self.db is not None:
+            self.db.close()
         self.db = None
+        self._owns_db = False
 
     def enable_cache(self, db_path: str = "stockula.db") -> None:
         """Enable database caching for this session.
@@ -613,8 +632,13 @@ class DataFetcher:
         Args:
             db_path: Path to SQLite database file
         """
+        # Close existing DB if we own it
+        if self._owns_db and self.db is not None:
+            self.db.close()
+
         self.use_cache = True
         self.db = DatabaseManager(db_path)
+        self._owns_db = True
 
     def get_treasury_rate(
         self,

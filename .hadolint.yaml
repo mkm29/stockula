@@ -5,29 +5,24 @@
 ignored:
   # DL3008: Pin versions in apt-get install
   - DL3008
-
   # DL3009: Delete the apt lists after installing something
   - DL3009
-
   # DL3015: Avoid additional packages by specifying --no-install-recommends
   - DL3015
-
 # Trust specific registries
 trustedRegistries:
   - ghcr.io
   - docker.io
-
 # Override severity levels for specific rules
 override:
   error:
-    - DL3001  # Ensure commands are not run with sudo
-    - DL3002  # Ensure user is switched before running commands
+    - DL3001 # Ensure commands are not run with sudo
+    - DL3002 # Ensure user is switched before running commands
   warning:
-    - DL3018  # Pin versions in apk add
-    - DL3019  # Use --no-cache in apk add
+    - DL3018 # Pin versions in apk add
+    - DL3019 # Use --no-cache in apk add
   info:
-    - DL3059  # Ensure consecutive RUN instructions are consolidated
-
+    - DL3059 # Ensure consecutive RUN instructions are consolidated
 # Label schema validation
 label-schema:
   author: info

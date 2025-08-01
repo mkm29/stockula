@@ -10,7 +10,6 @@ repos:
       - id: check-toml
       - id: debug-statements
       - id: mixed-line-ending
-
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.12.7
     hooks:
@@ -19,7 +18,6 @@ repos:
         args: ["check", "--select", "I,F841,F401", "--fix"]
       # Run the formatter
       - id: ruff-format
-
   - repo: https://github.com/pre-commit/mirrors-mypy
     rev: v1.17.0
     hooks:
@@ -27,7 +25,6 @@ repos:
         additional_dependencies: [types-requests]
         args: [--ignore-missing-imports]
         exclude: ^tests/
-
 exclude: |
   (?x)^(
     .*\.egg-info/.*|

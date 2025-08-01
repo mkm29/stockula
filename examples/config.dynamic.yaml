@@ -1,4 +1,3 @@
----
 # Stockula Configuration - Dynamic Allocation Example
 # Based on EMA portfolio strategy with allocation amounts for better capital utilization
 data:
@@ -10,9 +9,9 @@ portfolio:
   initial_capital: 20000
   allocation_method: dynamic
   dynamic_allocation: true
-  allow_fractional_shares: false  # Use integer shares only
+  allow_fractional_shares: false # Use integer shares only
   rebalance_frequency: monthly
-  max_position_size: 20.0  # Allow larger positions for better utilization
+  max_position_size: 20.0 # Allow larger positions for better utilization
   # Portfolio tickers with allocation amounts for precise capital deployment
   tickers:
     # Broad-Market Core holdings (hold-only) - $7,000 total (35%)
@@ -33,7 +32,7 @@ portfolio:
       allocation_amount: 1167
     - symbol: FXAIX
       category: INDEX
-      allocation_amount: 1165  # Slightly less to total $7,000
+      allocation_amount: 1165 # Slightly less to total $7,000
     # Momentum / Large-Cap Growth (tradeable) - $9,500 total (47.5%)
     - symbol: NVDA
       category: MOMENTUM
