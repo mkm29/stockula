@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.4.1](https://github.com/mkm29/stockula/compare/v0.4.0...v0.4.1) (2025-08-01)
+
+
+### Bug Fixes
+
+* added disk space cleanup acton ([1496631](https://github.com/mkm29/stockula/commit/1496631bb3e8d861e7fb84b5b1b39ce72c6c0b2f))
+* added disk space cleanup acton ([0b5278b](https://github.com/mkm29/stockula/commit/0b5278bf820a4062c5f6cdaa139b13ce411f3a9c))
+
 ## [0.4.0](https://github.com/mkm29/stockula/compare/v0.3.2...v0.4.0) (2025-08-01)
 
 
