@@ -614,3 +614,8 @@ def analyze_strategy_correlation(tickers, strategy):
 1. **Monitor Performance**: Track strategy performance in live conditions
 
 The backtesting framework provides a comprehensive environment for developing, testing, and optimizing trading strategies with realistic market conditions and costs.
+
+## See Also
+
+- [Allocation Strategies](allocation-strategies.md) - Learn about BacktestOptimizedAllocator which uses backtest results to optimize portfolio allocation
+- [Strategies API Reference](../api/strategies.md) - Detailed documentation of all available trading strategies

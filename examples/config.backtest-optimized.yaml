@@ -1,0 +1,105 @@
+# Stockula Configuration - Backtest-Optimized Allocation
+# This example demonstrates how to use historical backtesting to optimize portfolio allocation
+#
+# IMPORTANT: Currently, the backtest_optimized allocation method requires running
+# the optimization separately. Use the backtest_optimized_allocation_example.py
+# script to calculate optimal quantities, then update the quantities below.
+#
+# TODO: Future enhancement - integrate backtest optimization directly into main.py
+data:
+  start_date: "2024-01-01"
+  end_date: null # Current date
+# Portfolio configuration using backtest-optimized allocation
+portfolio:
+  name: "Backtest-Optimized Portfolio"
+  initial_capital: 100000
+  allocation_method: backtest_optimized
+  allow_fractional_shares: true
+  # Define the assets to optimize
+  tickers:
+    # Technology stocks
+    - symbol: AAPL
+      category: TECH
+      quantity: 0 # Will be calculated
+    - symbol: GOOGL
+      category: TECH
+      quantity: 0 # Will be calculated
+    - symbol: MSFT
+      category: TECH
+      quantity: 0 # Will be calculated
+    - symbol: NVDA
+      category: TECH
+      quantity: 0 # Will be calculated
+    # Index funds for stability
+    - symbol: SPY
+      category: INDEX
+      quantity: 0 # Will be calculated
+    - symbol: QQQ
+      category: INDEX
+      quantity: 0 # Will be calculated
+    # Commodities for diversification
+    - symbol: GLD
+      category: COMMODITY
+      quantity: 0 # Will be calculated
+    - symbol: SLV
+      category: COMMODITY
+      quantity: 0 # Will be calculated
+    # Value stocks
+    - symbol: BRK-B
+      category: VALUE
+      quantity: 0 # Will be calculated
+    - symbol: JPM
+      category: VALUE
+      quantity: 0 # Will be calculated
+# Backtest optimization configuration
+backtest_optimization:
+  # Training period - learn from historical data
+  train_start_date: "2023-01-01"
+  train_end_date: "2023-12-31"
+  # Testing period - validate performance
+  test_start_date: "2024-01-01"
+  test_end_date: "2024-06-30"
+  # Optimization parameters
+  ranking_metric: "Return [%]" # Default: optimize for highest returns
+  # Alternative metrics:
+  # ranking_metric: "Sharpe Ratio"  # Optimize for risk-adjusted returns
+  # ranking_metric: "Sortino Ratio" # Optimize for downside risk-adjusted returns
+  # ranking_metric: "Calmar Ratio"  # Optimize for return over max drawdown
+
+  # Allocation constraints
+  min_allocation_pct: 2.0 # Minimum 2% per asset
+  max_allocation_pct: 25.0 # Maximum 25% per asset
+  initial_allocation_pct: 10.0 # Initial allocation for training
+# Backtesting configuration
+backtest:
+  # Use realistic broker fees
+  broker_config:
+    name: "robinhood" # Zero commission with TAF
+  # The allocator will automatically test these strategies
+  # and select the best one for each asset
+  strategies:
+    - name: SMACross
+    - name: RSI
+    - name: MACD
+    - name: DoubleEMACross
+    - name: VIDYA
+    - name: KAMA
+    - name: FRAMA
+    - name: TripleEMACross
+    - name: TRIMACross
+    - name: VAMA
+    - name: KaufmanEfficiency
+# Technical analysis (optional)
+technical_analysis:
+  indicators: [sma, ema, rsi, macd, bbands]
+  sma_periods: [20, 50, 200]
+# Output settings
+output:
+  format: "console"
+  save_results: true
+  results_dir: "./results/backtest-optimized"
+# Logging
+logging:
+  enabled: true
+  level: "INFO"
+  show_allocation_details: true

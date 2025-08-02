@@ -12,6 +12,7 @@ Stockula is a comprehensive Python trading platform that provides tools for tech
     - [Installation](#installation)
     - [Basic Usage](#basic-usage)
     - [Configuration Example](#configuration-example)
+    - [Backtest-Optimized Allocation](#backtest-optimized-allocation)
     - [Forecast Evaluation](#forecast-evaluation)
   - [📚 Documentation](#-documentation)
     - [🏁 Getting Started](#-getting-started)
@@ -108,6 +109,52 @@ backtest:
         slow_period: 20
 ```
 
+### Backtest-Optimized Allocation
+
+Stockula includes an advanced allocation strategy that uses historical backtesting to optimize portfolio allocation:
+
+```yaml
+# config.yaml for backtest-optimized allocation
+portfolio:
+  initial_capital: 100000
+  allocation_method: backtest_optimized
+  tickers:
+    - symbol: AAPL
+      category: TECH
+      quantity: 0  # Placeholder - will be calculated
+    - symbol: SPY
+      category: INDEX
+      quantity: 0  # Placeholder - will be calculated
+    - symbol: GLD
+      category: COMMODITY
+      quantity: 0  # Placeholder - will be calculated
+    - symbol: NVDA
+      category: MOMENTUM
+      quantity: 0  # Placeholder - will be calculated
+
+# Configure backtest optimization
+backtest_optimization:
+  train_start_date: "2023-01-01"
+  train_end_date: "2023-12-31"
+  test_start_date: "2024-01-01"
+  test_end_date: "2024-06-30"
+  ranking_metric: "Return [%]"    # Default, can also use "Sharpe Ratio", etc.
+  min_allocation_pct: 2.0
+  max_allocation_pct: 25.0
+  initial_allocation_pct: 2.0
+```
+
+The BacktestOptimizedAllocator will:
+
+1. Test 11 different trading strategies on each asset using training data
+1. Select the best-performing strategy for each asset
+1. Evaluate performance on test data
+1. Allocate capital based on test performance (higher return = larger allocation by default)
+
+See the [Allocation Strategies](https://github.com/mkm29/stockula/blob/main/docs/user-guide/allocation-strategies.md) documentation for more details.
+
+> **Note**: Currently, the `backtest_optimized` allocation method requires placeholder quantities in the config. Full CLI integration is planned for a future release.
+
 ### Forecast Evaluation
 
 When running forecasts in evaluation mode (with train/test split), Stockula provides accuracy metrics:
@@ -141,39 +188,40 @@ This provides an intuitive measure where:
 
 ## 📚 Documentation
 
-For comprehensive documentation, visit our [**MkDocs Documentation Site**](docs/):
+For comprehensive documentation, visit our [**MkDocs Documentation Site**](https://github.com/mkm29/stockula/blob/main/docs/):
 
 ### 🏁 Getting Started
 
-- [**Installation Guide**](docs/getting-started/installation.md) - Detailed setup instructions
-- [**Quick Start**](docs/getting-started/quick-start.md) - Common workflows and examples
-- [**Configuration**](docs/getting-started/configuration.md) - Complete configuration reference
+- [**Installation Guide**](https://github.com/mkm29/stockula/blob/main/docs/getting-started/installation.md) - Detailed setup instructions
+- [**Quick Start**](https://github.com/mkm29/stockula/blob/main/docs/getting-started/quick-start.md) - Common workflows and examples
+- [**Configuration**](https://github.com/mkm29/stockula/blob/main/docs/getting-started/configuration.md) - Complete configuration reference
 
 ### 📖 User Guide
 
-- [**Architecture Overview**](docs/user-guide/architecture.md) - System design and data flow
-- [**Data Fetching**](docs/user-guide/data-fetching.md) - Market data and caching system
-- [**Technical Analysis**](hdocs/user-guide/technical-analysis.md) - 40+ indicators and usage
-- [**Backtesting**](docs/user-guide/backtesting.md) - Strategy testing with realistic costs
-- [**Forecasting**](docs/user-guide/forecasting.md) - AutoTS time series prediction
-- [**Forecasting Models**](docs/FORECASTING_MODELS.md) - Fast & full financial model details
-- [**Rich CLI Features**](docs/user-guide/rich-cli.md) - Enhanced command-line interface
+- [**Architecture Overview**](https://github.com/mkm29/stockula/blob/main/docs/user-guide/architecture.md) - System design and data flow
+- [**Data Fetching**](https://github.com/mkm29/stockula/blob/main/docs/user-guide/data-fetching.md) - Market data and caching system
+- [**Technical Analysis**](https://github.com/mkm29/stockula/blob/main/docs/user-guide/technical-analysis.md) - 40+ indicators and usage
+- [**Backtesting**](https://github.com/mkm29/stockula/blob/main/docs/user-guide/backtesting.md) - Strategy testing with realistic costs
+- [**Allocation Strategies**](https://github.com/mkm29/stockula/blob/main/docs/user-guide/allocation-strategies.md) - Portfolio allocation methods including backtest optimization
+- [**Forecasting**](https://github.com/mkm29/stockula/blob/main/docs/user-guide/forecasting.md) - AutoTS time series prediction
+- [**Forecasting Models**](https://github.com/mkm29/stockula/blob/main/docs/FORECASTING_MODELS.md) - Fast & full financial model details
+- [**Rich CLI Features**](https://github.com/mkm29/stockula/blob/main/docs/user-guide/rich-cli.md) - Enhanced command-line interface
 
 ### 🔧 API Reference
 
-- [**Strategies API**](docs/api/strategies.md) - Built-in and custom trading strategies
-- [**Broker Configuration**](docs/api) - _TODO_ Commission structures and fee models
-- [**Data Models**](docs/api/) - _TODO_ Pydantic models and validation
-- [**Database API**](docs/api/) - _TODO_ SQLite operations and CLI
+- [**Strategies API**](https://github.com/mkm29/stockula/blob/main/docs/api/strategies.md) - Built-in and custom trading strategies
+- [**Broker Configuration**](https://github.com/mkm29/stockula/blob/main/docs/api) - _TODO_ Commission structures and fee models
+- [**Data Models**](https://github.com/mkm29/stockula/blob/main/docs/api/) - _TODO_ Pydantic models and validation
+- [**Database API**](https://github.com/mkm29/stockula/blob/main/docs/api/) - _TODO_ SQLite operations and CLI
 
 ### 🛠️ Development
 
-- [**Testing**](docs/development/testing.md) - Comprehensive testing guide, strategy, and coverage
-- [**CI/CD**](docs/development/ci-cd.md) - Continuous integration and deployment with GitHub Actions
+- [**Testing**](https://github.com/mkm29/stockula/blob/main/docs/development/testing.md) - Comprehensive testing guide, strategy, and coverage
+- [**CI/CD**](https://github.com/mkm29/stockula/blob/main/docs/development/ci-cd.md) - Continuous integration and deployment with GitHub Actions
 
 ### 🔍 Help
 
-- [**Troubleshooting**](docs/troubleshooting.md) - Common issues and solutions
+- [**Troubleshooting**](https://github.com/mkm29/stockula/blob/main/docs/troubleshooting.md) - Common issues and solutions
 
 ## 🏗️ Architecture
 

@@ -1,29 +1,27 @@
 """Asset allocation strategies for portfolio construction."""
 
-from datetime import date, timedelta
 from typing import TYPE_CHECKING
 
-import pandas as pd
 from dependency_injector.wiring import Provide, inject
 
 from ..config import StockulaConfig, TickerConfig
 from ..interfaces import ILoggingManager
+from .base_allocator import BaseAllocator
 
 if TYPE_CHECKING:
     from ..data.fetcher import DataFetcher
 
 
-def date_to_string(date_value: str | date | None) -> str | None:
-    """Convert date or string to string format."""
-    if date_value is None:
-        return None
-    if isinstance(date_value, str):
-        return date_value
-    return date_value.strftime("%Y-%m-%d")
+class Allocator(BaseAllocator):
+    """Standard allocator that handles various asset allocation strategies.
 
-
-class Allocator:
-    """Handles asset allocation strategies for portfolio construction."""
+    This allocator supports:
+    - Equal weight allocation
+    - Market cap weighted allocation
+    - Custom allocation (fixed amounts/percentages)
+    - Dynamic allocation (based on prices and targets)
+    - Auto allocation (category-based)
+    """
 
     @inject
     def __init__(
@@ -37,8 +35,7 @@ class Allocator:
             fetcher: Data fetcher instance for price lookups
             logging_manager: Injected logging manager
         """
-        self.fetcher = fetcher
-        self.logger = logging_manager
+        super().__init__(fetcher, logging_manager)
 
     def calculate_dynamic_quantities(
         self, config: StockulaConfig, tickers_to_add: list[TickerConfig]
@@ -52,8 +49,7 @@ class Allocator:
         Returns:
             Dictionary mapping ticker symbols to calculated quantities
         """
-        if self.fetcher is None:
-            raise ValueError("Data fetcher not configured")
+        self._validate_fetcher()
 
         symbols = [ticker.symbol for ticker in tickers_to_add]
         calculation_prices = self._get_calculation_prices(config, symbols)
@@ -74,14 +70,11 @@ class Allocator:
                 # Should not happen due to validation, but handle gracefully
                 raise ValueError(f"No allocation specified for {ticker_config.symbol}")
 
-            # Calculate quantity
-            raw_quantity = allocation_amount / price
-
-            if config.portfolio.allow_fractional_shares:
-                calculated_quantities[ticker_config.symbol] = raw_quantity
-            else:
-                # Round down to nearest integer (conservative approach)
-                calculated_quantities[ticker_config.symbol] = max(1, int(raw_quantity))
+            # Calculate quantity using base class method
+            quantity = self._calculate_quantity_for_allocation(
+                allocation_amount, price, config.portfolio.allow_fractional_shares
+            )
+            calculated_quantities[ticker_config.symbol] = quantity
 
         return calculated_quantities
 
@@ -99,8 +92,7 @@ class Allocator:
         Returns:
             Dictionary mapping ticker symbols to calculated quantities
         """
-        if self.fetcher is None:
-            raise ValueError("Data fetcher not configured")
+        self._validate_fetcher()
 
         symbols = [ticker.symbol for ticker in tickers_to_add]
         calculation_prices = self._get_calculation_prices(config, symbols)
@@ -313,54 +305,34 @@ class Allocator:
 
         return calculated_quantities
 
-    def _get_calculation_prices(self, config: StockulaConfig, symbols: list[str]) -> dict[str, float]:
-        """Get prices for calculation (historical or current).
+    def calculate_quantities(
+        self,
+        config: StockulaConfig,
+        tickers: list[TickerConfig],
+        **kwargs,
+    ) -> dict[str, float]:
+        """Calculate quantities based on the configured allocation method.
 
         Args:
             config: Stockula configuration
-            symbols: List of ticker symbols
+            tickers: List of ticker configurations
+            **kwargs: Additional parameters (unused in standard allocator)
 
         Returns:
-            Dictionary mapping symbols to prices
+            Dictionary mapping ticker symbols to calculated quantities
         """
-        if config.data.start_date:
-            # Use start date prices for backtesting to ensure portfolio value matches at start
-            start_date_str = date_to_string(config.data.start_date)
-            self.logger.debug(
-                f"Calculating quantities using start date prices ({start_date_str}) for accurate portfolio value..."
-            )
-            calculation_prices = {}
+        allocation_method = config.portfolio.allocation_method
 
-            for symbol in symbols:
-                try:
-                    data = self.fetcher.get_stock_data(symbol, start=start_date_str, end=start_date_str)
-                    if not data.empty:
-                        calculation_prices[symbol] = data["Close"].iloc[0]
-                    else:
-                        # Fallback to a few days later if no data on exact date
-                        if isinstance(config.data.start_date, str):
-                            start_dt = pd.to_datetime(config.data.start_date)
-                            end_date = (start_dt + timedelta(days=7)).strftime("%Y-%m-%d")
-                        else:
-                            end_date = (config.data.start_date + timedelta(days=7)).strftime("%Y-%m-%d")
-
-                        data = self.fetcher.get_stock_data(symbol, start=start_date_str, end=end_date)
-                        if not data.empty:
-                            calculation_prices[symbol] = data["Close"].iloc[0]
-                        else:
-                            # Last resort: use current prices
-                            current_prices = self.fetcher.get_current_prices([symbol])
-                            if symbol in current_prices:
-                                calculation_prices[symbol] = current_prices[symbol]
-                                self.logger.warning(f"Using current price for {symbol} (no historical data available)")
-                except Exception as e:
-                    self.logger.error(f"Error fetching start date price for {symbol}: {e}")
-                    # Fallback to current prices
-                    current_prices = self.fetcher.get_current_prices([symbol])
-                    if symbol in current_prices:
-                        calculation_prices[symbol] = current_prices[symbol]
+        if allocation_method == "equal_weight":
+            return self.calculate_equal_weight_quantities(config, tickers)
+        elif allocation_method == "market_cap":
+            return self.calculate_market_cap_quantities(config, tickers)
+        elif allocation_method == "custom":
+            # Custom allocation is handled by ticker configs
+            return {ticker.symbol: ticker.quantity for ticker in tickers if ticker.quantity}
+        elif allocation_method == "dynamic":
+            return self.calculate_dynamic_quantities(config, tickers)
+        elif allocation_method == "auto":
+            return self.calculate_auto_allocation_quantities(config, tickers)
         else:
-            # No start date specified, use current prices
-            calculation_prices = self.fetcher.get_current_prices(symbols)
-
-        return calculation_prices
+            raise ValueError(f"Unknown allocation method: {allocation_method}")

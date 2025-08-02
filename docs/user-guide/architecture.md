@@ -115,7 +115,9 @@ src/stockula/
 │   ├── asset.py         # Asset representation
 │   ├── ticker.py        # Ticker & registry
 │   ├── category.py      # Category enum
-│   └── factory.py       # Domain object factory
+│   ├── factory.py       # Domain object factory
+│   ├── allocator.py     # Base allocation strategies
+│   └── backtest_allocator.py  # Backtest-optimized allocation
 ├── data/                 # Data fetching module
 │   ├── __init__.py
 │   └── fetcher.py       # yfinance wrapper with SQLite caching
@@ -167,6 +169,8 @@ src/stockula/
 - **Ticker**: Maps symbols to detailed information
 - **Factory**: Creates and configures domain objects
 - **Category**: Categorizes assets (INDEX, MOMENTUM, etc.)
+- **Allocator**: Base class for allocation strategies (equal weight, custom, etc.)
+- **BacktestOptimizedAllocator**: Advanced allocation using backtest performance data
 
 **Patterns**:
 
@@ -251,6 +255,8 @@ container = Container()
 data_fetcher = container.data_fetcher()
 backtest_runner = container.backtest_runner()
 portfolio_factory = container.domain_factory()
+allocator = container.allocator()
+backtest_allocator = container.backtest_allocator()
 ```
 
 ### Interface-Based Design

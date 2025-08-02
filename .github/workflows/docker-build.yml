@@ -17,10 +17,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     # Only run if the test workflow succeeded or if manually triggered/tag pushed
-    if: |
-      github.event_name == 'workflow_dispatch' || 
-      github.event_name == 'push' || 
-      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
+    if: "github.event_name == 'workflow_dispatch' || \ngithub.event_name == 'push' || \n(github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')\n"
     permissions:
       contents: read
       packages: write
