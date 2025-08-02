@@ -1,6 +1,6 @@
 [project]
 name = "stockula"
-version = "0.5.2"
+version = "0.6.0"
 description = ""
 authors = [
     {name = "Mitchell Murphy", email = "mitch.murphy@gmail.com"}

@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.6.0](https://github.com/mkm29/stockula/compare/v0.5.2...v0.6.0) (2025-08-02)
+
+
+### Features
+
+* create allocator class ([53cfde9](https://github.com/mkm29/stockula/commit/53cfde9d4fd524a7842fb7adae4b1120bfc49f60))
+
+
+### Miscellaneous Chores
+
+* update linting commands for consistency with CI and improve documentation ([d02ffa7](https://github.com/mkm29/stockula/commit/d02ffa7207109987fa0a6d7967fae60d61759f36))
+
 ## [0.5.2](https://github.com/mkm29/stockula/compare/v0.5.1...v0.5.2) (2025-08-02)
 
 ### Bug Fixes
