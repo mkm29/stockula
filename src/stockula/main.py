@@ -294,7 +294,12 @@ def run_backtest(
 
     # Check if we should use train/test split for backtesting
     # Note: This is for backtest parameter optimization, not forecast evaluation
-    use_train_test_split = False  # Disabled for now since train/test is in forecast config
+    use_train_test_split = (
+        config.forecast.train_start_date is not None
+        and config.forecast.train_end_date is not None
+        and config.forecast.test_start_date is not None
+        and config.forecast.test_end_date is not None
+    )
 
     for strategy_config in config.backtest.strategies:
         strategy_class = get_strategy_class(strategy_config.name)

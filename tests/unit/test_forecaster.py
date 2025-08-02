@@ -1,4 +1,4 @@
-"""Unit tests for forecasting module."""
+"""Consolidated unit tests for forecasting module."""
 
 import logging
 import sys
@@ -12,6 +12,7 @@ import pytest
 
 from stockula.forecasting.forecaster import (
     StockForecaster,
+    SuppressAutoTSOutput,
     suppress_autots_output,
 )
 
@@ -81,6 +82,73 @@ class TestSuppressAutoTSOutput:
         # Restore original level
         logger.setLevel(original_level)
 
+    def test_filtered_stream_flush(self):
+        """Test FilteredStream flush method."""
+        suppressor = SuppressAutoTSOutput()
+        suppressor.__enter__()
+
+        # Get the filtered stream
+        filtered_stream = sys.stdout
+
+        # Test flush
+        filtered_stream.flush()  # Should not raise
+
+        suppressor.__exit__(None, None, None)
+
+    def test_filtered_stream_getattr(self):
+        """Test FilteredStream __getattr__ delegation."""
+        suppressor = SuppressAutoTSOutput()
+        suppressor.__enter__()
+
+        # Get the filtered stream
+        filtered_stream = sys.stdout
+
+        # Test attribute delegation
+        assert hasattr(filtered_stream, "encoding")  # Should delegate to original stream
+
+        suppressor.__exit__(None, None, None)
+
+    def test_filtered_stream_non_debug_mode_patterns(self):
+        """Test FilteredStream pattern filtering in non-debug mode."""
+        from stockula.forecasting.forecaster import SuppressAutoTSOutput, logger
+
+        # Mock logger to be in non-debug mode
+        with patch.object(logger, "isEnabledFor", return_value=False):
+            suppressor = SuppressAutoTSOutput()
+            suppressor.__enter__()
+
+            # Get the filtered stream
+            filtered_stream = sys.stdout
+
+            # Mock the original stream
+            filtered_stream.original_stream = Mock()
+
+            # Test various patterns that should be suppressed
+            patterns_to_suppress = [
+                "Model Number: 123",
+                "New Generation: 5",
+                "Template Eval Error: something",
+                "2025-01-01 results",
+                "UserWarning: test",
+                "SVD did not converge",
+                "Optimization terminated abnormally",
+            ]
+
+            for pattern in patterns_to_suppress:
+                filtered_stream.original_stream.reset_mock()
+                result = filtered_stream.write(pattern)
+                assert result == len(pattern)
+                filtered_stream.original_stream.write.assert_not_called()
+
+            # Test pattern that should pass through
+            filtered_stream.original_stream.reset_mock()
+            normal_message = "Normal log message"
+            result = filtered_stream.write(normal_message)
+            assert result == len(normal_message)
+            filtered_stream.original_stream.write.assert_called_once_with(normal_message)
+
+            suppressor.__exit__(None, None, None)
+
 
 class TestStockForecasterInitialization:
     """Test StockForecaster initialization."""
@@ -113,6 +181,59 @@ class TestStockForecasterInitialization:
         assert forecaster.prediction_interval == 0.95
         assert forecaster.num_validations == 3
         assert forecaster.validation_method == "seasonal"
+
+    def test_init_with_custom_model_list(self):
+        """Test initialization with custom model list."""
+        forecaster = StockForecaster(
+            model_list=["ARIMA", "ETS", "Theta"],
+            forecast_length=30,
+            max_generations=5,
+        )
+
+        assert forecaster.model_list == ["ARIMA", "ETS", "Theta"]
+        assert forecaster.max_generations == 5
+
+    def test_init_with_preset_model_list(self):
+        """Test initialization with preset model lists."""
+        # Test 'fast' preset
+        forecaster = StockForecaster(model_list="fast", forecast_length=30)
+        assert forecaster.model_list == "fast"
+
+        # Test 'ultra_fast' preset
+        forecaster = StockForecaster(model_list="ultra_fast", forecast_length=30)
+        assert forecaster.model_list == "ultra_fast"
+
+        # Test 'financial' preset
+        forecaster = StockForecaster(model_list="financial", forecast_length=30)
+        assert forecaster.model_list == "financial"
+
+        # Test 'fast_financial' preset
+        forecaster = StockForecaster(model_list="fast_financial", forecast_length=30)
+        assert forecaster.model_list == "fast_financial"
+
+    def test_init_with_all_parameters(self):
+        """Test initialization with all parameters."""
+        forecaster = StockForecaster(
+            forecast_length=30,
+            frequency="D",
+            prediction_interval=0.90,
+            ensemble="simple",
+            num_validations=3,
+            validation_method="even",
+            model_list=["ARIMA", "ETS"],
+            max_generations=10,
+            no_negatives=False,
+        )
+
+        assert forecaster.forecast_length == 30
+        assert forecaster.frequency == "D"
+        assert forecaster.prediction_interval == 0.90
+        assert forecaster.ensemble == "simple"
+        assert forecaster.num_validations == 3
+        assert forecaster.validation_method == "even"
+        assert forecaster.model_list == ["ARIMA", "ETS"]
+        assert forecaster.max_generations == 10
+        assert forecaster.no_negatives is False
 
 
 class TestStockForecasterFit:
@@ -218,6 +339,102 @@ class TestStockForecasterFit:
             with pytest.raises(Exception, match="Model error"):
                 forecaster.fit(sample_data)
 
+    def test_fit_with_insufficient_data(self):
+        """Test fitting with insufficient historical data."""
+        forecaster = StockForecaster(forecast_length=30)
+
+        # Create very short data (less than required)
+        short_data = pd.DataFrame(
+            {"Close": [100, 101, 102]},
+            index=pd.date_range(start="2023-01-01", periods=3, freq="D"),
+        )
+
+        # The fit method will be called, which should handle short data appropriately
+        with patch("stockula.forecasting.forecaster.AutoTS") as mock_autots:
+            mock_model = Mock()
+            mock_autots.return_value = mock_model
+            mock_model.fit.side_effect = ValueError("Insufficient data")
+
+            with pytest.raises(ValueError, match="Insufficient data"):
+                forecaster.fit(short_data)
+
+    def test_fit_with_custom_target_column(self):
+        """Test fitting with custom target column."""
+        forecaster = StockForecaster(forecast_length=7)
+
+        # Create data with multiple columns
+        dates = pd.date_range(start="2023-01-01", periods=100, freq="D")
+        data = pd.DataFrame(
+            {
+                "Open": range(100),
+                "High": range(1, 101),
+                "Low": range(100),
+                "Close": range(100),
+            },
+            index=dates,
+        )
+
+        # Mock AutoTS to avoid actual model training
+        with patch("stockula.forecasting.forecaster.AutoTS") as mock_autots:
+            mock_model = Mock()
+            mock_autots.return_value = mock_model
+
+            # Mock the fit method
+            mock_model.fit.return_value = mock_model
+
+            # Mock the predict method
+            future_dates = pd.date_range(start="2023-04-11", periods=7, freq="D")
+            mock_forecast = pd.DataFrame({"High": range(101, 108)}, index=future_dates)
+            # Create a prediction object
+            mock_prediction = Mock()
+            mock_prediction.forecast = mock_forecast
+            mock_prediction.upper_forecast = mock_forecast
+            mock_prediction.lower_forecast = mock_forecast
+            mock_model.predict.return_value = mock_prediction
+
+            # Fit the model with custom target column
+            forecaster.fit(data, target_column="High")
+
+            # Verify AutoTS was called with correct parameters
+            mock_autots.assert_called_once()
+            call_args = mock_autots.call_args[1]
+            assert call_args["forecast_length"] == 7
+
+    @patch("stockula.forecasting.forecaster.AutoTS")
+    def test_fit_with_frequency_detection(self, mock_autots):
+        """Test frequency detection in fit."""
+        forecaster = StockForecaster(forecast_length=7)
+
+        # Create data with specific frequency
+        dates = pd.date_range(start="2023-01-01", periods=100, freq="B")  # Business days
+        data = pd.DataFrame(
+            {
+                "Close": range(100, 200),
+            },
+            index=dates,
+        )
+
+        mock_model = Mock()
+        mock_autots.return_value = mock_model
+        mock_model.fit.return_value = mock_model
+
+        # Mock prediction
+        future_dates = pd.date_range(start=dates[-1] + pd.Timedelta(days=1), periods=7, freq="B")
+        mock_forecast = pd.DataFrame({"Close": range(200, 207)}, index=future_dates)
+        # Create a prediction object
+        mock_prediction = Mock()
+        mock_prediction.forecast = mock_forecast
+        mock_prediction.upper_forecast = mock_forecast
+        mock_prediction.lower_forecast = mock_forecast
+        mock_model.predict.return_value = mock_prediction
+
+        forecaster.fit(data)
+
+        # Verify AutoTS was called with infer frequency
+        call_args = mock_autots.call_args[1]
+        # AutoTS detects the frequency from the data
+        assert "frequency" in call_args
+
 
 class TestStockForecasterPredict:
     """Test StockForecaster predict method."""
@@ -302,11 +519,34 @@ class TestStockForecasterFitPredict:
                 # Should return predictions
                 assert result.equals(mock_predictions)
 
+    def test_forecast_alias(self):
+        """Test that forecast is an alias for fit_predict."""
+        forecaster = StockForecaster()
+
+        # Mock fit_predict
+        mock_result = pd.DataFrame({"forecast": [110, 111, 112]})
+        with patch.object(forecaster, "fit_predict") as mock_fit_predict:
+            mock_fit_predict.return_value = mock_result
+
+            data = pd.DataFrame({"Close": [100, 101, 102]})
+            result = forecaster.forecast(data, target_column="Price", model_list="fast")
+
+            # Should call fit_predict with same arguments
+            mock_fit_predict.assert_called_once_with(data, "Price", model_list="fast")
+
+            # Should return same result
+            assert result.equals(mock_result)
+
 
 class TestStockForecasterForecastFromSymbol:
     """Test forecast_from_symbol method."""
 
-    def test_forecast_from_symbol_success(self):
+    @pytest.fixture
+    def mock_data_fetcher(self):
+        """Create mock data fetcher."""
+        return Mock()
+
+    def test_forecast_from_symbol_success(self, mock_data_fetcher):
         """Test successful forecast from symbol."""
         # Mock data
         stock_data = pd.DataFrame(
@@ -323,12 +563,11 @@ class TestStockForecasterForecastFromSymbol:
             }
         )
 
-        # Create mock data fetcher
-        mock_fetcher = Mock()
-        mock_fetcher.get_stock_data.return_value = stock_data
+        # Set up mock data fetcher
+        mock_data_fetcher.get_stock_data.return_value = stock_data
 
         # Create forecaster with mock data fetcher
-        forecaster = StockForecaster(data_fetcher=mock_fetcher)
+        forecaster = StockForecaster(data_fetcher=mock_data_fetcher)
 
         with patch.object(forecaster, "fit_predict") as mock_fit_predict:
             mock_fit_predict.return_value = predictions
@@ -336,7 +575,7 @@ class TestStockForecasterForecastFromSymbol:
             result = forecaster.forecast_from_symbol("AAPL", start_date="2023-01-01")
 
             # Should fetch data
-            mock_fetcher.get_stock_data.assert_called_once_with("AAPL", "2023-01-01", None)
+            mock_data_fetcher.get_stock_data.assert_called_once_with("AAPL", "2023-01-01", None)
 
             # Should fit and predict
             mock_fit_predict.assert_called_once()
@@ -351,16 +590,147 @@ class TestStockForecasterForecastFromSymbol:
         with pytest.raises(ValueError, match="Data fetcher not configured"):
             forecaster.forecast_from_symbol("TEST")
 
-    def test_forecast_from_symbol_no_data(self):
+    def test_forecast_from_symbol_no_data(self, mock_data_fetcher):
         """Test forecast from symbol with no data available."""
-        # Create mock data fetcher
-        mock_fetcher = Mock()
-        mock_fetcher.get_stock_data.return_value = pd.DataFrame()  # Empty
+        # Set up mock to return empty data
+        mock_data_fetcher.get_stock_data.return_value = pd.DataFrame()  # Empty
 
-        forecaster = StockForecaster(data_fetcher=mock_fetcher)
+        forecaster = StockForecaster(data_fetcher=mock_data_fetcher)
 
         with pytest.raises(ValueError, match="No data available for symbol TEST"):
             forecaster.forecast_from_symbol("TEST")
+
+    def test_forecast_from_symbol_with_all_parameters(self, mock_data_fetcher):
+        """Test forecast_from_symbol with all parameters."""
+        forecaster = StockForecaster(forecast_length=30, data_fetcher=mock_data_fetcher)
+
+        # Create sample data
+        dates = pd.date_range(start="2023-01-01", periods=100, freq="D")
+        data = pd.DataFrame(
+            {
+                "Close": range(100, 200),
+            },
+            index=dates,
+        )
+
+        # Set up mock to return our test data
+        with patch.object(mock_data_fetcher, "get_stock_data", return_value=data):
+            # Mock AutoTS
+            with patch("stockula.forecasting.forecaster.AutoTS") as mock_autots:
+                mock_model = Mock()
+                mock_autots.return_value = mock_model
+                mock_model.fit.return_value = mock_model
+
+                future_dates = pd.date_range(start="2023-04-11", periods=30, freq="D")
+                mock_forecast = pd.DataFrame({"Close": range(200, 230)}, index=future_dates)
+                # Create a prediction object with forecast, upper_forecast, lower_forecast attributes
+                mock_prediction = Mock()
+                mock_prediction.forecast = mock_forecast
+                mock_prediction.upper_forecast = mock_forecast
+                mock_prediction.lower_forecast = mock_forecast
+                mock_model.predict.return_value = mock_prediction
+
+                # Test with all parameters that are accepted by fit()
+                result = forecaster.forecast_from_symbol(
+                    symbol="AAPL",
+                    start_date="2023-01-01",
+                    end_date="2023-04-10",
+                    model_list=["ARIMA", "ETS"],
+                    ensemble="simple",
+                    max_generations=3,
+                )
+
+                assert len(result) == 30
+
+                # Verify that we got results back
+                assert isinstance(result, pd.DataFrame)
+                assert "forecast" in result.columns or result.shape[1] >= 1
+
+    def test_forecast_from_symbol_with_evaluation(self, mock_data_fetcher):
+        """Test forecast_from_symbol_with_evaluation method."""
+        forecaster = StockForecaster(forecast_length=7, data_fetcher=mock_data_fetcher)
+
+        # Create train and test data
+        train_dates = pd.date_range(start="2023-01-01", periods=90, freq="D")
+        test_dates = pd.date_range(start="2023-04-01", periods=10, freq="D")
+
+        train_data = pd.DataFrame(
+            {
+                "Close": range(100, 190),
+            },
+            index=train_dates,
+        )
+
+        test_data = pd.DataFrame(
+            {
+                "Close": range(190, 200),
+            },
+            index=test_dates,
+        )
+
+        # Mock data fetcher to return different data for train and test periods
+        def get_stock_data_side_effect(symbol, start=None, end=None, **kwargs):
+            if end and "2023-03-31" in end:
+                return train_data
+            else:
+                return pd.concat([train_data, test_data])
+
+        # Use patch to mock the method
+        with patch.object(mock_data_fetcher, "get_stock_data", side_effect=get_stock_data_side_effect):
+            # Mock AutoTS
+            with patch("stockula.forecasting.forecaster.AutoTS") as mock_autots:
+                mock_model = Mock()
+                mock_autots.return_value = mock_model
+                mock_model.fit.return_value = mock_model
+
+                # Mock prediction
+                forecast_dates = pd.date_range(start="2023-04-01", periods=7, freq="D")
+                mock_forecast = pd.DataFrame(
+                    {"Close": [190.5, 191.5, 192.5, 193.5, 194.5, 195.5, 196.5]}, index=forecast_dates
+                )
+                # Create a prediction object with forecast, upper_forecast, lower_forecast attributes
+                mock_prediction = Mock()
+                mock_prediction.forecast = mock_forecast
+                mock_prediction.upper_forecast = mock_forecast.copy()
+                mock_prediction.lower_forecast = mock_forecast.copy()
+                mock_model.predict.return_value = mock_prediction
+
+                # Mock best model info
+                mock_model.best_model_name = "Prophet"
+                mock_model.best_model_params = {"seasonality_mode": "multiplicative"}
+                mock_model.best_model_transformation_params = {}
+
+                # Patch sklearn metrics import inside the method
+                with patch("sklearn.metrics.mean_absolute_error") as mock_mae:
+                    with patch("sklearn.metrics.mean_squared_error") as mock_mse:
+                        mock_mae.return_value = 1.5
+                        mock_mse.return_value = 4.0  # sqrt(4.0) = 2.0
+
+                        result = forecaster.forecast_from_symbol_with_evaluation(
+                            symbol="AAPL",
+                            train_start_date="2023-01-01",
+                            train_end_date="2023-03-31",
+                            test_start_date="2023-04-01",
+                            test_end_date="2023-04-10",
+                            target_column="Close",
+                        )
+
+                        # Check result structure
+                        assert "predictions" in result
+                        assert "evaluation_metrics" in result
+                        assert "train_period" in result
+                        assert "test_period" in result
+
+                        # Check metrics
+                        metrics = result["evaluation_metrics"]
+                        assert "mae" in metrics
+                        assert "rmse" in metrics
+                        assert "mape" in metrics
+                        assert metrics["mae"] == 1.5
+                        assert metrics["rmse"] == 2.0
+
+                        # Verify data fetcher was called correctly
+                        assert mock_data_fetcher.get_stock_data.call_count >= 2
 
 
 class TestStockForecasterGetBestModel:
@@ -415,6 +785,31 @@ class TestStockForecasterGetBestModel:
 
         assert info["model_accuracy"] == "N/A"
 
+    def test_get_best_model_info(self):
+        """Test getting best model information with all attributes."""
+        forecaster = StockForecaster()
+
+        # Create mock model
+        mock_model = Mock()
+        mock_model.best_model_name = "Prophet"
+        mock_model.best_model_params = {"growth": "linear", "seasonality_mode": "additive"}
+        mock_model.best_model_transformation_params = {"fillna": "ffill"}
+        mock_model.best_model_id = "abc123"
+        mock_model.best_model_ensemble = 0
+        mock_model.df_wide_numeric = pd.DataFrame({"series1": [1, 2, 3]})
+        mock_model.best_model = {"Model": "Prophet", "ID": "abc123"}
+        # Mock best_model_accuracy to return "N/A" when accessed
+        mock_model.best_model_accuracy = "N/A"
+
+        forecaster.model = mock_model
+
+        info = forecaster.get_best_model()
+
+        assert info["model_name"] == "Prophet"
+        assert info["model_params"]["growth"] == "linear"
+        assert info["model_transformation"]["fillna"] == "ffill"
+        assert info["model_accuracy"] == "N/A"
+
 
 class TestStockForecasterPlotForecast:
     """Test plot_forecast method."""
@@ -450,26 +845,334 @@ class TestStockForecasterPlotForecast:
             forecaster.plot_forecast()
 
 
-class TestStockForecasterForecastAlias:
-    """Test forecast method (alias for fit_predict)."""
+class TestStockForecasterEdgeCases:
+    """Test edge cases and error handling."""
 
-    def test_forecast_alias(self):
-        """Test that forecast is an alias for fit_predict."""
+    def test_fit_with_empty_data(self):
+        """Test fitting with empty dataframe."""
+        forecaster = StockForecaster()
+        empty_data = pd.DataFrame()
+
+        with pytest.raises(ValueError):
+            forecaster.fit(empty_data)
+
+    def test_fit_with_non_dataframe(self):
+        """Test fitting with non-dataframe input."""
         forecaster = StockForecaster()
 
-        # Mock fit_predict
-        mock_result = pd.DataFrame({"forecast": [110, 111, 112]})
-        with patch.object(forecaster, "fit_predict") as mock_fit_predict:
-            mock_fit_predict.return_value = mock_result
+        # Should raise ValueError about DatetimeIndex
+        with pytest.raises(ValueError, match="Data index must be a DatetimeIndex"):
+            forecaster.fit([1, 2, 3])
 
-            data = pd.DataFrame({"Close": [100, 101, 102]})
-            result = forecaster.forecast(data, target_column="Price", model_list="fast")
+    def test_predict_stores_prediction(self):
+        """Test predict stores prediction for later use."""
+        forecaster = StockForecaster()
 
-            # Should call fit_predict with same arguments
-            mock_fit_predict.assert_called_once_with(data, "Price", model_list="fast")
+        # Mock the model
+        mock_model = Mock()
+        mock_prediction = Mock()
 
-            # Should return same result
-            assert result.equals(mock_result)
+        # Create forecast data
+        forecast_dates = pd.date_range("2023-02-01", periods=30)
+        mock_prediction.forecast = pd.DataFrame({"TEST": [110 + i for i in range(30)]}, index=forecast_dates)
+        mock_prediction.upper_forecast = pd.DataFrame({"TEST": [115 + i for i in range(30)]}, index=forecast_dates)
+        mock_prediction.lower_forecast = pd.DataFrame({"TEST": [105 + i for i in range(30)]}, index=forecast_dates)
+
+        mock_model.predict.return_value = mock_prediction
+        forecaster.model = mock_model
+
+        # Test prediction
+        result = forecaster.predict()
+        assert forecaster.prediction == mock_prediction  # Should store prediction
+        assert len(result) == 30
+
+    def test_fit_with_signal_handler_error(self):
+        """Test fit when signal handler setup fails."""
+        forecaster = StockForecaster()
+        data = pd.DataFrame({"Close": [100, 101, 102]}, index=pd.date_range("2023-01-01", periods=3))
+
+        with patch("stockula.forecasting.forecaster.signal.signal", side_effect=ValueError("Signal error")):
+            # Should raise the error
+            with patch("stockula.forecasting.forecaster.AutoTS") as mock_autots:
+                mock_model = Mock()
+                mock_autots.return_value = mock_model
+                mock_model.fit.return_value = mock_model
+
+                with pytest.raises((ValueError, RuntimeError)):  # Should raise some exception
+                    forecaster.fit(data)
+
+    def test_filtered_stream_write(self):
+        """Test FilteredStream write method."""
+        from io import StringIO
+
+        from stockula.forecasting.forecaster import suppress_autots_output
+
+        # Create a StringIO to capture output
+        StringIO()
+
+        with suppress_autots_output():
+            # Get the current stdout (which is a FilteredStream)
+            filtered_stream = sys.stdout
+
+            # Test writing normal text
+            filtered_stream.write("Normal output\n")
+
+            # Test writing text that should be filtered
+            filtered_stream.write("AutoTS upgrade package\n")
+            filtered_stream.write("remove_leading_zeros warning\n")
+
+    def test_initialization_with_missing_data_fetcher(self):
+        """Test initialization without data fetcher."""
+        forecaster = StockForecaster(data_fetcher=None)
+        assert forecaster.data_fetcher is None
+
+    def test_fit_converts_frequency_infer_to_d(self):
+        """Test that fit converts 'infer' frequency to 'D'."""
+        forecaster = StockForecaster(frequency="infer")
+
+        data = pd.DataFrame({"Close": [100, 101, 102]}, index=pd.date_range("2023-01-01", periods=3, freq="D"))
+
+        with patch("stockula.forecasting.forecaster.AutoTS") as mock_autots:
+            mock_model = Mock()
+            mock_autots.return_value = mock_model
+            mock_model.fit.return_value = mock_model
+
+            with patch("stockula.forecasting.forecaster.signal.signal"):
+                forecaster.fit(data)
+
+            # Check AutoTS was called with 'D' frequency
+            call_kwargs = mock_autots.call_args[1]
+            assert call_kwargs["frequency"] == "D"
+
+    @patch("stockula.forecasting.forecaster.logger")
+    def test_get_model_list_ultra_fast_with_logging(self, mock_logger):
+        """Test _get_model_list with ultra_fast logging."""
+        forecaster = StockForecaster()
+
+        forecaster._get_model_list("ultra_fast", "TestColumn")
+
+        # Verify logging
+        mock_logger.info.assert_called_once()
+        log_message = mock_logger.info.call_args[0][0]
+        assert "ultra-fast" in log_message
+        assert "TestColumn" in log_message
+        assert str(len(forecaster.ULTRA_FAST_MODEL_LIST)) in log_message
+
+    def test_get_model_list_fast_financial(self):
+        """Test _get_model_list with fast_financial preset."""
+        forecaster = StockForecaster()
+
+        result = forecaster._get_model_list("fast_financial")
+
+        # Should return intersection of FAST and FINANCIAL
+        expected = [m for m in forecaster.FAST_MODEL_LIST if m in forecaster.FINANCIAL_MODEL_LIST]
+        assert result == expected
+
+    def test_get_model_list_financial(self):
+        """Test _get_model_list with financial preset."""
+        forecaster = StockForecaster()
+
+        result = forecaster._get_model_list("financial")
+        assert result == forecaster.FINANCIAL_MODEL_LIST
+
+    @patch("stockula.forecasting.forecaster.pd.infer_freq")
+    @patch("stockula.forecasting.forecaster.AutoTS")
+    def test_fit_frequency_inference_exception(self, mock_autots, mock_infer_freq):
+        """Test fit when frequency inference raises exception."""
+        # Mock infer_freq to raise exception
+        mock_infer_freq.side_effect = Exception("Inference failed")
+
+        # Mock AutoTS
+        mock_model = Mock()
+        mock_model.fit.return_value = mock_model
+        mock_autots.return_value = mock_model
+
+        forecaster = StockForecaster(frequency="infer")
+
+        # Create data
+        dates = pd.date_range("2024-01-01", periods=10)
+        data = pd.DataFrame({"Close": np.random.rand(10) * 100}, index=dates)
+
+        # Fit should handle exception and use default frequency
+        forecaster.fit(data, show_progress=False)
+
+        # Verify default frequency 'D' was used
+        call_kwargs = mock_autots.call_args[1]
+        assert call_kwargs["frequency"] == "D"
+
+    @patch("stockula.forecasting.forecaster.signal.signal")
+    def test_fit_signal_handler_setup(self, mock_signal):
+        """Test signal handler setup in fit."""
+        forecaster = StockForecaster()
+
+        dates = pd.date_range("2024-01-01", periods=10)
+        data = pd.DataFrame({"Close": np.random.rand(10) * 100}, index=dates)
+
+        with patch("stockula.forecasting.forecaster.AutoTS") as mock_autots:
+            mock_model = Mock()
+            mock_model.fit.return_value = mock_model
+            mock_autots.return_value = mock_model
+
+            forecaster.fit(data, show_progress=False)
+
+            # Verify signal handler was set
+            mock_signal.assert_called_once()
+
+    def test_forecast_from_symbol_empty_data(self):
+        """Test forecast_from_symbol with empty data."""
+        mock_fetcher = Mock()
+        mock_fetcher.get_stock_data.return_value = pd.DataFrame()  # Empty data
+
+        forecaster = StockForecaster(data_fetcher=mock_fetcher)
+
+        with pytest.raises(ValueError, match="No data available for symbol"):
+            forecaster.forecast_from_symbol("INVALID")
+
+    def test_forecast_from_symbol_with_evaluation_no_test_data(self):
+        """Test forecast evaluation without test data."""
+        mock_fetcher = Mock()
+
+        # Only return training data
+        train_dates = pd.date_range("2024-01-01", periods=100)
+        train_data = pd.DataFrame({"Close": np.random.rand(100) * 100}, index=train_dates)
+        mock_fetcher.get_stock_data.return_value = train_data
+
+        forecaster = StockForecaster(data_fetcher=mock_fetcher)
+
+        # Mock the fit and predict methods
+        with patch.object(forecaster, "fit"):
+            with patch.object(forecaster, "predict") as mock_predict:
+                mock_predict.return_value = pd.DataFrame(
+                    {"forecast": [150, 151, 152], "upper_bound": [155, 156, 157], "lower_bound": [145, 146, 147]}
+                )
+
+                # Call without test dates
+                result = forecaster.forecast_from_symbol_with_evaluation(
+                    "AAPL", train_start_date="2024-01-01", train_end_date="2024-03-01"
+                )
+
+                # Should have predictions but no evaluation metrics
+                assert "predictions" in result
+                assert result["evaluation_metrics"] is None
+
+    def test_forecast_from_symbol_with_evaluation_no_common_dates(self):
+        """Test forecast evaluation with no common dates."""
+        mock_fetcher = Mock()
+
+        # Training data
+        train_dates = pd.date_range("2024-01-01", periods=100)
+        train_data = pd.DataFrame({"Close": np.random.rand(100) * 100}, index=train_dates)
+
+        # Test data with different dates
+        test_dates = pd.date_range("2024-06-01", periods=20)
+        test_data = pd.DataFrame({"Close": np.random.rand(20) * 100}, index=test_dates)
+
+        mock_fetcher.get_stock_data.side_effect = [train_data, test_data]
+
+        forecaster = StockForecaster(data_fetcher=mock_fetcher)
+
+        # Mock the fit and predict methods
+        with patch.object(forecaster, "fit"):
+            with patch.object(forecaster, "predict") as mock_predict:
+                # Return predictions with different dates than test data
+                pred_dates = pd.date_range("2024-07-01", periods=5)
+                mock_predict.return_value = pd.DataFrame(
+                    {
+                        "forecast": [150, 151, 152, 153, 154],
+                        "upper_bound": [155, 156, 157, 158, 159],
+                        "lower_bound": [145, 146, 147, 148, 149],
+                    },
+                    index=pred_dates,
+                )
+
+                # Call evaluation
+                result = forecaster.forecast_from_symbol_with_evaluation(
+                    "AAPL",
+                    train_start_date="2024-01-01",
+                    train_end_date="2024-03-01",
+                    test_start_date="2024-06-01",
+                    test_end_date="2024-06-20",
+                )
+
+                # Should have predictions but no evaluation metrics (no common dates)
+                assert "predictions" in result
+                assert result["evaluation_metrics"] is None
+
+    def test_forecast_from_symbol_with_evaluation_and_kwargs(self):
+        """Test forecast_from_symbol_with_evaluation with additional kwargs."""
+        mock_fetcher = Mock()
+
+        # Setup data
+        train_dates = pd.date_range("2024-01-01", periods=100)
+        train_data = pd.DataFrame({"Close": np.random.rand(100) * 100}, index=train_dates)
+        test_dates = pd.date_range("2024-06-01", periods=20)
+        test_data = pd.DataFrame({"Close": np.random.rand(20) * 100}, index=test_dates)
+
+        mock_fetcher.get_stock_data.side_effect = [train_data, test_data]
+
+        forecaster = StockForecaster(data_fetcher=mock_fetcher)
+
+        # Mock fit to capture kwargs
+        fit_kwargs = {}
+
+        def mock_fit(*args, **kwargs):
+            fit_kwargs.update(kwargs)
+            return forecaster
+
+        with patch.object(forecaster, "fit", side_effect=mock_fit):
+            with patch.object(forecaster, "predict") as mock_predict:
+                mock_predict.return_value = pd.DataFrame({"forecast": [150]})
+
+                # Call with extra kwargs
+                forecaster.forecast_from_symbol_with_evaluation(
+                    "AAPL",
+                    train_start_date="2024-01-01",
+                    train_end_date="2024-05-31",
+                    test_start_date="2024-06-01",
+                    test_end_date="2024-06-20",
+                    model_list="ultra_fast",
+                    max_generations=3,
+                )
+
+                # Verify kwargs were passed to fit
+                assert fit_kwargs["model_list"] == "ultra_fast"
+                assert fit_kwargs["max_generations"] == 3
+
+    def test_evaluate_forecast_with_misaligned_data(self):
+        """Test evaluate_forecast when actual data doesn't align with forecast."""
+        forecaster = StockForecaster()
+
+        # Mock prediction
+        forecast_dates = pd.date_range("2024-01-01", periods=5)
+        mock_prediction = Mock()
+        mock_prediction.forecast = pd.DataFrame({"value": [100, 101, 102, 103, 104]}, index=forecast_dates)
+        forecaster.prediction = mock_prediction
+
+        # Actual data with different dates
+        actual_dates = pd.date_range("2024-01-10", periods=5)
+        actual_data = pd.DataFrame({"Close": [105, 106, 107, 108, 109]}, index=actual_dates)
+
+        # This should raise an error when trying to align data
+        with pytest.raises((KeyError, ValueError, IndexError)):  # KeyError or similar alignment error
+            forecaster.evaluate_forecast(actual_data)
+
+    def test_fit_debug_logging(self, caplog):
+        """Test debug logging during fit."""
+        forecaster = StockForecaster()
+
+        data = pd.DataFrame({"Close": [100, 101, 102]}, index=pd.date_range("2023-01-01", periods=3))
+
+        with patch("stockula.forecasting.forecaster.AutoTS") as mock_autots:
+            mock_model = Mock()
+            mock_autots.return_value = mock_model
+            mock_model.fit.return_value = mock_model
+
+            with patch("stockula.forecasting.forecaster.signal.signal"):
+                with caplog.at_level(logging.DEBUG, logger="stockula.forecasting.forecaster"):
+                    forecaster.fit(data)
+
+                    # Check debug messages
+                    assert "Fitting AutoTS with parameters:" in caplog.text
 
 
 class TestStockForecasterIntegration:
