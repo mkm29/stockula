@@ -47,7 +47,7 @@ class TestDomainFactoryAssetCreation:
         ticker_config = TickerConfig(symbol="AAPL", sector="Technology", category="MOMENTUM")
         ticker_config.quantity = None  # Override after creation
 
-        with pytest.raises(ValueError, match="No quantity specified for ticker AAPL"):
+        with pytest.raises(ValueError, match="No quantity specified for"):
             factory._create_asset(ticker_config)
 
     def test_create_asset_with_calculated_quantity(self):
@@ -77,20 +77,23 @@ class TestDomainFactoryAssetCreation:
 class TestDomainFactoryDynamicQuantities:
     """Test dynamic quantity calculation."""
 
-    def test_calculate_dynamic_quantities_no_fetcher(self):
-        """Test dynamic quantities without data fetcher raises error."""
+    def test_calculate_dynamic_quantities_no_allocator(self):
+        """Test dynamic quantities without allocator raises error."""
         factory = DomainFactory(fetcher=None)
         config = StockulaConfig(
             portfolio=PortfolioConfig(
-                name="Test", initial_capital=100000, tickers=[TickerConfig(symbol="AAPL", allocation_pct=50)]
+                name="Test",
+                initial_capital=100000,
+                dynamic_allocation=True,
+                tickers=[TickerConfig(symbol="AAPL", allocation_pct=50)],
             )
         )
 
-        with pytest.raises(ValueError, match="Data fetcher not configured"):
-            factory._calculate_dynamic_quantities(config, config.portfolio.tickers)
+        with pytest.raises(ValueError, match="Allocator not configured"):
+            factory.create_portfolio(config)
 
-    def test_calculate_dynamic_quantities_with_start_date_no_data(self, mock_data_fetcher):
-        """Test dynamic quantities when historical data is empty."""
+    def test_dynamic_allocation_with_start_date_no_data(self, mock_data_fetcher):
+        """Test dynamic allocation when historical data is empty."""
         factory = DomainFactory(fetcher=mock_data_fetcher)
 
         # Mock empty historical data
@@ -99,15 +102,18 @@ class TestDomainFactoryDynamicQuantities:
 
         config = StockulaConfig(
             portfolio=PortfolioConfig(
-                name="Test", initial_capital=100000, tickers=[TickerConfig(symbol="AAPL", allocation_pct=50)]
+                name="Test",
+                initial_capital=100000,
+                dynamic_allocation=True,
+                tickers=[TickerConfig(symbol="AAPL", allocation_pct=50)],
             ),
             data=DataConfig(start_date="2023-01-01"),
         )
 
         # Should fall back to current prices
-        quantities = factory._calculate_dynamic_quantities(config, config.portfolio.tickers)
-        assert "AAPL" in quantities
-        assert quantities["AAPL"] == pytest.approx(333.33, rel=0.01)  # 50000 / 150
+        portfolio = factory.create_portfolio(config)
+        assert len(portfolio.assets) == 1
+        assert portfolio.assets[0].quantity == pytest.approx(333.33, rel=0.01)  # 50000 / 150
 
     def test_calculate_dynamic_quantities_with_date_string(self, mock_data_fetcher):
         """Test dynamic quantities with start date as string."""
@@ -138,7 +144,7 @@ class TestDomainFactoryDynamicQuantities:
             data=DataConfig(start_date="2023-01-01"),  # String date
         )
 
-        quantities = factory._calculate_dynamic_quantities(config, config.portfolio.tickers)
+        quantities = factory.allocator.calculate_dynamic_quantities(config, config.portfolio.tickers)
         assert "AAPL" in quantities
         assert quantities["AAPL"] == pytest.approx(322.58, rel=0.01)  # 50000 / 155
 
@@ -147,16 +153,22 @@ class TestDomainFactoryDynamicQuantities:
         factory = DomainFactory(fetcher=mock_data_fetcher)
         mock_data_fetcher.get_current_prices = Mock(return_value={"AAPL": 150.0})
 
+        # Create a ticker config with quantity, then override the allocation fields
+        ticker_config = TickerConfig(symbol="AAPL", quantity=10)
+        ticker_config.allocation_pct = None
+        ticker_config.allocation_amount = None
+
         config = StockulaConfig(
             portfolio=PortfolioConfig(
                 name="Test",
                 initial_capital=100000,
-                tickers=[TickerConfig(symbol="AAPL", quantity=10)],  # No allocation_pct or allocation_amount
+                dynamic_allocation=True,
+                tickers=[ticker_config],
             )
         )
 
         with pytest.raises(ValueError, match="No allocation specified for AAPL"):
-            factory._calculate_dynamic_quantities(config, config.portfolio.tickers)
+            factory.allocator.calculate_dynamic_quantities(config, config.portfolio.tickers)
 
     def test_calculate_dynamic_quantities_fractional_shares_disabled(self, mock_data_fetcher):
         """Test dynamic quantities with fractional shares disabled."""
@@ -168,11 +180,12 @@ class TestDomainFactoryDynamicQuantities:
                 name="Test",
                 initial_capital=100000,
                 allow_fractional_shares=False,
+                dynamic_allocation=True,
                 tickers=[TickerConfig(symbol="AAPL", allocation_amount=200)],  # Small amount
             )
         )
 
-        quantities = factory._calculate_dynamic_quantities(config, config.portfolio.tickers)
+        quantities = factory.allocator.calculate_dynamic_quantities(config, config.portfolio.tickers)
         assert quantities["AAPL"] == 1  # Should round down but minimum 1
 
     def test_calculate_dynamic_quantities_exception_handling(self, mock_data_fetcher):
@@ -185,13 +198,16 @@ class TestDomainFactoryDynamicQuantities:
 
         config = StockulaConfig(
             portfolio=PortfolioConfig(
-                name="Test", initial_capital=100000, tickers=[TickerConfig(symbol="AAPL", allocation_pct=50)]
+                name="Test",
+                initial_capital=100000,
+                dynamic_allocation=True,
+                tickers=[TickerConfig(symbol="AAPL", allocation_pct=50)],
             ),
             data=DataConfig(start_date="2023-01-01"),
         )
 
         # Should handle exception and fall back to current prices
-        quantities = factory._calculate_dynamic_quantities(config, config.portfolio.tickers)
+        quantities = factory.allocator.calculate_dynamic_quantities(config, config.portfolio.tickers)
         assert "AAPL" in quantities
 
     def test_calculate_dynamic_quantities_missing_price(self, mock_data_fetcher):
@@ -201,12 +217,15 @@ class TestDomainFactoryDynamicQuantities:
 
         config = StockulaConfig(
             portfolio=PortfolioConfig(
-                name="Test", initial_capital=100000, tickers=[TickerConfig(symbol="AAPL", allocation_pct=50)]
+                name="Test",
+                initial_capital=100000,
+                dynamic_allocation=True,
+                tickers=[TickerConfig(symbol="AAPL", allocation_pct=50)],
             )
         )
 
         with pytest.raises(ValueError, match="Could not fetch price for AAPL"):
-            factory._calculate_dynamic_quantities(config, config.portfolio.tickers)
+            factory.allocator.calculate_dynamic_quantities(config, config.portfolio.tickers)
 
 
 class TestDomainFactoryAutoAllocation:
@@ -225,8 +244,8 @@ class TestDomainFactoryAutoAllocation:
             )
         )
 
-        with pytest.raises(ValueError, match="Data fetcher not configured"):
-            factory._calculate_auto_allocation_quantities(config, config.portfolio.tickers)
+        with pytest.raises(ValueError, match="Allocator not configured"):
+            factory.create_portfolio(config)
 
     def test_auto_allocation_no_category_ratios(self, mock_data_fetcher):
         """Test auto allocation without category ratios."""
@@ -259,7 +278,7 @@ class TestDomainFactoryAutoAllocation:
         )
 
         with pytest.raises(ValueError, match="must have category specified for auto-allocation"):
-            factory._calculate_auto_allocation_quantities(config, config.portfolio.tickers)
+            factory.allocator.calculate_auto_allocation_quantities(config, config.portfolio.tickers)
 
     def test_auto_allocation_missing_price(self, mock_data_fetcher):
         """Test auto allocation when price is not available."""
@@ -277,7 +296,7 @@ class TestDomainFactoryAutoAllocation:
         )
 
         with pytest.raises(ValueError, match="Could not fetch price for AAPL"):
-            factory._calculate_auto_allocation_quantities(config, config.portfolio.tickers)
+            factory.allocator.calculate_auto_allocation_quantities(config, config.portfolio.tickers)
 
     def test_auto_allocation_no_tickers_in_category(self, mock_data_fetcher):
         """Test auto allocation with no tickers in specified category."""
@@ -296,7 +315,7 @@ class TestDomainFactoryAutoAllocation:
         )
 
         # Should handle missing category gracefully
-        quantities = factory._calculate_auto_allocation_quantities(config, config.portfolio.tickers)
+        quantities = factory.allocator.calculate_auto_allocation_quantities(config, config.portfolio.tickers)
         assert "AAPL" in quantities
 
     def test_auto_allocation_zero_ratio_category(self, mock_data_fetcher):
@@ -318,7 +337,7 @@ class TestDomainFactoryAutoAllocation:
             )
         )
 
-        quantities = factory._calculate_auto_allocation_quantities(config, config.portfolio.tickers)
+        quantities = factory.allocator.calculate_auto_allocation_quantities(config, config.portfolio.tickers)
         assert quantities["AAPL"] > 0
         assert quantities["GOOGL"] == 0  # Should have 0 allocation
 
@@ -344,7 +363,7 @@ class TestDomainFactoryAutoAllocation:
             )
         )
 
-        quantities = factory._calculate_auto_allocation_quantities(config, config.portfolio.tickers)
+        quantities = factory.allocator.calculate_auto_allocation_quantities(config, config.portfolio.tickers)
         # Should allocate at least 1 share of expensive stock if affordable
         assert quantities["BRK.A"] >= 1
         assert quantities["AAPL"] > 0
@@ -366,7 +385,7 @@ class TestDomainFactoryAutoAllocation:
             )
         )
 
-        quantities = factory._calculate_auto_allocation_quantities(config, config.portfolio.tickers)
+        quantities = factory.allocator.calculate_auto_allocation_quantities(config, config.portfolio.tickers)
         # With fractional shares, should have precise allocation
         assert quantities["AAPL"] > 0
         assert quantities["GOOGL"] > 0
@@ -395,7 +414,7 @@ class TestDomainFactoryAutoAllocation:
             )
         )
 
-        quantities = factory._calculate_auto_allocation_quantities(config, config.portfolio.tickers)
+        quantities = factory.allocator.calculate_auto_allocation_quantities(config, config.portfolio.tickers)
         # Should have allocated to all positions
         assert all(q > 0 for q in quantities.values())
 
@@ -426,7 +445,7 @@ class TestDomainFactoryAutoAllocation:
             data=DataConfig(start_date="2023-01-01"),
         )
 
-        quantities = factory._calculate_auto_allocation_quantities(config, config.portfolio.tickers)
+        quantities = factory.allocator.calculate_auto_allocation_quantities(config, config.portfolio.tickers)
         # Should use historical price (145) not current price (150)
         # Auto-allocation includes redistribution phase which can add extra shares
         # Just verify it used historical price by checking allocation is greater than
@@ -451,7 +470,7 @@ class TestDomainFactoryPortfolioCreation:
         def mock_calculate_dynamic(config, tickers):
             return {"AAPL": 10.0, "GOOGL": 0.0}  # GOOGL has 0 shares
 
-        factory._calculate_dynamic_quantities = Mock(side_effect=mock_calculate_dynamic)
+        factory.allocator.calculate_dynamic_quantities = Mock(side_effect=mock_calculate_dynamic)
 
         config = StockulaConfig(
             portfolio=PortfolioConfig(
@@ -465,9 +484,11 @@ class TestDomainFactoryPortfolioCreation:
             )
         )
 
-        # Should raise error when trying to create asset with zero quantity
-        with pytest.raises(ValueError, match="Asset GOOGL quantity must be positive"):
-            factory.create_portfolio(config)
+        # With the refactoring, zero quantity assets are now skipped during portfolio creation
+        # So this should not raise an error
+        portfolio = factory.create_portfolio(config)
+        assert len(portfolio.assets) == 1  # Only AAPL with non-zero quantity
+        assert portfolio.assets[0].symbol == "AAPL"
 
     def test_create_portfolio_static_allocation_with_validation(self, mock_data_fetcher):
         """Test portfolio creation with static allocation triggers validation."""

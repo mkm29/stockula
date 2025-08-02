@@ -924,7 +924,7 @@ class TestDomainFactoryEdgeCases:
         config.portfolio.dynamic_allocation = True
         config.portfolio.tickers[0].allocation_pct = 100.0
 
-        with pytest.raises(ValueError, match="Data fetcher not configured"):
+        with pytest.raises(ValueError, match="Allocator not configured"):
             factory.create_portfolio(config)
 
     def test_calculate_dynamic_quantities_with_start_date_no_data(self):
@@ -960,7 +960,7 @@ class TestDomainFactoryEdgeCases:
         factory = DomainFactory(config=config, fetcher=mock_fetcher)
 
         # Calculate quantities
-        quantities = factory._calculate_dynamic_quantities(config, config.portfolio.tickers)
+        quantities = factory.allocator.calculate_dynamic_quantities(config, config.portfolio.tickers)
 
         # Should have used the week-later prices
         assert "AAPL" in quantities
@@ -989,7 +989,7 @@ class TestDomainFactoryEdgeCases:
         factory = DomainFactory(config=config, fetcher=mock_fetcher)
 
         # Calculate quantities
-        quantities = factory._calculate_dynamic_quantities(config, config.portfolio.tickers)
+        quantities = factory.allocator.calculate_dynamic_quantities(config, config.portfolio.tickers)
 
         # Should have used current price as fallback
         assert "AAPL" in quantities
@@ -1016,7 +1016,7 @@ class TestDomainFactoryEdgeCases:
         factory = DomainFactory(config=config, fetcher=mock_fetcher)
 
         # Calculate quantities - should handle exception and use current prices
-        quantities = factory._calculate_dynamic_quantities(config, config.portfolio.tickers)
+        quantities = factory.allocator.calculate_dynamic_quantities(config, config.portfolio.tickers)
 
         assert "AAPL" in quantities
         assert quantities["AAPL"] > 0
@@ -1045,7 +1045,7 @@ class TestDomainFactoryEdgeCases:
         factory = DomainFactory(config=config, fetcher=mock_fetcher)
 
         # Calculate quantities
-        quantities = factory._calculate_dynamic_quantities(config, config.portfolio.tickers)
+        quantities = factory.allocator.calculate_dynamic_quantities(config, config.portfolio.tickers)
 
         assert "AAPL" in quantities
         assert quantities["AAPL"] > 0
@@ -1091,7 +1091,7 @@ class TestDomainFactoryEdgeCases:
 
         factory = DomainFactory(config=config, fetcher=mock_fetcher)
 
-        quantities = factory._calculate_auto_allocation_quantities(config, config.portfolio.tickers)
+        quantities = factory.allocator.calculate_auto_allocation_quantities(config, config.portfolio.tickers)
 
         # Check that quantities are fractional
         assert "AAPL" in quantities
@@ -1125,7 +1125,7 @@ class TestDomainFactoryEdgeCases:
 
         factory = DomainFactory(config=config, fetcher=mock_fetcher)
 
-        quantities = factory._calculate_auto_allocation_quantities(config, config.portfolio.tickers)
+        quantities = factory.allocator.calculate_auto_allocation_quantities(config, config.portfolio.tickers)
 
         # AAPL should get allocation, GOOGL should get 0
         assert quantities["AAPL"] > 0
@@ -1191,7 +1191,7 @@ class TestDomainFactoryEdgeCases:
         factory = DomainFactory(config=config, fetcher=mock_fetcher)
 
         with pytest.raises(ValueError, match="Could not fetch price"):
-            factory._calculate_dynamic_quantities(config, config.portfolio.tickers)
+            factory.allocator.calculate_dynamic_quantities(config, config.portfolio.tickers)
 
     def test_ticker_config_requires_allocation(self):
         """Test that TickerConfig requires some form of allocation."""

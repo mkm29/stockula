@@ -6,6 +6,7 @@ from .backtesting.runner import BacktestRunner
 from .config import load_config
 from .data.fetcher import DataFetcher
 from .database.manager import DatabaseManager
+from .domain.allocator import Allocator
 from .domain.factory import DomainFactory
 from .forecasting.forecaster import StockForecaster
 from .technical_analysis.indicators import TechnicalIndicators
@@ -43,6 +44,9 @@ class Container(containers.DeclarativeContainer):
         db_path=providers.Callable(lambda config: config.data.db_path, stockula_config),
         database_manager=database_manager,
     )
+
+    # Allocator
+    allocator = providers.Singleton(Allocator, fetcher=data_fetcher)
 
     # Domain factory
     domain_factory = providers.Singleton(DomainFactory, config=stockula_config, fetcher=data_fetcher)

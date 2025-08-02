@@ -1,5 +1,6 @@
 """Domain models for Stockula."""
 
+from .allocator import Allocator
 from .asset import Asset
 from .category import Category
 from .factory import DomainFactory
@@ -14,4 +15,5 @@ __all__ = [
     "Category",
     "Portfolio",
     "DomainFactory",
+    "Allocator",
 ]
