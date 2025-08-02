@@ -1,6 +1,9 @@
 """Shared pytest fixtures for the test suite."""
 
+import glob
+import os
 from datetime import datetime
+from pathlib import Path
 from unittest.mock import Mock, patch
 
 import numpy as np
@@ -12,6 +15,44 @@ import pytest
 def pytest_configure(config):
     """Configure pytest with xdist-specific markers."""
     config.addinivalue_line("markers", "xdist_group(name): mark test to run in the same xdist worker")
+
+
+def pytest_sessionfinish(session, exitstatus):
+    """Clean up temporary coverage files after test session completes."""
+    # Only run cleanup on the main process (not on workers)
+    if hasattr(session.config, "workerinput"):
+        return
+
+    # Get the root directory
+    root_dir = Path(__file__).parent.parent
+
+    # Find all temporary coverage files
+    coverage_pattern = str(root_dir / ".coverage.*")
+    temp_coverage_files = glob.glob(coverage_pattern)
+
+    # Combine coverage data if coverage is installed and was used
+    if temp_coverage_files and session.config.getoption("--cov", default=None):
+        try:
+            import coverage
+
+            cov = coverage.Coverage(data_file=str(root_dir / ".coverage"))
+            cov.combine(data_paths=temp_coverage_files, strict=True)
+            cov.save()
+
+            # Clean up temporary files after combining
+            for temp_file in temp_coverage_files:
+                try:
+                    os.remove(temp_file)
+                except OSError:
+                    pass  # Ignore errors if file is already deleted
+
+        except Exception:
+            # If coverage combine fails, still try to clean up
+            for temp_file in temp_coverage_files:
+                try:
+                    os.remove(temp_file)
+                except OSError:
+                    pass
 
 
 @pytest.fixture(scope="session")

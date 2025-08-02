@@ -1,7 +1,7 @@
 """Unit tests for data fetcher module."""
 
 from datetime import datetime
-from unittest.mock import Mock, patch
+from unittest.mock import Mock, PropertyMock, patch
 
 import pandas as pd
 import pytest
@@ -1074,3 +1074,643 @@ class TestDataFetcherTreasuryRates:
         # Test invalid duration (should default to 3_month)
         rate = fetcher.get_treasury_rate("2024-01-15", "invalid_duration")
         assert rate == 0.05
+
+
+class TestDataFetcherProgressBars:
+    """Test progress bar functionality for current prices."""
+
+    def test_get_current_prices_with_progress_bar(self):
+        """Test current prices with progress bar for multiple symbols - covers lines 184-219."""
+        symbols = ["AAPL", "GOOGL", "MSFT", "TSLA"]
+
+        def side_effect(symbol):
+            mock_ticker = Mock()
+            mock_ticker.history.return_value = pd.DataFrame(
+                {"Close": [150.0 + hash(symbol) % 50]}, index=pd.date_range("2023-01-01", periods=1)
+            )
+            return mock_ticker
+
+        with patch("yfinance.Ticker", side_effect=side_effect):
+            fetcher = DataFetcher(use_cache=False)
+            prices = fetcher.get_current_prices(symbols, show_progress=True)
+
+            assert len(prices) == 4
+            assert all(symbol in prices for symbol in symbols)
+
+    def test_get_current_prices_progress_with_info_fallback(self):
+        """Test progress bar with info fallback - covers lines 208-215."""
+        symbols = ["TEST1", "TEST2"]
+
+        def side_effect(symbol):
+            mock_ticker = Mock()
+            mock_ticker.history.return_value = pd.DataFrame()  # Empty history
+            if symbol == "TEST1":
+                mock_ticker.info = {"currentPrice": 155.75}
+            else:
+                mock_ticker.info = {"regularMarketPrice": 160.25}
+            return mock_ticker
+
+        with patch("yfinance.Ticker", side_effect=side_effect):
+            fetcher = DataFetcher(use_cache=False)
+            prices = fetcher.get_current_prices(symbols, show_progress=True)
+
+            assert prices == {"TEST1": 155.75, "TEST2": 160.25}
+
+    def test_get_current_prices_progress_with_warning(self):
+        """Test progress bar with price warning - covers line 215."""
+        mock_ticker = Mock(spec=yf.Ticker)
+        mock_ticker.history.return_value = pd.DataFrame()  # Empty history
+        mock_ticker.info = {"longName": "Test Company"}  # No price fields
+
+        with patch("yfinance.Ticker", return_value=mock_ticker):
+            with patch("stockula.data.fetcher.console.print") as mock_console_print:
+                fetcher = DataFetcher(use_cache=False)
+                prices = fetcher.get_current_prices(["TEST1", "TEST2"], show_progress=True)
+
+                mock_console_print.assert_any_call("[yellow]Warning: Could not get current price for TEST1[/yellow]")
+                mock_console_print.assert_any_call("[yellow]Warning: Could not get current price for TEST2[/yellow]")
+                assert prices == {}
+
+    def test_get_current_prices_progress_with_exception(self):
+        """Test progress bar with exception handling - covers lines 216-217."""
+        mock_ticker = Mock(spec=yf.Ticker)
+        mock_ticker.history.side_effect = Exception("API error")
+
+        with patch("yfinance.Ticker", return_value=mock_ticker):
+            with patch("stockula.data.fetcher.console.print") as mock_console_print:
+                fetcher = DataFetcher(use_cache=False)
+                prices = fetcher.get_current_prices(["TEST1", "TEST2"], show_progress=True)
+
+                mock_console_print.assert_any_call("[red]Error fetching price for TEST1: API error[/red]")
+                mock_console_print.assert_any_call("[red]Error fetching price for TEST2: API error[/red]")
+                assert prices == {}
+
+
+class TestDataFetcherBatchOperations:
+    """Test batch data fetching operations."""
+
+    def test_get_stock_data_batch_all_cached(self):
+        """Test batch operation with all data in cache - covers lines 432-437."""
+        symbols = ["AAPL", "GOOGL", "MSFT"]
+        cached_data = pd.DataFrame({"Close": [150.0]}, index=pd.date_range("2023-01-01", periods=1))
+
+        mock_db = Mock()
+
+        with patch("stockula.data.fetcher.DatabaseManager", return_value=mock_db):
+            fetcher = DataFetcher(use_cache=True)
+            # Mock get_stock_data to return cached data
+            fetcher.get_stock_data = Mock(return_value=cached_data)
+
+            results = fetcher.get_stock_data_batch(symbols)
+
+            assert len(results) == 3
+            assert all(symbol in results for symbol in symbols)
+
+    def test_get_stock_data_batch_single_symbol(self):
+        """Test batch operation with single symbol - covers lines 458-464."""
+        mock_data = pd.DataFrame({"Close": [150.0]}, index=pd.date_range("2023-01-01", periods=1))
+
+        mock_db = Mock()
+
+        with patch("stockula.data.fetcher.DatabaseManager", return_value=mock_db):
+            with patch("yfinance.download", return_value=mock_data) as mock_download:
+                fetcher = DataFetcher(use_cache=True)
+                # Override get_stock_data to force batch download path
+                fetcher.get_stock_data = Mock(return_value=pd.DataFrame())  # Empty to force batch
+
+                results = fetcher.get_stock_data_batch(["AAPL"])
+
+                mock_download.assert_called_once()
+                assert "AAPL" in results
+
+    def test_get_stock_data_batch_multiple_symbols(self):
+        """Test batch operation with multiple symbols - covers lines 465-477."""
+        symbols = ["AAPL", "GOOGL", "MSFT"]
+
+        # Create multi-level DataFrame as yfinance.download returns
+        columns = pd.MultiIndex.from_tuples([("AAPL", "Close"), ("GOOGL", "Close"), ("MSFT", "Close")])
+        mock_data = pd.DataFrame([[150.0, 100.0, 300.0]], index=pd.date_range("2023-01-01", periods=1), columns=columns)
+
+        mock_db = Mock()
+
+        with patch("stockula.data.fetcher.DatabaseManager", return_value=mock_db):
+            with patch("yfinance.download", return_value=mock_data) as mock_download:
+                fetcher = DataFetcher(use_cache=True)
+                # Override get_stock_data to force batch download path
+                fetcher.get_stock_data = Mock(return_value=pd.DataFrame())  # Empty to force batch
+
+                results = fetcher.get_stock_data_batch(symbols)
+
+                mock_download.assert_called_once()
+                assert len(results) == 3
+                assert all(symbol in results for symbol in symbols)
+
+    def test_get_stock_data_batch_with_missing_symbol(self):
+        """Test batch operation with missing symbol data - covers line 477."""
+        symbols = ["AAPL", "INVALID"]
+
+        # Create data only for AAPL
+        columns = pd.MultiIndex.from_tuples([("AAPL", "Close")])
+        mock_data = pd.DataFrame([[150.0]], index=pd.date_range("2023-01-01", periods=1), columns=columns)
+
+        mock_db = Mock()
+
+        with patch("stockula.data.fetcher.DatabaseManager", return_value=mock_db):
+            with patch("yfinance.download", return_value=mock_data):
+                with patch("stockula.data.fetcher.logger.warning") as mock_warning:
+                    fetcher = DataFetcher(use_cache=True)
+                    fetcher.get_stock_data = Mock(return_value=pd.DataFrame())  # Empty to force batch
+
+                    results = fetcher.get_stock_data_batch(symbols)
+
+                    mock_warning.assert_called_with("No data returned for INVALID")
+                    assert "AAPL" in results
+                    assert "INVALID" not in results
+
+    def test_get_stock_data_batch_download_error_fallback(self):
+        """Test batch download error with individual fallback - covers lines 479-488."""
+        symbols = ["AAPL", "GOOGL"]
+
+        mock_db = Mock()
+        fallback_data = pd.DataFrame({"Close": [150.0]}, index=pd.date_range("2023-01-01", periods=1))
+
+        with patch("stockula.data.fetcher.DatabaseManager", return_value=mock_db):
+            with patch("yfinance.download", side_effect=Exception("Batch download failed")):
+                with patch("stockula.data.fetcher.logger.error") as mock_error:
+                    fetcher = DataFetcher(use_cache=True)
+                    # Mock individual get_stock_data to return data
+                    fetcher.get_stock_data = Mock(return_value=fallback_data)
+
+                    # First call returns empty to force batch, subsequent calls return data
+                    def side_effect(*args, **kwargs):
+                        if fetcher.get_stock_data.call_count <= 2:  # First 2 calls for cache check
+                            return pd.DataFrame()
+                        return fallback_data
+
+                    fetcher.get_stock_data.side_effect = side_effect
+
+                    results = fetcher.get_stock_data_batch(symbols)
+
+                    mock_error.assert_called_with("Error in batch download: Batch download failed")
+                    # Should have fallback data for both symbols
+                    assert len(results) >= 1
+
+    def test_get_stock_data_batch_individual_fallback_error(self):
+        """Test individual fallback error handling - covers line 488."""
+        symbols = ["AAPL", "INVALID"]
+
+        mock_db = Mock()
+
+        with patch("stockula.data.fetcher.DatabaseManager", return_value=mock_db):
+            with patch("yfinance.download", side_effect=Exception("Batch download failed")):
+                with patch("stockula.data.fetcher.logger.error") as mock_error:
+                    fetcher = DataFetcher(use_cache=True)
+
+                    # Mock individual get_stock_data - first calls empty (cache check), then error
+                    # Mock individual get_stock_data properly
+                    with patch.object(fetcher, "get_stock_data") as mock_get_stock_data:
+
+                        def side_effect(*args, **kwargs):
+                            call_count = mock_get_stock_data.call_count
+                            if call_count <= 2:  # Cache check calls
+                                return pd.DataFrame()
+                            if "INVALID" in args[0]:  # Individual fallback fails for INVALID
+                                raise Exception("Error fetching INVALID")
+                            return pd.DataFrame({"Close": [150]}, index=pd.date_range("2023-01-01", periods=1))
+
+                        mock_get_stock_data.side_effect = side_effect
+
+                    fetcher.get_stock_data_batch(symbols)
+
+                    # Should log batch error
+                    mock_error.assert_any_call("Error in batch download: Batch download failed")
+
+
+class TestDataFetcherCurrentPricesBatch:
+    """Test batch current prices functionality."""
+
+    def test_get_current_prices_batch_with_fast_info(self):
+        """Test batch current prices with fast_info - covers lines 504-512."""
+        symbols = ["AAPL", "GOOGL", "MSFT"]
+
+        # Mock Tickers class
+        mock_tickers = Mock()
+        mock_ticker_instances = {}
+
+        for symbol in symbols:
+            mock_ticker = Mock()
+            mock_fast_info = Mock()
+            mock_fast_info.last_price = 150.0 + hash(symbol) % 50
+            mock_ticker.fast_info = mock_fast_info
+            mock_ticker_instances[symbol] = mock_ticker
+
+        mock_tickers.tickers = mock_ticker_instances
+
+        with patch("yfinance.Tickers", return_value=mock_tickers):
+            fetcher = DataFetcher(use_cache=False)
+            prices = fetcher.get_current_prices_batch(symbols)
+
+            assert len(prices) == 3
+            assert all(symbol in prices for symbol in symbols)
+            assert all(isinstance(price, float) for price in prices.values())
+
+    def test_get_current_prices_batch_with_info_fallback(self):
+        """Test batch current prices with info fallback - covers lines 514-518."""
+        symbols = ["AAPL", "GOOGL"]
+
+        mock_tickers = Mock()
+        mock_ticker_instances = {}
+
+        for i, symbol in enumerate(symbols):
+            mock_ticker = Mock()
+            mock_fast_info = Mock()
+            # First symbol has no last_price, second has no fast_info
+            if i == 0:
+                mock_fast_info.last_price = None
+                mock_ticker.fast_info = mock_fast_info
+                mock_ticker.info = {"regularMarketPrice": 155.0}
+            else:
+                mock_ticker.fast_info = Mock()
+                del mock_ticker.fast_info.last_price  # AttributeError when accessed
+                mock_ticker.info = {"previousClose": 160.0}
+            mock_ticker_instances[symbol] = mock_ticker
+
+        mock_tickers.tickers = mock_ticker_instances
+
+        with patch("yfinance.Tickers", return_value=mock_tickers):
+            fetcher = DataFetcher(use_cache=False)
+            prices = fetcher.get_current_prices_batch(symbols)
+
+            assert prices["AAPL"] == 155.0
+            assert prices["GOOGL"] == 160.0
+
+    def test_get_current_prices_batch_with_error_and_individual_fallback(self):
+        """Test batch current prices with error and individual fallback - covers lines 519-527."""
+        symbols = ["AAPL", "ERROR_SYMBOL"]
+
+        mock_tickers = Mock()
+        mock_ticker_instances = {}
+
+        # Good symbol
+        good_ticker = Mock()
+        good_fast_info = Mock()
+        good_fast_info.last_price = 150.0
+        good_ticker.fast_info = good_fast_info
+        mock_ticker_instances["AAPL"] = good_ticker
+
+        # Error symbol
+        error_ticker = Mock()
+        error_ticker.fast_info = Mock()
+        # This will raise an exception when accessed
+        type(error_ticker.fast_info).last_price = PropertyMock(side_effect=Exception("Fast info error"))
+        error_ticker.info = Mock()
+        error_ticker.info.get.side_effect = Exception("Info error")
+        mock_ticker_instances["ERROR_SYMBOL"] = error_ticker
+
+        mock_tickers.tickers = mock_ticker_instances
+
+        with patch("yfinance.Tickers", return_value=mock_tickers):
+            with patch("stockula.data.fetcher.logger.error") as mock_error:
+                fetcher = DataFetcher(use_cache=False)
+                # Mock individual fallback to return data
+                fetcher.get_current_prices = Mock(return_value={"ERROR_SYMBOL": 999.0})
+
+                prices = fetcher.get_current_prices_batch(symbols)
+
+                mock_error.assert_called()  # Should log error for ERROR_SYMBOL
+                assert prices["AAPL"] == 150.0
+                assert prices["ERROR_SYMBOL"] == 999.0  # From individual fallback
+
+    def test_get_current_prices_batch_complete_fallback_failure(self):
+        """Test batch current prices with complete fallback failure - covers lines 526-527."""
+        symbols = ["ERROR_SYMBOL"]
+
+        mock_tickers = Mock()
+        mock_ticker = Mock()
+        mock_ticker.fast_info = Mock()
+        type(mock_ticker.fast_info).last_price = PropertyMock(side_effect=Exception("Fast info error"))
+        mock_ticker.info = Mock()
+        mock_ticker.info.get.side_effect = Exception("Info error")
+        mock_tickers.tickers = {"ERROR_SYMBOL": mock_ticker}
+
+        with patch("yfinance.Tickers", return_value=mock_tickers):
+            with patch("stockula.data.fetcher.logger.error") as mock_error:
+                fetcher = DataFetcher(use_cache=False)
+                # Mock individual fallback to also fail
+                fetcher.get_current_prices = Mock(side_effect=Exception("Individual fallback failed"))
+
+                prices = fetcher.get_current_prices_batch(symbols)
+
+                mock_error.assert_called()  # Should log error
+                assert "ERROR_SYMBOL" not in prices  # Symbol should not be in results
+
+
+class TestDataFetcherLifecycleManagement:
+    """Test DataFetcher lifecycle and cleanup methods."""
+
+    def test_close_method_owns_db(self):
+        """Test close method when fetcher owns database - covers lines 61-63."""
+        mock_db = Mock()
+
+        with patch("stockula.data.fetcher.DatabaseManager", return_value=mock_db):
+            fetcher = DataFetcher(use_cache=True)
+            assert fetcher._owns_db is True
+
+            fetcher.close()
+
+            mock_db.close.assert_called_once()
+            assert fetcher.db is None
+
+    def test_close_method_does_not_own_db(self):
+        """Test close method when fetcher doesn't own database."""
+        mock_db = Mock()
+
+        # Injected database manager
+        fetcher = DataFetcher(use_cache=True, database_manager=mock_db)
+        assert fetcher._owns_db is False
+
+        fetcher.close()
+
+        # Should not close injected database
+        mock_db.close.assert_not_called()
+
+    def test_del_method_calls_close(self):
+        """Test __del__ method calls close - covers lines 67-71."""
+        mock_db = Mock()
+
+        with patch("stockula.data.fetcher.DatabaseManager", return_value=mock_db):
+            fetcher = DataFetcher(use_cache=True)
+            close_method = Mock()
+            fetcher.close = close_method
+
+            fetcher.__del__()
+
+            close_method.assert_called_once()
+
+    def test_del_method_handles_exception(self):
+        """Test __del__ method handles exceptions gracefully - covers line 70-71."""
+        mock_db = Mock()
+
+        with patch("stockula.data.fetcher.DatabaseManager", return_value=mock_db):
+            fetcher = DataFetcher(use_cache=True)
+            fetcher.close = Mock(side_effect=Exception("Cleanup error"))
+
+            # Should not raise exception
+            try:
+                fetcher.__del__()
+            except Exception:
+                pytest.fail("__del__ should not raise exceptions")
+
+
+class TestDataFetcherTreasuryAdvanced:
+    """Test advanced Treasury rate functionality."""
+
+    def test_get_treasury_rates_from_cache(self):
+        """Test treasury rates from cache - covers lines 750-753."""
+        cached_rates = pd.Series([0.0525, 0.0526], index=pd.date_range("2024-01-01", periods=2))
+
+        mock_db = Mock()
+
+        with patch("stockula.data.fetcher.DatabaseManager", return_value=mock_db):
+            fetcher = DataFetcher(use_cache=True)
+            fetcher._get_cached_rates = Mock(return_value=cached_rates)
+
+            rates = fetcher.get_treasury_rates("2024-01-01", "2024-01-02", "3_month")
+
+            assert rates.equals(cached_rates)
+
+    def test_get_treasury_rates_with_progress(self):
+        """Test treasury rates with progress indication - covers line 756."""
+        mock_rates = pd.Series([0.0525], index=pd.date_range("2024-01-01", periods=1))
+
+        mock_db = Mock()
+
+        with patch("stockula.data.fetcher.DatabaseManager", return_value=mock_db):
+            fetcher = DataFetcher(use_cache=True)
+            fetcher._get_cached_rates = Mock(return_value=pd.Series(dtype=float))  # Empty cache
+            fetcher._fetch_rates_from_yfinance = Mock(return_value=mock_rates)
+            fetcher._cache_rates = Mock()
+
+            rates = fetcher.get_treasury_rates("2024-01-01", "2024-01-02", "3_month", force_refresh=True)
+
+            fetcher._fetch_rates_from_yfinance.assert_called_with(
+                "^IRX", pd.to_datetime("2024-01-01"), pd.to_datetime("2024-01-02"), show_progress=True
+            )
+            assert rates.equals(mock_rates)
+
+    def test_get_treasury_rates_caching(self):
+        """Test treasury rates caching behavior - covers lines 759-760."""
+        mock_rates = pd.Series([0.0525], index=pd.date_range("2024-01-01", periods=1))
+
+        mock_db = Mock()
+
+        with patch("stockula.data.fetcher.DatabaseManager", return_value=mock_db):
+            fetcher = DataFetcher(use_cache=True)
+            fetcher._get_cached_rates = Mock(return_value=pd.Series(dtype=float))  # Empty cache
+            fetcher._fetch_rates_from_yfinance = Mock(return_value=mock_rates)
+            fetcher._cache_rates = Mock()
+
+            fetcher.get_treasury_rates("2024-01-01", "2024-01-02", "3_month", force_refresh=True)
+
+            fetcher._cache_rates.assert_called_once_with("^IRX", mock_rates)
+
+    def test_fetch_rates_from_yfinance_with_progress(self):
+        """Test _fetch_rates_from_yfinance with progress - covers lines 800-816."""
+        mock_data = pd.DataFrame({"Close": [5.25]}, index=pd.date_range("2024-01-01", periods=1))
+
+        mock_ticker = Mock()
+        mock_ticker.history.return_value = mock_data
+
+        with patch("yfinance.Ticker", return_value=mock_ticker):
+            fetcher = DataFetcher(use_cache=False)
+            rates = fetcher._fetch_rates_from_yfinance(
+                "^IRX", datetime(2024, 1, 1), datetime(2024, 1, 2), show_progress=True
+            )
+
+            expected_rates = pd.Series([0.0525], index=mock_data.index)  # Converted to decimal
+            assert rates.equals(expected_rates)
+
+    def test_fetch_rates_from_yfinance_without_progress(self):
+        """Test _fetch_rates_from_yfinance without progress - covers lines 817-819."""
+        mock_data = pd.DataFrame({"Close": [5.25]}, index=pd.date_range("2024-01-01", periods=1))
+
+        mock_ticker = Mock()
+        mock_ticker.history.return_value = mock_data
+
+        with patch("yfinance.Ticker", return_value=mock_ticker):
+            fetcher = DataFetcher(use_cache=False)
+            rates = fetcher._fetch_rates_from_yfinance(
+                "^IRX", datetime(2024, 1, 1), datetime(2024, 1, 2), show_progress=False
+            )
+
+            expected_rates = pd.Series([0.0525], index=mock_data.index)  # Converted to decimal
+            assert rates.equals(expected_rates)
+
+    def test_fetch_rates_from_yfinance_empty_data(self):
+        """Test _fetch_rates_from_yfinance with empty data - covers lines 821-822."""
+        mock_ticker = Mock()
+        mock_ticker.history.return_value = pd.DataFrame()  # Empty DataFrame
+
+        with patch("yfinance.Ticker", return_value=mock_ticker):
+            fetcher = DataFetcher(use_cache=False)
+            rates = fetcher._fetch_rates_from_yfinance("^IRX", datetime(2024, 1, 1), datetime(2024, 1, 2))
+
+            assert rates.empty
+            assert rates.dtype == float
+
+    def test_fetch_rates_from_yfinance_non_irx_ticker(self):
+        """Test _fetch_rates_from_yfinance with non-IRX ticker - covers lines 827-829."""
+        mock_data = pd.DataFrame({"Close": [0.0525]}, index=pd.date_range("2024-01-01", periods=1))
+
+        mock_ticker = Mock()
+        mock_ticker.history.return_value = mock_data
+
+        with patch("yfinance.Ticker", return_value=mock_ticker):
+            fetcher = DataFetcher(use_cache=False)
+            rates = fetcher._fetch_rates_from_yfinance(
+                "BIL",  # Not ^IRX
+                datetime(2024, 1, 1),
+                datetime(2024, 1, 2),
+            )
+
+            # Should not convert (already in decimal)
+            expected_rates = pd.Series([0.0525], index=mock_data.index)
+            assert rates.equals(expected_rates)
+
+    def test_fetch_rates_from_yfinance_error_handling(self):
+        """Test _fetch_rates_from_yfinance error handling - covers lines 833-835."""
+        with patch("yfinance.Ticker", side_effect=Exception("Network error")):
+            with patch("stockula.data.fetcher.console.print") as mock_console_print:
+                fetcher = DataFetcher(use_cache=False)
+                rates = fetcher._fetch_rates_from_yfinance("^IRX", datetime(2024, 1, 1), datetime(2024, 1, 2))
+
+                mock_console_print.assert_called_with(
+                    "[red]Error fetching Treasury rates for ^IRX: Network error[/red]"
+                )
+                assert rates.empty
+                assert rates.dtype == float
+
+    def test_get_cached_rate_no_db(self):
+        """Test _get_cached_rate with no database - covers lines 839-840."""
+        fetcher = DataFetcher(use_cache=False)
+        rate = fetcher._get_cached_rate("^IRX", datetime(2024, 1, 1))
+
+        assert rate is None
+
+    def test_get_cached_rate_with_data(self):
+        """Test _get_cached_rate with data - covers lines 848-851."""
+        mock_data = pd.DataFrame({"Close": [0.0525]}, index=pd.date_range("2024-01-01", periods=1))
+
+        mock_db = Mock()
+        mock_db.get_price_history.return_value = mock_data
+
+        with patch("stockula.data.fetcher.DatabaseManager", return_value=mock_db):
+            fetcher = DataFetcher(use_cache=True)
+            rate = fetcher._get_cached_rate("^IRX", datetime(2024, 1, 1))
+
+            assert rate == 0.0525
+
+    def test_get_cached_rate_db_none_check(self):
+        """Test _get_cached_rate with db None check - covers lines 846-847."""
+        mock_db = Mock()
+
+        with patch("stockula.data.fetcher.DatabaseManager", return_value=mock_db):
+            fetcher = DataFetcher(use_cache=True)
+            fetcher.db = None  # Set db to None manually
+
+            rate = fetcher._get_cached_rate("^IRX", datetime(2024, 1, 1))
+
+            assert rate is None
+
+    def test_get_cached_rates_no_db(self):
+        """Test _get_cached_rates with no database - covers lines 857-858."""
+        fetcher = DataFetcher(use_cache=False)
+        rates = fetcher._get_cached_rates("^IRX", datetime(2024, 1, 1), datetime(2024, 1, 2))
+
+        assert rates.empty
+        assert rates.dtype == float
+
+    def test_get_cached_rates_db_none_check(self):
+        """Test _get_cached_rates with db None check - covers lines 865-866."""
+        mock_db = Mock()
+
+        with patch("stockula.data.fetcher.DatabaseManager", return_value=mock_db):
+            fetcher = DataFetcher(use_cache=True)
+            fetcher.db = None  # Set db to None manually
+
+            rates = fetcher._get_cached_rates("^IRX", datetime(2024, 1, 1), datetime(2024, 1, 2))
+
+            assert rates.empty
+            assert rates.dtype == float
+
+    def test_get_cached_rates_with_data(self):
+        """Test _get_cached_rates with data - covers lines 869-870."""
+        mock_data = pd.DataFrame({"Close": [0.0525, 0.0526]}, index=pd.date_range("2024-01-01", periods=2))
+
+        mock_db = Mock()
+        mock_db.get_price_history.return_value = mock_data
+
+        with patch("stockula.data.fetcher.DatabaseManager", return_value=mock_db):
+            fetcher = DataFetcher(use_cache=True)
+            rates = fetcher._get_cached_rates("^IRX", datetime(2024, 1, 1), datetime(2024, 1, 2))
+
+            expected_rates = mock_data["Close"]
+            assert rates.equals(expected_rates)
+
+    def test_cache_rate_no_db(self):
+        """Test _cache_rate with no database - covers lines 876-877."""
+        fetcher = DataFetcher(use_cache=False)
+        # Should not raise exception
+        fetcher._cache_rate("^IRX", datetime(2024, 1, 1), 0.0525)
+
+    def test_cache_rate_db_none_check(self):
+        """Test _cache_rate with db None check - covers lines 892-893."""
+        mock_db = Mock()
+
+        with patch("stockula.data.fetcher.DatabaseManager", return_value=mock_db):
+            fetcher = DataFetcher(use_cache=True)
+            fetcher.db = None  # Set db to None manually
+
+            # Should not raise exception and not call store methods
+            fetcher._cache_rate("^IRX", datetime(2024, 1, 1), 0.0525)
+
+    def test_cache_rate_with_db(self):
+        """Test _cache_rate with database - covers lines 880-896."""
+        mock_db = Mock()
+
+        with patch("stockula.data.fetcher.DatabaseManager", return_value=mock_db):
+            fetcher = DataFetcher(use_cache=True)
+            fetcher._cache_rate("^IRX", datetime(2024, 1, 1), 0.0525)
+
+            # Should store both stock info and price history
+            mock_db.store_stock_info.assert_called_once()
+            mock_db.store_price_history.assert_called_once()
+
+    def test_cache_rates_no_db_or_empty(self):
+        """Test _cache_rates with no db or empty data - covers lines 900-901."""
+        fetcher = DataFetcher(use_cache=False)
+        empty_rates = pd.Series(dtype=float)
+
+        # Should not raise exception
+        fetcher._cache_rates("^IRX", empty_rates)
+
+    def test_cache_rates_with_db(self):
+        """Test _cache_rates with database - covers lines 904-919."""
+        mock_rates = pd.Series([0.0525, 0.0526], index=pd.date_range("2024-01-01", periods=2))
+        mock_db = Mock()
+
+        with patch("stockula.data.fetcher.DatabaseManager", return_value=mock_db):
+            fetcher = DataFetcher(use_cache=True)
+            fetcher._cache_rates("^IRX", mock_rates)
+
+            # Should store both stock info and price history
+            mock_db.store_stock_info.assert_called_once()
+            mock_db.store_price_history.assert_called_once()
+
+            # Verify the DataFrame structure
+            stored_df = mock_db.store_price_history.call_args[0][1]
+            assert "Open" in stored_df.columns
+            assert "High" in stored_df.columns
+            assert "Low" in stored_df.columns
+            assert "Close" in stored_df.columns
+            assert "Volume" in stored_df.columns

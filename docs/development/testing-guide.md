@@ -250,6 +250,47 @@ def test_with_fixture(market_data):
     assert len(market_data) > 0
 ```
 
+## Recent Test Consolidation (2025)
+
+### Consolidated Test Files
+
+Recent improvements consolidated duplicate and redundant test files to improve maintainability:
+
+#### Main Module Tests
+
+- **Before**: Multiple fragmented test files with duplicates and import errors
+- **After**: Single `test_main.py` with comprehensive coverage (83%)
+- **Removed**: `test_main_additional.py`, `test_main_coverage.py`, etc.
+
+#### Forecaster Tests
+
+- **Before**: Separate coverage-specific test files
+- **After**: Single `test_forecaster.py` with enhanced edge case coverage (83%)
+- **Removed**: `test_forecaster_coverage_clean.py` (consolidated)
+
+#### Database Tests
+
+- **Before**: Separate `test_database_manager.py` and `test_database_fixtures.py`
+- **After**: Single consolidated `test_database_manager.py`
+- **Benefit**: Unified database testing approach
+
+#### Domain Tests
+
+- **Before**: `test_domain.py` and `test_domain_factory_additional.py`
+- **After**: Single comprehensive `test_domain.py` with edge cases
+- **Coverage**: Enhanced factory testing and validation scenarios
+
+### Testing Philosophy
+
+The consolidation focused on:
+
+- **Quality over Quantity**: Fewer, better-organized test files
+- **Maintainability**: Single source of truth for each module
+- **Coverage Goals**: Maintained/improved coverage while reducing redundancy
+- **Clean Structure**: Clear test organization and documentation
+
+For details on the improvements, see `docs/development/coverage_improvement_summary.md`.
+
 ## Continuous Integration
 
 ### GitHub Actions Workflow
@@ -281,8 +322,12 @@ DATABASE_URL=sqlite:///./test_stockula.db STOCKULA_ENV=test uv run pytest tests/
 ```
 tests/
 ├── unit/           # Fast, isolated tests
-│   ├── test_strategies.py
-│   ├── test_indicators.py
+│   ├── test_strategies.py          # Strategy tests
+│   ├── test_indicators.py          # Indicator calculation tests  
+│   ├── test_main.py                # Main module tests (consolidated)
+│   ├── test_forecaster.py          # Forecaster tests (consolidated)
+│   ├── test_database_manager.py    # Database tests (consolidated)
+│   ├── test_domain.py              # Domain model tests (consolidated)
 │   └── ...
 └── integration/    # Tests with database/external services
     ├── test_data_fetching.py

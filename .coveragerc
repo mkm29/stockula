@@ -1,0 +1,28 @@
+[run]
+source = src/stockula
+parallel = true
+data_file = .coverage
+omit =
+    */tests/*
+    */__init__.py
+    */conftest.py
+    */.venv/*
+    */venv/*
+
+[report]
+exclude_lines =
+    pragma: no cover
+    def __repr__
+    if __name__ == .__main__.:
+    raise AssertionError
+    raise NotImplementedError
+    if TYPE_CHECKING:
+    @abstractmethod
+    @overload
+    \.\.\.
+
+[html]
+directory = htmlcov
+
+[xml]
+output = coverage.xml
