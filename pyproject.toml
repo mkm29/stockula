@@ -50,7 +50,9 @@ dev-dependencies = [
     "mkdocs-material>=9.6.16",
     "pytest-xdist>=3.8.0",
     "pre-commit>=4.2.0",
+    "mypy>=1.17.1",
     "types-pyyaml>=6.0.12.20250516",
+    "types-requests>=2.32.0",
 ]
 
 [tool.coverage.run]
@@ -156,6 +158,14 @@ known-first-party = ["stockula"]
 [tool.pytest.ini_options]
 minversion = "8.0"
 testpaths = ["tests"]
+
+[tool.mypy]
+python_version = "3.13"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = false
+ignore_missing_imports = true
+exclude = ["tests/"]
 
 [project.scripts]
 lint = "scripts.lint:main"
