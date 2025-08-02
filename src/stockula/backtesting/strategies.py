@@ -1,4 +1,15 @@
-"""Trading strategies for backtesting."""
+"""Trading strategies for backtesting.
+
+⚠️ WARNING: This module has NOT been thoroughly tested due to complex dependencies
+on the backtesting.py library. Unit testing is extremely difficult because of tight
+coupling with the library's internal state management and indicator calculations.
+
+IMPORTANT: These strategies should be considered EXPERIMENTAL and used with caution
+in production environments. Comprehensive integration testing is planned for the future.
+
+TODO: Implement integration tests with known data and expected outcomes (Q2 2024)
+TODO: Consider refactoring to improve testability by separating calculations from logic
+"""
 
 from datetime import datetime, timedelta
 

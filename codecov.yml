@@ -1,0 +1,87 @@
+# Codecov configuration for Stockula project
+# Documentation: https://docs.codecov.com/docs/codecov-yaml
+codecov:
+  # Require CI builds to pass before processing coverage
+  require_ci_to_pass: true
+  # Set max report age to 24 hours
+  max_report_age: 24
+coverage:
+  # Coverage precision and rounding
+  precision: 2
+  round: down
+  # Coverage range for color coding (red -> yellow -> green)
+  range: "70...100"
+  status:
+    # Overall project coverage settings
+    project:
+      default:
+        # Maintain or improve coverage
+        target: auto
+        # Allow 1% coverage drop without failing
+        threshold: 1%
+        # Only measure lines, not branches
+        only_pulls: false
+    # Coverage for new code in pull requests
+    patch:
+      default:
+        # Require 80% coverage for new code
+        target: 80%
+        # Allow 5% drop in patch coverage
+        threshold: 5%
+comment:
+  # Comment on pull requests
+  layout: "reach,diff,flags,files,footer"
+  behavior: default
+  require_changes: false
+  require_base: true
+  require_head: true
+  # Show coverage tree in comments
+  show_carryforward_flags: true
+# Ignore these paths from coverage calculations
+ignore:
+  - "**/tests/**"
+  - "**/*_test.py"
+  - "**/test_*.py"
+  - "**/conftest.py"
+  - "setup.py"
+  - "**/__init__.py"
+  - "**/migrations/**"
+  - "docs/**"
+  - "scripts/**"
+  - ".github/**"
+  # Already excluded in .coveragerc but listed here for consistency
+  - "src/stockula/backtesting/strategies.py"
+# Flag specific coverage groups (optional, for future use)
+flags:
+  unit:
+    paths:
+      - src/stockula/
+    carryforward: false
+  integration:
+    paths:
+      - src/stockula/
+    carryforward: true
+# Component-specific coverage tracking
+component_management:
+  individual_components:
+    - component_id: domain
+      name: Domain Models
+      paths:
+        - src/stockula/domain/**
+    - component_id: backtesting
+      name: Backtesting Module
+      paths:
+        - src/stockula/backtesting/**
+    - component_id: data
+      name: Data Layer
+      paths:
+        - src/stockula/data/**
+        - src/stockula/database/**
+    - component_id: forecasting
+      name: Forecasting Module
+      paths:
+        - src/stockula/forecasting/**
+    - component_id: config
+      name: Configuration
+      paths:
+        - src/stockula/config/**

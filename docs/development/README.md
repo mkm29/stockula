@@ -16,13 +16,13 @@ Guidelines for working with AutoTS's threading limitations and recommendations f
 
 Documentation about the migration from SQLAlchemy to SQLModel for improved type safety and validation.
 
-### [Testing Guide](testing-guide.md)
+### [Testing](testing.md)
 
-Comprehensive guide for writing and running tests in Stockula.
+Comprehensive guide for testing in Stockula, including testing strategy, best practices, coverage improvements, and common patterns.
 
-### [Testing Strategy](testing-strategy.md)
+### [Test Coverage Status](test-coverage-status.md)
 
-Overview of the testing approach, including unit, integration, and end-to-end testing strategies.
+Detailed test coverage metrics, recent improvements, and important warnings about untested modules.
 
 ## Quick Links
 

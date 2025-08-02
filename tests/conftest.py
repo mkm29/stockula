@@ -62,14 +62,7 @@ def worker_id(request):
 
 
 from stockula.backtesting import BacktestRunner
-from stockula.config import (
-    BacktestConfig,
-    DataConfig,
-    ForecastConfig,
-    PortfolioConfig,
-    StockulaConfig,
-    TickerConfig,
-)
+from stockula.config import BacktestConfig, DataConfig, ForecastConfig, PortfolioConfig, StockulaConfig, TickerConfig
 from stockula.container import Container
 from stockula.data.fetcher import DataFetcher
 from stockula.database.manager import DatabaseManager

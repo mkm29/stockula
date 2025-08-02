@@ -2,11 +2,7 @@
 
 from datetime import datetime
 
-from stockula.config.models import (
-    BacktestResult,
-    PortfolioBacktestResults,
-    StrategyBacktestSummary,
-)
+from stockula.config.models import BacktestResult, PortfolioBacktestResults, StrategyBacktestSummary
 
 
 class TestBacktestResult:

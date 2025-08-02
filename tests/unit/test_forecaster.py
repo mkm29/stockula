@@ -10,11 +10,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from stockula.forecasting.forecaster import (
-    StockForecaster,
-    SuppressAutoTSOutput,
-    suppress_autots_output,
-)
+from stockula.forecasting.forecaster import StockForecaster, SuppressAutoTSOutput, suppress_autots_output
 
 
 class TestSuppressAutoTSOutput:

@@ -168,9 +168,7 @@ For comprehensive documentation, visit our [**MkDocs Documentation Site**](docs/
 
 ### 🛠️ Development
 
-- [**Testing**](docs/development/testing.md) - Test suite and coverage
-  - [**Guide**](docs/development/testing-guide.md) - Guide for writing and running tests for Stockula
-  - [**Strategies**](docs/development/testing-strategy.md) - Strategy testing best practices
+- [**Testing**](docs/development/testing.md) - Comprehensive testing guide, strategy, and coverage
 - [**CI/CD**](docs/development/ci-cd.md) - Continuous integration and deployment with GitHub Actions
 
 ### 🔍 Help

@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 # Multi-stage Dockerfile for Stockula trading platform
-# 
+#
 # Build stages:
 #   - base: System dependencies and build tools
 #   - dependencies: Python packages installation

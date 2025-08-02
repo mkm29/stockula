@@ -1,0 +1,32 @@
+# Basic Codecov configuration for Stockula project
+# This is a simpler alternative to codecov.yml - use one or the other
+coverage:
+  precision: 2
+  round: down
+  range: "70..100"
+  status:
+    project:
+      default:
+        # Automatically set target based on previous coverage
+        target: auto
+        # Allow 1% coverage variance without failing status check
+        threshold: 1%
+        # Compare against the base branch
+        base: auto
+    patch:
+      default:
+        # Require 80% coverage on new/modified code
+        target: 80%
+        # Be more lenient with patch coverage (10% threshold)
+        threshold: 10%
+comment:
+  layout: "header, diff, files, footer"
+  behavior: default
+ignore:
+  - "tests/**/*"
+  - "**/__init__.py"
+  - "setup.py"
+  - "docs/**"
+  - ".github/**"
+  # Excluded due to testing difficulties with backtesting.py library
+  - "src/stockula/backtesting/strategies.py"

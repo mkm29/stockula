@@ -58,9 +58,15 @@ nav:
       - Backtesting: user-guide/backtesting.md
       - Forecasting: user-guide/forecasting.md
       - Rich CLI Features: user-guide/rich-cli.md
+  - Development:
+      - Testing Guide: development/testing.md
+      - Test Coverage Status: development/test-coverage-status.md
+      - CI/CD: development/ci-cd.md
+      - AutoTS Threading: development/autots-threading-considerations.md
+      - SQLModel Migration: development/sqlmodel-migration.md
   - Deployment:
       - Docker: deployment/docker.md
-      - Data Structures: deployment/DATA_STRUCTURES.md
+      - Data Structures: deployment/data-structures.md
   - API Reference:
       - Strategies: api/strategies.md
   - Troubleshooting: troubleshooting.md
