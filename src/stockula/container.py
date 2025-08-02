@@ -80,6 +80,7 @@ class Container(containers.DeclarativeContainer):
         model_list=providers.Callable(lambda config: config.forecast.model_list, stockula_config),
         prediction_interval=providers.Callable(lambda config: config.forecast.prediction_interval, stockula_config),
         data_fetcher=data_fetcher,
+        logging_manager=logging_manager,
     )
 
     # Technical indicators factory
@@ -107,6 +108,8 @@ def create_container(config_path: str | None = None) -> Container:
             "stockula.domain.allocator",
             "stockula.data.fetcher",
             "stockula.domain.factory",
+            "stockula.domain.portfolio",
+            "stockula.forecasting.forecaster",
         ]
     )
 

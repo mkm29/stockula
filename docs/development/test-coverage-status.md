@@ -67,7 +67,7 @@ Until comprehensive testing is implemented:
 
 ### New Test Files
 
-- `test_factory_coverage.py`: 27 comprehensive test cases
+- `test_factory.py`: 27 comprehensive test cases
 - Consolidated ~75 new test cases across modules
 
 ### Testing Approach

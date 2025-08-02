@@ -239,12 +239,13 @@ class TestCategory:
 class TestPortfolio:
     """Test Portfolio domain model."""
 
-    def test_portfolio_creation(self):
+    def test_portfolio_creation(self, mock_logging_manager):
         """Test creating a portfolio."""
         portfolio = Portfolio(
             name_init="Test Portfolio",
             initial_capital_init=100000.0,
             allocation_method_init="equal_weight",
+            logging_manager_init=mock_logging_manager,
             max_position_size=25.0,
             stop_loss_pct=10.0,
         )

@@ -24,13 +24,7 @@ import pandas as pd
 from dependency_injector.wiring import Provide, inject
 from rich.console import Console
 from rich.panel import Panel
-from rich.progress import (
-    BarColumn,
-    Progress,
-    SpinnerColumn,
-    TextColumn,
-    TimeRemainingColumn,
-)
+from rich.progress import BarColumn, Progress, SpinnerColumn, TextColumn, TimeRemainingColumn
 from rich.table import Table
 
 from .backtesting import (
@@ -47,11 +41,7 @@ from .backtesting import (
     VIDYAStrategy,
 )
 from .config import StockulaConfig
-from .config.models import (
-    BacktestResult,
-    PortfolioBacktestResults,
-    StrategyBacktestSummary,
-)
+from .config.models import BacktestResult, PortfolioBacktestResults, StrategyBacktestSummary
 from .container import Container, create_container
 from .domain import Category
 from .interfaces import IBacktestRunner, IDataFetcher, ILoggingManager, IStockForecaster

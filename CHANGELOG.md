@@ -2,81 +2,70 @@
 
 ## [0.5.2](https://github.com/mkm29/stockula/compare/v0.5.1...v0.5.2) (2025-08-02)
 
-
 ### Bug Fixes
 
-* require successful run of test GitHub Action before docker-build is run ([d087013](https://github.com/mkm29/stockula/commit/d08701394061c9ff5c401bde3a90b73a3d3bca70))
-* require successful run of test GitHub Action before docker-build… ([38e94a8](https://github.com/mkm29/stockula/commit/38e94a81a5b3afa5da6e04f891e036a6cac23585))
+- require successful run of test GitHub Action before docker-build is run ([d087013](https://github.com/mkm29/stockula/commit/d08701394061c9ff5c401bde3a90b73a3d3bca70))
+- require successful run of test GitHub Action before docker-build… ([38e94a8](https://github.com/mkm29/stockula/commit/38e94a81a5b3afa5da6e04f891e036a6cac23585))
 
 ## [0.5.1](https://github.com/mkm29/stockula/compare/v0.5.0...v0.5.1) (2025-08-02)
 
-
 ### Bug Fixes
 
-* removed unused packages from pyproject.toml ([cf2abac](https://github.com/mkm29/stockula/commit/cf2abacd83f6eec1a20f47c3cc3dad4a021b48a9))
-* removed unused packages from pyproject.toml ([8bf22e1](https://github.com/mkm29/stockula/commit/8bf22e189b0b0167399c5f415464fa5918668884))
+- removed unused packages from pyproject.toml ([cf2abac](https://github.com/mkm29/stockula/commit/cf2abacd83f6eec1a20f47c3cc3dad4a021b48a9))
+- removed unused packages from pyproject.toml ([8bf22e1](https://github.com/mkm29/stockula/commit/8bf22e189b0b0167399c5f415464fa5918668884))
 
 ## [0.5.0](https://github.com/mkm29/stockula/compare/v0.4.3...v0.5.0) (2025-08-02)
 
-
 ### Features
 
-* Enhance documentation and testing coverage ([35aa9e4](https://github.com/mkm29/stockula/commit/35aa9e4ad7ed0f70ed2c00b033bf3a0b5ff87fc4))
-
+- Enhance documentation and testing coverage ([35aa9e4](https://github.com/mkm29/stockula/commit/35aa9e4ad7ed0f70ed2c00b033bf3a0b5ff87fc4))
 
 ### Bug Fixes
 
-* Enhance documentation and testing coverage ([3ffcc96](https://github.com/mkm29/stockula/commit/3ffcc967594a3f47aae83100bc9eb9dc89ae5a3e))
-* improve test coverage ([f19dffe](https://github.com/mkm29/stockula/commit/f19dffe92aa584ff1260a7e91f46fde692dabf09))
-
+- Enhance documentation and testing coverage ([3ffcc96](https://github.com/mkm29/stockula/commit/3ffcc967594a3f47aae83100bc9eb9dc89ae5a3e))
+- improve test coverage ([f19dffe](https://github.com/mkm29/stockula/commit/f19dffe92aa584ff1260a7e91f46fde692dabf09))
 
 ### Code Refactoring
 
-* clean up Hadolint config and enhance test coverage for configuration loading ([c25c2c3](https://github.com/mkm29/stockula/commit/c25c2c3c0c2599e1729b105889813922f2065999))
-
+- clean up Hadolint config and enhance test coverage for configuration loading ([c25c2c3](https://github.com/mkm29/stockula/commit/c25c2c3c0c2599e1729b105889813922f2065999))
 
 ### Miscellaneous Chores
 
-* Update test workflow to simplify unit test command and add JUnit XML reporting ([55aa3a1](https://github.com/mkm29/stockula/commit/55aa3a11e23d7b86d2136c9e10b109a3ed53bd7b))
+- Update test workflow to simplify unit test command and add JUnit XML reporting ([55aa3a1](https://github.com/mkm29/stockula/commit/55aa3a11e23d7b86d2136c9e10b109a3ed53bd7b))
 
 ## [0.4.3](https://github.com/mkm29/stockula/compare/v0.4.2...v0.4.3) (2025-08-01)
 
-
 ### Bug Fixes
 
-* improve test coverage ([cfeafd1](https://github.com/mkm29/stockula/commit/cfeafd1caf2e2b78d1f90e7ed357149855b53410))
+- improve test coverage ([cfeafd1](https://github.com/mkm29/stockula/commit/cfeafd1caf2e2b78d1f90e7ed357149855b53410))
 
 ## [0.4.2](https://github.com/mkm29/stockula/compare/v0.4.1...v0.4.2) (2025-08-01)
 
-
 ### Bug Fixes
 
-* changed the tagging of docker images in docker-build.yml ([71f17e6](https://github.com/mkm29/stockula/commit/71f17e600160646609aacfe0d715742eaa4ddcaf))
-* reverted to previous docker build (only build cli) ([237ee63](https://github.com/mkm29/stockula/commit/237ee63ed6ba9b3cb5fc29a6b9352a99319517e6))
+- changed the tagging of docker images in docker-build.yml ([71f17e6](https://github.com/mkm29/stockula/commit/71f17e600160646609aacfe0d715742eaa4ddcaf))
+- reverted to previous docker build (only build cli) ([237ee63](https://github.com/mkm29/stockula/commit/237ee63ed6ba9b3cb5fc29a6b9352a99319517e6))
 
 ## [0.4.1](https://github.com/mkm29/stockula/compare/v0.4.0...v0.4.1) (2025-08-01)
 
-
 ### Bug Fixes
 
-* added disk space cleanup acton ([1496631](https://github.com/mkm29/stockula/commit/1496631bb3e8d861e7fb84b5b1b39ce72c6c0b2f))
-* added disk space cleanup acton ([0b5278b](https://github.com/mkm29/stockula/commit/0b5278bf820a4062c5f6cdaa139b13ce411f3a9c))
+- added disk space cleanup acton ([1496631](https://github.com/mkm29/stockula/commit/1496631bb3e8d861e7fb84b5b1b39ce72c6c0b2f))
+- added disk space cleanup acton ([0b5278b](https://github.com/mkm29/stockula/commit/0b5278bf820a4062c5f6cdaa139b13ce411f3a9c))
 
 ## [0.4.0](https://github.com/mkm29/stockula/compare/v0.3.2...v0.4.0) (2025-08-01)
 
-
 ### Features
 
-* enhance Docker workflows and documentation for production and C… ([43c4523](https://github.com/mkm29/stockula/commit/43c4523a2870f62aa91300d1451a6b8887eccc02))
-* enhance Docker workflows and documentation for production and CLI images ([d96038d](https://github.com/mkm29/stockula/commit/d96038d4909fb9ce7c816508d013ec5bdac84eb2))
+- enhance Docker workflows and documentation for production and C… ([43c4523](https://github.com/mkm29/stockula/commit/43c4523a2870f62aa91300d1451a6b8887eccc02))
+- enhance Docker workflows and documentation for production and CLI images ([d96038d](https://github.com/mkm29/stockula/commit/d96038d4909fb9ce7c816508d013ec5bdac84eb2))
 
 ## [0.3.2](https://github.com/mkm29/stockula/compare/v0.3.1...v0.3.2) (2025-08-01)
 
-
 ### Bug Fixes
 
-* optimized Dockerfile and build workflow for running on GitHub Ac… ([f9f52ac](https://github.com/mkm29/stockula/commit/f9f52acb195a65dbbb8b3710491ae78cc1920ff9))
-* optimized Dockerfile and build workflow for running on GitHub Actions ([13106b6](https://github.com/mkm29/stockula/commit/13106b6bd2c7428ef16b655ed515b3b1cde8cdc6))
+- optimized Dockerfile and build workflow for running on GitHub Ac… ([f9f52ac](https://github.com/mkm29/stockula/commit/f9f52acb195a65dbbb8b3710491ae78cc1920ff9))
+- optimized Dockerfile and build workflow for running on GitHub Actions ([13106b6](https://github.com/mkm29/stockula/commit/13106b6bd2c7428ef16b655ed515b3b1cde8cdc6))
 
 ## [0.3.1](https://github.com/mkm29/stockula/compare/v0.3.0...v0.3.1) (2025-08-01)
 

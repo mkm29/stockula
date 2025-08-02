@@ -1,6 +1,5 @@
 """Stock price forecasting using AutoTS - cleaned version without parallel processing."""
 
-import logging
 import os
 import signal
 import sys
@@ -11,15 +10,16 @@ from typing import TYPE_CHECKING, Any
 
 import pandas as pd
 from autots import AutoTS
+from dependency_injector.wiring import Provide, inject
 from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, TextColumn
+
+from ..interfaces import ILoggingManager
 
 console = Console()
 
 if TYPE_CHECKING:
     from ..data import DataFetcher
-
-logger = logging.getLogger(__name__)
 
 # Set up warning suppression for AutoTS
 warnings.filterwarnings("ignore", category=UserWarning, module="autots")
@@ -155,7 +155,7 @@ class SuppressAutoTSOutput:
                     return len(s)
 
                 # Only filter non-debug messages
-                if not logger.isEnabledFor(logging.DEBUG):
+                if True:  # Always filter for now since we can't access logger here
                     # List of patterns to suppress
                     suppress_patterns = [
                         "Model Number:",
@@ -305,6 +305,7 @@ class StockForecaster:
         "Theta",
     ]
 
+    @inject
     def __init__(
         self,
         forecast_length: int | None = None,
@@ -317,6 +318,7 @@ class StockForecaster:
         max_generations: int = 5,
         no_negatives: bool = True,
         data_fetcher: "DataFetcher | None" = None,
+        logging_manager: ILoggingManager = Provide["logging_manager"],
     ):
         """Initialize the stock forecaster.
 
@@ -332,6 +334,7 @@ class StockForecaster:
             max_generations: Maximum generations for model search
             no_negatives: Constraint predictions to be non-negative
             data_fetcher: Optional DataFetcher instance for retrieving stock data
+            logging_manager: Injected logging manager
         """
         self.forecast_length = forecast_length
         self.frequency = frequency
@@ -343,6 +346,7 @@ class StockForecaster:
         self.max_generations = max_generations
         self.no_negatives = no_negatives
         self.data_fetcher = data_fetcher
+        self.logger = logging_manager
         self.model = None
         self.prediction = None
 
@@ -361,7 +365,7 @@ class StockForecaster:
 
         # Map our presets to model lists
         if model_list == "ultra_fast":
-            logger.info(f"Using ultra-fast model list ({len(self.ULTRA_FAST_MODEL_LIST)} models) for {target_column}")
+            self.logger.info(f"Using ultra-fast model list ({len(self.ULTRA_FAST_MODEL_LIST)} models) for {target_column}")
             return self.ULTRA_FAST_MODEL_LIST
         elif model_list == "financial":
             return self.FINANCIAL_MODEL_LIST
@@ -418,13 +422,13 @@ class StockForecaster:
         data_for_model = data_for_model.reset_index()
         data_for_model.columns = ["date", target_column]
 
-        logger.debug(f"Fitting model on {len(data_for_model)} data points")
-        logger.debug(f"Date range: {data_for_model['date'].min()} to {data_for_model['date'].max()}")
+        self.logger.debug(f"Fitting model on {len(data_for_model)} data points")
+        self.logger.debug(f"Date range: {data_for_model['date'].min()} to {data_for_model['date'].max()}")
 
         try:
             # Set signal handler for graceful interruption
             def signal_handler(sig, frame):
-                logger.warning("Forecasting interrupted by user.")
+                print("Forecasting interrupted by user.")
                 sys.exit(0)
 
             signal.signal(signal.SIGINT, signal_handler)
@@ -478,7 +482,7 @@ class StockForecaster:
                     model_list_info = (
                         actual_model_list if isinstance(actual_model_list, str) else f"{len(actual_model_list)} models"
                     )
-                    logger.debug(
+                    self.logger.debug(
                         f"Fitting AutoTS with parameters: "
                         f"model_list={model_list_info}, "
                         f"max_generations={max_generations}"
@@ -548,7 +552,7 @@ class StockForecaster:
                     max_generations=max_generations,
                     num_validations=self.num_validations,
                     validation_method=self.validation_method,
-                    verbose=1 if logger.isEnabledFor(logging.DEBUG) else 0,  # Verbose only in debug mode
+                    verbose=1 if self.logger.isEnabledFor(10) else 0,  # Verbose only in debug mode
                     no_negatives=True,  # Stock prices can't be negative
                     drop_most_recent=0,  # Don't drop recent data
                     n_jobs=n_jobs_value,  # Limit to 1 in worker threads
@@ -560,7 +564,7 @@ class StockForecaster:
                 model_list_info = (
                     actual_model_list if isinstance(actual_model_list, str) else f"{len(actual_model_list)} models"
                 )
-                logger.debug(
+                self.logger.debug(
                     f"Fitting AutoTS with parameters: "
                     f"model_list={model_list_info}, "
                     f"max_generations={max_generations}, n_jobs={n_jobs_value}"
@@ -578,13 +582,13 @@ class StockForecaster:
                 if result is not None:
                     self.model = result
 
-            logger.debug("Model fitting completed")
+            self.logger.debug("Model fitting completed")
 
         except KeyboardInterrupt:
-            logger.warning("Model fitting interrupted by user.")
+            self.logger.warning("Model fitting interrupted by user.")
             raise
         except Exception as e:
-            logger.error(f"Error during model fitting: {str(e)}")
+            self.logger.error(f"Error during model fitting: {str(e)}")
             raise
 
         return self
@@ -598,13 +602,13 @@ class StockForecaster:
         if self.model is None:
             raise ValueError("Model not fitted. Call fit() first.")
 
-        logger.debug("Generating predictions...")
+        self.logger.debug("Generating predictions...")
 
         with suppress_autots_output():
             self.prediction = self.model.predict()
 
         forecast = self.prediction.forecast
-        logger.debug(f"Forecast shape: {forecast.shape}")
+        self.logger.debug(f"Forecast shape: {forecast.shape}")
 
         # Get upper and lower bounds
         upper_forecast = self.prediction.upper_forecast
@@ -619,7 +623,7 @@ class StockForecaster:
             }
         )
 
-        logger.debug(f"Generated {len(result)} forecast points")
+        self.logger.debug(f"Generated {len(result)} forecast points")
 
         return result
 
@@ -687,7 +691,7 @@ class StockForecaster:
                 business_days = pd.bdate_range(start=test_start, end=test_end)
                 temp_forecast_length = len(business_days)
 
-                logger.debug(f"Calculated forecast length from test period: {temp_forecast_length} business days")
+                self.logger.debug(f"Calculated forecast length from test period: {temp_forecast_length} business days")
 
                 # Temporarily set forecast length for this evaluation
                 original_forecast_length = self.forecast_length
@@ -804,7 +808,7 @@ class StockForecaster:
             "model_accuracy": getattr(self.model, "best_model_accuracy", "N/A"),
         }
 
-        logger.debug(f"Best model: {model_info['model_name']}")
+        self.logger.debug(f"Best model: {model_info['model_name']}")
 
         return model_info
 
@@ -902,6 +906,9 @@ class StockForecaster:
         Returns:
             Dictionary mapping symbols to their forecast results
         """
+        import logging
+        logger = logging.getLogger(__name__)
+        
         results = {}
 
         logger.info(f"Starting sequential forecast for {len(symbols)} symbols")

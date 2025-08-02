@@ -197,17 +197,17 @@ mock_ta_instance.sma.return_value = sma_mock
 
 ## Test Organization
 
-```
+```bash
 tests/
-├── unit/                          # Fast, isolated tests
-│   ├── test_strategies.py         # Strategy tests (60 tests)
-│   ├── test_indicators.py         # Indicator tests (25 tests)
-│   ├── test_main.py              # Main module tests (83% coverage)
-│   ├── test_forecaster.py        # Forecaster tests (83% coverage)
-│   ├── test_factory_coverage.py  # Factory tests (27 tests)
-│   ├── test_database_manager.py  # Database tests
-│   └── test_domain.py            # Domain model tests
-└── integration/                   # Tests with external dependencies
+├── unit/                           # Fast, isolated tests
+│   ├── test_strategies.py          # Strategy tests (60 tests)
+│   ├── test_indicators.py          # Indicator tests (25 tests)
+│   ├── test_main.py                # Main module tests (83% coverage)
+│   ├── test_forecaster.py          # Forecaster tests (83% coverage)
+│   ├── test_factory.py             # Factory tests (27 tests)
+│   ├── test_database_manager.py    # Database tests
+│   └── test_domain.py              # Domain model tests
+└── integration/                    # Tests with external dependencies
     └── test_data_fetching.py
 ```
 
