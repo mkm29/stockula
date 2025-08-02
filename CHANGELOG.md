@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.5.1](https://github.com/mkm29/stockula/compare/v0.5.0...v0.5.1) (2025-08-02)
+
+
+### Bug Fixes
+
+* removed unused packages from pyproject.toml ([cf2abac](https://github.com/mkm29/stockula/commit/cf2abacd83f6eec1a20f47c3cc3dad4a021b48a9))
+* removed unused packages from pyproject.toml ([8bf22e1](https://github.com/mkm29/stockula/commit/8bf22e189b0b0167399c5f415464fa5918668884))
+
 ## [0.5.0](https://github.com/mkm29/stockula/compare/v0.4.3...v0.5.0) (2025-08-02)
 
 
