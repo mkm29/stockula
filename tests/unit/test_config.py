@@ -18,6 +18,7 @@ from stockula.config import (
     save_config,
 )
 from stockula.config.models import MACDConfig, RSIConfig, SMACrossConfig, StrategyConfig
+from stockula.config.settings import load_yaml_config, parse_strategy_config
 
 
 class TestTickerConfig:
@@ -461,3 +462,190 @@ class TestConfigLoading:
         # checking os.environ.get("STOCKULA_CONFIG_FILE")
         loaded_config = load_config(str(config_file))
         assert isinstance(loaded_config, StockulaConfig)
+
+
+class TestSettingsModule:
+    """Test the settings module functions directly."""
+
+    def test_load_yaml_config_file_not_found(self):
+        """Test load_yaml_config raises FileNotFoundError for missing file."""
+        with pytest.raises(FileNotFoundError, match="Configuration file not found"):
+            load_yaml_config("nonexistent_file.yaml")
+
+    def test_load_yaml_config_success(self, tmp_path):
+        """Test load_yaml_config successfully loads YAML file."""
+        config_data = {
+            "portfolio": {"name": "Test Portfolio", "initial_capital": 50000},
+            "data": {"start_date": "2023-01-01", "end_date": "2023-12-31"},
+        }
+        config_file = tmp_path / "test_config.yaml"
+        with open(config_file, "w") as f:
+            yaml.dump(config_data, f)
+
+        result = load_yaml_config(config_file)
+        assert result == config_data
+        assert result["portfolio"]["name"] == "Test Portfolio"
+        assert result["data"]["start_date"] == "2023-01-01"
+
+    def test_parse_strategy_config_smacross(self):
+        """Test parse_strategy_config for SMACross strategy."""
+        strategy_dict = {"name": "SMACross", "parameters": {"fast_period": 10, "slow_period": 20}}
+        result = parse_strategy_config(strategy_dict)
+
+        assert isinstance(result, StrategyConfig)
+        assert result.name == "SMACross"
+        assert result.parameters["fast_period"] == 10
+        assert result.parameters["slow_period"] == 20
+
+    def test_parse_strategy_config_rsi(self):
+        """Test parse_strategy_config for RSI strategy."""
+        strategy_dict = {
+            "name": "RSI",
+            "parameters": {"period": 14, "oversold_threshold": 30.0, "overbought_threshold": 70.0},
+        }
+        result = parse_strategy_config(strategy_dict)
+
+        assert isinstance(result, StrategyConfig)
+        assert result.name == "RSI"
+        assert result.parameters["period"] == 14
+        assert result.parameters["oversold_threshold"] == 30.0
+        assert result.parameters["overbought_threshold"] == 70.0
+
+    def test_parse_strategy_config_macd(self):
+        """Test parse_strategy_config for MACD strategy."""
+        strategy_dict = {"name": "MACD", "parameters": {"fast_period": 12, "slow_period": 26, "signal_period": 9}}
+        result = parse_strategy_config(strategy_dict)
+
+        assert isinstance(result, StrategyConfig)
+        assert result.name == "MACD"
+        assert result.parameters["fast_period"] == 12
+        assert result.parameters["slow_period"] == 26
+        assert result.parameters["signal_period"] == 9
+
+    def test_parse_strategy_config_unknown_strategy(self):
+        """Test parse_strategy_config for unknown strategy type."""
+        strategy_dict = {"name": "CustomStrategy", "parameters": {"param1": "value1", "param2": 42}}
+        result = parse_strategy_config(strategy_dict)
+
+        assert isinstance(result, StrategyConfig)
+        assert result.name == "CustomStrategy"
+        assert result.parameters["param1"] == "value1"
+        assert result.parameters["param2"] == 42
+
+    def test_parse_strategy_config_no_name(self):
+        """Test parse_strategy_config with missing name field raises KeyError."""
+        strategy_dict = {"parameters": {"param1": "value1"}}
+        with pytest.raises(KeyError, match="name"):
+            parse_strategy_config(strategy_dict)
+
+    def test_parse_strategy_config_no_parameters(self):
+        """Test parse_strategy_config with missing parameters field."""
+        strategy_dict = {"name": "SimpleStrategy"}
+        result = parse_strategy_config(strategy_dict)
+
+        assert isinstance(result, StrategyConfig)
+        assert result.name == "SimpleStrategy"
+        assert result.parameters == {}
+
+    def test_load_config_with_default_files(self, tmp_path, monkeypatch):
+        """Test load_config checks for default config files."""
+        # Change to temp directory
+        monkeypatch.chdir(tmp_path)
+
+        # Create a .config.yaml file
+        config_data = {"portfolio": {"name": "Default Config Portfolio"}}
+        config_file = tmp_path / ".config.yaml"
+        with open(config_file, "w") as f:
+            yaml.dump(config_data, f)
+
+        result = load_config(None)
+        assert result.portfolio.name == "Default Config Portfolio"
+
+    def test_load_config_with_alternative_default_files(self, tmp_path, monkeypatch):
+        """Test load_config checks alternative default config files."""
+        # Change to temp directory
+        monkeypatch.chdir(tmp_path)
+
+        # Create a stockula.yml file (fourth in priority)
+        config_data = {"portfolio": {"name": "Stockula YML Config"}}
+        config_file = tmp_path / "stockula.yml"
+        with open(config_file, "w") as f:
+            yaml.dump(config_data, f)
+
+        result = load_config(None)
+        assert result.portfolio.name == "Stockula YML Config"
+
+    def test_load_config_with_strategies(self, tmp_path):
+        """Test load_config parses strategies correctly."""
+        config_data = {
+            "portfolio": {"name": "Strategy Test Portfolio"},
+            "backtest": {
+                "strategies": [
+                    {"name": "SMACross", "parameters": {"fast_period": 5, "slow_period": 15}},
+                    {"name": "RSI", "parameters": {"period": 21}},
+                    {"name": "CustomStrategy", "parameters": {"custom_param": "test"}},
+                ]
+            },
+        }
+
+        config_file = tmp_path / "strategy_config.yaml"
+        with open(config_file, "w") as f:
+            yaml.dump(config_data, f)
+
+        result = load_config(config_file)
+        assert len(result.backtest.strategies) == 3
+
+        # Check first strategy (SMACross)
+        assert result.backtest.strategies[0].name == "SMACross"
+        assert result.backtest.strategies[0].parameters["fast_period"] == 5
+
+        # Check second strategy (RSI)
+        assert result.backtest.strategies[1].name == "RSI"
+        assert result.backtest.strategies[1].parameters["period"] == 21
+
+        # Check third strategy (Custom)
+        assert result.backtest.strategies[2].name == "CustomStrategy"
+        assert result.backtest.strategies[2].parameters["custom_param"] == "test"
+
+    def test_load_config_backtest_without_strategies(self, tmp_path):
+        """Test load_config with backtest section but no strategies."""
+        config_data = {
+            "portfolio": {"name": "No Strategies Portfolio"},
+            "backtest": {"initial_cash": 25000.0, "commission": 0.001},
+        }
+
+        config_file = tmp_path / "no_strategies_config.yaml"
+        with open(config_file, "w") as f:
+            yaml.dump(config_data, f)
+
+        result = load_config(config_file)
+        assert result.portfolio.name == "No Strategies Portfolio"
+        assert result.backtest.initial_cash == 25000.0
+        assert result.backtest.commission == 0.001
+
+    def test_parse_strategy_config_case_insensitive(self):
+        """Test parse_strategy_config handles case insensitive strategy names."""
+        # Test lowercase strategy names
+        for strategy_name, _expected_class in [("smacross", SMACrossConfig), ("rsi", RSIConfig), ("macd", MACDConfig)]:
+            strategy_dict = {
+                "name": strategy_name.upper(),  # Use uppercase in name
+                "parameters": {},
+            }
+            result = parse_strategy_config(strategy_dict)
+            assert isinstance(result, StrategyConfig)
+            assert result.name == strategy_name.upper()
+
+    def test_load_config_environment_settings(self, tmp_path, monkeypatch):
+        """Test that Settings class is instantiated during load_config."""
+        config_data = {"portfolio": {"name": "Env Test Portfolio"}}
+        config_file = tmp_path / "env_config.yaml"
+        with open(config_file, "w") as f:
+            yaml.dump(config_data, f)
+
+        # Set environment variable
+        monkeypatch.setenv("STOCKULA_CONFIG_FILE", str(config_file))
+
+        # The Settings class should pick up the environment variable
+        # but since we're passing explicit path, it should use that
+        result = load_config(str(config_file))
+        assert result.portfolio.name == "Env Test Portfolio"

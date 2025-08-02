@@ -1,6 +1,5 @@
 # Hadolint configuration for Dockerfile linting
 # https://github.com/hadolint/hadolint
-
 # Ignore specific rules
 ignored:
   # DL3008: Pin versions in apt-get install
