@@ -1,11 +1,11 @@
 """Data fetching utilities using yfinance."""
 
-import logging
 from datetime import datetime, timedelta
 from typing import Any
 
 import pandas as pd
 import yfinance as yf
+from dependency_injector.wiring import Provide, inject
 from rich.console import Console
 from rich.progress import (
     BarColumn,
@@ -16,9 +16,9 @@ from rich.progress import (
 )
 
 from ..database import DatabaseManager
+from ..interfaces import ILoggingManager
 
 console = Console()
-logger = logging.getLogger(__name__)
 
 
 class DataFetcher:
@@ -33,11 +33,13 @@ class DataFetcher:
         "sgov": "SGOV",  # iShares 0-3 Month Treasury Bond ETF
     }
 
+    @inject
     def __init__(
         self,
         use_cache: bool = True,
         db_path: str = "stockula.db",
         database_manager: DatabaseManager | None = None,
+        logging_manager: ILoggingManager = Provide["logging_manager"],
     ):
         """Initialize data fetcher.
 
@@ -45,9 +47,11 @@ class DataFetcher:
             use_cache: Whether to use database caching
             db_path: Path to SQLite database file
             database_manager: Injected database manager instance
+            logging_manager: Injected logging manager
         """
         self.use_cache = use_cache
         self._owns_db = False  # Track if we created the DB manager
+        self.logger = logging_manager
 
         # Use injected database manager if provided, otherwise create one
         if database_manager is not None:
@@ -474,10 +478,10 @@ class DataFetcher:
                                 if self.use_cache and self.db is not None:
                                     self.db.store_price_history(symbol, symbol_data, interval)
                         except KeyError:
-                            logger.warning(f"No data returned for {symbol}")
+                            self.logger.warning(f"No data returned for {symbol}")
 
             except Exception as e:
-                logger.error(f"Error in batch download: {e}")
+                self.logger.error(f"Error in batch download: {e}")
                 # Fall back to individual downloads
                 for symbol in symbols_to_fetch:
                     try:
@@ -485,7 +489,7 @@ class DataFetcher:
                         if not data.empty:
                             results[symbol] = data
                     except Exception as e:
-                        logger.error(f"Error fetching {symbol}: {e}")
+                        self.logger.error(f"Error fetching {symbol}: {e}")
 
         return results
 
@@ -517,7 +521,7 @@ class DataFetcher:
                     if price:
                         prices[symbol] = float(price)
             except Exception as e:
-                logger.error(f"Error getting price for {symbol}: {e}")
+                self.logger.error(f"Error getting price for {symbol}: {e}")
                 # Try individual fetch as fallback
                 try:
                     individual_prices = self.get_current_prices(symbol, show_progress=False)

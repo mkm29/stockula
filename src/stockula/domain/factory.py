@@ -1,10 +1,12 @@
 """Factory for creating domain objects from configuration."""
 
-import logging
 from datetime import date
 from typing import TYPE_CHECKING
 
+from dependency_injector.wiring import Provide, inject
+
 from ..config import StockulaConfig, TickerConfig
+from ..interfaces import ILoggingManager
 from .allocator import Allocator
 from .asset import Asset
 from .category import Category
@@ -13,9 +15,6 @@ from .ticker import Ticker, TickerRegistry
 
 if TYPE_CHECKING:
     from ..interfaces import IDataFetcher
-
-# Create logger
-logger = logging.getLogger(__name__)
 
 
 def date_to_string(date_value: str | date | None) -> str | None:
@@ -30,11 +29,14 @@ def date_to_string(date_value: str | date | None) -> str | None:
 class DomainFactory:
     """Factory for creating domain objects from configuration."""
 
+    @inject
     def __init__(
         self,
         config: StockulaConfig | None = None,
         fetcher: "IDataFetcher | None" = None,
         ticker_registry: TickerRegistry | None = None,
+        allocator: Allocator | None = None,
+        logging_manager: ILoggingManager = Provide["logging_manager"],
     ):
         """Initialize factory with dependencies.
 
@@ -42,11 +44,15 @@ class DomainFactory:
             config: Configuration object
             fetcher: Data fetcher instance
             ticker_registry: Ticker registry instance
+            allocator: Allocator instance (if not provided, will be created from fetcher)
+            logging_manager: Injected logging manager
         """
         self.config = config
         self.fetcher = fetcher
         self.ticker_registry = ticker_registry or TickerRegistry()
-        self.allocator = Allocator(fetcher) if fetcher else None
+        # If allocator is provided, use it; otherwise create one if fetcher is available
+        self.allocator = allocator if allocator is not None else (Allocator(fetcher) if fetcher else None)
+        self.logger = logging_manager
 
     def _create_ticker(self, ticker_config: TickerConfig) -> Ticker:
         """Create or get ticker from configuration (internal method).
@@ -119,7 +125,7 @@ class DomainFactory:
 
         # Handle different allocation modes
         if config.portfolio.auto_allocate:
-            logger.info(
+            self.logger.info(
                 "Using auto-allocation - optimizing quantities based on category ratios "
                 "and capital utilization target..."
             )
@@ -134,9 +140,11 @@ class DomainFactory:
                     asset = self._create_asset(ticker_config, calculated_quantity)
                     portfolio.add_asset(asset)
                 else:
-                    logger.debug(f"Skipping {ticker_config.symbol} - 0 shares allocated")
+                    self.logger.debug(f"Skipping {ticker_config.symbol} - 0 shares allocated")
         elif config.portfolio.dynamic_allocation:
-            logger.info("Using dynamic allocation - calculating quantities based on allocation percentages/amounts...")
+            self.logger.info(
+                "Using dynamic allocation - calculating quantities based on allocation percentages/amounts..."
+            )
             if not self.allocator:
                 raise ValueError("Allocator not configured - data fetcher required for dynamic allocation")
             calculated_quantities = self.allocator.calculate_dynamic_quantities(config, tickers_to_add)
@@ -146,9 +154,9 @@ class DomainFactory:
                 if calculated_quantity is not None and calculated_quantity > 0:
                     asset = self._create_asset(ticker_config, calculated_quantity)
                     portfolio.add_asset(asset)
-                    logger.debug(f"  {ticker_config.symbol}: {calculated_quantity:.4f} shares")
+                    self.logger.debug(f"  {ticker_config.symbol}: {calculated_quantity:.4f} shares")
                 else:
-                    logger.debug(f"Skipping {ticker_config.symbol} - 0 shares allocated")
+                    self.logger.debug(f"Skipping {ticker_config.symbol} - 0 shares allocated")
         else:
             # Use static quantities from configuration
             for ticker_config in tickers_to_add:

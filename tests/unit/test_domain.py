@@ -8,12 +8,31 @@ import pytest
 
 from stockula.config import DataConfig, PortfolioConfig, StockulaConfig, TickerConfig
 from stockula.domain import Asset, Category, DomainFactory, Portfolio, Ticker, TickerRegistry
+from stockula.domain.allocator import Allocator
+
+
+@pytest.fixture
+def mock_logging_manager():
+    """Create a mock logging manager."""
+    logger = Mock()
+    logger.debug = Mock()
+    logger.info = Mock()
+    logger.warning = Mock()
+    logger.error = Mock()
+    return logger
+
+
+@pytest.fixture
+def mock_allocator(mock_data_fetcher, mock_logging_manager):
+    """Create a mock allocator with mocked logging manager."""
+    allocator = Allocator(mock_data_fetcher, logging_manager=mock_logging_manager)
+    return allocator
 
 
 class TestTicker:
     """Test Ticker domain model."""
 
-    def test_ticker_creation(self):
+    def test_ticker_creation(self, mock_logging_manager):
         """Test creating a ticker."""
         ticker = Ticker(
             symbol="AAPL",
@@ -369,9 +388,9 @@ class TestPortfolio:
 class TestDomainFactory:
     """Test DomainFactory."""
 
-    def test_create_portfolio_basic(self, sample_stockula_config, mock_data_fetcher):
+    def test_create_portfolio_basic(self, sample_stockula_config, mock_data_fetcher, mock_logging_manager):
         """Test creating a basic portfolio from config."""
-        factory = DomainFactory(fetcher=mock_data_fetcher)
+        factory = DomainFactory(fetcher=mock_data_fetcher, logging_manager=mock_logging_manager)
 
         # Mock validation methods to not raise errors
         with patch.object(Portfolio, "validate_capital_sufficiency"):
@@ -382,10 +401,12 @@ class TestDomainFactory:
         assert portfolio.initial_capital == 100000.0
         assert len(portfolio.assets) == 4
 
-    def test_create_portfolio_with_dynamic_allocation(self, dynamic_allocation_config, mock_data_fetcher):
+    def test_create_portfolio_with_dynamic_allocation(
+        self, dynamic_allocation_config, mock_data_fetcher, mock_logging_manager
+    ):
         """Test creating portfolio with dynamic allocation."""
         config = StockulaConfig(portfolio=dynamic_allocation_config)
-        factory = DomainFactory(fetcher=mock_data_fetcher)
+        factory = DomainFactory(fetcher=mock_data_fetcher, logging_manager=mock_logging_manager)
 
         portfolio = factory.create_portfolio(config)
 
@@ -399,10 +420,14 @@ class TestDomainFactory:
         googl_asset = portfolio.get_asset_by_symbol("GOOGL")
         assert googl_asset.quantity == pytest.approx(83.33, rel=0.01)
 
-    def test_create_portfolio_with_auto_allocation(self, auto_allocation_config, mock_data_fetcher):
+    def test_create_portfolio_with_auto_allocation(
+        self, auto_allocation_config, mock_data_fetcher, mock_allocator, mock_logging_manager
+    ):
         """Test creating portfolio with auto allocation."""
         config = StockulaConfig(portfolio=auto_allocation_config)
-        factory = DomainFactory(fetcher=mock_data_fetcher)
+        factory = DomainFactory(
+            fetcher=mock_data_fetcher, allocator=mock_allocator, logging_manager=mock_logging_manager
+        )
 
         portfolio = factory.create_portfolio(config)
 
@@ -421,7 +446,7 @@ class TestDomainFactory:
         index_pct = allocations["Index"]["percentage"]
         assert 30 < index_pct < 40  # Allow some variance
 
-    def test_create_portfolio_insufficient_allocation(self):
+    def test_create_portfolio_insufficient_allocation(self, mock_logging_manager):
         """Test creating portfolio with insufficient allocation info raises error."""
         from pydantic import ValidationError
 
@@ -438,9 +463,9 @@ class TestDomainFactory:
                 )
             )
 
-    def test_get_all_tickers(self, sample_stockula_config, mock_data_fetcher):
+    def test_get_all_tickers(self, sample_stockula_config, mock_data_fetcher, mock_logging_manager):
         """Test getting all tickers from factory."""
-        factory = DomainFactory(fetcher=mock_data_fetcher)
+        factory = DomainFactory(fetcher=mock_data_fetcher, logging_manager=mock_logging_manager)
 
         # Create portfolio to populate registry
         with patch.object(Portfolio, "validate_capital_sufficiency"):
@@ -457,9 +482,9 @@ class TestDomainFactory:
 class TestDomainFactoryAdvanced:
     """Test advanced DomainFactory functionality."""
 
-    def test_create_portfolio_edge_cases(self, mock_data_fetcher):
+    def test_create_portfolio_edge_cases(self, mock_data_fetcher, mock_logging_manager):
         """Test portfolio creation edge cases."""
-        factory = DomainFactory(fetcher=mock_data_fetcher)
+        factory = DomainFactory(fetcher=mock_data_fetcher, logging_manager=mock_logging_manager)
 
         # Test with minimal config
         minimal_config = StockulaConfig(
@@ -479,7 +504,7 @@ class TestDomainFactoryAdvanced:
         assert portfolio.initial_capital == 1000.0
         assert len(portfolio.assets) == 1
 
-    def test_create_portfolio_with_categories(self, mock_data_fetcher):
+    def test_create_portfolio_with_categories(self, mock_data_fetcher, mock_logging_manager):
         """Test portfolio creation with various category types."""
         config = StockulaConfig(
             portfolio=PortfolioConfig(
@@ -495,7 +520,7 @@ class TestDomainFactoryAdvanced:
             )
         )
 
-        factory = DomainFactory(fetcher=mock_data_fetcher)
+        factory = DomainFactory(fetcher=mock_data_fetcher, logging_manager=mock_logging_manager)
 
         with patch.object(Portfolio, "validate_capital_sufficiency"):
             with patch.object(Portfolio, "validate_allocation_constraints"):
@@ -511,7 +536,7 @@ class TestDomainFactoryAdvanced:
         }
         assert categories == expected_categories
 
-    def test_create_portfolio_dynamic_allocation_error_handling(self, mock_data_fetcher):
+    def test_create_portfolio_dynamic_allocation_error_handling(self, mock_data_fetcher, mock_logging_manager):
         """Test error handling in dynamic allocation."""
         # Patch the get_current_prices method to raise an exception
         with patch.object(
@@ -528,14 +553,14 @@ class TestDomainFactoryAdvanced:
                 )
             )
 
-            factory = DomainFactory(fetcher=mock_data_fetcher)
+            factory = DomainFactory(fetcher=mock_data_fetcher, logging_manager=mock_logging_manager)
 
             # Should handle price fetch errors gracefully or raise appropriate error
             with pytest.raises(Exception) as exc_info:
                 factory.create_portfolio(config)
             assert "Price fetch failed" in str(exc_info.value)
 
-    def test_create_portfolio_auto_allocation_categories(self, mock_data_fetcher):
+    def test_create_portfolio_auto_allocation_categories(self, mock_data_fetcher, mock_allocator, mock_logging_manager):
         """Test auto allocation with category ratios."""
         # Override the return value for this specific test
         with patch.object(
@@ -571,7 +596,9 @@ class TestDomainFactoryAdvanced:
                 )
             )
 
-            factory = DomainFactory(fetcher=mock_data_fetcher)
+            factory = DomainFactory(
+                fetcher=mock_data_fetcher, allocator=mock_allocator, logging_manager=mock_logging_manager
+            )
             portfolio = factory.create_portfolio(config)
 
             # Only tickers with non-zero category allocation should be included
@@ -584,9 +611,9 @@ class TestDomainFactoryAdvanced:
                 # VWO should not be in the portfolio
                 assert asset.ticker.symbol != "VWO"
 
-    def test_ticker_registry_integration(self, mock_data_fetcher):
+    def test_ticker_registry_integration(self, mock_data_fetcher, mock_logging_manager):
         """Test ticker registry integration with factory."""
-        factory = DomainFactory(fetcher=mock_data_fetcher)
+        factory = DomainFactory(fetcher=mock_data_fetcher, logging_manager=mock_logging_manager)
 
         # Clear registry first
         registry = TickerRegistry()
@@ -617,16 +644,16 @@ class TestDomainFactoryAdvanced:
         assert "AAPL" in registry_tickers
         assert "GOOGL" in registry_tickers
 
-    def test_factory_methods_consistency(self, mock_data_fetcher):
+    def test_factory_methods_consistency(self, mock_data_fetcher, mock_logging_manager):
         """Test that factory methods are consistent."""
-        factory = DomainFactory(fetcher=mock_data_fetcher)
+        factory = DomainFactory(fetcher=mock_data_fetcher, logging_manager=mock_logging_manager)
 
         # Test that get_all_tickers returns empty list initially
         initial_tickers = factory.get_all_tickers()
         assert isinstance(initial_tickers, list)
         assert len(initial_tickers) >= 0  # Could have tickers from other tests
 
-    def test_allocation_amount_calculation(self, mock_data_fetcher):
+    def test_allocation_amount_calculation(self, mock_data_fetcher, mock_logging_manager):
         """Test allocation amount calculation accuracy."""
         # Override the return value for this specific test
         with patch.object(
@@ -649,7 +676,7 @@ class TestDomainFactoryAdvanced:
                 )
             )
 
-            factory = DomainFactory(fetcher=mock_data_fetcher)
+            factory = DomainFactory(fetcher=mock_data_fetcher, logging_manager=mock_logging_manager)
             portfolio = factory.create_portfolio(config)
 
             # Check exact allocations
@@ -659,7 +686,7 @@ class TestDomainFactoryAdvanced:
             googl_asset = portfolio.get_asset_by_symbol("GOOGL")
             assert googl_asset.quantity == 2.0
 
-    def test_allocation_percentage_calculation(self, mock_data_fetcher):
+    def test_allocation_percentage_calculation(self, mock_data_fetcher, mock_logging_manager):
         """Test allocation percentage calculation."""
         # Override the return value for this specific test
         with patch.object(
@@ -679,7 +706,7 @@ class TestDomainFactoryAdvanced:
                 )
             )
 
-            factory = DomainFactory(fetcher=mock_data_fetcher)
+            factory = DomainFactory(fetcher=mock_data_fetcher, logging_manager=mock_logging_manager)
             portfolio = factory.create_portfolio(config)
 
             vti_asset = portfolio.get_asset_by_symbol("VTI")
@@ -692,7 +719,7 @@ class TestDomainFactoryAdvanced:
 class TestDomainFactoryErrorScenarios:
     """Test error scenarios in DomainFactory."""
 
-    def test_create_portfolio_zero_capital(self):
+    def test_create_portfolio_zero_capital(self, mock_logging_manager):
         """Test portfolio creation with zero capital."""
         from pydantic import ValidationError
 
@@ -707,7 +734,7 @@ class TestDomainFactoryErrorScenarios:
                 )
             )
 
-    def test_create_portfolio_zero_price(self, mock_data_fetcher):
+    def test_create_portfolio_zero_price(self, mock_data_fetcher, mock_logging_manager):
         """Test handling of zero stock prices."""
         # Override the return value for this specific test
         with patch.object(
@@ -726,13 +753,13 @@ class TestDomainFactoryErrorScenarios:
                 )
             )
 
-            factory = DomainFactory(fetcher=mock_data_fetcher)
+            factory = DomainFactory(fetcher=mock_data_fetcher, logging_manager=mock_logging_manager)
 
             # Should handle zero price gracefully or raise appropriate error
             with pytest.raises((ValueError, ZeroDivisionError)):
                 factory.create_portfolio(config)
 
-    def test_create_portfolio_missing_prices(self, mock_data_fetcher):
+    def test_create_portfolio_missing_prices(self, mock_data_fetcher, mock_logging_manager):
         """Test handling of missing stock prices."""
         # Override the return value for this specific test
         with patch.object(
@@ -755,7 +782,7 @@ class TestDomainFactoryErrorScenarios:
                 )
             )
 
-            factory = DomainFactory(fetcher=mock_data_fetcher)
+            factory = DomainFactory(fetcher=mock_data_fetcher, logging_manager=mock_logging_manager)
 
             # Should raise error for missing prices in dynamic allocation
             with pytest.raises(ValueError, match="Could not fetch price for GOOGL"):
@@ -765,7 +792,7 @@ class TestDomainFactoryErrorScenarios:
 class TestTickerRegistryAdvanced:
     """Test advanced TickerRegistry functionality."""
 
-    def test_ticker_registry_update_behavior(self):
+    def test_ticker_registry_update_behavior(self, mock_logging_manager):
         """Test ticker registry update behavior."""
         registry = TickerRegistry()
         registry._clear()
@@ -906,9 +933,9 @@ class TestDateToString:
 class TestDomainFactoryEdgeCases:
     """Test edge cases in DomainFactory."""
 
-    def test_create_portfolio_without_config(self):
+    def test_create_portfolio_without_config(self, mock_logging_manager):
         """Test creating portfolio without config."""
-        factory = DomainFactory()
+        factory = DomainFactory(logging_manager=mock_logging_manager)
 
         # Create a config to pass
         config = StockulaConfig(
@@ -920,14 +947,14 @@ class TestDomainFactoryEdgeCases:
         )
 
         # Without fetcher, should raise error for any allocation method requiring prices
-        factory = DomainFactory(fetcher=None)
+        factory = DomainFactory(fetcher=None, logging_manager=mock_logging_manager)
         config.portfolio.dynamic_allocation = True
         config.portfolio.tickers[0].allocation_pct = 100.0
 
         with pytest.raises(ValueError, match="Allocator not configured"):
             factory.create_portfolio(config)
 
-    def test_calculate_dynamic_quantities_with_start_date_no_data(self):
+    def test_calculate_dynamic_quantities_with_start_date_no_data(self, mock_allocator, mock_logging_manager):
         """Test quantity calculation when no data available on start date."""
         # Create config with start date
         config = StockulaConfig(
@@ -957,7 +984,12 @@ class TestDomainFactoryEdgeCases:
 
         mock_fetcher.get_current_prices.return_value = {"AAPL": 155.0, "GOOGL": 125.0}
 
-        factory = DomainFactory(config=config, fetcher=mock_fetcher)
+        # Update the allocator's fetcher
+        mock_allocator.fetcher = mock_fetcher
+
+        factory = DomainFactory(
+            config=config, fetcher=mock_fetcher, allocator=mock_allocator, logging_manager=mock_logging_manager
+        )
 
         # Calculate quantities
         quantities = factory.allocator.calculate_dynamic_quantities(config, config.portfolio.tickers)
@@ -968,7 +1000,9 @@ class TestDomainFactoryEdgeCases:
         assert quantities["AAPL"] > 0
         assert quantities["GOOGL"] > 0
 
-    def test_calculate_dynamic_quantities_with_start_date_fallback_to_current(self):
+    def test_calculate_dynamic_quantities_with_start_date_fallback_to_current(
+        self, mock_allocator, mock_logging_manager
+    ):
         """Test quantity calculation falling back to current prices."""
         # Create config with start date
         config = StockulaConfig(
@@ -986,7 +1020,12 @@ class TestDomainFactoryEdgeCases:
         mock_fetcher.get_stock_data.return_value = pd.DataFrame()  # Always empty
         mock_fetcher.get_current_prices.return_value = {"AAPL": 155.0}
 
-        factory = DomainFactory(config=config, fetcher=mock_fetcher)
+        # Update the allocator's fetcher
+        mock_allocator.fetcher = mock_fetcher
+
+        factory = DomainFactory(
+            config=config, fetcher=mock_fetcher, allocator=mock_allocator, logging_manager=mock_logging_manager
+        )
 
         # Calculate quantities
         quantities = factory.allocator.calculate_dynamic_quantities(config, config.portfolio.tickers)
@@ -995,7 +1034,7 @@ class TestDomainFactoryEdgeCases:
         assert "AAPL" in quantities
         assert quantities["AAPL"] > 0
 
-    def test_calculate_dynamic_quantities_with_exception_handling(self):
+    def test_calculate_dynamic_quantities_with_exception_handling(self, mock_allocator, mock_logging_manager):
         """Test quantity calculation with exception in data fetching."""
         # Create config with start date as string
         config = StockulaConfig(
@@ -1013,7 +1052,12 @@ class TestDomainFactoryEdgeCases:
         mock_fetcher.get_stock_data.side_effect = Exception("API Error")
         mock_fetcher.get_current_prices.return_value = {"AAPL": 155.0}
 
-        factory = DomainFactory(config=config, fetcher=mock_fetcher)
+        # Update the allocator's fetcher
+        mock_allocator.fetcher = mock_fetcher
+
+        factory = DomainFactory(
+            config=config, fetcher=mock_fetcher, allocator=mock_allocator, logging_manager=mock_logging_manager
+        )
 
         # Calculate quantities - should handle exception and use current prices
         quantities = factory.allocator.calculate_dynamic_quantities(config, config.portfolio.tickers)
@@ -1021,7 +1065,7 @@ class TestDomainFactoryEdgeCases:
         assert "AAPL" in quantities
         assert quantities["AAPL"] > 0
 
-    def test_calculate_dynamic_quantities_date_type_handling(self):
+    def test_calculate_dynamic_quantities_date_type_handling(self, mock_allocator, mock_logging_manager):
         """Test quantity calculation with date object instead of string."""
         # Create config with start date as date object
         config = StockulaConfig(
@@ -1042,7 +1086,12 @@ class TestDomainFactoryEdgeCases:
         ]
         mock_fetcher.get_current_prices.return_value = {"AAPL": 155.0}
 
-        factory = DomainFactory(config=config, fetcher=mock_fetcher)
+        # Update the allocator's fetcher
+        mock_allocator.fetcher = mock_fetcher
+
+        factory = DomainFactory(
+            config=config, fetcher=mock_fetcher, allocator=mock_allocator, logging_manager=mock_logging_manager
+        )
 
         # Calculate quantities
         quantities = factory.allocator.calculate_dynamic_quantities(config, config.portfolio.tickers)
@@ -1050,7 +1099,7 @@ class TestDomainFactoryEdgeCases:
         assert "AAPL" in quantities
         assert quantities["AAPL"] > 0
 
-    def test_auto_allocation_with_no_category_ratios(self):
+    def test_auto_allocation_with_no_category_ratios(self, mock_logging_manager):
         """Test auto-allocation without category ratios."""
         # PortfolioConfig validation prevents auto_allocate without category_ratios
         # So we test that the validation works
@@ -1064,7 +1113,7 @@ class TestDomainFactoryEdgeCases:
                 )
             )
 
-    def test_auto_allocation_with_fractional_shares(self):
+    def test_auto_allocation_with_fractional_shares(self, mock_allocator):
         """Test auto-allocation with fractional shares allowed."""
         config = StockulaConfig(
             portfolio=PortfolioConfig(
@@ -1089,7 +1138,12 @@ class TestDomainFactoryEdgeCases:
             "MSFT": 300.0,
         }
 
-        factory = DomainFactory(config=config, fetcher=mock_fetcher)
+        # Update the allocator's fetcher
+        mock_allocator.fetcher = mock_fetcher
+
+        factory = DomainFactory(
+            config=config, fetcher=mock_fetcher, allocator=mock_allocator, logging_manager=mock_logging_manager
+        )
 
         quantities = factory.allocator.calculate_auto_allocation_quantities(config, config.portfolio.tickers)
 
@@ -1101,7 +1155,7 @@ class TestDomainFactoryEdgeCases:
         total_value = quantities["AAPL"] * 150.0 + quantities["GOOGL"] * 120.0 + quantities["MSFT"] * 300.0
         assert abs(total_value - 95000.0) < 100  # Close to 95% of 100k
 
-    def test_auto_allocation_with_zero_ratio_category(self):
+    def test_auto_allocation_with_zero_ratio_category(self, mock_allocator, mock_logging_manager):
         """Test auto-allocation with zero ratio for a category."""
         config = StockulaConfig(
             portfolio=PortfolioConfig(
@@ -1123,7 +1177,12 @@ class TestDomainFactoryEdgeCases:
             "GOOGL": 120.0,
         }
 
-        factory = DomainFactory(config=config, fetcher=mock_fetcher)
+        # Update the allocator's fetcher
+        mock_allocator.fetcher = mock_fetcher
+
+        factory = DomainFactory(
+            config=config, fetcher=mock_fetcher, allocator=mock_allocator, logging_manager=mock_logging_manager
+        )
 
         quantities = factory.allocator.calculate_auto_allocation_quantities(config, config.portfolio.tickers)
 
@@ -1131,7 +1190,7 @@ class TestDomainFactoryEdgeCases:
         assert quantities["AAPL"] > 0
         assert quantities["GOOGL"] == 0
 
-    def test_create_portfolio_with_missing_info(self):
+    def test_create_portfolio_with_missing_info(self, mock_logging_manager):
         """Test portfolio creation when ticker info is missing."""
         config = StockulaConfig(
             portfolio=PortfolioConfig(
@@ -1146,14 +1205,14 @@ class TestDomainFactoryEdgeCases:
         mock_fetcher.get_info.return_value = {"symbol": "UNKNOWN"}
         mock_fetcher.get_current_prices.return_value = {"UNKNOWN": 100.0}
 
-        factory = DomainFactory(config=config, fetcher=mock_fetcher)
+        factory = DomainFactory(config=config, fetcher=mock_fetcher, logging_manager=mock_logging_manager)
 
         # Should create portfolio without error
         portfolio = factory.create_portfolio(config)
         assert portfolio is not None
         assert len(portfolio.assets) == 1
 
-    def test_create_asset_with_invalid_category(self):
+    def test_create_asset_with_invalid_category(self, mock_logging_manager):
         """Test creating asset with invalid category string."""
         config = StockulaConfig(
             portfolio=PortfolioConfig(
@@ -1163,7 +1222,7 @@ class TestDomainFactoryEdgeCases:
             )
         )
 
-        factory = DomainFactory(config=config)
+        factory = DomainFactory(config=config, logging_manager=mock_logging_manager)
 
         # Should create asset without error (category will be None)
         ticker_config = config.portfolio.tickers[0]
@@ -1174,7 +1233,7 @@ class TestDomainFactoryEdgeCases:
         assert asset.ticker.symbol == "AAPL"
         assert asset.quantity == 10
 
-    def test_calculate_dynamic_quantities_missing_price(self):
+    def test_calculate_dynamic_quantities_missing_price(self, mock_logging_manager):
         """Test dynamic quantity calculation when price is missing."""
         config = StockulaConfig(
             portfolio=PortfolioConfig(
@@ -1188,18 +1247,18 @@ class TestDomainFactoryEdgeCases:
         mock_fetcher = Mock()
         mock_fetcher.get_current_prices.return_value = {}  # No prices returned
 
-        factory = DomainFactory(config=config, fetcher=mock_fetcher)
+        factory = DomainFactory(config=config, fetcher=mock_fetcher, logging_manager=mock_logging_manager)
 
         with pytest.raises(ValueError, match="Could not fetch price"):
             factory.allocator.calculate_dynamic_quantities(config, config.portfolio.tickers)
 
-    def test_ticker_config_requires_allocation(self):
+    def test_ticker_config_requires_allocation(self, mock_logging_manager):
         """Test that TickerConfig requires some form of allocation."""
         # TickerConfig validation requires one of: quantity, allocation_pct, allocation_amount, or category
         with pytest.raises(ValueError, match="Ticker AAPL must specify exactly one of"):
             TickerConfig(symbol="AAPL")
 
-    def test_auto_allocation_requires_category_for_all_tickers(self):
+    def test_auto_allocation_requires_category_for_all_tickers(self, mock_logging_manager):
         """Test that auto-allocation requires category for all tickers."""
         # When auto_allocate is True, ALL tickers must have category
         with pytest.raises(ValueError, match="must have category specified for auto-allocation"):
@@ -1221,12 +1280,12 @@ class TestDomainFactoryEdgeCases:
             mock_fetcher = Mock()
             mock_fetcher.get_current_prices.return_value = {"AAPL": 150.0, "GOOGL": 120.0}
 
-            factory = DomainFactory(config=config, fetcher=mock_fetcher)
+            factory = DomainFactory(config=config, fetcher=mock_fetcher, logging_manager=mock_logging_manager)
             factory.create_portfolio(config)
 
-    def test_get_all_tickers_from_factory(self):
+    def test_get_all_tickers_from_factory(self, mock_logging_manager):
         """Test getting all registered tickers from factory."""
-        factory = DomainFactory()
+        factory = DomainFactory(logging_manager=mock_logging_manager)
 
         # Create some tickers with quantity
         ticker_config1 = TickerConfig(symbol="AAPL", sector="Technology", quantity=10)

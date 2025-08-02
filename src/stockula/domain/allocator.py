@@ -1,17 +1,16 @@
 """Asset allocation strategies for portfolio construction."""
 
-import logging
 from datetime import date, timedelta
 from typing import TYPE_CHECKING
 
 import pandas as pd
+from dependency_injector.wiring import Provide, inject
 
 from ..config import StockulaConfig, TickerConfig
+from ..interfaces import ILoggingManager
 
 if TYPE_CHECKING:
     from ..data.fetcher import DataFetcher
-
-logger = logging.getLogger(__name__)
 
 
 def date_to_string(date_value: str | date | None) -> str | None:
@@ -26,13 +25,20 @@ def date_to_string(date_value: str | date | None) -> str | None:
 class Allocator:
     """Handles asset allocation strategies for portfolio construction."""
 
-    def __init__(self, fetcher: "DataFetcher"):
-        """Initialize allocator with data fetcher.
+    @inject
+    def __init__(
+        self,
+        fetcher: "DataFetcher",
+        logging_manager: ILoggingManager = Provide["logging_manager"],
+    ):
+        """Initialize allocator with data fetcher and logging manager.
 
         Args:
             fetcher: Data fetcher instance for price lookups
+            logging_manager: Injected logging manager
         """
         self.fetcher = fetcher
+        self.logger = logging_manager
 
     def calculate_dynamic_quantities(
         self, config: StockulaConfig, tickers_to_add: list[TickerConfig]
@@ -121,7 +127,7 @@ class Allocator:
         for ticker_config in tickers_to_add:
             calculated_quantities[ticker_config.symbol] = 0.0
 
-        logger.debug(
+        self.logger.debug(
             f"Auto-allocation target capital: ${target_capital:,.2f} "
             f"({config.portfolio.capital_utilization_target:.1%} of ${config.portfolio.initial_capital:,.2f})"
         )
@@ -131,12 +137,12 @@ class Allocator:
         for category, ratio in config.portfolio.category_ratios.items():
             category_upper = category.upper()
             if category_upper not in tickers_by_category:
-                logger.warning(f"No tickers found for category {category}")
+                self.logger.warning(f"No tickers found for category {category}")
                 continue
 
             # Skip categories with 0% allocation
             if ratio == 0:
-                logger.debug(f"Skipping {category} - 0% allocation")
+                self.logger.debug(f"Skipping {category} - 0% allocation")
                 continue
 
             category_capital = target_capital * ratio
@@ -147,7 +153,7 @@ class Allocator:
                 "quantities": {},
             }
 
-            logger.debug(
+            self.logger.debug(
                 f"\n{category} allocation: ${category_capital:,.2f} ({ratio:.1%}) "
                 f"across {len(category_tickers)} tickers"
             )
@@ -170,7 +176,9 @@ class Allocator:
                     calculated_quantities[ticker_config.symbol] = quantity
                     actual_cost = quantity * price
                     total_allocated += actual_cost
-                    logger.debug(f"  {ticker_config.symbol}: {quantity:.4f} shares × ${price:.2f} = ${actual_cost:.2f}")
+                    self.logger.debug(
+                        f"  {ticker_config.symbol}: {quantity:.4f} shares × ${price:.2f} = ${actual_cost:.2f}"
+                    )
                 category_unused[category] = 0  # No unused capital with fractional shares
             else:
                 # Integer shares: optimize allocation for balanced portfolio
@@ -209,7 +217,7 @@ class Allocator:
                         cost = quantity * price
                         remaining_capital -= cost
                         total_allocated += cost
-                        logger.debug(
+                        self.logger.debug(
                             f"  {ticker_config.symbol}: {quantity} shares × ${price:.2f} = ${cost:.2f} "
                             f"(target: ${target_value_per_ticker:.2f})"
                         )
@@ -221,12 +229,12 @@ class Allocator:
                     calculated_quantities[symbol] = quantity
 
                 category_unused[category] = remaining_capital
-                logger.debug(f"  Unused capital in {category}: ${remaining_capital:.2f}")
+                self.logger.debug(f"  Unused capital in {category}: ${remaining_capital:.2f}")
 
         # Second pass: Aggressive redistribution of all unused capital
         remaining_capital = sum(category_unused.values())
         if remaining_capital > 0 and not config.portfolio.allow_fractional_shares:
-            logger.debug(f"\nRedistributing unused capital: ${remaining_capital:.2f}")
+            self.logger.debug(f"\nRedistributing unused capital: ${remaining_capital:.2f}")
 
             # Calculate position values for balancing
             ticker_values = {}
@@ -270,7 +278,7 @@ class Allocator:
                         total_allocated += price
                         ticker_values[symbol] += price
                         any_allocation = True
-                        logger.debug(f"  Balanced redistribution: +1 {symbol} share (${price:.2f})")
+                        self.logger.debug(f"  Balanced redistribution: +1 {symbol} share (${price:.2f})")
                         break  # Recalculate after each addition
 
                 if not any_allocation:
@@ -290,18 +298,18 @@ class Allocator:
                         remaining_capital -= price
                         total_allocated += price
                         ticker_values[symbol] = current_value + price
-                        logger.debug(f"  Final redistribution: +1 {symbol} share (${price:.2f})")
+                        self.logger.debug(f"  Final redistribution: +1 {symbol} share (${price:.2f})")
                     else:
                         break  # Can't afford any more shares
 
-            logger.debug(f"Final unused capital: ${remaining_capital:.2f}")
+            self.logger.debug(f"Final unused capital: ${remaining_capital:.2f}")
 
         # Calculate final utilization statistics
         actual_utilization = total_allocated / config.portfolio.initial_capital
 
-        logger.info(f"\nTotal portfolio cost: ${total_allocated:,.2f}")
-        logger.info(f"Capital utilization: {actual_utilization:.1%}")
-        logger.info(f"Remaining cash: ${config.portfolio.initial_capital - total_allocated:,.2f}")
+        self.logger.info(f"\nTotal portfolio cost: ${total_allocated:,.2f}")
+        self.logger.info(f"Capital utilization: {actual_utilization:.1%}")
+        self.logger.info(f"Remaining cash: ${config.portfolio.initial_capital - total_allocated:,.2f}")
 
         return calculated_quantities
 
@@ -318,7 +326,7 @@ class Allocator:
         if config.data.start_date:
             # Use start date prices for backtesting to ensure portfolio value matches at start
             start_date_str = date_to_string(config.data.start_date)
-            logger.debug(
+            self.logger.debug(
                 f"Calculating quantities using start date prices ({start_date_str}) for accurate portfolio value..."
             )
             calculation_prices = {}
@@ -344,9 +352,9 @@ class Allocator:
                             current_prices = self.fetcher.get_current_prices([symbol])
                             if symbol in current_prices:
                                 calculation_prices[symbol] = current_prices[symbol]
-                                logger.warning(f"Using current price for {symbol} (no historical data available)")
+                                self.logger.warning(f"Using current price for {symbol} (no historical data available)")
                 except Exception as e:
-                    logger.error(f"Error fetching start date price for {symbol}: {e}")
+                    self.logger.error(f"Error fetching start date price for {symbol}: {e}")
                     # Fallback to current prices
                     current_prices = self.fetcher.get_current_prices([symbol])
                     if symbol in current_prices:
