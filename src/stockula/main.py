@@ -24,13 +24,7 @@ import pandas as pd
 from dependency_injector.wiring import Provide, inject
 from rich.console import Console
 from rich.panel import Panel
-from rich.progress import (
-    BarColumn,
-    Progress,
-    SpinnerColumn,
-    TextColumn,
-    TimeRemainingColumn,
-)
+from rich.progress import BarColumn, Progress, SpinnerColumn, TextColumn, TimeRemainingColumn
 from rich.table import Table
 
 from .backtesting import (
@@ -47,11 +41,7 @@ from .backtesting import (
     VIDYAStrategy,
 )
 from .config import StockulaConfig
-from .config.models import (
-    BacktestResult,
-    PortfolioBacktestResults,
-    StrategyBacktestSummary,
-)
+from .config.models import BacktestResult, PortfolioBacktestResults, StrategyBacktestSummary
 from .container import Container, create_container
 from .domain import Category
 from .interfaces import IBacktestRunner, IDataFetcher, ILoggingManager, IStockForecaster
@@ -566,7 +556,6 @@ def save_detailed_report(
         Path to the saved report file
     """
     import json
-    from pathlib import Path
 
     # Create reports directory if it doesn't exist
     reports_dir = Path(config.output.get("results_dir", "./results")) / "reports"
@@ -1805,87 +1794,6 @@ Detailed report saved to: {
 
         # Exit after showing strategy summaries
         return
-
-        # Re-fetch current prices to get the most up-to-date values
-        log_manager.debug("\nFetching latest prices...")
-        final_prices = fetcher.get_current_prices(symbols, show_progress=True)
-        final_value = portfolio.get_portfolio_value(final_prices)
-
-        print(f"""
-Portfolio Value at Start Date: ${results["initial_portfolio_value"]:,.2f}
-Portfolio Value at End (Current): ${final_value:,.2f}""")
-
-        period_return = final_value - results["initial_portfolio_value"]
-        period_return_pct = (period_return / results["initial_portfolio_value"]) * 100
-
-        # Show category breakdown if available
-        category_allocations = portfolio.get_allocation_by_category(final_prices)
-        if category_allocations:
-            print("\nAllocation by Category:")
-            for category, data in sorted(category_allocations.items(), key=lambda x: x[1]["value"], reverse=True):
-                print(f"  {category}: ${data['value']:,.2f} ({data['percentage']:.1f}%)")
-
-        # Show performance breakdown by category
-        if args.mode in ["all", "backtest"] and config.data.start_date:
-            start_category_allocations = portfolio.get_allocation_by_category(start_prices)
-            final_category_allocations = portfolio.get_allocation_by_category(final_prices)
-
-            print("\nPerformance Breakdown By Category:")
-            for category in final_category_allocations.keys():
-                if category in start_category_allocations:
-                    start_value = start_category_allocations[category]["value"]
-                    final_value = final_category_allocations[category]["value"]
-                    category_return = final_value - start_value
-                    category_return_pct = (category_return / start_value) * 100 if start_value > 0 else 0
-
-                    print(f"""  {category}:
-    Start Value: ${start_value:,.2f}
-    Current Value: ${final_value:,.2f}
-    Return: ${category_return:,.2f} ({category_return_pct:+.2f}%)
-    Assets: {", ".join(final_category_allocations[category]["assets"])}""")
-                else:
-                    # New category added during the period
-                    final_value = final_category_allocations[category]["value"]
-                    print(f"""  {category}:
-    Start Value: $0.00 (new category)
-    Current Value: ${final_value:,.2f}
-    Assets: {", ".join(final_category_allocations[category]["assets"])}""")
-
-        # Show performance breakdown by asset type
-        if hold_only_assets and tradeable_assets:
-            print("\nAsset Type Breakdown:")
-
-            # Calculate hold-only assets value
-            hold_only_value = sum(asset.get_value(final_prices.get(asset.symbol, 0)) for asset in hold_only_assets)
-
-            # Calculate tradeable assets value
-            tradeable_value = sum(asset.get_value(final_prices.get(asset.symbol, 0)) for asset in tradeable_assets)
-
-            print(f"""  Hold-only Assets: ${hold_only_value:,.2f}
-  Tradeable Assets: ${tradeable_value:,.2f}
-  Total Portfolio: ${hold_only_value + tradeable_value:,.2f}""")
-
-        # Calculate and show total trades from backtesting results
-        total_trades = 0
-        if "backtesting" in results:
-            total_trades = sum(backtest.get("num_trades", 0) for backtest in results["backtesting"])
-            print(f"\nTotal Trades Executed: {total_trades}")
-
-        # Show return during period at the very end
-        print(f"Return During Period: ${period_return:,.2f} ({period_return_pct:+.2f}%)")
-
-    # Save results if configured
-    if config.output.get("save_results", False):
-        results_dir = Path(config.output.get("results_dir", "./results"))
-        results_dir.mkdir(exist_ok=True)
-
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        results_file = results_dir / f"stockula_results_{timestamp}.json"
-
-        with open(results_file, "w") as f:
-            json.dump(results, f, indent=2, default=str)
-
-        log_manager.info(f"\nResults saved to {results_file}")
 
 
 if __name__ == "__main__":

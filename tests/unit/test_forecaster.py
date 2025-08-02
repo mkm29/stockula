@@ -13,17 +13,29 @@ import pytest
 from stockula.forecasting.forecaster import StockForecaster, SuppressAutoTSOutput, suppress_autots_output
 
 
+@pytest.fixture
+def mock_logging_manager():
+    """Create a mock logging manager for forecaster tests."""
+    logger = Mock()
+    logger.debug = Mock()
+    logger.info = Mock()
+    logger.warning = Mock()
+    logger.error = Mock()
+    logger.isEnabledFor = Mock(return_value=False)  # Return False for debug level by default
+    return logger
+
+
 class TestSuppressAutoTSOutput:
     """Test the suppress_autots_output context manager."""
 
-    def test_suppress_warnings(self):
+    def test_suppress_warnings(self, mock_logging_manager):
         """Test that warnings are suppressed."""
         with suppress_autots_output():
             # This warning should be suppressed
             warnings.warn("Test warning", UserWarning, stacklevel=2)
             # No warning should be raised
 
-    def test_suppress_stdout_when_not_debug(self):
+    def test_suppress_stdout_when_not_debug(self, mock_logging_manager):
         """Test stdout suppression when not in debug mode."""
         logger = logging.getLogger("stockula.forecasting.forecaster")
         original_level = logger.level
@@ -49,7 +61,7 @@ class TestSuppressAutoTSOutput:
         # Restore original level
         logger.setLevel(original_level)
 
-    def test_no_suppress_when_debug(self):
+    def test_no_suppress_when_debug(self, mock_logging_manager):
         """Test filtering in debug mode."""
         logger = logging.getLogger("stockula.forecasting.forecaster")
         original_level = logger.level
@@ -78,7 +90,7 @@ class TestSuppressAutoTSOutput:
         # Restore original level
         logger.setLevel(original_level)
 
-    def test_filtered_stream_flush(self):
+    def test_filtered_stream_flush(self, mock_logging_manager):
         """Test FilteredStream flush method."""
         suppressor = SuppressAutoTSOutput()
         suppressor.__enter__()
@@ -91,7 +103,7 @@ class TestSuppressAutoTSOutput:
 
         suppressor.__exit__(None, None, None)
 
-    def test_filtered_stream_getattr(self):
+    def test_filtered_stream_getattr(self, mock_logging_manager):
         """Test FilteredStream __getattr__ delegation."""
         suppressor = SuppressAutoTSOutput()
         suppressor.__enter__()
@@ -104,9 +116,13 @@ class TestSuppressAutoTSOutput:
 
         suppressor.__exit__(None, None, None)
 
-    def test_filtered_stream_non_debug_mode_patterns(self):
+    def test_filtered_stream_non_debug_mode_patterns(self, mock_logging_manager):
         """Test FilteredStream pattern filtering in non-debug mode."""
-        from stockula.forecasting.forecaster import SuppressAutoTSOutput, logger
+        import logging
+
+        from stockula.forecasting.forecaster import SuppressAutoTSOutput
+
+        logger = logging.getLogger("stockula.forecasting.forecaster")
 
         # Mock logger to be in non-debug mode
         with patch.object(logger, "isEnabledFor", return_value=False):
@@ -149,9 +165,9 @@ class TestSuppressAutoTSOutput:
 class TestStockForecasterInitialization:
     """Test StockForecaster initialization."""
 
-    def test_initialization_with_defaults(self):
+    def test_initialization_with_defaults(self, mock_logging_manager):
         """Test initialization with default parameters."""
-        forecaster = StockForecaster()
+        forecaster = StockForecaster(logging_manager=mock_logging_manager)
 
         assert forecaster.forecast_length is None  # Changed to None for mutual exclusivity
         assert forecaster.frequency == "infer"
@@ -161,7 +177,7 @@ class TestStockForecasterInitialization:
         assert forecaster.model is None
         assert forecaster.prediction is None
 
-    def test_initialization_with_custom_params(self):
+    def test_initialization_with_custom_params(self, mock_logging_manager):
         """Test initialization with custom parameters."""
         forecaster = StockForecaster(
             forecast_length=30,
@@ -170,6 +186,7 @@ class TestStockForecasterInitialization:
             num_validations=3,
             validation_method="seasonal",
             data_fetcher=None,
+            logging_manager=mock_logging_manager,
         )
 
         assert forecaster.forecast_length == 30
@@ -178,36 +195,39 @@ class TestStockForecasterInitialization:
         assert forecaster.num_validations == 3
         assert forecaster.validation_method == "seasonal"
 
-    def test_init_with_custom_model_list(self):
+    def test_init_with_custom_model_list(self, mock_logging_manager):
         """Test initialization with custom model list."""
         forecaster = StockForecaster(
             model_list=["ARIMA", "ETS", "Theta"],
             forecast_length=30,
             max_generations=5,
+            logging_manager=mock_logging_manager,
         )
 
         assert forecaster.model_list == ["ARIMA", "ETS", "Theta"]
         assert forecaster.max_generations == 5
 
-    def test_init_with_preset_model_list(self):
+    def test_init_with_preset_model_list(self, mock_logging_manager):
         """Test initialization with preset model lists."""
         # Test 'fast' preset
-        forecaster = StockForecaster(model_list="fast", forecast_length=30)
+        forecaster = StockForecaster(model_list="fast", forecast_length=30, logging_manager=mock_logging_manager)
         assert forecaster.model_list == "fast"
 
         # Test 'ultra_fast' preset
-        forecaster = StockForecaster(model_list="ultra_fast", forecast_length=30)
+        forecaster = StockForecaster(model_list="ultra_fast", forecast_length=30, logging_manager=mock_logging_manager)
         assert forecaster.model_list == "ultra_fast"
 
         # Test 'financial' preset
-        forecaster = StockForecaster(model_list="financial", forecast_length=30)
+        forecaster = StockForecaster(model_list="financial", forecast_length=30, logging_manager=mock_logging_manager)
         assert forecaster.model_list == "financial"
 
         # Test 'fast_financial' preset
-        forecaster = StockForecaster(model_list="fast_financial", forecast_length=30)
+        forecaster = StockForecaster(
+            model_list="fast_financial", forecast_length=30, logging_manager=mock_logging_manager
+        )
         assert forecaster.model_list == "fast_financial"
 
-    def test_init_with_all_parameters(self):
+    def test_init_with_all_parameters(self, mock_logging_manager):
         """Test initialization with all parameters."""
         forecaster = StockForecaster(
             forecast_length=30,
@@ -219,6 +239,7 @@ class TestStockForecasterInitialization:
             model_list=["ARIMA", "ETS"],
             max_generations=10,
             no_negatives=False,
+            logging_manager=mock_logging_manager,
         )
 
         assert forecaster.forecast_length == 30
@@ -255,11 +276,12 @@ class TestStockForecasterFit:
             mock.return_value = mock_instance
             yield mock, mock_instance, mock_model
 
-    def test_fit_with_valid_data(self, sample_data, mock_autots):
+    def test_fit_with_valid_data(self, sample_data, mock_autots, mock_logging_manager):
         """Test fitting with valid data."""
         mock_autots_class, mock_instance, _ = mock_autots
 
-        forecaster = StockForecaster(forecast_length=14)  # Specify forecast_length
+        # Specify forecast_length
+        forecaster = StockForecaster(forecast_length=14, logging_manager=mock_logging_manager)
 
         # Set up signal handler mock
         with patch("stockula.forecasting.forecaster.signal.signal"):
@@ -289,20 +311,20 @@ class TestStockForecasterFit:
         assert "Close" in fit_df.columns
         assert len(fit_df) == len(sample_data)
 
-    def test_fit_missing_target_column(self):
+    def test_fit_missing_target_column(self, mock_logging_manager):
         """Test fit with missing target column."""
         data = pd.DataFrame({"Price": [100, 101, 102]}, index=pd.date_range("2023-01-01", periods=3))
 
-        forecaster = StockForecaster()
+        forecaster = StockForecaster(logging_manager=mock_logging_manager)
 
         with pytest.raises(ValueError, match="Target column 'Close' not found"):
             forecaster.fit(data, target_column="Close")
 
-    def test_fit_with_custom_parameters(self, sample_data, mock_autots):
+    def test_fit_with_custom_parameters(self, sample_data, mock_autots, mock_logging_manager):
         """Test fit with custom parameters."""
         mock_autots_class, _, _ = mock_autots
 
-        forecaster = StockForecaster()
+        forecaster = StockForecaster(logging_manager=mock_logging_manager)
 
         with patch("stockula.forecasting.forecaster.signal.signal"):
             forecaster.fit(sample_data, model_list="slow", ensemble="simple", max_generations=10)
@@ -313,31 +335,31 @@ class TestStockForecasterFit:
         assert call_kwargs["ensemble"] == "simple"
         assert call_kwargs["max_generations"] == 10
 
-    def test_fit_keyboard_interrupt(self, sample_data, mock_autots):
+    def test_fit_keyboard_interrupt(self, sample_data, mock_autots, mock_logging_manager):
         """Test handling keyboard interrupt during fit."""
         _, mock_instance, _ = mock_autots
         mock_instance.fit.side_effect = KeyboardInterrupt()
 
-        forecaster = StockForecaster()
+        forecaster = StockForecaster(logging_manager=mock_logging_manager)
 
         with patch("stockula.forecasting.forecaster.signal.signal"):
             with pytest.raises(KeyboardInterrupt):
                 forecaster.fit(sample_data)
 
-    def test_fit_general_exception(self, sample_data, mock_autots):
+    def test_fit_general_exception(self, sample_data, mock_autots, mock_logging_manager):
         """Test handling general exception during fit."""
         _, mock_instance, _ = mock_autots
         mock_instance.fit.side_effect = Exception("Model error")
 
-        forecaster = StockForecaster()
+        forecaster = StockForecaster(logging_manager=mock_logging_manager)
 
         with patch("stockula.forecasting.forecaster.signal.signal"):
             with pytest.raises(Exception, match="Model error"):
                 forecaster.fit(sample_data)
 
-    def test_fit_with_insufficient_data(self):
+    def test_fit_with_insufficient_data(self, mock_logging_manager):
         """Test fitting with insufficient historical data."""
-        forecaster = StockForecaster(forecast_length=30)
+        forecaster = StockForecaster(forecast_length=30, logging_manager=mock_logging_manager)
 
         # Create very short data (less than required)
         short_data = pd.DataFrame(
@@ -354,9 +376,9 @@ class TestStockForecasterFit:
             with pytest.raises(ValueError, match="Insufficient data"):
                 forecaster.fit(short_data)
 
-    def test_fit_with_custom_target_column(self):
+    def test_fit_with_custom_target_column(self, mock_logging_manager):
         """Test fitting with custom target column."""
-        forecaster = StockForecaster(forecast_length=7)
+        forecaster = StockForecaster(forecast_length=7, logging_manager=mock_logging_manager)
 
         # Create data with multiple columns
         dates = pd.date_range(start="2023-01-01", periods=100, freq="D")
@@ -397,9 +419,9 @@ class TestStockForecasterFit:
             assert call_args["forecast_length"] == 7
 
     @patch("stockula.forecasting.forecaster.AutoTS")
-    def test_fit_with_frequency_detection(self, mock_autots):
+    def test_fit_with_frequency_detection(self, mock_autots, mock_logging_manager):
         """Test frequency detection in fit."""
-        forecaster = StockForecaster(forecast_length=7)
+        forecaster = StockForecaster(forecast_length=7, logging_manager=mock_logging_manager)
 
         # Create data with specific frequency
         dates = pd.date_range(start="2023-01-01", periods=100, freq="B")  # Business days
@@ -436,9 +458,9 @@ class TestStockForecasterPredict:
     """Test StockForecaster predict method."""
 
     @pytest.fixture
-    def fitted_forecaster(self):
+    def fitted_forecaster(self, mock_logging_manager):
         """Create a fitted forecaster with mocked model."""
-        forecaster = StockForecaster()
+        forecaster = StockForecaster(logging_manager=mock_logging_manager)
 
         # Mock the model
         mock_model = Mock()
@@ -476,9 +498,9 @@ class TestStockForecasterPredict:
         assert result["upper_bound"].iloc[0] == 115
         assert result["lower_bound"].iloc[0] == 105
 
-    def test_predict_without_fitted_model(self):
+    def test_predict_without_fitted_model(self, mock_logging_manager):
         """Test prediction without fitted model."""
-        forecaster = StockForecaster()
+        forecaster = StockForecaster(logging_manager=mock_logging_manager)
 
         with pytest.raises(ValueError, match="Model not fitted"):
             forecaster.predict()
@@ -487,9 +509,9 @@ class TestStockForecasterPredict:
 class TestStockForecasterFitPredict:
     """Test StockForecaster fit_predict method."""
 
-    def test_fit_predict(self):
+    def test_fit_predict(self, mock_logging_manager):
         """Test fit_predict method."""
-        forecaster = StockForecaster()
+        forecaster = StockForecaster(logging_manager=mock_logging_manager)
 
         # Mock fit and predict methods
         mock_predictions = pd.DataFrame(
@@ -515,9 +537,9 @@ class TestStockForecasterFitPredict:
                 # Should return predictions
                 assert result.equals(mock_predictions)
 
-    def test_forecast_alias(self):
+    def test_forecast_alias(self, mock_logging_manager):
         """Test that forecast is an alias for fit_predict."""
-        forecaster = StockForecaster()
+        forecaster = StockForecaster(logging_manager=mock_logging_manager)
 
         # Mock fit_predict
         mock_result = pd.DataFrame({"forecast": [110, 111, 112]})
@@ -542,7 +564,7 @@ class TestStockForecasterForecastFromSymbol:
         """Create mock data fetcher."""
         return Mock()
 
-    def test_forecast_from_symbol_success(self, mock_data_fetcher):
+    def test_forecast_from_symbol_success(self, mock_data_fetcher, mock_logging_manager):
         """Test successful forecast from symbol."""
         # Mock data
         stock_data = pd.DataFrame(
@@ -563,7 +585,7 @@ class TestStockForecasterForecastFromSymbol:
         mock_data_fetcher.get_stock_data.return_value = stock_data
 
         # Create forecaster with mock data fetcher
-        forecaster = StockForecaster(data_fetcher=mock_data_fetcher)
+        forecaster = StockForecaster(data_fetcher=mock_data_fetcher, logging_manager=mock_logging_manager)
 
         with patch.object(forecaster, "fit_predict") as mock_fit_predict:
             mock_fit_predict.return_value = predictions
@@ -579,26 +601,28 @@ class TestStockForecasterForecastFromSymbol:
             # Should return predictions
             assert result.equals(predictions)
 
-    def test_forecast_from_symbol_no_data_fetcher(self):
+    def test_forecast_from_symbol_no_data_fetcher(self, mock_logging_manager):
         """Test forecast from symbol without data fetcher configured."""
-        forecaster = StockForecaster(data_fetcher=None)
+        forecaster = StockForecaster(data_fetcher=None, logging_manager=mock_logging_manager)
 
         with pytest.raises(ValueError, match="Data fetcher not configured"):
             forecaster.forecast_from_symbol("TEST")
 
-    def test_forecast_from_symbol_no_data(self, mock_data_fetcher):
+    def test_forecast_from_symbol_no_data(self, mock_data_fetcher, mock_logging_manager):
         """Test forecast from symbol with no data available."""
         # Set up mock to return empty data
         mock_data_fetcher.get_stock_data.return_value = pd.DataFrame()  # Empty
 
-        forecaster = StockForecaster(data_fetcher=mock_data_fetcher)
+        forecaster = StockForecaster(data_fetcher=mock_data_fetcher, logging_manager=mock_logging_manager)
 
         with pytest.raises(ValueError, match="No data available for symbol TEST"):
             forecaster.forecast_from_symbol("TEST")
 
-    def test_forecast_from_symbol_with_all_parameters(self, mock_data_fetcher):
+    def test_forecast_from_symbol_with_all_parameters(self, mock_data_fetcher, mock_logging_manager):
         """Test forecast_from_symbol with all parameters."""
-        forecaster = StockForecaster(forecast_length=30, data_fetcher=mock_data_fetcher)
+        forecaster = StockForecaster(
+            forecast_length=30, data_fetcher=mock_data_fetcher, logging_manager=mock_logging_manager
+        )
 
         # Create sample data
         dates = pd.date_range(start="2023-01-01", periods=100, freq="D")
@@ -642,9 +666,11 @@ class TestStockForecasterForecastFromSymbol:
                 assert isinstance(result, pd.DataFrame)
                 assert "forecast" in result.columns or result.shape[1] >= 1
 
-    def test_forecast_from_symbol_with_evaluation(self, mock_data_fetcher):
+    def test_forecast_from_symbol_with_evaluation(self, mock_data_fetcher, mock_logging_manager):
         """Test forecast_from_symbol_with_evaluation method."""
-        forecaster = StockForecaster(forecast_length=7, data_fetcher=mock_data_fetcher)
+        forecaster = StockForecaster(
+            forecast_length=7, data_fetcher=mock_data_fetcher, logging_manager=mock_logging_manager
+        )
 
         # Create train and test data
         train_dates = pd.date_range(start="2023-01-01", periods=90, freq="D")
@@ -732,9 +758,9 @@ class TestStockForecasterForecastFromSymbol:
 class TestStockForecasterGetBestModel:
     """Test get_best_model method."""
 
-    def test_get_best_model_fitted(self):
+    def test_get_best_model_fitted(self, mock_logging_manager):
         """Test getting best model info when fitted."""
-        forecaster = StockForecaster()
+        forecaster = StockForecaster(logging_manager=mock_logging_manager)
 
         # Mock fitted model
         mock_model = Mock()
@@ -752,16 +778,16 @@ class TestStockForecasterGetBestModel:
         assert info["model_transformation"] == {"fillna": "mean"}
         assert info["model_accuracy"] == 0.95
 
-    def test_get_best_model_not_fitted(self):
+    def test_get_best_model_not_fitted(self, mock_logging_manager):
         """Test getting best model info when not fitted."""
-        forecaster = StockForecaster()
+        forecaster = StockForecaster(logging_manager=mock_logging_manager)
 
         with pytest.raises(ValueError, match="Model not fitted"):
             forecaster.get_best_model()
 
-    def test_get_best_model_no_accuracy(self):
+    def test_get_best_model_no_accuracy(self, mock_logging_manager):
         """Test getting best model when accuracy not available."""
-        forecaster = StockForecaster()
+        forecaster = StockForecaster(logging_manager=mock_logging_manager)
 
         # Mock model without accuracy attribute
         mock_model = Mock(
@@ -781,9 +807,9 @@ class TestStockForecasterGetBestModel:
 
         assert info["model_accuracy"] == "N/A"
 
-    def test_get_best_model_info(self):
+    def test_get_best_model_info(self, mock_logging_manager):
         """Test getting best model information with all attributes."""
-        forecaster = StockForecaster()
+        forecaster = StockForecaster(logging_manager=mock_logging_manager)
 
         # Create mock model
         mock_model = Mock()
@@ -810,9 +836,9 @@ class TestStockForecasterGetBestModel:
 class TestStockForecasterPlotForecast:
     """Test plot_forecast method."""
 
-    def test_plot_forecast_with_prediction(self):
+    def test_plot_forecast_with_prediction(self, mock_logging_manager):
         """Test plotting forecast with prediction available."""
-        forecaster = StockForecaster()
+        forecaster = StockForecaster(logging_manager=mock_logging_manager)
 
         # Mock prediction with plot method
         mock_prediction = Mock()
@@ -833,9 +859,9 @@ class TestStockForecasterPlotForecast:
             mock_model.df_wide_numeric, remove_zero_series=False, start_date=-50
         )
 
-    def test_plot_forecast_no_prediction(self):
+    def test_plot_forecast_no_prediction(self, mock_logging_manager):
         """Test plotting forecast without prediction."""
-        forecaster = StockForecaster()
+        forecaster = StockForecaster(logging_manager=mock_logging_manager)
 
         with pytest.raises(ValueError, match="No predictions available"):
             forecaster.plot_forecast()
@@ -844,25 +870,25 @@ class TestStockForecasterPlotForecast:
 class TestStockForecasterEdgeCases:
     """Test edge cases and error handling."""
 
-    def test_fit_with_empty_data(self):
+    def test_fit_with_empty_data(self, mock_logging_manager):
         """Test fitting with empty dataframe."""
-        forecaster = StockForecaster()
+        forecaster = StockForecaster(logging_manager=mock_logging_manager)
         empty_data = pd.DataFrame()
 
         with pytest.raises(ValueError):
             forecaster.fit(empty_data)
 
-    def test_fit_with_non_dataframe(self):
+    def test_fit_with_non_dataframe(self, mock_logging_manager):
         """Test fitting with non-dataframe input."""
-        forecaster = StockForecaster()
+        forecaster = StockForecaster(logging_manager=mock_logging_manager)
 
         # Should raise ValueError about DatetimeIndex
         with pytest.raises(ValueError, match="Data index must be a DatetimeIndex"):
             forecaster.fit([1, 2, 3])
 
-    def test_predict_stores_prediction(self):
+    def test_predict_stores_prediction(self, mock_logging_manager):
         """Test predict stores prediction for later use."""
-        forecaster = StockForecaster()
+        forecaster = StockForecaster(logging_manager=mock_logging_manager)
 
         # Mock the model
         mock_model = Mock()
@@ -882,9 +908,9 @@ class TestStockForecasterEdgeCases:
         assert forecaster.prediction == mock_prediction  # Should store prediction
         assert len(result) == 30
 
-    def test_fit_with_signal_handler_error(self):
+    def test_fit_with_signal_handler_error(self, mock_logging_manager):
         """Test fit when signal handler setup fails."""
-        forecaster = StockForecaster()
+        forecaster = StockForecaster(logging_manager=mock_logging_manager)
         data = pd.DataFrame({"Close": [100, 101, 102]}, index=pd.date_range("2023-01-01", periods=3))
 
         with patch("stockula.forecasting.forecaster.signal.signal", side_effect=ValueError("Signal error")):
@@ -897,7 +923,7 @@ class TestStockForecasterEdgeCases:
                 with pytest.raises((ValueError, RuntimeError)):  # Should raise some exception
                     forecaster.fit(data)
 
-    def test_filtered_stream_write(self):
+    def test_filtered_stream_write(self, mock_logging_manager):
         """Test FilteredStream write method."""
         from io import StringIO
 
@@ -917,14 +943,14 @@ class TestStockForecasterEdgeCases:
             filtered_stream.write("AutoTS upgrade package\n")
             filtered_stream.write("remove_leading_zeros warning\n")
 
-    def test_initialization_with_missing_data_fetcher(self):
+    def test_initialization_with_missing_data_fetcher(self, mock_logging_manager):
         """Test initialization without data fetcher."""
-        forecaster = StockForecaster(data_fetcher=None)
+        forecaster = StockForecaster(data_fetcher=None, logging_manager=mock_logging_manager)
         assert forecaster.data_fetcher is None
 
-    def test_fit_converts_frequency_infer_to_d(self):
+    def test_fit_converts_frequency_infer_to_d(self, mock_logging_manager):
         """Test that fit converts 'infer' frequency to 'D'."""
-        forecaster = StockForecaster(frequency="infer")
+        forecaster = StockForecaster(frequency="infer", logging_manager=mock_logging_manager)
 
         data = pd.DataFrame({"Close": [100, 101, 102]}, index=pd.date_range("2023-01-01", periods=3, freq="D"))
 
@@ -940,23 +966,22 @@ class TestStockForecasterEdgeCases:
             call_kwargs = mock_autots.call_args[1]
             assert call_kwargs["frequency"] == "D"
 
-    @patch("stockula.forecasting.forecaster.logger")
-    def test_get_model_list_ultra_fast_with_logging(self, mock_logger):
+    def test_get_model_list_ultra_fast_with_logging(self, mock_logging_manager):
         """Test _get_model_list with ultra_fast logging."""
-        forecaster = StockForecaster()
+        forecaster = StockForecaster(logging_manager=mock_logging_manager)
 
         forecaster._get_model_list("ultra_fast", "TestColumn")
 
-        # Verify logging
-        mock_logger.info.assert_called_once()
-        log_message = mock_logger.info.call_args[0][0]
+        # Verify logging was called
+        mock_logging_manager.info.assert_called_once()
+        log_message = mock_logging_manager.info.call_args[0][0]
         assert "ultra-fast" in log_message
         assert "TestColumn" in log_message
         assert str(len(forecaster.ULTRA_FAST_MODEL_LIST)) in log_message
 
-    def test_get_model_list_fast_financial(self):
+    def test_get_model_list_fast_financial(self, mock_logging_manager):
         """Test _get_model_list with fast_financial preset."""
-        forecaster = StockForecaster()
+        forecaster = StockForecaster(logging_manager=mock_logging_manager)
 
         result = forecaster._get_model_list("fast_financial")
 
@@ -964,16 +989,16 @@ class TestStockForecasterEdgeCases:
         expected = [m for m in forecaster.FAST_MODEL_LIST if m in forecaster.FINANCIAL_MODEL_LIST]
         assert result == expected
 
-    def test_get_model_list_financial(self):
+    def test_get_model_list_financial(self, mock_logging_manager):
         """Test _get_model_list with financial preset."""
-        forecaster = StockForecaster()
+        forecaster = StockForecaster(logging_manager=mock_logging_manager)
 
         result = forecaster._get_model_list("financial")
         assert result == forecaster.FINANCIAL_MODEL_LIST
 
     @patch("stockula.forecasting.forecaster.pd.infer_freq")
     @patch("stockula.forecasting.forecaster.AutoTS")
-    def test_fit_frequency_inference_exception(self, mock_autots, mock_infer_freq):
+    def test_fit_frequency_inference_exception(self, mock_autots, mock_infer_freq, mock_logging_manager):
         """Test fit when frequency inference raises exception."""
         # Mock infer_freq to raise exception
         mock_infer_freq.side_effect = Exception("Inference failed")
@@ -983,7 +1008,7 @@ class TestStockForecasterEdgeCases:
         mock_model.fit.return_value = mock_model
         mock_autots.return_value = mock_model
 
-        forecaster = StockForecaster(frequency="infer")
+        forecaster = StockForecaster(frequency="infer", logging_manager=mock_logging_manager)
 
         # Create data
         dates = pd.date_range("2024-01-01", periods=10)
@@ -997,9 +1022,9 @@ class TestStockForecasterEdgeCases:
         assert call_kwargs["frequency"] == "D"
 
     @patch("stockula.forecasting.forecaster.signal.signal")
-    def test_fit_signal_handler_setup(self, mock_signal):
+    def test_fit_signal_handler_setup(self, mock_signal, mock_logging_manager):
         """Test signal handler setup in fit."""
-        forecaster = StockForecaster()
+        forecaster = StockForecaster(logging_manager=mock_logging_manager)
 
         dates = pd.date_range("2024-01-01", periods=10)
         data = pd.DataFrame({"Close": np.random.rand(10) * 100}, index=dates)
@@ -1014,17 +1039,17 @@ class TestStockForecasterEdgeCases:
             # Verify signal handler was set
             mock_signal.assert_called_once()
 
-    def test_forecast_from_symbol_empty_data(self):
+    def test_forecast_from_symbol_empty_data(self, mock_logging_manager):
         """Test forecast_from_symbol with empty data."""
         mock_fetcher = Mock()
         mock_fetcher.get_stock_data.return_value = pd.DataFrame()  # Empty data
 
-        forecaster = StockForecaster(data_fetcher=mock_fetcher)
+        forecaster = StockForecaster(data_fetcher=mock_fetcher, logging_manager=mock_logging_manager)
 
         with pytest.raises(ValueError, match="No data available for symbol"):
             forecaster.forecast_from_symbol("INVALID")
 
-    def test_forecast_from_symbol_with_evaluation_no_test_data(self):
+    def test_forecast_from_symbol_with_evaluation_no_test_data(self, mock_logging_manager):
         """Test forecast evaluation without test data."""
         mock_fetcher = Mock()
 
@@ -1033,7 +1058,7 @@ class TestStockForecasterEdgeCases:
         train_data = pd.DataFrame({"Close": np.random.rand(100) * 100}, index=train_dates)
         mock_fetcher.get_stock_data.return_value = train_data
 
-        forecaster = StockForecaster(data_fetcher=mock_fetcher)
+        forecaster = StockForecaster(data_fetcher=mock_fetcher, logging_manager=mock_logging_manager)
 
         # Mock the fit and predict methods
         with patch.object(forecaster, "fit"):
@@ -1051,7 +1076,7 @@ class TestStockForecasterEdgeCases:
                 assert "predictions" in result
                 assert result["evaluation_metrics"] is None
 
-    def test_forecast_from_symbol_with_evaluation_no_common_dates(self):
+    def test_forecast_from_symbol_with_evaluation_no_common_dates(self, mock_logging_manager):
         """Test forecast evaluation with no common dates."""
         mock_fetcher = Mock()
 
@@ -1065,7 +1090,7 @@ class TestStockForecasterEdgeCases:
 
         mock_fetcher.get_stock_data.side_effect = [train_data, test_data]
 
-        forecaster = StockForecaster(data_fetcher=mock_fetcher)
+        forecaster = StockForecaster(data_fetcher=mock_fetcher, logging_manager=mock_logging_manager)
 
         # Mock the fit and predict methods
         with patch.object(forecaster, "fit"):
@@ -1094,7 +1119,7 @@ class TestStockForecasterEdgeCases:
                 assert "predictions" in result
                 assert result["evaluation_metrics"] is None
 
-    def test_forecast_from_symbol_with_evaluation_and_kwargs(self):
+    def test_forecast_from_symbol_with_evaluation_and_kwargs(self, mock_logging_manager):
         """Test forecast_from_symbol_with_evaluation with additional kwargs."""
         mock_fetcher = Mock()
 
@@ -1106,7 +1131,7 @@ class TestStockForecasterEdgeCases:
 
         mock_fetcher.get_stock_data.side_effect = [train_data, test_data]
 
-        forecaster = StockForecaster(data_fetcher=mock_fetcher)
+        forecaster = StockForecaster(data_fetcher=mock_fetcher, logging_manager=mock_logging_manager)
 
         # Mock fit to capture kwargs
         fit_kwargs = {}
@@ -1134,9 +1159,9 @@ class TestStockForecasterEdgeCases:
                 assert fit_kwargs["model_list"] == "ultra_fast"
                 assert fit_kwargs["max_generations"] == 3
 
-    def test_evaluate_forecast_with_misaligned_data(self):
+    def test_evaluate_forecast_with_misaligned_data(self, mock_logging_manager):
         """Test evaluate_forecast when actual data doesn't align with forecast."""
-        forecaster = StockForecaster()
+        forecaster = StockForecaster(logging_manager=mock_logging_manager)
 
         # Mock prediction
         forecast_dates = pd.date_range("2024-01-01", periods=5)
@@ -1152,9 +1177,9 @@ class TestStockForecasterEdgeCases:
         with pytest.raises((KeyError, ValueError, IndexError)):  # KeyError or similar alignment error
             forecaster.evaluate_forecast(actual_data)
 
-    def test_fit_debug_logging(self, caplog):
+    def test_fit_debug_logging(self, mock_logging_manager):
         """Test debug logging during fit."""
-        forecaster = StockForecaster()
+        forecaster = StockForecaster(logging_manager=mock_logging_manager)
 
         data = pd.DataFrame({"Close": [100, 101, 102]}, index=pd.date_range("2023-01-01", periods=3))
 
@@ -1164,17 +1189,18 @@ class TestStockForecasterEdgeCases:
             mock_model.fit.return_value = mock_model
 
             with patch("stockula.forecasting.forecaster.signal.signal"):
-                with caplog.at_level(logging.DEBUG, logger="stockula.forecasting.forecaster"):
-                    forecaster.fit(data)
+                forecaster.fit(data)
 
-                    # Check debug messages
-                    assert "Fitting AutoTS with parameters:" in caplog.text
+                # Check debug messages were called on mock logger
+                mock_logging_manager.debug.assert_called()
+                debug_calls = [call.args[0] for call in mock_logging_manager.debug.call_args_list]
+                assert any("Fitting AutoTS with parameters:" in call for call in debug_calls)
 
 
 class TestStockForecasterIntegration:
     """Integration tests for StockForecaster."""
 
-    def test_full_workflow(self):
+    def test_full_workflow(self, mock_logging_manager):
         """Test complete forecasting workflow."""
         # Create realistic data
         np.random.seed(42)
@@ -1212,7 +1238,9 @@ class TestStockForecasterIntegration:
             mock_autots.return_value = mock_instance
 
             # Create forecaster
-            forecaster = StockForecaster(forecast_length=14, frequency="D", prediction_interval=0.95)
+            forecaster = StockForecaster(
+                forecast_length=14, frequency="D", prediction_interval=0.95, logging_manager=mock_logging_manager
+            )
 
             # Run full workflow
             with patch("stockula.forecasting.forecaster.signal.signal"):
@@ -1227,14 +1255,14 @@ class TestStockForecasterIntegration:
             model_info = forecaster.get_best_model()
             assert model_info["model_name"] == "SeasonalNaive"
 
-    def test_logging_messages(self, caplog):
+    def test_logging_messages(self, mock_logging_manager):
         """Test that appropriate log messages are generated."""
         data = pd.DataFrame(
             {"Close": [100, 101, 102, 103, 104]},
             index=pd.date_range("2023-01-01", periods=5),
         )
 
-        forecaster = StockForecaster()
+        forecaster = StockForecaster(logging_manager=mock_logging_manager)
 
         with patch("stockula.forecasting.forecaster.AutoTS") as mock_autots:
             mock_instance = Mock()
@@ -1243,10 +1271,10 @@ class TestStockForecasterIntegration:
             mock_autots.return_value = mock_instance
 
             with patch("stockula.forecasting.forecaster.signal.signal"):
-                # Set the specific logger to DEBUG level as well
-                with caplog.at_level(logging.DEBUG, logger="stockula.forecasting.forecaster"):
-                    forecaster.fit(data)
+                forecaster.fit(data)
 
-            # Check log messages
-            assert "Fitting model on 5 data points" in caplog.text
-            assert "Model fitting completed" in caplog.text
+            # Check log messages were called on mock logger
+            mock_logging_manager.debug.assert_called()
+            debug_calls = [call.args[0] for call in mock_logging_manager.debug.call_args_list]
+            assert any("Fitting model on 5 data points" in call for call in debug_calls)
+            assert any("Model fitting completed" in call for call in debug_calls)

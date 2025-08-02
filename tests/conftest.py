@@ -186,20 +186,32 @@ def sample_asset(sample_ticker):
     return Asset(ticker_init=sample_ticker, quantity_init=10.0, category_init=Category.MOMENTUM)
 
 
+@pytest.fixture
+def mock_logging_manager():
+    """Create a mock logging manager."""
+    logger = Mock()
+    logger.debug = Mock()
+    logger.info = Mock()
+    logger.warning = Mock()
+    logger.error = Mock()
+    return logger
+
+
 @pytest.fixture(scope="function")
-def sample_portfolio():
+def sample_portfolio(mock_logging_manager):
     """Create a sample portfolio."""
     return Portfolio(
         name_init="Test Portfolio",
         initial_capital_init=100000.0,
         allocation_method_init="equal_weight",
+        logging_manager_init=mock_logging_manager,
     )
 
 
 @pytest.fixture(scope="function")
-def populated_portfolio(sample_ticker_configs, mock_data_fetcher):
+def populated_portfolio(sample_ticker_configs, mock_data_fetcher, mock_logging_manager):
     """Create a portfolio with multiple assets."""
-    factory = DomainFactory(fetcher=mock_data_fetcher)
+    factory = DomainFactory(fetcher=mock_data_fetcher, logging_manager=mock_logging_manager)
     config = StockulaConfig(
         portfolio=PortfolioConfig(
             name="Test Portfolio",

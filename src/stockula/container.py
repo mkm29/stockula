@@ -1,11 +1,14 @@
 """Dependency injection container for Stockula."""
 
+import threading
+
 from dependency_injector import containers, providers
 
 from .backtesting.runner import BacktestRunner
 from .config import load_config
 from .data.fetcher import DataFetcher
 from .database.manager import DatabaseManager
+from .domain.allocator import Allocator
 from .domain.factory import DomainFactory
 from .forecasting.forecaster import StockForecaster
 from .technical_analysis.indicators import TechnicalIndicators
@@ -13,7 +16,14 @@ from .utils.logging_manager import LoggingManager
 
 
 class Container(containers.DeclarativeContainer):
-    """Main dependency injection container for Stockula."""
+    """Main dependency injection container for Stockula.
+
+    Thread-safe singleton providers are used for shared components
+    to ensure proper synchronization in multi-threading environments.
+    """
+
+    # Thread synchronization lock for singleton providers
+    _lock = threading.RLock()
 
     # Configuration
     config = providers.Configuration()
@@ -21,31 +31,37 @@ class Container(containers.DeclarativeContainer):
     # Config file path
     config_path = providers.Object(None)
 
-    # Logger
-    logging_manager = providers.Singleton(LoggingManager, name="stockula")
+    # Logger - thread-safe singleton
+    logging_manager = providers.ThreadSafeSingleton(LoggingManager, name="stockula")
 
-    # Stockula configuration
-    stockula_config = providers.Singleton(
+    # Stockula configuration - thread-safe singleton
+    stockula_config = providers.ThreadSafeSingleton(
         lambda config_path: load_config(config_path),
         config_path=config_path,
     )
 
-    # Database manager
-    database_manager = providers.Singleton(
+    # Database manager - thread-safe singleton
+    database_manager = providers.ThreadSafeSingleton(
         DatabaseManager,
         db_path=providers.Callable(lambda config: config.data.db_path, stockula_config),
     )
 
-    # Data fetcher with injected database manager
-    data_fetcher = providers.Singleton(
+    # Data fetcher with injected database manager and logging - thread-safe singleton
+    data_fetcher = providers.ThreadSafeSingleton(
         DataFetcher,
         use_cache=providers.Callable(lambda config: config.data.use_cache, stockula_config),
         db_path=providers.Callable(lambda config: config.data.db_path, stockula_config),
         database_manager=database_manager,
+        logging_manager=logging_manager,
     )
 
-    # Domain factory
-    domain_factory = providers.Singleton(DomainFactory, config=stockula_config, fetcher=data_fetcher)
+    # Allocator - thread-safe singleton
+    allocator = providers.ThreadSafeSingleton(Allocator, fetcher=data_fetcher, logging_manager=logging_manager)
+
+    # Domain factory - thread-safe singleton
+    domain_factory = providers.ThreadSafeSingleton(
+        DomainFactory, config=stockula_config, fetcher=data_fetcher, allocator=allocator
+    )
 
     # Backtesting runner
     backtest_runner = providers.Factory(
@@ -64,6 +80,7 @@ class Container(containers.DeclarativeContainer):
         model_list=providers.Callable(lambda config: config.forecast.model_list, stockula_config),
         prediction_interval=providers.Callable(lambda config: config.forecast.prediction_interval, stockula_config),
         data_fetcher=data_fetcher,
+        logging_manager=logging_manager,
     )
 
     # Technical indicators factory
@@ -88,6 +105,11 @@ def create_container(config_path: str | None = None) -> Container:
     container.wire(
         modules=[
             "stockula.main",
+            "stockula.domain.allocator",
+            "stockula.data.fetcher",
+            "stockula.domain.factory",
+            "stockula.domain.portfolio",
+            "stockula.forecasting.forecaster",
         ]
     )
 

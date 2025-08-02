@@ -1,19 +1,18 @@
 """Portfolio domain model for managing asset allocations."""
 
-import logging
 from dataclasses import InitVar, dataclass, field
 from functools import lru_cache
 from typing import TYPE_CHECKING, Any
 
+from dependency_injector.wiring import Provide, inject
+
+from ..interfaces import IDataFetcher, ILoggingManager
 from .asset import Asset
 from .category import Category
 from .ticker import Ticker
 
 if TYPE_CHECKING:
-    from ..interfaces import IDataFetcher
-
-# Create logger
-logger = logging.getLogger(__name__)
+    pass
 
 
 # Cached function for allocation calculations
@@ -43,22 +42,33 @@ class Portfolio:
     initial_capital_init: InitVar[float]
     name_init: InitVar[str] = "Main Portfolio"
     allocation_method_init: InitVar[str] = "equal_weight"  # equal_weight, market_cap, custom
+    logging_manager_init: InitVar[ILoggingManager] = None
     # Regular fields
     _name: str = field(init=False, repr=False)
     _initial_capital: float = field(init=False, repr=False)
     _allocation_method: str = field(init=False, repr=False)
+    _logger: ILoggingManager = field(init=False, repr=False)
     assets: list[Asset] = field(default_factory=list)
     rebalance_frequency: str | None = "monthly"
     max_position_size: float | None = None  # Max % per position
     stop_loss_pct: float | None = None  # Global stop loss %
 
-    def __post_init__(self, initial_capital_init: float, name_init: str, allocation_method_init: str):
+    @inject
+    def __post_init__(
+        self,
+        initial_capital_init: float,
+        name_init: str,
+        allocation_method_init: str,
+        logging_manager_init: ILoggingManager | None = None,
+        logging_manager: ILoggingManager = Provide["logging_manager"],
+    ):
         """Validate portfolio constraints and set private attributes."""
         self._name = name_init
         if initial_capital_init <= 0:
             raise ValueError("Initial capital must be positive")
         self._initial_capital = initial_capital_init
         self._allocation_method = allocation_method_init
+        self._logger = logging_manager_init or logging_manager
 
         if self.max_position_size is not None:
             if not 0 < self.max_position_size <= 100:
@@ -307,7 +317,7 @@ class Portfolio:
         required_capital = self.get_portfolio_value(validation_prices)
 
         if required_capital == 0:
-            logger.warning("Could not fetch prices for portfolio validation")
+            self._logger.warning("Could not fetch prices for portfolio validation")
             return
 
         if self._initial_capital < required_capital:
@@ -320,7 +330,7 @@ class Portfolio:
         # Warn if capital is significantly higher than needed (optional)
         excess_ratio = (self._initial_capital - required_capital) / required_capital
         if excess_ratio > 0.5:  # More than 50% excess
-            logger.warning(
+            self._logger.warning(
                 f"Initial capital (${self._initial_capital:,.2f}) significantly "
                 f"exceeds required capital (${required_capital:,.2f}). "
                 f"Consider adjusting asset quantities or initial capital."
@@ -353,7 +363,7 @@ class Portfolio:
                 prices = fetcher.get_current_prices(self.symbols)
 
         if not prices:
-            logger.warning("Could not fetch prices for allocation validation")
+            self._logger.warning("Could not fetch prices for allocation validation")
             return
 
         # Check max position size constraint
@@ -370,7 +380,7 @@ class Portfolio:
         # Validate total allocation doesn't exceed 100% (with small tolerance for rounding)
         total_allocation = sum(data["percentage"] for data in self.get_asset_allocations(prices).values())
         if total_allocation > 100.1:  # 0.1% tolerance for rounding
-            logger.warning(
+            self._logger.warning(
                 f"Total allocation ({total_allocation:.1f}%) exceeds 100%. This may indicate overleveraging."
             )
 
@@ -378,7 +388,7 @@ class Portfolio:
         portfolio_value = self.get_portfolio_value(prices)
         utilization_ratio = portfolio_value / self._initial_capital
         if utilization_ratio < 0.5:  # Less than 50% utilization
-            logger.warning(
+            self._logger.warning(
                 f"Low capital utilization ({utilization_ratio:.1%}). "
                 f"Portfolio value (${portfolio_value:,.2f}) is much lower than "
                 f"initial capital (${self._initial_capital:,.2f})."
