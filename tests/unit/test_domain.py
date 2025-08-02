@@ -7,14 +7,7 @@ import pandas as pd
 import pytest
 
 from stockula.config import DataConfig, PortfolioConfig, StockulaConfig, TickerConfig
-from stockula.domain import (
-    Asset,
-    Category,
-    DomainFactory,
-    Portfolio,
-    Ticker,
-    TickerRegistry,
-)
+from stockula.domain import Asset, Category, DomainFactory, Portfolio, Ticker, TickerRegistry
 
 
 class TestTicker:

@@ -500,6 +500,370 @@ class TestBacktestRunnerBrokerConfig:
         assert commission == 1.50
 
 
+class TestBacktestRunnerCommissionEdgeCases:
+    """Test commission function edge cases for better coverage."""
+
+    def test_commission_func_per_share_with_none_per_share_commission(self):
+        """Test per-share commission with None per_share_commission."""
+        broker_config = BrokerConfig(
+            name="custom",
+            commission_type="per_share",
+            commission_value=0.01,  # This will be used as per_share since per_share_commission is None
+            per_share_commission=None,
+            regulatory_fees=0.0,
+        )
+
+        runner = BacktestRunner(broker_config=broker_config, data_fetcher=None)
+        commission = runner.commission(100, 50.0)
+
+        # Should use commission_value as per_share
+        expected = 100 * 0.01  # 100 shares * $0.01 per share
+        assert abs(commission - expected) < 0.001
+
+    def test_commission_func_tiered_with_non_dict_value(self):
+        """Test tiered commission with non-dict commission value."""
+        broker_config = BrokerConfig(
+            name="custom",
+            commission_type="tiered",
+            commission_value=0.005,  # Not a dict, so no tiered calculation
+            regulatory_fees=0.0,
+        )
+
+        runner = BacktestRunner(broker_config=broker_config, data_fetcher=None)
+        commission = runner.commission(100, 50.0)
+
+        # Should be 0 since commission_value is not a dict for tiered
+        assert commission == 0.0
+
+
+class TestBacktestRunnerDateExtractionEdgeCases:
+    """Test date extraction edge cases."""
+
+    @patch("stockula.backtesting.runner.Backtest")
+    def test_run_with_pandas_datetime_index(self, mock_backtest_class):
+        """Test run with pandas datetime index for date extraction."""
+        # Create data with pandas datetime index that has .date() method
+        dates = pd.to_datetime(pd.date_range("2023-01-01", periods=10, freq="D"))
+        data = pd.DataFrame(
+            {
+                "Open": [100] * 10,
+                "High": [101] * 10,
+                "Low": [99] * 10,
+                "Close": [100] * 10,
+                "Volume": [1000000] * 10,
+            },
+            index=dates,
+        )
+
+        mock_backtest = Mock()
+        mock_results = {}
+        mock_backtest.run.return_value = mock_results
+        mock_backtest_class.return_value = mock_backtest
+
+        runner = BacktestRunner(data_fetcher=None)
+        results = runner.run(data, Mock)
+
+        # Should extract dates using .date().strftime() path (lines 210-217)
+        assert "Start Date" in results
+        assert "End Date" in results
+        assert "Trading Days" in results
+        assert "Calendar Days" in results
+        assert results["Start Date"] == "2023-01-01"
+        assert results["End Date"] == "2023-01-10"
+
+
+class TestBacktestRunnerStrategyValidation:
+    """Test strategy validation and warnings."""
+
+    @patch("stockula.backtesting.runner.Backtest")
+    def test_run_with_insufficient_data_warning(self, mock_backtest_class, capsys):
+        """Test run with strategy that has insufficient data (triggers warning)."""
+        # Create minimal data
+        dates = pd.date_range("2023-01-01", periods=5, freq="D")
+        data = pd.DataFrame(
+            {
+                "Open": [100] * 5,
+                "High": [101] * 5,
+                "Low": [99] * 5,
+                "Close": [100] * 5,
+                "Volume": [1000000] * 5,
+            },
+            index=dates,
+        )
+
+        # Create mock strategy with period requirements
+        mock_strategy = Mock()
+        mock_strategy.__name__ = "TestStrategy"
+        mock_strategy.slow_period = 20  # Requires 20 days
+        mock_strategy.min_trading_days_buffer = 10  # Plus 10 buffer = 30 total needed
+
+        mock_backtest = Mock()
+        mock_results = {}
+        mock_backtest.run.return_value = mock_results
+        mock_backtest_class.return_value = mock_backtest
+
+        runner = BacktestRunner(data_fetcher=None)
+        runner.run(data, mock_strategy)
+
+        # Check that warning was printed (lines 149-155)
+        captured = capsys.readouterr()
+        assert "Warning: TestStrategy requires at least 30 days of data" in captured.out
+        assert "but only 5 days available" in captured.out
+
+
+class TestBacktestRunnerTrainTestSplit:
+    """Test train/test split functionality."""
+
+    def test_run_with_train_test_split_no_data_fetcher(self):
+        """Test train/test split without data fetcher raises error."""
+        runner = BacktestRunner(data_fetcher=None)
+
+        with pytest.raises(ValueError, match="Data fetcher not configured"):
+            runner.run_with_train_test_split("AAPL", Mock)
+
+    @patch("stockula.backtesting.runner.BacktestRunner.run")
+    @patch("stockula.backtesting.runner.BacktestRunner._extract_key_metrics")
+    def test_run_with_train_test_split_basic(self, mock_extract, mock_run, mock_data_fetcher):
+        """Test basic train/test split functionality."""
+        # Mock data fetcher to return data
+        dates = pd.date_range("2023-01-01", periods=100, freq="D")
+        mock_data = pd.DataFrame(
+            {
+                "Open": [100] * 100,
+                "High": [101] * 100,
+                "Low": [99] * 100,
+                "Close": [100] * 100,
+                "Volume": [1000000] * 100,
+            },
+            index=dates,
+        )
+
+        # Mock the get_stock_data method
+        with (
+            patch.object(mock_data_fetcher, "get_stock_data", return_value=mock_data),
+            patch.object(mock_data_fetcher, "get_treasury_rates", return_value=pd.Series()),
+        ):
+            # Mock strategy
+            mock_strategy = Mock()
+            mock_strategy.__name__ = "TestStrategy"
+
+            runner = BacktestRunner(data_fetcher=mock_data_fetcher)
+
+            mock_run.return_value = {"Return [%]": 10.0, "Sharpe Ratio": 1.0}
+            mock_extract.return_value = {"return_pct": 10.0, "sharpe_ratio": 1.0}
+
+            results = runner.run_with_train_test_split(
+                "AAPL",
+                mock_strategy,
+                train_start_date="2023-01-01",
+                train_end_date="2023-02-01",
+                test_start_date="2023-02-02",
+                test_end_date="2023-03-01",
+            )
+
+            # Verify results structure
+            assert "symbol" in results
+            assert "strategy" in results
+            assert "train_period" in results
+            assert "test_period" in results
+            assert "train_results" in results
+            assert "test_results" in results
+            assert "performance_degradation" in results
+            assert results["symbol"] == "AAPL"
+            assert results["strategy"] == "TestStrategy"
+
+    @patch("stockula.backtesting.runner.BacktestRunner.optimize")
+    @patch("stockula.backtesting.runner.BacktestRunner.run")
+    @patch("stockula.backtesting.runner.BacktestRunner._extract_key_metrics")
+    def test_run_with_train_test_split_with_optimization(
+        self, mock_extract, mock_run, mock_optimize, mock_data_fetcher
+    ):
+        """Test train/test split with parameter optimization."""
+        # Mock data
+        dates = pd.date_range("2023-01-01", periods=100, freq="D")
+        mock_data = pd.DataFrame(
+            {
+                "Open": [100] * 100,
+                "High": [101] * 100,
+                "Low": [99] * 100,
+                "Close": [100] * 100,
+                "Volume": [1000000] * 100,
+            },
+            index=dates,
+        )
+        # Mock the get_stock_data method
+        with (
+            patch.object(mock_data_fetcher, "get_stock_data", return_value=mock_data),
+            patch.object(mock_data_fetcher, "get_treasury_rates", return_value=pd.Series()),
+        ):
+            # Mock strategy
+            mock_strategy = Mock()
+            mock_strategy.__name__ = "TestStrategy"
+
+            runner = BacktestRunner(data_fetcher=mock_data_fetcher)
+
+            # Mock optimization result with parameters
+            mock_optimize.return_value = {
+                "fast_period": 10,
+                "slow_period": 20,
+                "Return [%]": 15.0,  # This should be filtered out
+                "Sharpe Ratio": 1.2,  # This should be filtered out
+            }
+            mock_run.return_value = {"Return [%]": 12.0, "Sharpe Ratio": 1.1}
+            mock_extract.return_value = {"return_pct": 12.0, "sharpe_ratio": 1.1}
+
+            results = runner.run_with_train_test_split(
+                "AAPL",
+                mock_strategy,
+                optimize_on_train=True,
+                param_ranges={"fast_period": range(5, 15), "slow_period": range(15, 25)},
+            )
+
+            # Check that optimization was called and parameters were extracted
+            assert "optimized_parameters" in results
+            assert results["optimized_parameters"]["fast_period"] == 10
+            assert results["optimized_parameters"]["slow_period"] == 20
+            # Performance metrics should be filtered out
+            assert "Return [%]" not in results["optimized_parameters"]
+            assert "Sharpe Ratio" not in results["optimized_parameters"]
+
+    def test_extract_key_metrics(self):
+        """Test _extract_key_metrics method."""
+        runner = BacktestRunner(data_fetcher=None)
+
+        backtest_result = {
+            "Return [%]": 15.5,
+            "Sharpe Ratio": 1.25,
+            "Max. Drawdown [%]": -8.3,
+            "# Trades": 42,
+            "Win Rate [%]": 65.0,
+            "Equity Final [$]": 11550.0,
+            "Buy & Hold Return [%]": 12.0,
+        }
+
+        metrics = runner._extract_key_metrics(backtest_result)
+
+        assert metrics["return_pct"] == 15.5
+        assert metrics["sharpe_ratio"] == 1.25
+        assert metrics["max_drawdown_pct"] == -8.3
+        assert metrics["num_trades"] == 42
+        assert metrics["win_rate"] == 65.0
+        assert metrics["equity_final"] == 11550.0
+        assert metrics["buy_hold_return_pct"] == 12.0
+
+    def test_extract_key_metrics_missing_values(self):
+        """Test _extract_key_metrics with missing values."""
+        runner = BacktestRunner(data_fetcher=None)
+
+        backtest_result = {}  # Empty result
+
+        metrics = runner._extract_key_metrics(backtest_result)
+
+        # Should default to 0 for missing values
+        assert metrics["return_pct"] == 0
+        assert metrics["sharpe_ratio"] == 0
+        assert metrics["max_drawdown_pct"] == 0
+        assert metrics["num_trades"] == 0
+        assert metrics["win_rate"] == 0
+        assert metrics["equity_final"] == 0
+        assert metrics["buy_hold_return_pct"] == 0
+
+
+class TestBacktestRunnerEquityCurveEdgeCases:
+    """Test equity curve processing edge cases."""
+
+    def test_enhance_results_basic_coverage(self):
+        """Test that equity curve processing code is covered."""
+        runner = BacktestRunner(data_fetcher=None)
+
+        # Test with Series equity curve and dynamic risk free rate
+        dates = pd.date_range("2023-01-01", periods=10, freq="D")
+        treasury_rates = pd.Series([0.05] * 10, index=dates)
+        runner.risk_free_rate = treasury_rates
+        runner._treasury_rates = treasury_rates
+        runner._equity_curve = pd.Series([10000 + i * 100 for i in range(10)], index=dates)
+
+        # Mock the enhance_backtest_metrics to avoid the import dependency
+        with patch("stockula.backtesting.metrics.enhance_backtest_metrics") as mock_enhance:
+            mock_enhance.return_value = {"enhanced_metric": 1.0}
+            runner.results = {"Return [%]": 10.0}
+
+            # This should call the equity curve processing code
+            runner._enhance_results_with_dynamic_metrics()
+
+            # Verify enhance was called
+            mock_enhance.assert_called_once()
+
+
+class TestBacktestRunnerRunFromSymbolDateExtraction:
+    """Test date extraction edge cases in run_from_symbol."""
+
+    @patch("stockula.backtesting.runner.BacktestRunner.run")
+    def test_run_from_symbol_date_extraction_none_dates(self, mock_run, mock_data_fetcher):
+        """Test run_from_symbol when start_date and end_date are None."""
+        # Create data with index that has strftime method
+        dates = pd.date_range("2023-01-01", periods=10, freq="D")
+        mock_data = pd.DataFrame(
+            {
+                "Open": [100] * 10,
+                "High": [101] * 10,
+                "Low": [99] * 10,
+                "Close": [100] * 10,
+                "Volume": [1000000] * 10,
+            },
+            index=dates,
+        )
+        with (
+            patch.object(mock_data_fetcher, "get_stock_data", return_value=mock_data),
+            patch.object(
+                mock_data_fetcher, "get_treasury_rates", return_value=pd.Series([0.05] * 10, index=dates)
+            ) as mock_get_treasury,
+        ):
+            runner = BacktestRunner(data_fetcher=mock_data_fetcher)
+
+            mock_run.return_value = {}
+
+            # Call with None dates - should extract from data
+            runner.run_from_symbol("AAPL", Mock, start_date=None, end_date=None)
+
+            # Should call get_treasury_rates with extracted dates
+            mock_get_treasury.assert_called_with("2023-01-01", "2023-01-10", "3_month")
+
+
+class TestBacktestRunnerDynamicRiskFreeRateDateExtraction:
+    """Test date extraction in run_with_dynamic_risk_free_rate."""
+
+    @patch("stockula.backtesting.runner.BacktestRunner.run")
+    def test_run_with_dynamic_risk_free_rate_none_dates(self, mock_run, mock_data_fetcher):
+        """Test date extraction when start_date and end_date are None."""
+        dates = pd.date_range("2023-01-01", periods=10, freq="D")
+        mock_data = pd.DataFrame(
+            {
+                "Open": [100] * 10,
+                "High": [101] * 10,
+                "Low": [99] * 10,
+                "Close": [100] * 10,
+                "Volume": [1000000] * 10,
+            },
+            index=dates,
+        )
+        with (
+            patch.object(mock_data_fetcher, "get_stock_data", return_value=mock_data),
+            patch.object(
+                mock_data_fetcher, "get_treasury_rates", return_value=pd.Series([0.05] * 10, index=dates)
+            ) as mock_get_treasury,
+        ):
+            runner = BacktestRunner(data_fetcher=mock_data_fetcher)
+
+            mock_run.return_value = {}
+
+            # Call without dates - should extract from stock data (lines 638, 640)
+            runner.run_with_dynamic_risk_free_rate("AAPL", Mock)
+
+            # Should extract dates and call get_treasury_rates
+            mock_get_treasury.assert_called_with("2023-01-01", "2023-01-10", "3_month")
+
+
 class TestBacktestRunnerDynamicRiskFreeRate:
     """Test BacktestRunner dynamic risk-free rate functionality."""
 

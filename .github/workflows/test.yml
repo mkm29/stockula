@@ -1,5 +1,8 @@
 name: Test
 on:
+  push:
+    branches:
+      - main
   pull_request:
   # Run on any pull request
 env:
@@ -66,9 +69,14 @@ jobs:
         uses: codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
-          flags: unit
-          name: unit-tests
-          fail_ci_if_error: false
+          # flags: unit
+          # name: unit-tests
+          # fail_ci_if_error: false
+      - name: Upload test results to Codecov
+        if: ${{ !cancelled() }}
+        uses: codecov/test-results-action@v1
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
       - name: Minimize uv cache
         run: uv cache prune --ci
 
