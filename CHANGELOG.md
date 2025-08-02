@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.5.2](https://github.com/mkm29/stockula/compare/v0.5.1...v0.5.2) (2025-08-02)
+
+
+### Bug Fixes
+
+* require successful run of test GitHub Action before docker-build is run ([d087013](https://github.com/mkm29/stockula/commit/d08701394061c9ff5c401bde3a90b73a3d3bca70))
+* require successful run of test GitHub Action before docker-build… ([38e94a8](https://github.com/mkm29/stockula/commit/38e94a81a5b3afa5da6e04f891e036a6cac23585))
+
 ## [0.5.1](https://github.com/mkm29/stockula/compare/v0.5.0...v0.5.1) (2025-08-02)
 
 
