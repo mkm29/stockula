@@ -17,6 +17,15 @@ def calculate_dynamic_sharpe_ratio(
     Returns:
         Dynamic Sharpe ratio
     """
+    # Handle timezone mismatch
+    if hasattr(returns.index, "tz") and returns.index.tz is not None:
+        returns = returns.copy()
+        returns.index = returns.index.tz_localize(None)
+
+    if hasattr(risk_free_rates.index, "tz") and risk_free_rates.index.tz is not None:
+        risk_free_rates = risk_free_rates.copy()
+        risk_free_rates.index = risk_free_rates.index.tz_localize(None)
+
     # Align the series by date
     aligned_data = pd.DataFrame({"returns": returns, "rf_rates": risk_free_rates}).dropna()
 
@@ -57,6 +66,15 @@ def calculate_rolling_sharpe_ratio(
     Returns:
         Rolling Sharpe ratio series
     """
+    # Handle timezone mismatch
+    if hasattr(returns.index, "tz") and returns.index.tz is not None:
+        returns = returns.copy()
+        returns.index = returns.index.tz_localize(None)
+
+    if hasattr(risk_free_rates.index, "tz") and risk_free_rates.index.tz is not None:
+        risk_free_rates = risk_free_rates.copy()
+        risk_free_rates.index = risk_free_rates.index.tz_localize(None)
+
     # Align the series
     aligned_data = pd.DataFrame({"returns": returns, "rf_rates": risk_free_rates})
 
@@ -89,6 +107,15 @@ def calculate_sortino_ratio_dynamic(
     Returns:
         Dynamic Sortino ratio
     """
+    # Handle timezone mismatch
+    if hasattr(returns.index, "tz") and returns.index.tz is not None:
+        returns = returns.copy()
+        returns.index = returns.index.tz_localize(None)
+
+    if hasattr(risk_free_rates.index, "tz") and risk_free_rates.index.tz is not None:
+        risk_free_rates = risk_free_rates.copy()
+        risk_free_rates.index = risk_free_rates.index.tz_localize(None)
+
     # Align the series
     aligned_data = pd.DataFrame({"returns": returns, "rf_rates": risk_free_rates}).dropna()
 
@@ -139,6 +166,16 @@ def enhance_backtest_metrics(
     # Ensure treasury_rates is a pandas Series
     if not isinstance(treasury_rates, pd.Series):
         raise ValueError("treasury_rates must be a pandas Series")
+
+    # Handle timezone mismatch between equity_curve and treasury_rates
+    # Convert both to timezone-naive for consistent comparison
+    if hasattr(equity_curve.index, "tz") and equity_curve.index.tz is not None:
+        equity_curve = equity_curve.copy()
+        equity_curve.index = equity_curve.index.tz_localize(None)
+
+    if hasattr(treasury_rates.index, "tz") and treasury_rates.index.tz is not None:
+        treasury_rates = treasury_rates.copy()
+        treasury_rates.index = treasury_rates.index.tz_localize(None)
 
     # Calculate returns from equity curve
     returns = equity_curve.pct_change(fill_method=None).dropna()
