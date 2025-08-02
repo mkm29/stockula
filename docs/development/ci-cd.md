@@ -30,6 +30,7 @@ Stockula uses GitHub Actions for automated testing, building, and deployment. Th
   - Import sorting
   - Format consistency
 - **Configuration**: Uses `pyproject.toml` for ruff settings
+- **Local Script**: `scripts/lint.py` runs the same commands as CI for consistency
 
 #### 2. Unit Tests
 
@@ -106,6 +107,47 @@ Stockula uses GitHub Actions for automated testing, building, and deployment. Th
   - Registry cache (persistent, shared across workflows)
   - Base image caching from `:latest` tag
 
+## Linting Script
+
+The `scripts` module provides a `lint` command for consistent linting checks between local development and CI:
+
+### Usage
+
+```bash
+# Run the same checks as CI
+uv run lint
+```
+
+### What it does
+
+1. **Ruff Check**: Runs `uv run ruff check src tests`
+
+   - Validates code style, imports, and common issues
+   - Same scope as CI (only `src` and `tests` directories)
+
+1. **Format Check**: Runs `uv run ruff format --check src tests`
+
+   - Validates code formatting without making changes
+   - Ensures consistent style across the codebase
+
+### Output
+
+- ✅ **Success**: All checks pass (same as CI)
+- ❌ **Failure**: Shows specific issues and provides fix commands:
+  ```bash
+  🔧 To fix these issues, run:
+    uv run ruff check src tests --fix
+    uv run ruff format src tests
+  ```
+
+### Benefits
+
+- **CI Consistency**: Runs identical commands to the CI pipeline
+- **Easy Access**: Available as `uv run lint` from any directory in the project
+- **Fast Feedback**: Catch issues locally before pushing
+- **Clear Instructions**: Provides exact commands to fix issues
+- **Module Integration**: Part of the project's Python package structure
+
 ## Development Workflow
 
 ### 1. Local Development
@@ -117,8 +159,15 @@ uv sync --all-extras --dev
 # Run tests locally
 uv run pytest
 
-# Check code style
+# Check code style (consistent with CI)
+uv run lint
+
+# Or run individual commands
 uv run ruff check src tests
+uv run ruff format --check src tests
+
+# Fix linting issues
+uv run ruff check src tests --fix
 uv run ruff format src tests
 ```
 

@@ -118,9 +118,10 @@ class TestSuppressAutoTSOutput:
 
     def test_filtered_stream_non_debug_mode_patterns(self, mock_logging_manager):
         """Test FilteredStream pattern filtering in non-debug mode."""
-        from stockula.forecasting.forecaster import SuppressAutoTSOutput
         import logging
-        
+
+        from stockula.forecasting.forecaster import SuppressAutoTSOutput
+
         logger = logging.getLogger("stockula.forecasting.forecaster")
 
         # Mock logger to be in non-debug mode
@@ -178,12 +179,15 @@ class TestStockForecasterInitialization:
 
     def test_initialization_with_custom_params(self, mock_logging_manager):
         """Test initialization with custom parameters."""
-        forecaster = StockForecaster(forecast_length=30,
+        forecaster = StockForecaster(
+            forecast_length=30,
             frequency="D",
             prediction_interval=0.95,
             num_validations=3,
             validation_method="seasonal",
-            data_fetcher=None, logging_manager=mock_logging_manager)
+            data_fetcher=None,
+            logging_manager=mock_logging_manager,
+        )
 
         assert forecaster.forecast_length == 30
         assert forecaster.frequency == "D"
@@ -193,9 +197,12 @@ class TestStockForecasterInitialization:
 
     def test_init_with_custom_model_list(self, mock_logging_manager):
         """Test initialization with custom model list."""
-        forecaster = StockForecaster(model_list=["ARIMA", "ETS", "Theta"],
+        forecaster = StockForecaster(
+            model_list=["ARIMA", "ETS", "Theta"],
             forecast_length=30,
-            max_generations=5, logging_manager=mock_logging_manager)
+            max_generations=5,
+            logging_manager=mock_logging_manager,
+        )
 
         assert forecaster.model_list == ["ARIMA", "ETS", "Theta"]
         assert forecaster.max_generations == 5
@@ -215,12 +222,15 @@ class TestStockForecasterInitialization:
         assert forecaster.model_list == "financial"
 
         # Test 'fast_financial' preset
-        forecaster = StockForecaster(model_list="fast_financial", forecast_length=30, logging_manager=mock_logging_manager)
+        forecaster = StockForecaster(
+            model_list="fast_financial", forecast_length=30, logging_manager=mock_logging_manager
+        )
         assert forecaster.model_list == "fast_financial"
 
     def test_init_with_all_parameters(self, mock_logging_manager):
         """Test initialization with all parameters."""
-        forecaster = StockForecaster(forecast_length=30,
+        forecaster = StockForecaster(
+            forecast_length=30,
             frequency="D",
             prediction_interval=0.90,
             ensemble="simple",
@@ -228,7 +238,9 @@ class TestStockForecasterInitialization:
             validation_method="even",
             model_list=["ARIMA", "ETS"],
             max_generations=10,
-            no_negatives=False, logging_manager=mock_logging_manager)
+            no_negatives=False,
+            logging_manager=mock_logging_manager,
+        )
 
         assert forecaster.forecast_length == 30
         assert forecaster.frequency == "D"
@@ -268,7 +280,8 @@ class TestStockForecasterFit:
         """Test fitting with valid data."""
         mock_autots_class, mock_instance, _ = mock_autots
 
-        forecaster = StockForecaster(forecast_length=14, logging_manager=mock_logging_manager)  # Specify forecast_length
+        # Specify forecast_length
+        forecaster = StockForecaster(forecast_length=14, logging_manager=mock_logging_manager)
 
         # Set up signal handler mock
         with patch("stockula.forecasting.forecaster.signal.signal"):
@@ -607,7 +620,9 @@ class TestStockForecasterForecastFromSymbol:
 
     def test_forecast_from_symbol_with_all_parameters(self, mock_data_fetcher, mock_logging_manager):
         """Test forecast_from_symbol with all parameters."""
-        forecaster = StockForecaster(forecast_length=30, data_fetcher=mock_data_fetcher, logging_manager=mock_logging_manager)
+        forecaster = StockForecaster(
+            forecast_length=30, data_fetcher=mock_data_fetcher, logging_manager=mock_logging_manager
+        )
 
         # Create sample data
         dates = pd.date_range(start="2023-01-01", periods=100, freq="D")
@@ -653,7 +668,9 @@ class TestStockForecasterForecastFromSymbol:
 
     def test_forecast_from_symbol_with_evaluation(self, mock_data_fetcher, mock_logging_manager):
         """Test forecast_from_symbol_with_evaluation method."""
-        forecaster = StockForecaster(forecast_length=7, data_fetcher=mock_data_fetcher, logging_manager=mock_logging_manager)
+        forecaster = StockForecaster(
+            forecast_length=7, data_fetcher=mock_data_fetcher, logging_manager=mock_logging_manager
+        )
 
         # Create train and test data
         train_dates = pd.date_range(start="2023-01-01", periods=90, freq="D")
@@ -1221,7 +1238,9 @@ class TestStockForecasterIntegration:
             mock_autots.return_value = mock_instance
 
             # Create forecaster
-            forecaster = StockForecaster(forecast_length=14, frequency="D", prediction_interval=0.95, logging_manager=mock_logging_manager)
+            forecaster = StockForecaster(
+                forecast_length=14, frequency="D", prediction_interval=0.95, logging_manager=mock_logging_manager
+            )
 
             # Run full workflow
             with patch("stockula.forecasting.forecaster.signal.signal"):

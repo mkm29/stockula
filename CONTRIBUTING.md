@@ -75,5 +75,7 @@ BREAKING CHANGE: Broker configuration now requires explicit fee structure defini
 1. Install uv: `curl -LsSf https://astral.sh/uv/install.sh | sh`
 1. Install dependencies: `uv sync`
 1. Run tests: `uv run pytest`
-1. Run linter: `uv run ruff check`
-1. Format code: `uv run ruff format`
+1. Run linting: `uv run lint` (consistent with CI)
+1. Fix linting issues:
+   - `uv run ruff check src tests --fix`
+   - `uv run ruff format src tests`

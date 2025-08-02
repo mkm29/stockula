@@ -20,41 +20,39 @@ def run_command(cmd: str, check: bool = True) -> subprocess.CompletedProcess:
 
 
 def main() -> None:
-    """Run formatting and linting."""
-    print("🔧 Formatting code...")
-    run_command("ruff format .")
-
-    print("\n🔍 Attempting to fix linting issues...")
-    # First try to fix what we can
-    fix_result = run_command("ruff check . --fix --unsafe-fixes", check=False)
-
-    if fix_result.returncode != 0:
-        print("\n⚠️  Some issues couldn't be automatically fixed:")
-        print(fix_result.stdout)
-
-        # Show remaining issues
-        print("\n📋 Remaining issues that need manual fixes:")
-        check_result = run_command("ruff check .", check=False)
-
-        if check_result.returncode != 0:
-            # Count issues by type
-            lines = check_result.stdout.strip().split("\n")
-            error_types: dict[str, int] = {}
-            for line in lines:
-                if " E" in line or " B" in line or " F" in line:
-                    parts = line.split(":")
-                    if len(parts) >= 4:
-                        error_code = parts[3].strip().split()[0]
-                        error_types[error_code] = error_types.get(error_code, 0) + 1
-
-            print("\nSummary by error type:")
-            for code, count in sorted(error_types.items()):
-                print(f"  {code}: {count} issue(s)")
-
-            print(f"\nTotal: {check_result.stdout.strip().split('\n')[-1]}")
-            sys.exit(1)
+    """Run linting checks consistent with CI pipeline."""
+    print("🔍 Checking code with ruff (consistent with CI)...")
+    
+    # Run the same commands as CI
+    print("Running: uv run ruff check src tests")
+    check_result = run_command("uv run ruff check src tests", check=False)
+    
+    print("\nRunning: uv run ruff format --check src tests")  
+    format_result = run_command("uv run ruff format --check src tests", check=False)
+    
+    # Report results
+    if check_result.returncode == 0 and format_result.returncode == 0:
+        print("\n✅ All linting checks passed!")
     else:
-        print("\n✅ All linting issues fixed!")
+        print("\n❌ Linting issues found:")
+        
+        if check_result.returncode != 0:
+            print("\n📋 Ruff check issues:")
+            print(check_result.stdout)
+            if check_result.stderr:
+                print(check_result.stderr)
+        
+        if format_result.returncode != 0:
+            print("\n📋 Format check issues:")
+            print(format_result.stdout)
+            if format_result.stderr:
+                print(format_result.stderr)
+        
+        print("\n🔧 To fix these issues, run:")
+        print("  uv run ruff check src tests --fix")
+        print("  uv run ruff format src tests")
+        
+        sys.exit(1)
 
 
 if __name__ == "__main__":

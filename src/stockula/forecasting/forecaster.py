@@ -365,7 +365,9 @@ class StockForecaster:
 
         # Map our presets to model lists
         if model_list == "ultra_fast":
-            self.logger.info(f"Using ultra-fast model list ({len(self.ULTRA_FAST_MODEL_LIST)} models) for {target_column}")
+            self.logger.info(
+                f"Using ultra-fast model list ({len(self.ULTRA_FAST_MODEL_LIST)} models) for {target_column}"
+            )
             return self.ULTRA_FAST_MODEL_LIST
         elif model_list == "financial":
             return self.FINANCIAL_MODEL_LIST
@@ -907,8 +909,9 @@ class StockForecaster:
             Dictionary mapping symbols to their forecast results
         """
         import logging
+
         logger = logging.getLogger(__name__)
-        
+
         results = {}
 
         logger.info(f"Starting sequential forecast for {len(symbols)} symbols")

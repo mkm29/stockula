@@ -61,13 +61,22 @@ test-integration: ## Run integration tests only
 test-coverage: ## Run tests with coverage report
 	docker run --rm -v $(PWD):/app stockula:test uv run pytest tests/ --cov=src/stockula --cov-report=html
 
-lint: ## Run linting in Docker
+lint: ## Run linting checks (consistent with CI)
+	uv run lint
+
+lint-docker: ## Run linting in Docker
 	docker run --rm -v $(PWD):/app stockula:test uv run ruff check src/ tests/
 
 format: ## Format code using ruff
-	docker run --rm -v $(PWD):/app stockula:test uv run ruff format src/ tests/
+	uv run ruff format src tests
 
 format-check: ## Check code formatting
+	uv run ruff format --check src tests
+
+format-docker: ## Format code using ruff in Docker
+	docker run --rm -v $(PWD):/app stockula:test uv run ruff format src/ tests/
+
+format-check-docker: ## Check code formatting in Docker
 	docker run --rm -v $(PWD):/app stockula:test uv run ruff format --check src/ tests/
 
 # Example running targets
