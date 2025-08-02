@@ -28,7 +28,7 @@ from .data import DataFetcher
 from .forecasting import StockForecaster
 from .technical_analysis import TechnicalIndicators
 
-__version__ = "0.4.3"
+__version__ = "0.5.0"
 
 __all__ = [
     "DataFetcher",

@@ -1,5 +1,28 @@
 # Changelog
 
+## [0.5.0](https://github.com/mkm29/stockula/compare/v0.4.3...v0.5.0) (2025-08-02)
+
+
+### Features
+
+* Enhance documentation and testing coverage ([35aa9e4](https://github.com/mkm29/stockula/commit/35aa9e4ad7ed0f70ed2c00b033bf3a0b5ff87fc4))
+
+
+### Bug Fixes
+
+* Enhance documentation and testing coverage ([3ffcc96](https://github.com/mkm29/stockula/commit/3ffcc967594a3f47aae83100bc9eb9dc89ae5a3e))
+* improve test coverage ([f19dffe](https://github.com/mkm29/stockula/commit/f19dffe92aa584ff1260a7e91f46fde692dabf09))
+
+
+### Code Refactoring
+
+* clean up Hadolint config and enhance test coverage for configuration loading ([c25c2c3](https://github.com/mkm29/stockula/commit/c25c2c3c0c2599e1729b105889813922f2065999))
+
+
+### Miscellaneous Chores
+
+* Update test workflow to simplify unit test command and add JUnit XML reporting ([55aa3a1](https://github.com/mkm29/stockula/commit/55aa3a11e23d7b86d2136c9e10b109a3ed53bd7b))
+
 ## [0.4.3](https://github.com/mkm29/stockula/compare/v0.4.2...v0.4.3) (2025-08-01)
 
 
