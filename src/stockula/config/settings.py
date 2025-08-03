@@ -7,13 +7,7 @@ import yaml  # type: ignore[import-untyped]
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from .models import (
-    MACDConfig,
-    RSIConfig,
-    SMACrossConfig,
-    StockulaConfig,
-    StrategyConfig,
-)
+from .models import MACDConfig, RSIConfig, SMACrossConfig, StockulaConfig, StrategyConfig
 
 
 class Settings(BaseSettings):

@@ -2,6 +2,7 @@
 
 from .models import (
     BacktestConfig,
+    BacktestOptimizationConfig,
     DataConfig,
     ForecastConfig,
     LoggingConfig,
@@ -16,6 +17,7 @@ from .settings import Settings, load_config, save_config
 __all__ = [
     "DataConfig",
     "BacktestConfig",
+    "BacktestOptimizationConfig",
     "StrategyConfig",
     "ForecastConfig",
     "TechnicalAnalysisConfig",

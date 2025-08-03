@@ -1,0 +1,189 @@
+data:
+  start_date: '2024-01-01'
+  interval: 1d
+  use_cache: true
+  db_path: stockula.db
+portfolio:
+  name: Backtest-Optimized Portfolio
+  initial_capital: 20000.0
+  allocation_method: custom
+  dynamic_allocation: false
+  auto_allocate: false
+  allow_fractional_shares: true
+  capital_utilization_target: 0.95
+  rebalance_frequency: monthly
+  tickers:
+  - symbol: SPY
+    quantity: 1.0
+    category: INDEX
+  - symbol: VOO
+    quantity: 1.0
+    category: INDEX
+  - symbol: DFUSX
+    quantity: 8.0
+    category: INDEX
+  - symbol: FSKAX
+    quantity: 2.0
+    category: INDEX
+  - symbol: FSMDX
+    quantity: 9.0
+    category: INDEX
+  - symbol: FXAIX
+    quantity: 1.0
+    category: INDEX
+  - symbol: NVDA
+    quantity: 24.0
+    sector: Technology
+    category: MOMENTUM
+  - symbol: AMD
+    quantity: 7.0
+    sector: Technology
+    category: MOMENTUM
+  - symbol: TSM
+    quantity: 12.0
+    sector: Technology
+    category: MOMENTUM
+  - symbol: AAPL
+    quantity: 10.0
+    sector: Technology
+    category: MOMENTUM
+  - symbol: MSFT
+    quantity: 1.0
+    sector: Technology
+    category: MOMENTUM
+  - symbol: GOOGL
+    quantity: 3.0
+    sector: Technology
+    category: MOMENTUM
+  - symbol: AMZN
+    quantity: 1.0
+    sector: Consumer Cyclical
+    category: MOMENTUM
+  - symbol: META
+    quantity: 1.0
+    sector: Technology
+    category: MOMENTUM
+  - symbol: TSLA
+    quantity: 1.0
+    sector: Consumer Cyclical
+    category: MOMENTUM
+  - symbol: PLTR
+    quantity: 18.0
+    sector: Technology
+    category: MOMENTUM
+  - symbol: LIDR
+    quantity: 118.0
+    sector: Technology
+    category: SPECULATIVE
+  - symbol: OPEN
+    quantity: 142.0
+    sector: Real Estate
+    category: SPECULATIVE
+  - symbol: SOFI
+    quantity: 16.0
+    sector: Financial
+    category: SPECULATIVE
+  - symbol: IONQ
+    quantity: 7.0
+    sector: Technology
+    category: SPECULATIVE
+backtest:
+  initial_cash: 10000.0
+  commission: 0.002
+  broker_config:
+    name: robinhood
+    commission_type: percentage
+    commission_value: 0.002
+    regulatory_fees: 0.0
+    exchange_fees: 0.0
+  margin: 1.0
+  strategies:
+  - name: SMACross
+    parameters:
+      fast_period: 10
+      slow_period: 20
+  - name: RSI
+    parameters:
+      period: 14
+      oversold_threshold: 30.0
+      overbought_threshold: 70.0
+  - name: MACD
+    parameters:
+      fast_period: 12
+      slow_period: 26
+      signal_period: 9
+  - name: DoubleEMACross
+    parameters: {}
+  - name: VIDYA
+    parameters: {}
+  - name: KAMA
+    parameters: {}
+  - name: FRAMA
+    parameters: {}
+  - name: TripleEMACross
+    parameters: {}
+  - name: TRIMACross
+    parameters: {}
+  - name: VAMA
+    parameters: {}
+  - name: KaufmanEfficiency
+    parameters: {}
+  optimize: false
+  hold_only_categories:
+  - INDEX
+  - BOND
+backtest_optimization:
+  train_start_date: '2023-01-01'
+  train_end_date: '2023-12-31'
+  test_start_date: '2024-01-01'
+  test_end_date: '2024-06-30'
+  ranking_metric: Return [%]
+  min_allocation_pct: 2.0
+  max_allocation_pct: 25.0
+  initial_allocation_pct: 10.0
+forecast:
+  frequency: infer
+  prediction_interval: 0.9
+  model_list: fast
+  ensemble: auto
+  use_financial_models: true
+  max_generations: 2
+  num_validations: 1
+  validation_method: backwards
+  max_workers: 1
+technical_analysis:
+  indicators:
+  - sma
+  - ema
+  - rsi
+  - macd
+  - bbands
+  sma_periods:
+  - 20
+  - 50
+  - 200
+  ema_periods:
+  - 12
+  - 26
+  rsi_period: 14
+  macd_params:
+    period_fast: 12
+    period_slow: 26
+    signal: 9
+  bbands_params:
+    period: 20
+    std: 2
+  atr_period: 14
+output:
+  format: console
+  save_results: true
+  results_dir: ./results/backtest-optimized
+logging:
+  enabled: true
+  level: INFO
+  show_allocation_details: true
+  show_price_fetching: true
+  log_to_file: false
+  log_file: stockula.log
+  max_log_size: 10485760
+  backup_count: 3

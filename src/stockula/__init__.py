@@ -25,7 +25,9 @@ from .backtesting import (
 )
 from .config import StockulaConfig, load_config
 from .data import DataFetcher
+from .display import ResultsDisplay
 from .forecasting import StockForecaster
+from .manager import StockulaManager
 from .technical_analysis import TechnicalIndicators
 
 __version__ = "0.6.1"
@@ -41,4 +43,6 @@ __all__ = [
     "StockForecaster",
     "StockulaConfig",
     "load_config",
+    "StockulaManager",
+    "ResultsDisplay",
 ]

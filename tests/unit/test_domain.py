@@ -6,9 +6,9 @@ from unittest.mock import Mock, patch
 import pandas as pd
 import pytest
 
+from stockula.allocation import Allocator
 from stockula.config import DataConfig, PortfolioConfig, StockulaConfig, TickerConfig
 from stockula.domain import Asset, Category, DomainFactory, Portfolio, Ticker, TickerRegistry
-from stockula.domain.allocator import Allocator
 
 
 @pytest.fixture
@@ -447,22 +447,22 @@ class TestDomainFactory:
         index_pct = allocations["Index"]["percentage"]
         assert 30 < index_pct < 40  # Allow some variance
 
-    def test_create_portfolio_insufficient_allocation(self, mock_logging_manager):
-        """Test creating portfolio with insufficient allocation info raises error."""
-        from pydantic import ValidationError
-
-        # This should raise validation error at config creation time
-        with pytest.raises(ValidationError, match="must specify exactly one"):
-            StockulaConfig(
-                portfolio=PortfolioConfig(
-                    name="Test",
-                    initial_capital=10000,
-                    dynamic_allocation=True,
-                    tickers=[
-                        TickerConfig(symbol="AAPL"),  # No allocation info
-                    ],
-                )
+    def test_create_portfolio_dynamic_allocation_without_info(self, mock_logging_manager):
+        """Test creating portfolio with dynamic allocation but no allocation info."""
+        # This is now allowed - the ticker config doesn't validate against portfolio settings
+        config = StockulaConfig(
+            portfolio=PortfolioConfig(
+                name="Test",
+                initial_capital=10000,
+                dynamic_allocation=True,
+                tickers=[
+                    TickerConfig(symbol="AAPL"),  # No allocation info
+                ],
             )
+        )
+        # The validation would happen later when trying to calculate dynamic quantities
+        assert config.portfolio.dynamic_allocation is True
+        assert config.portfolio.tickers[0].quantity is None
 
     def test_get_all_tickers(self, sample_stockula_config, mock_data_fetcher, mock_logging_manager):
         """Test getting all tickers from factory."""
@@ -1253,11 +1253,14 @@ class TestDomainFactoryEdgeCases:
         with pytest.raises(ValueError, match="Could not fetch price"):
             factory.allocator.calculate_dynamic_quantities(config, config.portfolio.tickers)
 
-    def test_ticker_config_requires_allocation(self, mock_logging_manager):
-        """Test that TickerConfig requires some form of allocation."""
-        # TickerConfig validation requires one of: quantity, allocation_pct, allocation_amount, or category
-        with pytest.raises(ValueError, match="Ticker AAPL must specify exactly one of"):
-            TickerConfig(symbol="AAPL")
+    def test_ticker_config_allows_no_allocation(self, mock_logging_manager):
+        """Test that TickerConfig allows no allocation for backtest_optimized."""
+        # This is now valid for backtest_optimized allocation
+        ticker = TickerConfig(symbol="AAPL")
+        assert ticker.symbol == "AAPL"
+        assert ticker.quantity is None
+        assert ticker.allocation_pct is None
+        assert ticker.allocation_amount is None
 
     def test_auto_allocation_requires_category_for_all_tickers(self, mock_logging_manager):
         """Test that auto-allocation requires category for all tickers."""

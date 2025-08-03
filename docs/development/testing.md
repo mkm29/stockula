@@ -26,7 +26,7 @@ open htmlcov/index.html
 | Module          | Coverage | Notes                   |
 | --------------- | -------- | ----------------------- |
 | Overall Project | 83%      | Excluding strategies.py |
-| main.py         | 83%      | +22% improvement        |
+| main.py         | 83%      | Refactored to entry point |
 | forecaster.py   | 83%      | +33% improvement        |
 | factory.py      | 88%      | +9% improvement         |
 | runner.py       | 89%      | +19% improvement        |
@@ -168,17 +168,18 @@ def test_insufficient_data_warning(self):
 ### Dependency Injection Testing
 
 ```python
-def test_injected_function(self):
+def test_manager_with_mocks(self):
     # Create container and override dependencies
     container = Container()
     mock_data_fetcher = Mock()
     container.data_fetcher.override(mock_data_fetcher)
 
     # IMPORTANT: Wire the container to enable injection
-    container.wire(modules=["stockula.main"])
+    container.wire(modules=["stockula.manager"])
 
-    # Now you can call the injected function
-    result = run_technical_analysis("AAPL", config)
+    # Create manager with mocked dependencies
+    manager = StockulaManager(config, container, console)
+    result = manager.run_technical_analysis("AAPL")
 ```
 
 ### Mocking Technical Indicators
@@ -202,7 +203,9 @@ tests/
 ├── unit/                           # Fast, isolated tests
 │   ├── test_strategies.py          # Strategy tests (60 tests)
 │   ├── test_indicators.py          # Indicator tests (25 tests)
-│   ├── test_main.py                # Main module tests (83% coverage)
+│   ├── test_main.py                # CLI entry point tests
+│   ├── test_manager.py             # Business logic tests
+│   ├── test_display.py             # Results display tests
 │   ├── test_forecaster.py          # Forecaster tests (83% coverage)
 │   ├── test_factory.py             # Factory tests (27 tests)
 │   ├── test_database_manager.py    # Database tests
@@ -223,9 +226,12 @@ We consolidated multiple redundant test files to improve maintainability:
 - After: 671 lines in single `test_strategies.py`
 - Result: 60 tests covering all 12 strategy classes
 
-**Module Consolidations**:
+**Architecture Refactoring**:
 
-- **main.py**: Achieved 83% coverage (was 61%)
+- **main.py**: Refactored to minimal CLI entry point (~350 lines from ~1942)
+- **manager.py**: New business logic orchestration module (StockulaManager)
+- **display.py**: New results formatting module (ResultsDisplay)
+- **allocation/**: New module for allocation strategies
 - **forecaster.py**: Achieved 83% coverage (was ~50%)
 - **factory.py**: Achieved 88% coverage (was 79%)
 - **runner.py**: Achieved 89% coverage (was 70%)

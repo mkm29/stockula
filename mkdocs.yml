@@ -56,6 +56,7 @@ nav:
       - Data Fetching: user-guide/data-fetching.md
       - Technical Analysis: user-guide/technical-analysis.md
       - Backtesting: user-guide/backtesting.md
+      - Allocation Strategies: user-guide/allocation-strategies.md
       - Forecasting: user-guide/forecasting.md
       - Rich CLI Features: user-guide/rich-cli.md
   - Development:

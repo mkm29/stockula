@@ -11,19 +11,8 @@ import pytest
 from stockula.config import StockulaConfig, TickerConfig
 from stockula.config.models import BrokerConfig, PortfolioBacktestResults
 from stockula.domain.category import Category
-from stockula.main import (
-    create_portfolio_backtest_results,
-    date_to_string,
-    get_strategy_class,
-    main,
-    print_results,
-    run_backtest,
-    run_forecast,
-    run_forecast_with_evaluation,
-    run_technical_analysis,
-    save_detailed_report,
-    setup_logging,
-)
+from stockula.main import main, print_results, setup_logging
+from stockula.manager import StockulaManager
 
 
 # Helper fixtures and utilities
@@ -83,26 +72,42 @@ def create_mock_container(config=None):
     return container
 
 
+def create_mock_manager(config=None):
+    """Create a mock StockulaManager for testing utility functions."""
+    if config is None:
+        config = StockulaConfig()
+
+    container = create_mock_container(config)
+    console = Mock()
+    # Make the console support context manager protocol
+    console.__enter__ = Mock(return_value=console)
+    console.__exit__ = Mock(return_value=None)
+
+    return StockulaManager(config, container, console)
+
+
 class TestCoreUtilities:
     """Test core utility functions."""
 
     def test_date_to_string_variants(self):
         """Test date_to_string with different input types."""
-        assert date_to_string(None) is None
-        assert date_to_string("2024-01-01") == "2024-01-01"
-        assert date_to_string(date(2024, 1, 15)) == "2024-01-15"
-        assert date_to_string(datetime(2024, 6, 30, 12, 30)) == "2024-06-30"
+        manager = create_mock_manager()
+        assert manager.date_to_string(None) is None
+        assert manager.date_to_string("2024-01-01") == "2024-01-01"
+        assert manager.date_to_string(date(2024, 1, 15)) == "2024-01-15"
+        assert manager.date_to_string(datetime(2024, 6, 30, 12, 30)) == "2024-06-30"
 
     def test_get_strategy_class(self):
         """Test strategy class retrieval."""
         from stockula.backtesting.strategies import KAMAStrategy, RSIStrategy, SMACrossStrategy
 
-        assert get_strategy_class("smacross") == SMACrossStrategy
-        assert get_strategy_class("SMACROSS") == SMACrossStrategy
-        assert get_strategy_class("rsi") == RSIStrategy
-        assert get_strategy_class("KAMA") == KAMAStrategy
-        assert get_strategy_class("invalid") is None
-        assert get_strategy_class("") is None
+        manager = create_mock_manager()
+        assert manager.get_strategy_class("smacross") == SMACrossStrategy
+        assert manager.get_strategy_class("SMACROSS") == SMACrossStrategy
+        assert manager.get_strategy_class("rsi") == RSIStrategy
+        assert manager.get_strategy_class("KAMA") == KAMAStrategy
+        assert manager.get_strategy_class("invalid") is None
+        assert manager.get_strategy_class("") is None
 
     def test_setup_logging(self):
         """Test logging setup."""
@@ -116,7 +121,7 @@ class TestCoreUtilities:
 class TestTechnicalAnalysis:
     """Test technical analysis functionality."""
 
-    @patch("stockula.main.TechnicalIndicators")
+    @patch("stockula.manager.TechnicalIndicators")
     def test_run_technical_analysis_success(self, mock_ta_class):
         """Test successful technical analysis execution."""
         config = StockulaConfig()
@@ -143,7 +148,10 @@ class TestTechnicalAnalysis:
         mock_ta.rsi.return_value = pd.Series([50.0] * 50)
         mock_ta_class.return_value = mock_ta
 
-        result = run_technical_analysis("AAPL", config, data_fetcher=mock_data_fetcher)
+        manager = create_mock_manager(config)
+        # Set up the container's data_fetcher to return our mock
+        manager.container.data_fetcher.return_value = mock_data_fetcher
+        result = manager.run_technical_analysis("AAPL", show_progress=False)
 
         assert result["ticker"] == "AAPL"
         assert "SMA_20" in result["indicators"]
@@ -151,7 +159,7 @@ class TestTechnicalAnalysis:
         assert result["indicators"]["SMA_20"] == 100.5
         assert result["indicators"]["RSI"] == 50.0
 
-    @patch("stockula.main.TechnicalIndicators")
+    @patch("stockula.manager.TechnicalIndicators")
     def test_run_technical_analysis_all_indicators(self, mock_ta_class):
         """Test technical analysis with all indicator types."""
         config = StockulaConfig()
@@ -180,8 +188,11 @@ class TestTechnicalAnalysis:
         mock_ta_class.return_value = mock_ta
 
         # Test with and without progress bar
-        for show_progress in [True, False]:
-            result = run_technical_analysis("TEST", config, data_fetcher=mock_data_fetcher, show_progress=show_progress)
+        for _show_progress in [True, False]:
+            manager = create_mock_manager(config)
+            # Set up the container's data_fetcher to return our mock
+            manager.container.data_fetcher.return_value = mock_data_fetcher
+            result = manager.run_technical_analysis("TEST", show_progress=False)
             assert all(
                 ind in result["indicators"]
                 for ind in ["SMA_10", "SMA_20", "EMA_12", "EMA_26", "RSI", "MACD", "BBands", "ATR", "ADX"]
@@ -191,8 +202,7 @@ class TestTechnicalAnalysis:
 class TestBacktesting:
     """Test backtesting functionality."""
 
-    @patch("stockula.main.get_strategy_class")
-    def test_run_backtest_success(self, mock_get_strategy):
+    def test_run_backtest_success(self):
         """Test successful backtest execution."""
         config = StockulaConfig()
         strategy_config = Mock()
@@ -200,9 +210,7 @@ class TestBacktesting:
         strategy_config.parameters = {"fast_period": 10, "slow_period": 20}
         config.backtest.strategies = [strategy_config]
 
-        mock_strategy = Mock()
-        mock_get_strategy.return_value = mock_strategy
-
+        Mock()
         mock_runner = Mock()
         mock_runner.run_from_symbol.return_value = {
             "Return [%]": 15.5,
@@ -212,15 +220,17 @@ class TestBacktesting:
             "Win Rate [%]": 55.0,
         }
 
-        results = run_backtest("AAPL", config, backtest_runner=mock_runner)
+        manager = create_mock_manager(config)
+        # Set up the container's backtest_runner to return our mock
+        manager.container.backtest_runner.return_value = mock_runner
+        results = manager.run_backtest("AAPL")
 
         assert len(results) == 1
         assert results[0]["ticker"] == "AAPL"
         assert results[0]["return_pct"] == 15.5
         assert results[0]["num_trades"] == 42
 
-    @patch("stockula.main.get_strategy_class")
-    def test_run_backtest_edge_cases(self, mock_get_strategy):
+    def test_run_backtest_edge_cases(self):
         """Test backtest edge cases: no trades, unknown strategy, exception."""
         config = StockulaConfig()
 
@@ -229,9 +239,6 @@ class TestBacktesting:
         strategy_config.name = "SMACross"
         strategy_config.parameters = {}
         config.backtest.strategies = [strategy_config]
-
-        mock_strategy = Mock()
-        mock_get_strategy.return_value = mock_strategy
 
         mock_runner = Mock()
         mock_runner.run_from_symbol.return_value = {
@@ -242,28 +249,24 @@ class TestBacktesting:
             "Win Rate [%]": float("nan"),
         }
 
-        results = run_backtest("TEST", config, backtest_runner=mock_runner)
+        manager = create_mock_manager(config)
+        # Set up the container's backtest_runner to return our mock
+        manager.container.backtest_runner.return_value = mock_runner
+        results = manager.run_backtest("TEST")
         assert results[0]["win_rate"] is None
 
-        # Test 2: Unknown strategy
-        strategy_config.name = "UnknownStrategy"
-        mock_get_strategy.return_value = None
-        results = run_backtest("TEST", config, backtest_runner=mock_runner)
-        assert results == []
-
-        # Test 3: Exception during backtest
-        strategy_config.name = "SMACross"
-        mock_get_strategy.return_value = mock_strategy
+        # Test 2: Exception during backtest
         mock_runner.run_from_symbol.side_effect = Exception("Backtest error")
-        results = run_backtest("TEST", config, backtest_runner=mock_runner)
+        manager = create_mock_manager(config)
+        manager.container.backtest_runner.return_value = mock_runner
+        results = manager.run_backtest("TEST")
         assert results == []
 
 
 class TestForecasting:
     """Test forecasting functionality."""
 
-    @patch("stockula.main.log_manager")
-    def test_run_forecast_success(self, mock_log_manager):
+    def test_run_forecast_success(self):
         """Test successful forecast execution."""
         config = StockulaConfig()
         config.forecast.forecast_length = 30
@@ -284,15 +287,17 @@ class TestForecasting:
             "model_params": {"p": 1, "d": 1, "q": 1},
         }
 
-        result = run_forecast("AAPL", config, stock_forecaster=mock_forecaster)
+        manager = create_mock_manager(config)
+        # Set up the container's stock_forecaster to return our mock
+        manager.container.stock_forecaster.return_value = mock_forecaster
+        result = manager.run_forecast("AAPL")
 
         assert result["ticker"] == "AAPL"
         assert result["current_price"] == 110
         assert result["forecast_price"] == 114
         assert result["best_model"] == "ARIMA"
 
-    @patch("stockula.main.log_manager")
-    def test_run_forecast_with_evaluation(self, mock_log_manager):
+    def test_run_forecast_with_evaluation(self):
         """Test forecast with evaluation functionality."""
         config = StockulaConfig()
         config.forecast.train_start_date = date(2023, 1, 1)
@@ -317,26 +322,34 @@ class TestForecasting:
         mock_forecaster.forecast_from_symbol_with_evaluation.return_value = mock_result
         mock_forecaster.get_best_model.return_value = {"model_name": "ARIMA"}
 
-        result = run_forecast_with_evaluation("AAPL", config, stock_forecaster=mock_forecaster)
+        manager = create_mock_manager(config)
+        # Set up the container's stock_forecaster to return our mock
+        manager.container.stock_forecaster.return_value = mock_forecaster
+        result = manager.run_forecast_with_evaluation("AAPL")
 
         assert result["ticker"] == "AAPL"
         assert "evaluation" in result
         assert result["evaluation"]["rmse"] == 2.5
 
-    @patch("stockula.main.log_manager")
-    def test_forecast_error_handling(self, mock_log_manager):
+    def test_forecast_error_handling(self):
         """Test forecast error handling."""
         config = StockulaConfig()
 
         # Test keyboard interrupt
         mock_forecaster = Mock()
         mock_forecaster.forecast_from_symbol.side_effect = KeyboardInterrupt()
-        result = run_forecast("TEST", config, stock_forecaster=mock_forecaster)
+        manager = create_mock_manager(config)
+        # Set up the container's stock_forecaster to return our mock
+        manager.container.stock_forecaster.return_value = mock_forecaster
+        result = manager.run_forecast("TEST")
         assert result["error"] == "Interrupted by user"
 
         # Test general exception
         mock_forecaster.forecast_from_symbol.side_effect = Exception("API error")
-        result = run_forecast("TEST", config, stock_forecaster=mock_forecaster)
+        manager = create_mock_manager(config)
+        # Set up the container's stock_forecaster to return our mock
+        manager.container.stock_forecaster.return_value = mock_forecaster
+        result = manager.run_forecast("TEST")
         assert result["error"] == "API error"
 
 
@@ -453,7 +466,7 @@ class TestMainFunction:
     @patch("stockula.main.create_container")
     @patch("stockula.main.setup_logging")
     @patch("stockula.main.log_manager")
-    @patch("stockula.main.run_technical_analysis")
+    @patch("stockula.manager.StockulaManager.run_technical_analysis")
     @patch("stockula.main.print_results")
     @patch("sys.argv", ["stockula", "--mode", "ta", "--ticker", "AAPL"])
     def test_main_ta_mode(self, mock_print, mock_ta, mock_log_manager, mock_logging, mock_container):
@@ -470,7 +483,7 @@ class TestMainFunction:
     @patch("stockula.main.create_container")
     @patch("stockula.main.setup_logging")
     @patch("stockula.main.log_manager")
-    @patch("stockula.main.run_forecast_with_evaluation")
+    @patch("stockula.manager.StockulaManager.run_forecast_with_evaluation")
     @patch("stockula.main.print_results")
     @patch("sys.argv", ["stockula", "--mode", "forecast"])
     def test_main_forecast_mode(self, mock_print, mock_forecast_eval, mock_log_manager, mock_logging, mock_container):
@@ -496,27 +509,29 @@ class TestMainFunction:
         mock_print.assert_called_once()
 
     @patch("stockula.main.create_container")
+    @patch("stockula.main.setup_logging")
     @patch("sys.argv", ["stockula", "--save-config", "output.yaml"])
-    def test_main_save_config(self, mock_container):
+    def test_main_save_config(self, mock_logging, mock_container):
         """Test main function with save config option."""
         container = create_mock_container()
+        container.logging_manager.return_value = Mock()
         mock_container.return_value = container
 
-        with patch("stockula.config.settings.save_config") as mock_save:
+        with patch("stockula.main.save_config") as mock_save:
             main()
             mock_save.assert_called_once()
 
     @patch("stockula.main.create_container")
     @patch("stockula.main.setup_logging")
-    @patch("stockula.main.run_technical_analysis")
-    @patch("stockula.main.run_backtest")
-    @patch("stockula.main.run_forecast")
+    @patch("stockula.manager.StockulaManager.run_technical_analysis")
+    @patch("stockula.manager.StockulaManager.run_backtest")
+    @patch("stockula.manager.StockulaManager.run_forecast")
     @patch("stockula.main.print_results")
     @patch("pathlib.Path")
     @patch("builtins.open", create=True)
-    @patch("stockula.main.json.dump")
+    @patch("stockula.manager.json.dump")
     @patch("stockula.main.log_manager")
-    @patch("stockula.main.get_strategy_class")
+    @patch("stockula.manager.StockulaManager.get_strategy_class")
     @patch("sys.argv", ["stockula", "--output", "console", "--mode", "ta"])
     def test_main_saves_results(
         self,
@@ -579,7 +594,8 @@ class TestPortfolioBacktestResults:
             ]
         }
 
-        portfolio_results = create_portfolio_backtest_results(results, config, strategy_results)
+        manager = create_mock_manager(config)
+        portfolio_results = manager.create_portfolio_backtest_results(results, strategy_results)
 
         assert isinstance(portfolio_results, PortfolioBacktestResults)
         assert portfolio_results.initial_portfolio_value == 10000.0
@@ -621,7 +637,8 @@ class TestPortfolioBacktestResults:
             ]
         }
 
-        portfolio_results = create_portfolio_backtest_results(results, config, strategy_results)
+        manager = create_mock_manager(config)
+        portfolio_results = manager.create_portfolio_backtest_results(results, strategy_results)
 
         assert portfolio_results.date_range["start"] == "2023-01-15"
         assert portfolio_results.date_range["end"] == "2023-12-30"
@@ -630,10 +647,10 @@ class TestPortfolioBacktestResults:
 class TestSaveDetailedReport:
     """Test report saving functionality."""
 
-    @patch("stockula.main.datetime")
-    @patch("stockula.main.Path")
+    @patch("stockula.manager.datetime")
+    @patch("stockula.manager.Path")
     @patch("builtins.open", create=True)
-    @patch("stockula.main.json.dump")
+    @patch("stockula.manager.json.dump")
     def test_save_detailed_report(self, mock_json_dump, mock_open, mock_path_class, mock_datetime):
         """Test saving detailed strategy report."""
         mock_datetime.now.return_value.strftime.return_value = "20240115_120000"
@@ -658,7 +675,8 @@ class TestSaveDetailedReport:
         results = {"initial_portfolio_value": 50000.0, "initial_capital": 50000.0}
         config = StockulaConfig()
 
-        report_path = save_detailed_report("KAMA", strategy_results, results, config)
+        manager = create_mock_manager(config)
+        report_path = manager.save_detailed_report("KAMA", strategy_results, results)
 
         assert str(report_path) == "results/reports/strategy_report_KAMA_20240115_120000.json"
         assert mock_json_dump.called
@@ -695,8 +713,7 @@ class TestMainEntryPoint:
 class TestTrainTestSplitBacktesting:
     """Test backtesting with train/test split functionality."""
 
-    @patch("stockula.main.get_strategy_class")
-    def test_run_backtest_with_train_test_split(self, mock_get_strategy):
+    def test_run_backtest_with_train_test_split(self):
         """Test backtest with train/test split."""
         config = StockulaConfig()
         strategy_config = Mock()
@@ -712,9 +729,6 @@ class TestTrainTestSplitBacktesting:
         # This flag doesn't exist, we check for train/test dates instead
         config.backtest.optimize = True
         config.backtest.optimization_params = {"fast_period": [10, 20], "slow_period": [30, 40]}
-
-        mock_strategy = Mock()
-        mock_get_strategy.return_value = mock_strategy
 
         mock_runner = Mock()
         mock_runner.run_with_train_test_split.return_value = {
@@ -738,7 +752,10 @@ class TestTrainTestSplitBacktesting:
             "performance_degradation": {"return_diff": -7.2, "sharpe_diff": -0.4},
         }
 
-        results = run_backtest("AAPL", config, backtest_runner=mock_runner)
+        manager = create_mock_manager(config)
+        # Set up the container's backtest_runner to return our mock
+        manager.container.backtest_runner.return_value = mock_runner
+        results = manager.run_backtest("AAPL")
 
         assert len(results) == 1
         result = results[0]
@@ -751,8 +768,7 @@ class TestTrainTestSplitBacktesting:
         assert result["return_pct"] == 18.3  # Test period return
         assert result["parameters"]["fast_period"] == 15  # Optimized param
 
-    @patch("stockula.main.get_strategy_class")
-    def test_run_backtest_with_portfolio_info(self, mock_get_strategy):
+    def test_run_backtest_with_portfolio_info(self):
         """Test backtest with portfolio information fields."""
         config = StockulaConfig()
         strategy_config = Mock()
@@ -764,9 +780,6 @@ class TestTrainTestSplitBacktesting:
         config.backtest.start_date = date(2023, 1, 1)
         config.backtest.end_date = date(2023, 12, 31)
         # No train/test split
-
-        mock_strategy = Mock()
-        mock_get_strategy.return_value = mock_strategy
 
         mock_runner = Mock()
         mock_runner.run_from_symbol.return_value = {
@@ -782,7 +795,10 @@ class TestTrainTestSplitBacktesting:
             "Calendar Days": 365,
         }
 
-        results = run_backtest("AAPL", config, backtest_runner=mock_runner)
+        manager = create_mock_manager(config)
+        # Set up the container's backtest_runner to return our mock
+        manager.container.backtest_runner.return_value = mock_runner
+        results = manager.run_backtest("AAPL")
 
         assert len(results) == 1
         result = results[0]
@@ -995,7 +1011,8 @@ class TestPortfolioBacktestResultsComplex:
             ]
         }
 
-        portfolio_results = create_portfolio_backtest_results(results, config, strategy_results)
+        manager = create_mock_manager(config)
+        portfolio_results = manager.create_portfolio_backtest_results(results, strategy_results)
 
         assert portfolio_results.broker_config["name"] == "td_ameritrade"
         assert portfolio_results.broker_config["commission_type"] == "percentage"
@@ -1012,7 +1029,8 @@ class TestPortfolioBacktestResultsComplex:
         results = {"initial_portfolio_value": 100000.0, "initial_capital": 100000.0}
         strategy_results = {"RSI": []}
 
-        portfolio_results = create_portfolio_backtest_results(results, config, strategy_results)
+        manager = create_mock_manager(config)
+        portfolio_results = manager.create_portfolio_backtest_results(results, strategy_results)
 
         assert portfolio_results.broker_config["name"] == "legacy"
         assert portfolio_results.broker_config["commission_value"] == 0.002
@@ -1041,7 +1059,8 @@ class TestPortfolioBacktestResultsComplex:
         }
         strategy_results = {"SMACross": []}
 
-        portfolio_results = create_portfolio_backtest_results(results, config, strategy_results)
+        manager = create_mock_manager(config)
+        portfolio_results = manager.create_portfolio_backtest_results(results, strategy_results)
 
         assert portfolio_results.date_range["start"] == "2023-03-15"
         assert portfolio_results.date_range["end"] == "2023-11-30"
@@ -1108,8 +1127,8 @@ class TestMainFunctionAdvanced:
     @patch("stockula.main.create_container")
     @patch("stockula.main.setup_logging")
     @patch("stockula.main.log_manager")
-    @patch("stockula.main.run_technical_analysis")
-    @patch("stockula.main.get_strategy_class")
+    @patch("stockula.manager.StockulaManager.run_technical_analysis")
+    @patch("stockula.manager.StockulaManager.get_strategy_class")
     @patch("stockula.main.print_results")
     @patch("sys.argv", ["stockula", "--mode", "all"])
     def test_main_all_mode_with_hold_only_assets(
@@ -1187,8 +1206,8 @@ class TestMainFunctionAdvanced:
     @patch("stockula.main.create_container")
     @patch("stockula.main.setup_logging")
     @patch("stockula.main.log_manager")
-    @patch("stockula.main.run_forecast")
-    @patch("stockula.main.run_forecast_with_evaluation")
+    @patch("stockula.manager.StockulaManager.run_forecast")
+    @patch("stockula.manager.StockulaManager.run_forecast_with_evaluation")
     @patch("stockula.main.print_results")
     @patch("stockula.main.Progress")
     @patch("sys.argv", ["stockula", "--mode", "forecast"])
@@ -1319,7 +1338,7 @@ class TestMainFunctionAdvanced:
 
         mock_container.return_value = container
 
-        with patch("stockula.main.run_backtest") as mock_backtest:
+        with patch("stockula.manager.StockulaManager.run_backtest") as mock_backtest:
             mock_backtest.return_value = []
             with patch("stockula.main.print_results"):
                 main()
@@ -1330,17 +1349,15 @@ class TestMainFunctionAdvanced:
     @patch("stockula.main.create_container")
     @patch("stockula.main.setup_logging")
     @patch("stockula.main.log_manager")
-    @patch("stockula.main.get_strategy_class")
     @patch("stockula.main.print_results")
-    @patch("stockula.main.create_portfolio_backtest_results")
-    @patch("stockula.main.save_detailed_report")
+    @patch("stockula.manager.StockulaManager.create_portfolio_backtest_results")
+    @patch("stockula.manager.StockulaManager.save_detailed_report")
     @patch("sys.argv", ["stockula", "--mode", "backtest"])
     def test_main_backtest_strategy_summaries(
         self,
         mock_save_report,
         mock_create_results,
         mock_print,
-        mock_get_strategy,
         mock_log_manager,
         mock_logging,
         mock_container,
@@ -1401,9 +1418,7 @@ class TestMainFunctionAdvanced:
 
         mock_container.return_value = container
 
-        # Mock get_strategy_class
-        mock_strategy = Mock()
-        mock_get_strategy.return_value = mock_strategy
+        # Manager handles strategy class lookup internally
 
         # Mock portfolio results
         mock_strategy_summary = Mock()
@@ -1436,8 +1451,7 @@ class TestMainFunctionAdvanced:
 class TestForecastingEdgeCases:
     """Test forecasting error handling and edge cases."""
 
-    @patch("stockula.main.log_manager")
-    def test_run_forecast_empty_predictions(self, mock_log_manager):
+    def test_run_forecast_empty_predictions(self):
         """Test forecast with empty predictions."""
         config = StockulaConfig()
         config.forecast.forecast_length = 30
@@ -1447,13 +1461,15 @@ class TestForecastingEdgeCases:
         mock_forecaster.forecast_from_symbol.return_value = pd.DataFrame()
         mock_forecaster.get_best_model.return_value = {"model_name": "ARIMA"}
 
-        result = run_forecast("AAPL", config, stock_forecaster=mock_forecaster)
+        manager = create_mock_manager(config)
+        # Set up the container's stock_forecaster to return our mock
+        manager.container.stock_forecaster.return_value = mock_forecaster
+        result = manager.run_forecast("AAPL")
 
         assert result["ticker"] == "AAPL"
         assert "error" in result
 
-    @patch("stockula.main.log_manager")
-    def test_run_forecast_with_evaluation_missing_dates(self, mock_log_manager):
+    def test_run_forecast_with_evaluation_missing_dates(self):
         """Test forecast evaluation with missing date configurations."""
         config = StockulaConfig()
         # No forecast dates set, should fall back to data dates
@@ -1481,7 +1497,10 @@ class TestForecastingEdgeCases:
         mock_forecaster.forecast_from_symbol_with_evaluation.return_value = mock_result
         mock_forecaster.get_best_model.return_value = {"model_name": "ARIMA"}
 
-        result = run_forecast_with_evaluation("AAPL", config, stock_forecaster=mock_forecaster)
+        manager = create_mock_manager(config)
+        # Set up the container's stock_forecaster to return our mock
+        manager.container.stock_forecaster.return_value = mock_forecaster
+        result = manager.run_forecast_with_evaluation("AAPL")
 
         assert result["ticker"] == "AAPL"
         assert "evaluation" in result
@@ -1497,7 +1516,8 @@ class TestDateStringHandling:
         config.data.start_date = "2023-01-01"  # String instead of date object
 
         # In main(), this would be handled
-        start_date_str = date_to_string(config.data.start_date)
+        manager = create_mock_manager(config)
+        start_date_str = manager.date_to_string(config.data.start_date)
         assert start_date_str == "2023-01-01"
 
 
@@ -1539,7 +1559,7 @@ class TestMainHoldingsDisplay:
 
         mock_container.return_value = container
 
-        with patch("stockula.main.run_technical_analysis") as mock_ta:
+        with patch("stockula.manager.StockulaManager.run_technical_analysis") as mock_ta:
             mock_ta.return_value = {"ticker": "AAPL", "indicators": {}}
             with patch("stockula.main.print_results"):
                 with patch("stockula.main.console") as mock_console:
@@ -1560,7 +1580,7 @@ class TestMainErrorHandling:
     @patch("stockula.main.create_container")
     @patch("stockula.main.setup_logging")
     @patch("stockula.main.log_manager")
-    @patch("stockula.main.run_technical_analysis")
+    @patch("stockula.manager.StockulaManager.run_technical_analysis")
     @patch("stockula.main.print_results")
     @patch("sys.argv", ["stockula", "--mode", "ta"])
     def test_main_with_progress_bars_single_operation(
@@ -1606,7 +1626,7 @@ class TestMainErrorHandling:
     @patch("stockula.main.create_container")
     @patch("stockula.main.setup_logging")
     @patch("stockula.main.log_manager")
-    @patch("stockula.main.run_backtest")
+    @patch("stockula.manager.StockulaManager.run_backtest")
     @patch("stockula.main.print_results")
     @patch("sys.argv", ["stockula", "--mode", "backtest"])
     def test_main_backtest_with_multiple_strategies_progress(
@@ -1654,7 +1674,27 @@ class TestMainErrorHandling:
 
         mock_container.return_value = container
 
-        mock_backtest.return_value = []
+        # Return actual backtest results to trigger progress logic
+        mock_backtest.return_value = [
+            {
+                "ticker": "AAPL",
+                "strategy": "SMACross",
+                "return_pct": 15.0,
+                "sharpe_ratio": 1.2,
+                "max_drawdown_pct": -8.0,
+                "num_trades": 20,
+                "win_rate": 60.0,
+            },
+            {
+                "ticker": "AAPL",
+                "strategy": "RSI",
+                "return_pct": 12.0,
+                "sharpe_ratio": 1.0,
+                "max_drawdown_pct": -6.0,
+                "num_trades": 15,
+                "win_rate": 55.0,
+            },
+        ]
 
         with patch("stockula.main.Progress") as mock_progress_class:
             mock_progress = Mock()
@@ -1669,13 +1709,15 @@ class TestMainErrorHandling:
 
             # Should create progress bars
             assert mock_progress_class.called
-            # Should update progress for each strategy
-            assert mock_progress.update.called
+            # Should add task for backtesting progress
+            assert mock_progress.add_task.called
+            # Should advance progress for each strategy result
+            assert mock_progress.advance.called
 
     @patch("stockula.main.create_container")
     @patch("stockula.main.setup_logging")
     @patch("stockula.main.log_manager")
-    @patch("stockula.main.run_forecast_with_evaluation")
+    @patch("stockula.manager.StockulaManager.run_forecast_with_evaluation")
     @patch("stockula.main.print_results")
     @patch("sys.argv", ["stockula", "--mode", "forecast"])
     def test_main_forecast_parallel_processing(

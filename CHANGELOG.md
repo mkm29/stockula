@@ -2,23 +2,20 @@
 
 ## [0.6.1](https://github.com/mkm29/stockula/compare/v0.6.0...v0.6.1) (2025-08-02)
 
-
 ### Bug Fixes
 
-* resolved timezone discrepancies in backtesting ([2619b88](https://github.com/mkm29/stockula/commit/2619b8862423eabeaea1f560801062b06ce96ccf))
-* resolved timezone discrepancies in backtesting ([9e95e95](https://github.com/mkm29/stockula/commit/9e95e95b2678f80da7b27aacd52f95dc4c9032ed))
+- resolved timezone discrepancies in backtesting ([2619b88](https://github.com/mkm29/stockula/commit/2619b8862423eabeaea1f560801062b06ce96ccf))
+- resolved timezone discrepancies in backtesting ([9e95e95](https://github.com/mkm29/stockula/commit/9e95e95b2678f80da7b27aacd52f95dc4c9032ed))
 
 ## [0.6.0](https://github.com/mkm29/stockula/compare/v0.5.2...v0.6.0) (2025-08-02)
 
-
 ### Features
 
-* create allocator class ([53cfde9](https://github.com/mkm29/stockula/commit/53cfde9d4fd524a7842fb7adae4b1120bfc49f60))
-
+- create allocator class ([53cfde9](https://github.com/mkm29/stockula/commit/53cfde9d4fd524a7842fb7adae4b1120bfc49f60))
 
 ### Miscellaneous Chores
 
-* update linting commands for consistency with CI and improve documentation ([d02ffa7](https://github.com/mkm29/stockula/commit/d02ffa7207109987fa0a6d7967fae60d61759f36))
+- update linting commands for consistency with CI and improve documentation ([d02ffa7](https://github.com/mkm29/stockula/commit/d02ffa7207109987fa0a6d7967fae60d61759f36))
 
 ## [0.5.2](https://github.com/mkm29/stockula/compare/v0.5.1...v0.5.2) (2025-08-02)
 

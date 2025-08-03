@@ -62,10 +62,14 @@ class TestTickerConfig:
         with pytest.raises(ValueError, match="must specify exactly one"):
             TickerConfig(symbol="AAPL", quantity=10.0, allocation_pct=25.0)
 
-    def test_ticker_no_allocation_no_category_raises_error(self):
-        """Test that no allocation method and no category raises an error."""
-        with pytest.raises(ValueError, match="must specify exactly one"):
-            TickerConfig(symbol="AAPL")
+    def test_ticker_no_allocation_no_category_allowed(self):
+        """Test that no allocation method and no category is allowed for backtest_optimized."""
+        # This is now valid for backtest_optimized allocation
+        ticker = TickerConfig(symbol="AAPL")
+        assert ticker.symbol == "AAPL"
+        assert ticker.quantity is None
+        assert ticker.allocation_pct is None
+        assert ticker.allocation_amount is None
 
     def test_ticker_with_full_details(self):
         """Test ticker with all optional fields."""

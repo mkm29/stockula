@@ -5,9 +5,9 @@ from typing import TYPE_CHECKING
 
 from dependency_injector.wiring import Provide, inject
 
+from ..allocation import Allocator
 from ..config import StockulaConfig, TickerConfig
 from ..interfaces import ILoggingManager
-from .allocator import Allocator
 from .asset import Asset
 from .category import Category
 from .portfolio import Portfolio
@@ -142,10 +142,16 @@ class DomainFactory:
                     portfolio.add_asset(asset)
                 else:
                     self.logger.debug(f"Skipping {ticker_config.symbol} - 0 shares allocated")
-        elif config.portfolio.dynamic_allocation:
-            self.logger.info(
-                "Using dynamic allocation - calculating quantities based on allocation percentages/amounts..."
-            )
+        elif config.portfolio.dynamic_allocation or config.portfolio.allocation_method == "backtest_optimized":
+            # For backtest_optimized, treat it like dynamic allocation
+            if config.portfolio.allocation_method == "backtest_optimized":
+                self.logger.info(
+                    "Using backtest-optimized allocation - calculating quantities based on historical performance..."
+                )
+            else:
+                self.logger.info(
+                    "Using dynamic allocation - calculating quantities based on allocation percentages/amounts..."
+                )
             if not self.allocator:
                 raise ValueError("Allocator not configured - data fetcher required for dynamic allocation")
             calculated_quantities = self.allocator.calculate_dynamic_quantities(config, tickers_to_add)

@@ -1,0 +1,162 @@
+# Stockula Configuration - Backtest-Optimized Allocation
+# This example demonstrates how to use historical backtesting to optimize portfolio allocation
+#
+# Usage:
+# 1. First, run the optimization to determine optimal quantities:
+#    uv run python -m stockula.main --config examples/config.backtest-optimized.yaml \
+#      --mode optimize-allocation --save-optimized-config optimized-portfolio.yaml
+#
+# 2. Then, run backtest with the optimized configuration:
+#    uv run python -m stockula.main --config optimized-portfolio.yaml --mode backtest
+#
+# The optimization process will:
+# - Test multiple trading strategies on each asset during the training period
+# - Select the best strategy for each asset based on the ranking metric
+# - Run the best strategies on the test period
+# - Allocate capital based on performance, respecting min/max constraints
+data:
+  start_date: "2024-01-01"
+  end_date: null # Current date
+# Portfolio configuration using backtest-optimized allocation
+portfolio:
+  name: "Backtest-Optimized Portfolio"
+  initial_capital: 20000 # Initial capital for backtesting
+  allocation_method: backtest_optimized
+  allow_fractional_shares: true
+  # Define the assets to optimize
+  # Note: For backtest_optimized allocation, no quantity or allocation fields are needed
+  # The optimizer will calculate optimal allocations automatically
+  tickers:
+  # Broad-Market Core holdings (hold-only)
+    - symbol: SPY
+      category: INDEX
+    - symbol: VOO
+      category: INDEX
+    - symbol: DFUSX
+      category: INDEX
+    - symbol: FSKAX
+      category: INDEX
+    - symbol: FSMDX
+      category: INDEX
+    - symbol: FXAIX
+      category: INDEX
+    # Momentum / Large-Cap Growth (tradeable)
+    - symbol: NVDA
+      category: MOMENTUM
+      sector: Technology
+    - symbol: AMD
+      category: MOMENTUM
+      sector: Technology
+    - symbol: TSM
+      category: MOMENTUM
+      sector: Technology
+    - symbol: AAPL
+      category: MOMENTUM
+      sector: Technology
+    - symbol: MSFT
+      category: MOMENTUM
+      sector: Technology
+    - symbol: GOOGL
+      category: MOMENTUM
+      sector: Technology
+    - symbol: AMZN
+      category: MOMENTUM
+      sector: Consumer Cyclical
+    - symbol: META
+      category: MOMENTUM
+      sector: Technology
+    - symbol: TSLA
+      category: MOMENTUM
+      sector: Consumer Cyclical
+    - symbol: PLTR
+      category: MOMENTUM
+      sector: Technology
+    # Speculative High-Beta (tradeable)
+    - symbol: LIDR
+      category: SPECULATIVE
+      sector: Technology
+    - symbol: OPEN
+      category: SPECULATIVE
+      sector: Real Estate
+    - symbol: SOFI
+      category: SPECULATIVE
+      sector: Financial
+    - symbol: IONQ
+      category: SPECULATIVE
+      sector: Technology
+    # # Technology stocks
+    # - symbol: AAPL
+    #   category: TECH
+    # - symbol: GOOGL
+    #   category: TECH
+    # - symbol: MSFT
+    #   category: TECH
+    # - symbol: NVDA
+    #   category: TECH
+    # # Index funds for stability
+    # - symbol: SPY
+    #   category: INDEX
+    # - symbol: QQQ
+    #   category: INDEX
+    # # Commodities for diversification
+    # - symbol: GLD
+    #   category: COMMODITY
+    # - symbol: SLV
+    #   category: COMMODITY
+    # # Value stocks
+    # - symbol: BRK-B
+    #   category: VALUE
+    # - symbol: JPM
+    #   category: VALUE
+# Backtest optimization configuration
+backtest_optimization:
+  # Training period - learn from historical data
+  train_start_date: "2023-01-01"
+  train_end_date: "2023-12-31"
+  # Testing period - validate performance
+  test_start_date: "2024-01-01"
+  test_end_date: "2024-06-30"
+  # Optimization parameters
+  ranking_metric: "Return [%]" # Default: optimize for highest returns
+  # Alternative metrics:
+  # ranking_metric: "Sharpe Ratio"  # Optimize for risk-adjusted returns
+  # ranking_metric: "Sortino Ratio" # Optimize for downside risk-adjusted returns
+  # ranking_metric: "Calmar Ratio"  # Optimize for return over max drawdown
+
+  # Allocation constraints
+  min_allocation_pct: 2.0 # Minimum 2% per asset
+  max_allocation_pct: 25.0 # Maximum 25% per asset
+  initial_allocation_pct: 10.0 # Initial allocation for training
+# Backtesting configuration
+backtest:
+  # Use realistic broker fees
+  broker_config:
+    name: "robinhood" # Zero commission with TAF
+  # The allocator will automatically test these strategies
+  # and select the best one for each asset
+  strategies:
+    - name: SMACross
+    - name: RSI
+    - name: MACD
+    - name: DoubleEMACross
+    - name: VIDYA
+    - name: KAMA
+    - name: FRAMA
+    - name: TripleEMACross
+    - name: TRIMACross
+    - name: VAMA
+    - name: KaufmanEfficiency
+# Technical analysis (optional)
+technical_analysis:
+  indicators: [sma, ema, rsi, macd, bbands]
+  sma_periods: [20, 50, 200]
+# Output settings
+output:
+  format: "console"
+  save_results: true
+  results_dir: "./results/backtest-optimized"
+# Logging
+logging:
+  enabled: true
+  level: "INFO"
+  show_allocation_details: true

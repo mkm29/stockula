@@ -92,10 +92,15 @@ class TickerConfig(BaseModel):
         if sum(allocation_methods) == 0 and self.category is not None:
             return  # Valid for auto-allocation
 
+        # For backtest_optimized allocation, no allocation fields are required
+        # This will be validated at the portfolio level
+        if sum(allocation_methods) == 0:
+            return  # Valid for backtest_optimized or other dynamic methods
+
         if sum(allocation_methods) != 1:
             raise ValueError(
                 f"Ticker {self.symbol} must specify exactly one of: quantity, allocation_pct, "
-                f"allocation_amount, or just category (for auto-allocation)"
+                f"allocation_amount, or none of them (for backtest_optimized or auto-allocation)"
             )
 
 
@@ -108,7 +113,9 @@ class PortfolioConfig(BaseModel):
     initial_capital: float = Field(default=10000.0, gt=0, description="Initial portfolio capital")
     allocation_method: str = Field(
         default="equal_weight",
-        description="Allocation method: 'equal_weight', 'market_cap', 'custom', 'dynamic', 'auto'",
+        description=(
+            "Allocation method: 'equal_weight', 'market_cap', 'custom', 'dynamic', 'auto', 'backtest_optimized'"
+        ),
     )
     dynamic_allocation: bool = Field(
         default=False,
@@ -176,6 +183,19 @@ class PortfolioConfig(BaseModel):
                     print(
                         f"Warning: Ticker {ticker.symbol} has quantity specified but dynamic_allocation is enabled. "
                         f"Quantity will be ignored."
+                    )
+
+        # Validate backtest_optimized allocation settings
+        if self.allocation_method == "backtest_optimized":
+            for ticker in self.tickers:
+                if (
+                    ticker.quantity is not None
+                    or ticker.allocation_pct is not None
+                    or ticker.allocation_amount is not None
+                ):
+                    print(
+                        f"Warning: Ticker {ticker.symbol} has allocation specified but "
+                        f"allocation_method='backtest_optimized'. Allocations will be calculated automatically."
                     )
 
         # Validate auto-allocation settings
@@ -547,12 +567,65 @@ class LoggingConfig(BaseModel):
     backup_count: int = Field(default=3, description="Number of backup log files to keep")
 
 
+class BacktestOptimizationConfig(BaseModel):
+    """Configuration for backtest-optimized allocation strategy."""
+
+    train_start_date: str | date | None = Field(default=None, description="Start date for training period (YYYY-MM-DD)")
+    train_end_date: str | date | None = Field(default=None, description="End date for training period (YYYY-MM-DD)")
+    test_start_date: str | date | None = Field(default=None, description="Start date for testing period (YYYY-MM-DD)")
+    test_end_date: str | date | None = Field(default=None, description="End date for testing period (YYYY-MM-DD)")
+    ranking_metric: str = Field(
+        default="Return [%]",
+        description="Metric to use for ranking strategies: 'Return [%]', 'Sharpe Ratio', 'Sortino Ratio', etc.",
+    )
+    min_allocation_pct: float = Field(
+        default=2.0, ge=0.0, le=100.0, description="Minimum allocation percentage per asset (0-100)"
+    )
+    max_allocation_pct: float = Field(
+        default=25.0, ge=0.0, le=100.0, description="Maximum allocation percentage per asset (0-100)"
+    )
+    initial_allocation_pct: float = Field(
+        default=2.0, ge=0.0, le=100.0, description="Initial allocation percentage for training period"
+    )
+
+    @field_validator("train_start_date", "train_end_date", "test_start_date", "test_end_date", mode="before")
+    @classmethod
+    def parse_date(cls, v):
+        """Parse date strings to date objects."""
+        if isinstance(v, str):
+            return datetime.strptime(v, "%Y-%m-%d").date()
+        return v
+
+    @model_validator(mode="after")
+    def validate_dates(self):
+        """Validate date ranges."""
+        if self.train_start_date and self.train_end_date:
+            if self.train_start_date >= self.train_end_date:
+                raise ValueError("train_start_date must be before train_end_date")
+
+        if self.test_start_date and self.test_end_date:
+            if self.test_start_date >= self.test_end_date:
+                raise ValueError("test_start_date must be before test_end_date")
+
+        if self.train_end_date and self.test_start_date:
+            if self.train_end_date > self.test_start_date:
+                raise ValueError("train_end_date must be before or equal to test_start_date")
+
+        if self.min_allocation_pct > self.max_allocation_pct:
+            raise ValueError("min_allocation_pct must be less than or equal to max_allocation_pct")
+
+        return self
+
+
 class StockulaConfig(BaseModel):
     """Main configuration model for Stockula."""
 
     data: DataConfig = Field(default_factory=DataConfig)
     portfolio: PortfolioConfig = Field(default_factory=PortfolioConfig)
     backtest: BacktestConfig = Field(default_factory=BacktestConfig)
+    backtest_optimization: BacktestOptimizationConfig | None = Field(
+        default=None, description="Configuration for backtest-optimized allocation"
+    )
     forecast: ForecastConfig = Field(default_factory=ForecastConfig)
     technical_analysis: TechnicalAnalysisConfig = Field(default_factory=TechnicalAnalysisConfig)
     output: dict[str, Any] = Field(

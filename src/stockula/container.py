@@ -4,11 +4,11 @@ import threading
 
 from dependency_injector import containers, providers
 
+from .allocation import Allocator, BacktestOptimizedAllocator
 from .backtesting.runner import BacktestRunner
 from .config import load_config
 from .data.fetcher import DataFetcher
 from .database.manager import DatabaseManager
-from .domain.allocator import Allocator
 from .domain.factory import DomainFactory
 from .forecasting.forecaster import StockForecaster
 from .technical_analysis.indicators import TechnicalIndicators
@@ -72,6 +72,14 @@ class Container(containers.DeclarativeContainer):
         data_fetcher=data_fetcher,
     )
 
+    # Backtest-optimized allocator - thread-safe singleton
+    backtest_allocator = providers.ThreadSafeSingleton(
+        BacktestOptimizedAllocator,
+        fetcher=data_fetcher,
+        logging_manager=logging_manager,
+        backtest_runner=backtest_runner,
+    )
+
     # Stock forecaster
     stock_forecaster = providers.Factory(
         StockForecaster,
@@ -105,7 +113,8 @@ def create_container(config_path: str | None = None) -> Container:
     container.wire(
         modules=[
             "stockula.main",
-            "stockula.domain.allocator",
+            "stockula.allocation.allocator",
+            # Note: backtest_allocator doesn't need wiring as it doesn't use @inject
             "stockula.data.fetcher",
             "stockula.domain.factory",
             "stockula.domain.portfolio",

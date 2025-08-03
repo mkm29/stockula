@@ -127,19 +127,20 @@ portfolio:
 
 ### Allocation Methods
 
-| Method         | Description                                      |
-| -------------- | ------------------------------------------------ |
-| `equal_weight` | Equal allocation across all tickers              |
-| `market_cap`   | Weight by market capitalization                  |
-| `custom`       | Use specified allocation amounts/percentages     |
-| `dynamic`      | Calculate quantities based on allocation targets |
-| `auto`         | Automatic allocation based on categories         |
+| Method               | Description                                      |
+| -------------------- | ------------------------------------------------ |
+| `equal_weight`       | Equal allocation across all tickers              |
+| `market_cap`         | Weight by market capitalization                  |
+| `custom`             | Use specified allocation amounts/percentages     |
+| `dynamic`            | Calculate quantities based on allocation targets |
+| `auto`               | Automatic allocation based on categories         |
+| `backtest_optimized` | Use backtest results to optimize allocation      |
 
 ### Portfolio Buckets
 
 Organize assets into logical groups:
 
-```yaml
+````yaml
 portfolio:
   initial_capital: 100000
   buckets:
@@ -162,7 +163,38 @@ portfolio:
         - symbol: AMD
         - symbol: GOOGL
         - symbol: META
-```
+
+### Backtest-Optimized Allocation
+
+Use historical backtesting to determine optimal allocations:
+
+```yaml
+portfolio:
+  initial_capital: 100000
+  allocation_method: backtest_optimized
+  tickers:
+    - symbol: AAPL
+      category: TECH
+    - symbol: SPY
+      category: INDEX
+    - symbol: GLD
+      category: COMMODITY
+
+# Configure backtest optimization
+backtest_optimization:
+  train_start_date: "2023-01-01"
+  train_end_date: "2023-12-31"
+  test_start_date: "2024-01-01"
+  test_end_date: "2024-06-30"
+  ranking_metric: "Return [%]"      # Default: "Return [%]", can also use "Sharpe Ratio", etc.
+  min_allocation_pct: 2.0
+  max_allocation_pct: 25.0
+  initial_allocation_pct: 2.0
+````
+
+See [Allocation Strategies](../user-guide/allocation-strategies.md) for detailed information.
+
+````
 
 ## Backtest Configuration
 
@@ -178,7 +210,7 @@ backtest:
       parameters:
         fast_period: 10
         slow_period: 20
-```
+````
 
 ### Broker Configuration
 

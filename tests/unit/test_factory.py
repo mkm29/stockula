@@ -6,9 +6,9 @@ from unittest.mock import Mock, patch
 import pandas as pd
 import pytest
 
+from stockula.allocation import Allocator
 from stockula.config import DataConfig, PortfolioConfig, StockulaConfig, TickerConfig
 from stockula.domain import DomainFactory, Portfolio, TickerRegistry
-from stockula.domain.allocator import Allocator
 
 
 @pytest.fixture
@@ -142,7 +142,7 @@ class TestDomainFactoryDynamicQuantities:
         # First call returns empty, second call returns data
         call_count = 0
 
-        def mock_get_stock_data(symbol, start=None, end=None):
+        def mock_get_stock_data(symbol, start=None, end=None, interval="1d"):
             nonlocal call_count
             call_count += 1
             if call_count == 1:
@@ -162,6 +162,7 @@ class TestDomainFactoryDynamicQuantities:
                 name="Test",
                 initial_capital=100000,
                 dynamic_allocation=True,
+                allow_fractional_shares=True,  # Enable fractional shares for this test
                 tickers=[TickerConfig(symbol="AAPL", allocation_pct=50)],
             ),
             data=DataConfig(start_date="2023-01-01"),  # String date
