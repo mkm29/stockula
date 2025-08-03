@@ -6,11 +6,7 @@ import pandas as pd
 import pytest
 
 from stockula.allocation import BacktestOptimizedAllocator
-from stockula.backtesting.strategies import (
-    MACDStrategy,
-    RSIStrategy,
-    SMACrossStrategy,
-)
+from stockula.backtesting.strategies import MACDStrategy, RSIStrategy, SMACrossStrategy
 from stockula.config import PortfolioConfig, StockulaConfig, TickerConfig
 
 

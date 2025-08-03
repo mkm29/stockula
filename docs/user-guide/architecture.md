@@ -7,7 +7,9 @@ Stockula is built with a modular, domain-driven architecture that separates conc
 ```mermaid
 graph TB
     subgraph "User Interface"
-        CLI[CLI main.py]
+        CLI[CLI Entry Point<br/>main.py]
+        Manager[Business Logic<br/>StockulaManager]
+        Display[Results Display<br/>ResultsDisplay]
         Config[Configuration<br/>.config.yaml]
     end
 
@@ -17,6 +19,7 @@ graph TB
         Asset[Asset]
         Ticker[Ticker]
         Category[Category]
+        Allocator[Allocation Module<br/>BacktestOptimizedAllocator]
     end
 
     subgraph "Data Layer"
@@ -34,19 +37,24 @@ graph TB
     subgraph "Configuration & Utilities"
         Models[Config Models<br/>Pydantic]
         LogManager[Logging Manager]
+        Container[DI Container]
     end
 
+    CLI --> Manager
     CLI --> Config
+    Manager --> Display
+    Manager --> Container
     Config --> Models
     Models --> Factory
     Factory --> Portfolio
     Portfolio --> Asset
     Asset --> Ticker
     Asset --> Category
+    Manager --> Allocator
 
-    CLI --> TA
-    CLI --> BT
-    CLI --> FC
+    Manager --> TA
+    Manager --> BT
+    Manager --> FC
 
     TA --> Fetcher
     BT --> Fetcher
@@ -56,15 +64,19 @@ graph TB
     Fetcher --> Cache
     Cache --> DB
 
-    CLI --> LogManager
+    Container --> LogManager
     LogManager --> Models
 
     style CLI fill:#2196F3,stroke:#1976D2,color:#fff
+    style Manager fill:#FF5722,stroke:#D84315,color:#fff
+    style Display fill:#607D8B,stroke:#455A64,color:#fff
     style Config fill:#4CAF50,stroke:#388E3C,color:#fff
     style DB fill:#FF9800,stroke:#F57C00,color:#fff
     style Portfolio fill:#9C27B0,stroke:#7B1FA2,color:#fff
     style Factory fill:#9C27B0,stroke:#7B1FA2,color:#fff
     style LogManager fill:#607D8B,stroke:#455A64,color:#fff
+    style Container fill:#795548,stroke:#5D4037,color:#fff
+    style Allocator fill:#E91E63,stroke:#C2185B,color:#fff
 ```
 
 ## Data Flow
@@ -73,6 +85,8 @@ graph TB
 sequenceDiagram
     participant User
     participant CLI
+    participant Manager
+    participant Display
     participant Config
     participant Factory
     participant Portfolio
@@ -82,7 +96,8 @@ sequenceDiagram
 
     User->>CLI: Run command
     CLI->>Config: Load .config.yaml
-    Config->>Factory: Create domain objects
+    CLI->>Manager: Create manager instance
+    Manager->>Factory: Create domain objects
     Factory->>Portfolio: Build portfolio
     Portfolio->>Fetcher: Request prices
     Fetcher->>DB: Check cache
@@ -94,8 +109,10 @@ sequenceDiagram
         Fetcher->>DB: Store in cache
     end
     Fetcher-->>Portfolio: Return prices
-    Portfolio->>Analysis: Run analysis
-    Analysis-->>CLI: Return results
+    Manager->>Analysis: Run analysis
+    Analysis-->>Manager: Return results
+    Manager->>Display: Format results
+    Display-->>CLI: Formatted output
     CLI-->>User: Display output
 ```
 
@@ -104,7 +121,11 @@ sequenceDiagram
 ```
 src/stockula/
 ├── __init__.py           # Main package exports
-├── main.py               # CLI demo application
+├── main.py               # CLI entry point (minimal orchestration)
+├── manager.py            # Business logic manager (StockulaManager)
+├── display.py            # Results display and formatting (ResultsDisplay)
+├── container.py          # Dependency injection container
+├── interfaces.py         # Abstract interfaces
 ├── config/               # Configuration management
 │   ├── __init__.py
 │   ├── models.py        # Pydantic models
@@ -115,7 +136,9 @@ src/stockula/
 │   ├── asset.py         # Asset representation
 │   ├── ticker.py        # Ticker & registry
 │   ├── category.py      # Category enum
-│   ├── factory.py       # Domain object factory
+│   └── factory.py       # Domain object factory
+├── allocation/           # Allocation strategies
+│   ├── __init__.py
 │   ├── allocator.py     # Base allocation strategies
 │   └── backtest_allocator.py  # Backtest-optimized allocation
 ├── data/                 # Data fetching module
@@ -164,6 +187,8 @@ src/stockula/
 
 **Key Components**:
 
+- **StockulaManager**: Orchestrates all business logic and operations
+- **ResultsDisplay**: Handles formatting and presentation of results
 - **Portfolio**: Manages collections of assets with allocation strategies
 - **Asset**: Represents individual holdings with market data
 - **Ticker**: Maps symbols to detailed information
@@ -235,8 +260,12 @@ src/stockula/
 
 Each module has a single responsibility:
 
+- **main.py**: CLI entry point and minimal orchestration
+- **manager.py**: Business logic orchestration and coordination
+- **display.py**: Results formatting and presentation
 - **Config**: Settings and validation
 - **Domain**: Business logic and rules
+- **Allocation**: Portfolio allocation strategies
 - **Data**: External data access
 - **Analysis**: Financial computations
 - **Utils**: Shared utilities

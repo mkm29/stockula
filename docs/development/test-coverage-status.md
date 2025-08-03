@@ -29,7 +29,7 @@ Until comprehensive testing is implemented:
 | Module              | Coverage | Status | Notes                   |
 | ------------------- | -------- | ------ | ----------------------- |
 | **Overall Project** | 83%      | ✅     | Excluding strategies.py |
-| **main.py**         | 83%      | ✅     | +22% improvement        |
+| **main.py**         | 83%      | ✅     | Refactored to entry point |
 | **forecaster.py**   | 83%      | ✅     | +33% improvement        |
 | **factory.py**      | 88%      | ✅     | +9% improvement         |
 | **runner.py**       | 89%      | ✅     | +19% improvement        |
@@ -55,7 +55,8 @@ Until comprehensive testing is implemented:
 
 - **Before**: 61%
 - **After**: 83%
-- **Added**: Date utilities, strategy retrieval, configuration handling
+- **Refactored**: Reduced from ~1942 lines to ~350 lines (CLI entry point only)
+- **New modules**: manager.py (StockulaManager), display.py (ResultsDisplay)
 
 #### Forecaster (`forecaster.py`)
 
