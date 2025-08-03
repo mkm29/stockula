@@ -188,7 +188,7 @@ class TestTechnicalAnalysis:
         mock_ta_class.return_value = mock_ta
 
         # Test with and without progress bar
-        for show_progress in [True, False]:
+        for _show_progress in [True, False]:
             manager = create_mock_manager(config)
             # Set up the container's data_fetcher to return our mock
             manager.container.data_fetcher.return_value = mock_data_fetcher
@@ -210,7 +210,7 @@ class TestBacktesting:
         strategy_config.parameters = {"fast_period": 10, "slow_period": 20}
         config.backtest.strategies = [strategy_config]
 
-        mock_strategy = Mock()
+        Mock()
         mock_runner = Mock()
         mock_runner.run_from_symbol.return_value = {
             "Return [%]": 15.5,
