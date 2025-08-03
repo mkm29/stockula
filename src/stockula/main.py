@@ -1211,14 +1211,6 @@ def main():
     if args.test_end:
         config.forecast.test_end_date = datetime.strptime(args.test_end, "%Y-%m-%d").date()
 
-    # Save configuration if requested
-    if args.save_config:
-        from .config.settings import save_config
-
-        save_config(config, args.save_config)
-        print(f"Configuration saved to {args.save_config}")
-        return
-
     # Handle optimize-allocation mode early (before portfolio creation)
     if args.mode == "optimize-allocation":
         console.print("\n[bold cyan]Running Backtest Optimization for Allocation[/bold cyan]")
@@ -1295,18 +1287,23 @@ def main():
 
             console.print(results_table)
 
-            # Save optimized config if requested
-            if args.save_optimized_config:
+            # Save optimized config if requested (support both flags)
+            save_path = args.save_optimized_config or args.save_config
+            if save_path:
                 # Update the config with optimized quantities
                 for ticker_config in config.portfolio.tickers:
                     if ticker_config.symbol in optimized_quantities:
                         # Convert numpy types to native Python types
                         quantity = optimized_quantities[ticker_config.symbol]
                         if hasattr(quantity, "item"):
-                            # Convert numpy scalar to Python float
-                            ticker_config.quantity = quantity.item()
+                            # Convert numpy scalar to Python type
+                            ticker_config.quantity = float(quantity.item())
                         else:
-                            ticker_config.quantity = float(quantity)
+                            # Keep as integer if it's already an integer (from backtest_optimized)
+                            if isinstance(quantity, int):
+                                ticker_config.quantity = float(quantity)
+                            else:
+                                ticker_config.quantity = float(quantity)
                         # Clear allocation_pct and allocation_amount since we now have quantities
                         ticker_config.allocation_pct = None
                         ticker_config.allocation_amount = None
@@ -1333,13 +1330,13 @@ def main():
 
                 config_dict = convert_dates(config_dict)
 
-                with open(args.save_optimized_config, "w") as f:
+                with open(save_path, "w") as f:
                     yaml.dump(config_dict, f, default_flow_style=False, sort_keys=False)
 
-                console.print(f"\n[green]✓ Optimized configuration saved to: {args.save_optimized_config}[/green]")
+                console.print(f"\n[green]✓ Optimized configuration saved to: {save_path}[/green]")
                 console.print(
                     "[dim]You can now run backtest with: "
-                    f"uv run python -m stockula.main --config {args.save_optimized_config} --mode backtest[/dim]"
+                    f"uv run python -m stockula.main --config {save_path} --mode backtest[/dim]"
                 )
 
             return 0
@@ -1349,6 +1346,14 @@ def main():
             if log_manager:
                 log_manager.error(f"Optimization error: {e}", exc_info=True)
             return 1
+
+    # Save configuration if requested (for non-optimize-allocation modes)
+    if args.save_config and args.mode != "optimize-allocation":
+        from .config.settings import save_config
+
+        save_config(config, args.save_config)
+        print(f"Configuration saved to {args.save_config}")
+        return
 
     # Get injected services from container
     factory = container.domain_factory()

@@ -20,7 +20,7 @@ data:
 # Portfolio configuration using backtest-optimized allocation
 portfolio:
   name: "Backtest-Optimized Portfolio"
-  initial_capital: 100000
+  initial_capital: 20000 # Initial capital for backtesting
   allocation_method: backtest_optimized
   allow_fractional_shares: true
   # Define the assets to optimize
