@@ -384,10 +384,9 @@ class BacktestOptimizedAllocator(BaseAllocator):
 
             raw_quantity = allocation_amount / prices[symbol]
 
-            if config.portfolio.allow_fractional_shares:
-                calculated_quantities[symbol] = raw_quantity
-            else:
-                calculated_quantities[symbol] = max(1, int(raw_quantity))
+            # For backtest_optimized allocation, always use whole shares
+            # This ensures the output can be used directly in portfolio construction
+            calculated_quantities[symbol] = max(1, int(raw_quantity))
 
         return calculated_quantities
 
@@ -422,7 +421,7 @@ class BacktestOptimizedAllocator(BaseAllocator):
                 f"{symbol:8} | Strategy: {strategy:25} | "
                 f"{self.ranking_metric}: {performance:7.4f} | "
                 f"Allocation: {allocation_pct:5.2f}% | "
-                f"Quantity: {quantity:8.2f}"
+                f"Quantity: {quantity:8.0f}"
             )
 
         self.logger.info("=" * 80)

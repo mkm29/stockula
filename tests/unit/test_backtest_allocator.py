@@ -5,13 +5,13 @@ from unittest.mock import Mock
 import pandas as pd
 import pytest
 
+from stockula.allocation import BacktestOptimizedAllocator
 from stockula.backtesting.strategies import (
     MACDStrategy,
     RSIStrategy,
     SMACrossStrategy,
 )
 from stockula.config import PortfolioConfig, StockulaConfig, TickerConfig
-from stockula.domain.backtest_allocator import BacktestOptimizedAllocator
 
 
 class TestBacktestOptimizedAllocator:
@@ -261,18 +261,18 @@ class TestBacktestOptimizedAllocator:
             sample_config, ["AAPL", "GOOGL", "MSFT"], allocations, "2023-12-31"
         )
 
-        # Verify quantities
-        assert abs(quantities["AAPL"] - 40000 / 150) < 0.01  # ~266.67
-        assert abs(quantities["GOOGL"] - 35000 / 2800) < 0.01  # ~12.5
-        assert abs(quantities["MSFT"] - 25000 / 300) < 0.01  # ~83.33
+        # Verify quantities are integers
+        assert quantities["AAPL"] == 266  # int(40000 / 150)
+        assert quantities["GOOGL"] == 12  # int(35000 / 2800)
+        assert quantities["MSFT"] == 83  # int(25000 / 300)
 
     def test_convert_allocations_to_quantities_integer_shares(self, allocator, mock_fetcher):
-        """Test quantity conversion with integer shares only."""
-        # Create config with integer shares
+        """Test quantity conversion always returns integers."""
+        # Create config with fractional shares enabled
         config = StockulaConfig(
             portfolio=PortfolioConfig(
                 initial_capital=100000.0,
-                allow_fractional_shares=False,
+                allow_fractional_shares=True,  # Even with fractional enabled
             )
         )
 
@@ -285,8 +285,9 @@ class TestBacktestOptimizedAllocator:
 
         quantities = allocator._convert_allocations_to_quantities(config, ["AAPL"], allocations, "2023-12-31")
 
-        # Should be integer
-        assert quantities["AAPL"] == int(100000 / 150)  # 666 shares
+        # Should always be integer for backtest_optimized
+        assert quantities["AAPL"] == 666  # int(100000 / 150)
+        assert isinstance(quantities["AAPL"], int)
 
     def test_calculate_backtest_optimized_quantities_integration(
         self, allocator, sample_config, sample_tickers, mock_fetcher, mock_backtest_runner

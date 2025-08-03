@@ -92,10 +92,15 @@ class TickerConfig(BaseModel):
         if sum(allocation_methods) == 0 and self.category is not None:
             return  # Valid for auto-allocation
 
+        # For backtest_optimized allocation, no allocation fields are required
+        # This will be validated at the portfolio level
+        if sum(allocation_methods) == 0:
+            return  # Valid for backtest_optimized or other dynamic methods
+
         if sum(allocation_methods) != 1:
             raise ValueError(
                 f"Ticker {self.symbol} must specify exactly one of: quantity, allocation_pct, "
-                f"allocation_amount, or just category (for auto-allocation)"
+                f"allocation_amount, or none of them (for backtest_optimized or auto-allocation)"
             )
 
 
@@ -178,6 +183,19 @@ class PortfolioConfig(BaseModel):
                     print(
                         f"Warning: Ticker {ticker.symbol} has quantity specified but dynamic_allocation is enabled. "
                         f"Quantity will be ignored."
+                    )
+
+        # Validate backtest_optimized allocation settings
+        if self.allocation_method == "backtest_optimized":
+            for ticker in self.tickers:
+                if (
+                    ticker.quantity is not None
+                    or ticker.allocation_pct is not None
+                    or ticker.allocation_amount is not None
+                ):
+                    print(
+                        f"Warning: Ticker {ticker.symbol} has allocation specified but "
+                        f"allocation_method='backtest_optimized'. Allocations will be calculated automatically."
                     )
 
         # Validate auto-allocation settings

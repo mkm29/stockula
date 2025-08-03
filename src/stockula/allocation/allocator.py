@@ -334,5 +334,12 @@ class Allocator(BaseAllocator):
             return self.calculate_dynamic_quantities(config, tickers)
         elif allocation_method == "auto":
             return self.calculate_auto_allocation_quantities(config, tickers)
+        elif allocation_method == "backtest_optimized":
+            # For backtest_optimized, we need the BacktestOptimizedAllocator
+            # This is a placeholder - in practice, the container should inject the right allocator
+            raise ValueError(
+                "backtest_optimized allocation method requires BacktestOptimizedAllocator. "
+                "Please use --mode optimize-allocation to calculate optimal quantities."
+            )
         else:
             raise ValueError(f"Unknown allocation method: {allocation_method}")

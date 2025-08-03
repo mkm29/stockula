@@ -238,6 +238,12 @@ graph TB
         Asset[Asset]
     end
 
+    subgraph "Allocation Module"
+        Allocator[Base Allocator]
+        STD[Standard Allocator]
+        OPT[Backtest Optimized<br/>Allocator]
+    end
+
     subgraph "Data Layer"
         Fetcher[Data Fetcher<br/>yfinance wrapper]
         DB[(SQLite Database<br/>stockula.db)]
@@ -252,6 +258,10 @@ graph TB
     CLI --> Config
     Config --> Factory
     Factory --> Portfolio
+    Factory --> Allocator
+    STD --> Allocator
+    OPT --> Allocator
+    OPT --> BT
     TA --> Fetcher
     BT --> Fetcher
     FC --> Fetcher

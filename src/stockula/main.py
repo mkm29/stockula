@@ -1154,7 +1154,7 @@ def main():
     parser.add_argument(
         "--mode",
         "-m",
-        choices=["all", "ta", "backtest", "forecast"],
+        choices=["all", "ta", "backtest", "forecast", "optimize-allocation"],
         default="all",
         help="Operation mode",
     )
@@ -1166,6 +1166,11 @@ def main():
         help="Output format",
     )
     parser.add_argument("--save-config", type=str, help="Save current configuration to file")
+    parser.add_argument(
+        "--save-optimized-config",
+        type=str,
+        help="Save optimized configuration to file (used with optimize-allocation mode)",
+    )
 
     # Add date range arguments
     parser.add_argument("--train-start", type=str, help="Training start date (YYYY-MM-DD)")
@@ -1213,6 +1218,137 @@ def main():
         save_config(config, args.save_config)
         print(f"Configuration saved to {args.save_config}")
         return
+
+    # Handle optimize-allocation mode early (before portfolio creation)
+    if args.mode == "optimize-allocation":
+        console.print("\n[bold cyan]Running Backtest Optimization for Allocation[/bold cyan]")
+
+        # Check if allocation method is backtest_optimized
+        if config.portfolio.allocation_method != "backtest_optimized":
+            console.print("[yellow]Warning: allocation_method is not set to 'backtest_optimized' in config.[/yellow]")
+            console.print("[yellow]Setting it to 'backtest_optimized' for this run.[/yellow]")
+            config.portfolio.allocation_method = "backtest_optimized"
+
+        # Check if we have the necessary date configuration
+        if not config.backtest_optimization:
+            console.print(
+                "[red]Error: backtest_optimization configuration is required for optimize-allocation mode.[/red]"
+            )
+            console.print("[red]Please add backtest_optimization section to your config file.[/red]")
+            return 1
+
+        # Run the optimization
+        from .allocation import BacktestOptimizedAllocator
+
+        try:
+            # Create the backtest allocator
+            backtest_allocator = BacktestOptimizedAllocator(
+                fetcher=container.data_fetcher(),
+                logging_manager=container.logging_manager(),
+                backtest_runner=container.backtest_runner(),
+            )
+
+            # Calculate optimized quantities
+            console.print("\n[blue]Calculating optimized quantities...[/blue]")
+            optimized_quantities = backtest_allocator.calculate_quantities(
+                config=config,
+                tickers=config.portfolio.tickers,
+            )
+
+            # Display results
+            console.print("\n[bold green]Optimization Results:[/bold green]")
+
+            results_table = Table(title="Optimized Allocation")
+            results_table.add_column("Ticker", style="cyan", no_wrap=True)
+            results_table.add_column("Quantity", style="green", justify="right")
+            results_table.add_column("Allocation %", style="yellow", justify="right")
+
+            # Calculate total value for percentage
+            total_value = 0
+            ticker_values = {}
+            for ticker_config in config.portfolio.tickers:
+                symbol = ticker_config.symbol
+                if symbol in optimized_quantities:
+                    # Get current price for value calculation
+                    prices = container.data_fetcher().get_current_prices([symbol])
+                    if symbol in prices:
+                        value = optimized_quantities[symbol] * prices[symbol]
+                        ticker_values[symbol] = value
+                        total_value += value
+
+            # Display results
+            for ticker_config in config.portfolio.tickers:
+                symbol = ticker_config.symbol
+                quantity = optimized_quantities.get(symbol, 0)
+
+                # Calculate allocation percentage
+                if symbol in ticker_values and total_value > 0:
+                    allocation_pct = (ticker_values[symbol] / total_value) * 100
+                else:
+                    allocation_pct = 0
+
+                results_table.add_row(
+                    symbol,
+                    f"{quantity:.4f}" if config.portfolio.allow_fractional_shares else f"{int(quantity)}",
+                    f"{allocation_pct:.2f}%",
+                )
+
+            console.print(results_table)
+
+            # Save optimized config if requested
+            if args.save_optimized_config:
+                # Update the config with optimized quantities
+                for ticker_config in config.portfolio.tickers:
+                    if ticker_config.symbol in optimized_quantities:
+                        # Convert numpy types to native Python types
+                        quantity = optimized_quantities[ticker_config.symbol]
+                        if hasattr(quantity, "item"):
+                            # Convert numpy scalar to Python float
+                            ticker_config.quantity = quantity.item()
+                        else:
+                            ticker_config.quantity = float(quantity)
+                        # Clear allocation_pct and allocation_amount since we now have quantities
+                        ticker_config.allocation_pct = None
+                        ticker_config.allocation_amount = None
+
+                # Change allocation method to custom since we now have fixed quantities
+                config.portfolio.allocation_method = "custom"
+                config.portfolio.dynamic_allocation = False
+                config.portfolio.auto_allocate = False
+
+                # Save to file
+                import yaml
+
+                config_dict = config.model_dump(exclude_none=True)
+
+                # Convert dates to strings for YAML serialization
+                def convert_dates(obj):
+                    if isinstance(obj, dict):
+                        return {k: convert_dates(v) for k, v in obj.items()}
+                    elif isinstance(obj, list):
+                        return [convert_dates(item) for item in obj]
+                    elif isinstance(obj, date):
+                        return obj.strftime("%Y-%m-%d")
+                    return obj
+
+                config_dict = convert_dates(config_dict)
+
+                with open(args.save_optimized_config, "w") as f:
+                    yaml.dump(config_dict, f, default_flow_style=False, sort_keys=False)
+
+                console.print(f"\n[green]✓ Optimized configuration saved to: {args.save_optimized_config}[/green]")
+                console.print(
+                    "[dim]You can now run backtest with: "
+                    f"uv run python -m stockula.main --config {args.save_optimized_config} --mode backtest[/dim]"
+                )
+
+            return 0
+
+        except Exception as e:
+            console.print(f"[red]Error during optimization: {e}[/red]")
+            if log_manager:
+                log_manager.error(f"Optimization error: {e}", exc_info=True)
+            return 1
 
     # Get injected services from container
     factory = container.domain_factory()

@@ -188,26 +188,44 @@ The allocator can optimize based on various metrics:
 
 ### Example Usage
 
-> **Note**: Currently, the `backtest_optimized` allocation method is not fully integrated into the main CLI. You need to use the programmatic approach or the example script to calculate optimal quantities.
+The `backtest_optimized` allocation method is fully integrated into the CLI and follows a two-step workflow:
 
-#### Command Line (Future Enhancement)
+#### Command Line Usage
 
 ```bash
-# This feature is planned but not yet implemented
-# uv run python -m stockula.main --config config.yaml --mode backtest --optimize-allocation
+# Step 1: Run optimization to determine optimal quantities
+uv run python -m stockula.main --config config.yaml --mode optimize-allocation \
+    --save-optimized-config optimized-portfolio.yaml
+
+# Step 2: Run backtest with the optimized configuration
+uv run python -m stockula.main --config optimized-portfolio.yaml --mode backtest
 ```
 
-#### Using the Example Script
+#### Configuration Example
 
-```bash
-# Run the backtest optimization example to calculate quantities
-uv run python examples/backtest_optimized_allocation_example.py
+When using `backtest_optimized` allocation, you don't need to specify quantities or allocation percentages:
+
+```yaml
+portfolio:
+  name: "Backtest Optimized Portfolio"
+  initial_capital: 100000
+  allocation_method: backtest_optimized
+  allow_fractional_shares: true
+  
+  tickers:
+    # No quantity or allocation fields needed - they will be calculated
+    - symbol: AAPL
+      category: TECH
+    - symbol: GOOGL
+      category: TECH
+    - symbol: SPY
+      category: INDEX
 ```
 
 #### Programmatic Usage
 
 ```python
-from stockula.domain.backtest_allocator import BacktestOptimizedAllocator
+from stockula.allocation import BacktestOptimizedAllocator
 from stockula.config import load_config
 from stockula.data.fetcher import DataFetcher
 
@@ -322,9 +340,9 @@ for symbol, amount in validation['allocations'].items():
 ### Creating a Custom Allocator
 
 ```python
-from stockula.domain.allocator import Allocator
+from stockula.allocation import BaseAllocator
 
-class MomentumAllocator(Allocator):
+class MomentumAllocator(BaseAllocator):
     """Allocate based on momentum metrics."""
     
     def calculate_quantities(
@@ -359,6 +377,8 @@ class MomentumAllocator(Allocator):
 
 ```python
 # In container.py
+from stockula.allocation import MomentumAllocator
+
 custom_allocator = providers.ThreadSafeSingleton(
     MomentumAllocator,
     fetcher=data_fetcher,

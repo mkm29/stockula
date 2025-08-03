@@ -6,9 +6,9 @@ from unittest.mock import Mock, patch
 import pandas as pd
 import pytest
 
+from stockula.allocation import Allocator
 from stockula.config import DataConfig, PortfolioConfig, StockulaConfig, TickerConfig
 from stockula.domain import DomainFactory, Portfolio, TickerRegistry
-from stockula.domain.allocator import Allocator
 
 
 @pytest.fixture
