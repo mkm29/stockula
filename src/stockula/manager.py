@@ -332,36 +332,41 @@ class StockulaManager:
         Returns:
             Dictionary with indicator results
         """
-        data_fetcher = self.container.data_fetcher()
-        data = data_fetcher.get_stock_data(
-            ticker,
-            start=self.date_to_string(self.config.data.start_date),
-            end=self.date_to_string(self.config.data.end_date),
-            interval=self.config.data.interval,
-        )
+        # Get the technical analysis manager
+        ta_manager = self.container.technical_analysis_manager()
 
-        ta = TechnicalIndicators(data)
-        results = {"ticker": ticker, "indicators": {}}
+        # Determine which indicators to use based on configuration
         ta_config = self.config.technical_analysis
+        custom_indicators = []
 
-        # Count total indicators to calculate
-        total_indicators = 0
+        # Build custom indicators list based on config
         if "sma" in ta_config.indicators:
-            total_indicators += len(ta_config.sma_periods)
+            custom_indicators.append("sma")
         if "ema" in ta_config.indicators:
-            total_indicators += len(ta_config.ema_periods)
+            custom_indicators.append("ema")
         if "rsi" in ta_config.indicators:
-            total_indicators += 1
+            custom_indicators.append("rsi")
         if "macd" in ta_config.indicators:
-            total_indicators += 1
+            custom_indicators.append("macd")
         if "bbands" in ta_config.indicators:
-            total_indicators += 1
+            custom_indicators.append("bbands")
         if "atr" in ta_config.indicators:
-            total_indicators += 1
+            custom_indicators.append("atr")
         if "adx" in ta_config.indicators:
-            total_indicators += 1
+            custom_indicators.append("adx")
+        if "stoch" in ta_config.indicators:
+            custom_indicators.append("stoch")
+        if "williams_r" in ta_config.indicators:
+            custom_indicators.append("williams_r")
+        if "cci" in ta_config.indicators:
+            custom_indicators.append("cci")
+        if "obv" in ta_config.indicators:
+            custom_indicators.append("obv")
+        if "ichimoku" in ta_config.indicators:
+            custom_indicators.append("ichimoku")
 
-        if show_progress and total_indicators > 0:
+        # Use the manager to analyze the symbol
+        if show_progress:
             with Progress(
                 SpinnerColumn(),
                 TextColumn("[progress.description]{task.description}"),
@@ -369,19 +374,72 @@ class StockulaManager:
                 TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
                 TimeRemainingColumn(),
                 console=self.console,
-                transient=True,  # Remove progress bar when done
+                transient=True,
             ) as progress:
                 task = progress.add_task(
-                    f"[cyan]Computing {total_indicators} technical indicators for {ticker}...",
-                    total=total_indicators,
+                    f"[cyan]Analyzing technical indicators for {ticker}...",
+                    total=1,
                 )
 
-                self._compute_indicators(ta, ta_config, results, progress, task, ticker)
-        else:
-            # Run without progress bars
-            self._compute_indicators(ta, ta_config, results)
+                result = ta_manager.analyze_symbol(
+                    ticker,
+                    self.config,
+                    analysis_type="custom" if custom_indicators else "comprehensive",
+                    custom_indicators=custom_indicators if custom_indicators else None,
+                )
 
-        return results
+                progress.advance(task)
+        else:
+            result = ta_manager.analyze_symbol(
+                ticker,
+                self.config,
+                analysis_type="custom" if custom_indicators else "comprehensive",
+                custom_indicators=custom_indicators if custom_indicators else None,
+            )
+
+        # If we need to maintain backward compatibility with the old format,
+        # we can still compute the specific period values
+        if "indicators" in result and not result.get("error"):
+            # Get the data for period-specific calculations
+            data_fetcher = self.container.data_fetcher()
+            data = data_fetcher.get_stock_data(
+                ticker,
+                start=self.date_to_string(self.config.data.start_date),
+                end=self.date_to_string(self.config.data.end_date),
+                interval=self.config.data.interval,
+            )
+
+            if not data.empty:
+                ta = TechnicalIndicators(data)
+
+                # Add period-specific calculations if needed
+                if "sma" in ta_config.indicators and "sma" in result["indicators"]:
+                    for period in ta_config.sma_periods:
+                        result["indicators"][f"SMA_{period}"] = ta.sma(period).iloc[-1]
+
+                if "ema" in ta_config.indicators and "ema" in result["indicators"]:
+                    for period in ta_config.ema_periods:
+                        result["indicators"][f"EMA_{period}"] = ta.ema(period).iloc[-1]
+
+                # Add simple indicator values for backward compatibility
+                if "rsi" in ta_config.indicators and "rsi" in result["indicators"]:
+                    result["indicators"]["RSI"] = result["indicators"]["rsi"]["current"]
+
+                if "macd" in ta_config.indicators and "macd" in result["indicators"]:
+                    macd_data = result["indicators"]["macd"]["current"]
+                    if isinstance(macd_data, dict):
+                        result["indicators"]["MACD"] = macd_data.get("MACD")
+
+                if "bbands" in ta_config.indicators and "bbands" in result["indicators"]:
+                    result["indicators"]["BBands"] = result["indicators"]["bbands"]["current"]
+
+                if "atr" in ta_config.indicators and "atr" in result["indicators"]:
+                    result["indicators"]["ATR"] = result["indicators"]["atr"]["current"]
+
+                if "adx" in ta_config.indicators and "adx" in result["indicators"]:
+                    result["indicators"]["ADX"] = result["indicators"]["adx"]["current"]
+
+        return result
 
     def _compute_indicators(
         self,

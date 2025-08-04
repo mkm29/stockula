@@ -6,11 +6,78 @@ Stockula provides comprehensive technical analysis capabilities through the fint
 
 The technical analysis module offers:
 
+- **TechnicalAnalysisManager**: Centralized coordinator for all technical analysis strategies
 - **40+ Indicators**: Moving averages, oscillators, volatility, volume indicators
+- **Analysis Groups**: Pre-configured indicator groups (basic, momentum, trend, volatility, comprehensive)
 - **Batch Processing**: Calculate multiple indicators simultaneously
 - **Rich Display**: Beautiful tables with formatted results
 - **Flexible Configuration**: Customizable parameters for all indicators
 - **Performance Optimized**: Vectorized calculations using pandas
+- **Smart Analysis**: Automatic signal generation and trend detection
+
+## TechnicalAnalysisManager
+
+The TechnicalAnalysisManager coordinates different technical analysis strategies and provides a unified interface for all indicator calculations.
+
+### Available Analysis Types
+
+1. **Basic Analysis**: Essential indicators for quick overview
+   - Simple Moving Average (SMA)
+   - Exponential Moving Average (EMA)
+   - Relative Strength Index (RSI)
+   - Volume analysis
+
+2. **Momentum Analysis**: Focus on momentum indicators
+   - RSI, MACD, Stochastic
+   - ADX, CCI, Williams %R
+
+3. **Trend Analysis**: Trend-following indicators
+   - SMA, EMA, MACD
+   - ADX, Ichimoku Cloud
+
+4. **Volatility Analysis**: Volatility measurement
+   - Bollinger Bands
+   - Average True Range (ATR)
+   - Stochastic
+
+5. **Comprehensive Analysis**: All available indicators
+
+### Manager Methods
+
+```python
+from stockula.container import Container
+
+container = Container()
+ta_manager = container.technical_analysis_manager()
+
+# Analyze a single symbol
+result = ta_manager.analyze_symbol('AAPL', config, analysis_type='comprehensive')
+
+# Quick analysis with key indicators
+quick_result = ta_manager.quick_analysis('AAPL')
+
+# Momentum-focused analysis
+momentum_result = ta_manager.momentum_analysis('AAPL', config)
+
+# Trend analysis
+trend_result = ta_manager.trend_analysis('AAPL', config)
+
+# Volatility analysis
+volatility_result = ta_manager.volatility_analysis('AAPL', config)
+
+# Analyze multiple symbols
+results = ta_manager.analyze_multiple_symbols(['AAPL', 'GOOGL'], config)
+
+# Custom indicators with specific parameters
+custom_result = ta_manager.calculate_custom_indicators(
+    'AAPL',
+    indicators={
+        'sma': {'period': 50},
+        'rsi': {'period': 21},
+        'macd': {'period_fast': 8, 'period_slow': 17, 'signal': 9}
+    }
+)
+```
 
 ## Available Indicators
 
@@ -135,8 +202,34 @@ uv run python -m stockula.main --config myconfig.yaml --mode ta
 
 ### Programmatic Usage
 
+#### Using TechnicalAnalysisManager (Recommended)
+
 ```python
-from stockula.technical_analysis.indicators import TechnicalAnalysis
+from stockula.container import Container
+from stockula.config.settings import load_config
+
+# Load configuration and get manager
+config = load_config("myconfig.yaml")
+container = Container()
+ta_manager = container.technical_analysis_manager()
+
+# Comprehensive analysis
+result = ta_manager.analyze_symbol('AAPL', config)
+print(f"Current Price: ${result['current_price']:.2f}")
+print(f"Analysis Type: {result['analysis_type']}")
+print(f"Summary: {result['summary']['strength']}")
+
+# Quick analysis
+quick = ta_manager.quick_analysis('AAPL')
+print(f"Trend: {quick['trend']}")
+print(f"Momentum: {quick['momentum']}")
+print(f"RSI: {quick['rsi']:.2f}")
+```
+
+#### Direct TechnicalIndicators Usage
+
+```python
+from stockula.technical_analysis.indicators import TechnicalIndicators
 from stockula.data.fetcher import DataFetcher
 
 # Get stock data
@@ -144,30 +237,55 @@ fetcher = DataFetcher()
 data = fetcher.get_stock_data("AAPL", start_date="2023-01-01")
 
 # Create technical analysis instance
-ta = TechnicalAnalysis()
+ta = TechnicalIndicators(data)
 
 # Calculate specific indicators
-sma_20 = ta.calculate_sma(data, period=20)
-rsi_14 = ta.calculate_rsi(data, period=14)
-macd = ta.calculate_macd(data, fast=12, slow=26, signal=9)
+sma_20 = ta.sma(period=20)
+rsi_14 = ta.rsi(period=14)
+macd = ta.macd(fast=12, slow=26, signal=9)
 
-# Calculate multiple indicators at once
-indicators = ta.calculate_indicators(
-    data,
-    indicators=["sma", "ema", "rsi", "macd", "bbands"],
-    sma_periods=[20, 50],
-    ema_periods=[12, 26]
-)
-
-print(indicators)
+print(f"SMA(20): {sma_20.iloc[-1]:.2f}")
+print(f"RSI(14): {rsi_14.iloc[-1]:.2f}")
+print(f"MACD: {macd['MACD'].iloc[-1]:.2f}")
 ```
 
 ### Batch Analysis
 
+#### Using TechnicalAnalysisManager (Recommended)
+
+```python
+from stockula.container import Container
+from stockula.config.settings import load_config
+from stockula.domain.factory import DomainFactory
+
+# Load configuration
+config = load_config("myconfig.yaml")
+container = Container()
+ta_manager = container.technical_analysis_manager()
+
+# Create portfolio
+factory = DomainFactory(config)
+portfolio = factory.create_portfolio()
+
+# Analyze entire portfolio
+symbols = [asset.ticker for asset in portfolio.assets]
+results = ta_manager.analyze_multiple_symbols(symbols, config, analysis_type='momentum')
+
+# Display results
+for symbol, result in results.items():
+    if 'error' not in result:
+        print(f"\n{symbol}:")
+        print(f"  Current Price: ${result['current_price']:.2f}")
+        print(f"  Summary: {result['summary']['strength']}")
+        print(f"  Signals: {', '.join(result['summary']['signals'])}")
+```
+
+#### Direct TechnicalIndicators Usage
+
 ```python
 from stockula.config.settings import load_config
 from stockula.domain.factory import DomainFactory
-from stockula.technical_analysis.indicators import TechnicalAnalysis
+from stockula.technical_analysis.indicators import TechnicalIndicators
 
 # Load configuration
 config = load_config("myconfig.yaml")
@@ -177,7 +295,6 @@ factory = DomainFactory(config)
 portfolio = factory.create_portfolio()
 
 # Run technical analysis on entire portfolio
-ta = TechnicalAnalysis()
 results = {}
 
 for asset in portfolio.assets:

@@ -162,6 +162,7 @@ src/stockula/
 │   └── cli.py           # Command-line interface
 ├── technical_analysis/   # Technical indicators
 │   ├── __init__.py
+│   ├── manager.py       # TechnicalAnalysisManager - coordinates strategies
 │   └── indicators.py    # finta wrapper
 ├── backtesting/         # Strategy backtesting
 │   ├── __init__.py
@@ -243,9 +244,12 @@ src/stockula/
 
 1. **Technical Analysis** (`technical_analysis/`)
 
+   - TechnicalAnalysisManager for coordinating analysis strategies
    - Wraps finta library for indicators
+   - Pre-configured analysis groups (basic, momentum, trend, volatility)
    - Vectorized calculations for performance
    - Configurable indicator parameters
+   - Automatic signal generation and summary
 
 1. **Backtesting** (`backtesting/`)
 

@@ -148,9 +148,23 @@ class TestTechnicalAnalysis:
         mock_ta.rsi.return_value = pd.Series([50.0] * 50)
         mock_ta_class.return_value = mock_ta
 
+        # Mock TechnicalAnalysisManager
+        mock_ta_manager = Mock()
+        mock_ta_manager.analyze_symbol.return_value = {
+            "ticker": "AAPL",
+            "current_price": 100,
+            "analysis_type": "custom",
+            "indicators": {
+                "sma": {"current": 100.5},
+                "rsi": {"current": 50.0},
+            },
+            "summary": {"signals": [], "strength": "neutral"},
+        }
+
         manager = create_mock_manager(config)
         # Set up the container's data_fetcher to return our mock
         manager.container.data_fetcher.return_value = mock_data_fetcher
+        manager.container.technical_analysis_manager.return_value = mock_ta_manager
         result = manager.run_technical_analysis("AAPL", show_progress=False)
 
         assert result["ticker"] == "AAPL"
@@ -168,7 +182,13 @@ class TestTechnicalAnalysis:
         config.technical_analysis.ema_periods = [12, 26]
 
         mock_data = pd.DataFrame(
-            {"Close": [100] * 100},
+            {
+                "Open": [99] * 100,
+                "High": [101] * 100,
+                "Low": [98] * 100,
+                "Close": [100] * 100,
+                "Volume": [1000000] * 100,
+            },
             index=pd.date_range("2023-01-01", periods=100),
         )
         mock_data_fetcher = Mock()
@@ -187,11 +207,30 @@ class TestTechnicalAnalysis:
         mock_ta.adx.return_value = pd.Series([25.0] * 100)
         mock_ta_class.return_value = mock_ta
 
+        # Mock TechnicalAnalysisManager
+        mock_ta_manager = Mock()
+        mock_ta_manager.analyze_symbol.return_value = {
+            "ticker": "TEST",
+            "current_price": 100,
+            "analysis_type": "custom",
+            "indicators": {
+                "sma": {"current": 100.0},
+                "ema": {"current": 99.5},
+                "rsi": {"current": 55.0},
+                "macd": {"current": {"MACD": 0.5, "MACD_SIGNAL": 0.3}},
+                "bbands": {"current": {"BB_UPPER": 102, "BB_MIDDLE": 100, "BB_LOWER": 98}},
+                "atr": {"current": 2.0},
+                "adx": {"current": 25.0},
+            },
+            "summary": {"signals": [], "strength": "neutral"},
+        }
+
         # Test with and without progress bar
         for _show_progress in [True, False]:
             manager = create_mock_manager(config)
             # Set up the container's data_fetcher to return our mock
             manager.container.data_fetcher.return_value = mock_data_fetcher
+            manager.container.technical_analysis_manager.return_value = mock_ta_manager
             result = manager.run_technical_analysis("TEST", show_progress=False)
             assert all(
                 ind in result["indicators"]
