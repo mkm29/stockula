@@ -296,13 +296,31 @@ class StockForecaster:
         "SeasonalNaive",
     ]
 
-    # Fast models that balance speed and accuracy
+    # Clean models that avoid warnings (recommended for production use)
+    # This curated list excludes problematic models that cause warnings:
+    # - No Motif models (avoid "k too large for size of data" warnings)
+    # - No Cassandra transformations (avoid "Adding noise" warnings)
+    # - No models using deprecated SciPy distance metrics
+    # - Focus on reliable, financial time series appropriate models
+    CLEAN_MODEL_LIST = [
+        "LastValueNaive",  # Simple but effective baseline
+        "AverageValueNaive",  # Moving average approach
+        "SeasonalNaive",  # Captures seasonal patterns
+        "ETS",  # Exponential smoothing - very reliable
+        "ARIMA",  # Classic time series - works well with financial data
+        "UnivariateRegression",  # Regression-based forecasting
+        "WindowRegression",  # Rolling window regression
+        "Theta",  # Theta method - excellent for financial forecasting
+    ]
+
+    # Fast models that balance speed and accuracy (avoiding problematic models)
     FAST_MODEL_LIST = ULTRA_FAST_MODEL_LIST + [
         "ZeroesNaive",
         "ETS",
         "WindowRegression",
         "UnivariateRegression",
         "Theta",
+        "ARIMA",  # Add ARIMA which works well with financial data
     ]
 
     @inject
@@ -329,9 +347,13 @@ class StockForecaster:
             ensemble: Ensemble method or None
             num_validations: Number of validation splits
             validation_method: Validation method ('backwards', 'even', 'similarity')
-            model_list: List of models or preset ('fast', 'superfast', 'parallel', 'statistical',
-                'probabilistic', 'multivariate')
-            max_generations: Maximum generations for model search
+            model_list: List of models or preset. Options:
+                - 'ultra_fast': 3 models, fastest execution
+                - 'fast': 6 models, balanced speed/accuracy
+                - 'clean': 8 models, no warnings, recommended for production
+                - 'financial': 12 models, optimized for financial data
+                - 'fast_financial': intersection of fast + financial models
+            max_generations: Maximum generations for model evolution (1=basic, 2=balanced, 3+=thorough)
             no_negatives: Constraint predictions to be non-negative
             data_fetcher: Optional DataFetcher instance for retrieving stock data
             logging_manager: Injected logging manager
@@ -369,6 +391,9 @@ class StockForecaster:
                 f"Using ultra-fast model list ({len(self.ULTRA_FAST_MODEL_LIST)} models) for {target_column}"
             )
             return self.ULTRA_FAST_MODEL_LIST
+        elif model_list == "clean":
+            self.logger.info(f"Using clean model list ({len(self.CLEAN_MODEL_LIST)} models) for {target_column}")
+            return self.CLEAN_MODEL_LIST
         elif model_list == "financial":
             return self.FINANCIAL_MODEL_LIST
         elif model_list == "fast_financial":

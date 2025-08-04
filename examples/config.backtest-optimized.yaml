@@ -28,18 +28,18 @@ portfolio:
   # The optimizer will calculate optimal allocations automatically
   tickers:
   # Broad-Market Core holdings (hold-only)
-    - symbol: SPY
-      category: INDEX
-    - symbol: VOO
-      category: INDEX
-    - symbol: DFUSX
-      category: INDEX
-    - symbol: FSKAX
-      category: INDEX
-    - symbol: FSMDX
-      category: INDEX
-    - symbol: FXAIX
-      category: INDEX
+    # - symbol: SPY
+    #   category: INDEX
+    # - symbol: VOO
+    #   category: INDEX
+    # - symbol: DFUSX
+    #   category: INDEX
+    # - symbol: FSKAX
+    #   category: INDEX
+    # - symbol: FSMDX
+    #   category: INDEX
+    # - symbol: FXAIX
+    #   category: INDEX
     # Momentum / Large-Cap Growth (tradeable)
     - symbol: NVDA
       category: MOMENTUM
@@ -135,17 +135,17 @@ backtest:
   # The allocator will automatically test these strategies
   # and select the best one for each asset
   strategies:
-    - name: SMACross
-    - name: RSI
-    - name: MACD
-    - name: DoubleEMACross
-    - name: VIDYA
-    - name: KAMA
-    - name: FRAMA
-    - name: TripleEMACross
-    - name: TRIMACross
-    - name: VAMA
-    - name: KaufmanEfficiency
+    - name: smacross
+    - name: rsi
+    - name: macd
+    - name: double_ema_cross
+    - name: vidya
+    - name: kama
+    - name: frama
+    - name: triple_ema_cross
+    - name: trima_cross
+    - name: vama
+    - name: kaufman_efficiency
 # Technical analysis (optional)
 technical_analysis:
   indicators: [sma, ema, rsi, macd, bbands]

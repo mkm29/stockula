@@ -11,20 +11,7 @@ from rich.console import Console
 from rich.progress import BarColumn, Progress, SpinnerColumn, TextColumn, TimeRemainingColumn
 from rich.table import Table
 
-from .backtesting import (
-    BaseStrategy,
-    DoubleEMACrossStrategy,
-    FRAMAStrategy,
-    KAMAStrategy,
-    KaufmanEfficiencyStrategy,
-    MACDStrategy,
-    RSIStrategy,
-    SMACrossStrategy,
-    TRIMACrossStrategy,
-    TripleEMACrossStrategy,
-    VAMAStrategy,
-    VIDYAStrategy,
-)
+from .backtesting import BaseStrategy, StrategyRegistry
 from .config import StockulaConfig
 from .config.models import BacktestResult, PortfolioBacktestResults, StrategyBacktestSummary
 from .container import Container
@@ -53,20 +40,8 @@ class StockulaManager:
         self.console = console or Console()
         self.log_manager = container.logging_manager()
 
-        # Strategy mapping
-        self.strategy_map = {
-            "smacross": SMACrossStrategy,
-            "rsi": RSIStrategy,
-            "macd": MACDStrategy,
-            "doubleemacross": DoubleEMACrossStrategy,
-            "tripleemacross": TripleEMACrossStrategy,
-            "trimacross": TRIMACrossStrategy,
-            "vidya": VIDYAStrategy,
-            "kama": KAMAStrategy,
-            "frama": FRAMAStrategy,
-            "vama": VAMAStrategy,
-            "er": KaufmanEfficiencyStrategy,
-        }
+        # Strategy registry provides centralized strategy management
+        self.strategy_registry = StrategyRegistry
 
     def get_strategy_class(self, strategy_name: str) -> type[BaseStrategy] | None:
         """Get strategy class by name.
@@ -77,7 +52,7 @@ class StockulaManager:
         Returns:
             Strategy class or None if not found
         """
-        return self.strategy_map.get(strategy_name.lower())
+        return self.strategy_registry.get_strategy_class(strategy_name)
 
     def date_to_string(self, date_value: str | date | None) -> str | None:
         """Convert date or string to string format.
@@ -191,6 +166,17 @@ class StockulaManager:
 
         self.console.print(results_table)
 
+    def _normalize_strategy_name(self, strategy_name: str) -> str:
+        """Normalize strategy name to snake_case format.
+
+        Args:
+            strategy_name: Strategy name in any format
+
+        Returns:
+            Normalized strategy name in snake_case
+        """
+        return self.strategy_registry.normalize_strategy_name(strategy_name)
+
     def _save_optimized_config(self, save_path: str, optimized_quantities: dict[str, float]) -> None:
         """Save optimized configuration to file.
 
@@ -223,6 +209,12 @@ class StockulaManager:
 
         # Save to file
         config_dict = self.config.model_dump(exclude_none=True)
+
+        # Normalize strategy names in backtest configuration
+        if "backtest" in config_dict and "strategies" in config_dict["backtest"]:
+            for strategy in config_dict["backtest"]["strategies"]:
+                if "name" in strategy:
+                    strategy["name"] = self._normalize_strategy_name(strategy["name"])
 
         # Convert dates to strings for YAML serialization
         config_dict = self._convert_dates(config_dict)
@@ -279,18 +271,37 @@ class StockulaManager:
 
         self.console.print(portfolio_table)
 
-    def display_portfolio_holdings(self, portfolio: Portfolio) -> None:
+    def display_portfolio_holdings(self, portfolio: Portfolio, mode: str | None = None) -> None:
         """Display detailed portfolio holdings.
 
         Args:
             portfolio: Portfolio instance
+            mode: Optional operation mode (if 'forecast', shows price and value columns)
         """
         holdings_table = Table(title="Portfolio Holdings")
         holdings_table.add_column("Ticker", style="cyan", no_wrap=True)
         holdings_table.add_column("Type", style="yellow")
         holdings_table.add_column("Quantity", style="green", justify="right")
 
-        all_assets = portfolio.get_all_assets()
+        # Add price and value columns for forecast mode
+        if mode == "forecast":
+            holdings_table.add_column("Price", style="white", justify="right")
+            holdings_table.add_column("Value", style="blue", justify="right")
+
+            # Fetch current prices for all assets
+            all_assets = portfolio.get_all_assets()
+            symbols = [asset.symbol for asset in all_assets]
+            fetcher = self.container.data_fetcher()
+
+            try:
+                current_prices = fetcher.get_current_prices(symbols, show_progress=False)
+            except Exception as e:
+                self.log_manager.warning(f"Could not fetch current prices: {e}")
+                current_prices = {}
+        else:
+            all_assets = portfolio.get_all_assets()
+            current_prices = {}
+
         for asset in all_assets:
             # Get symbol as string
             symbol = asset.symbol if hasattr(asset, "symbol") else "N/A"
@@ -305,16 +316,27 @@ class StockulaManager:
 
             # Handle quantity formatting - check if it's a real number
             quantity_str = "N/A"
+            quantity_val = 0.0
             if hasattr(asset, "quantity") and isinstance(asset.quantity, int | float):
+                quantity_val = asset.quantity
                 quantity_str = f"{asset.quantity:.2f}"
             elif hasattr(asset, "quantity"):
                 # Try to convert to float if possible
                 try:
-                    quantity_str = f"{float(asset.quantity):.2f}"
+                    quantity_val = float(asset.quantity)
+                    quantity_str = f"{quantity_val:.2f}"
                 except (TypeError, ValueError):
                     quantity_str = str(asset.quantity)
 
-            holdings_table.add_row(symbol, category_name, quantity_str)
+            if mode == "forecast":
+                # Add price and value columns
+                price = current_prices.get(symbol, 0.0)
+                value = quantity_val * price
+                price_str = f"${price:.2f}" if price > 0 else "N/A"
+                value_str = f"${value:,.2f}" if value > 0 else "N/A"
+                holdings_table.add_row(symbol, category_name, quantity_str, price_str, value_str)
+            else:
+                holdings_table.add_row(symbol, category_name, quantity_str)
 
         self.console.print(holdings_table)
 
@@ -585,7 +607,9 @@ class StockulaManager:
 
                     result_entry = self._create_standard_result(ticker, strategy_config, backtest_result)
 
-                results.append(result_entry)
+                # Only append if result_entry is not None (i.e., backtest succeeded)
+                if result_entry is not None:
+                    results.append(result_entry)
             except Exception as e:
                 self.console.print(f"[red]Error backtesting {strategy_config.name} on {ticker}: {e}[/red]")
 
@@ -650,7 +674,7 @@ class StockulaManager:
 
     def _create_standard_result(
         self, ticker: str, strategy_config: Any, backtest_result: dict[str, Any]
-    ) -> dict[str, Any]:
+    ) -> dict[str, Any] | None:
         """Create result entry for standard backtest.
 
         Args:
@@ -659,8 +683,25 @@ class StockulaManager:
             backtest_result: Raw backtest result
 
         Returns:
-            Formatted result entry
+            Formatted result entry or None if backtest failed
         """
+        # Check if this is an error result
+        if "error" in backtest_result:
+            self.console.print(
+                f"[red]Error backtesting {strategy_config.name} on {ticker}: {backtest_result['error']}[/red]"
+            )
+            return None
+
+        # Check if required keys are present
+        required_keys = ["Return [%]", "Sharpe Ratio", "Max. Drawdown [%]", "# Trades"]
+        missing_keys = [key for key in required_keys if key not in backtest_result]
+        if missing_keys:
+            self.console.print(
+                f"[red]Backtest result for {strategy_config.name} on {ticker} "
+                f"missing required keys: {missing_keys}[/red]"
+            )
+            return None
+
         # Handle NaN values for win rate when there are no trades
         win_rate = backtest_result.get("Win Rate [%]", 0)
         if pd.isna(win_rate):

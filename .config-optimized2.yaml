@@ -13,38 +13,20 @@ portfolio:
   capital_utilization_target: 0.95
   rebalance_frequency: monthly
   tickers:
-  - symbol: SPY
-    quantity: 1.0
-    category: INDEX
-  - symbol: VOO
-    quantity: 1.0
-    category: INDEX
-  - symbol: DFUSX
-    quantity: 8.0
-    category: INDEX
-  - symbol: FSKAX
-    quantity: 2.0
-    category: INDEX
-  - symbol: FSMDX
-    quantity: 9.0
-    category: INDEX
-  - symbol: FXAIX
-    quantity: 1.0
-    category: INDEX
   - symbol: NVDA
-    quantity: 24.0
+    quantity: 26.0
     sector: Technology
     category: MOMENTUM
   - symbol: AMD
-    quantity: 7.0
+    quantity: 8.0
     sector: Technology
     category: MOMENTUM
   - symbol: TSM
-    quantity: 12.0
+    quantity: 15.0
     sector: Technology
     category: MOMENTUM
   - symbol: AAPL
-    quantity: 10.0
+    quantity: 12.0
     sector: Technology
     category: MOMENTUM
   - symbol: MSFT
@@ -52,7 +34,7 @@ portfolio:
     sector: Technology
     category: MOMENTUM
   - symbol: GOOGL
-    quantity: 3.0
+    quantity: 4.0
     sector: Technology
     category: MOMENTUM
   - symbol: AMZN
@@ -68,23 +50,23 @@ portfolio:
     sector: Consumer Cyclical
     category: MOMENTUM
   - symbol: PLTR
-    quantity: 18.0
+    quantity: 21.0
     sector: Technology
     category: MOMENTUM
   - symbol: LIDR
-    quantity: 118.0
+    quantity: 128.0
     sector: Technology
     category: SPECULATIVE
   - symbol: OPEN
-    quantity: 142.0
+    quantity: 154.0
     sector: Real Estate
     category: SPECULATIVE
   - symbol: SOFI
-    quantity: 16.0
+    quantity: 17.0
     sector: Financial
     category: SPECULATIVE
   - symbol: IONQ
-    quantity: 7.0
+    quantity: 8.0
     sector: Technology
     category: SPECULATIVE
 backtest:
@@ -133,10 +115,10 @@ backtest:
   - INDEX
   - BOND
 backtest_optimization:
-  train_start_date: '2025-01-01'
-  train_end_date: '2025-03-31'
-  test_start_date: '2025-04-01'
-  test_end_date: '2025-06-30'
+  train_start_date: '2023-01-01'
+  train_end_date: '2023-12-31'
+  test_start_date: '2024-01-01'
+  test_end_date: '2024-06-30'
   ranking_metric: Return [%]
   min_allocation_pct: 2.0
   max_allocation_pct: 25.0
@@ -151,7 +133,7 @@ forecast:
   num_validations: 2
   validation_method: backwards
   max_workers: 1
-  forecast_length: 30
+  no_negatives: true
 technical_analysis:
   indicators:
   - sma

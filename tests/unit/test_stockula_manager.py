@@ -65,10 +65,11 @@ class TestStockulaManager:
         assert manager.console is not None
         assert manager.log_manager == mock_container.logging_manager.return_value
 
-        # Check strategy mapping
-        assert "smacross" in manager.strategy_map
-        assert manager.strategy_map["smacross"] == SMACrossStrategy
-        assert manager.strategy_map["rsi"] == RSIStrategy
+        # Check that strategy registry is properly accessible
+        assert manager.strategy_registry is not None
+        # Verify strategies are available through get_strategy_class method
+        assert manager.get_strategy_class("smacross") == SMACrossStrategy
+        assert manager.get_strategy_class("rsi") == RSIStrategy
 
     def test_get_strategy_class(self, manager):
         """Test strategy class retrieval."""

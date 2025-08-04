@@ -53,6 +53,7 @@ class SMACrossStrategy(BaseStrategy):
 class RSIStrategy(BaseStrategy):
     """RSI-based trading strategy."""
 
+    period = 14  # Required by backtesting framework
     rsi_period = 14
     oversold_threshold = 30
     overbought_threshold = 70
@@ -244,6 +245,10 @@ class VIDYAStrategy(BaseStrategy):
     VIDYA = Alpha * Close + (1 - Alpha) * Previous VIDYA
     """
 
+    # Required by backtesting framework
+    period = 14
+    alpha = 0.2
+
     # CMO calculation period
     cmo_period = 9
     # VIDYA smoothing period (for alpha calculation)
@@ -401,6 +406,11 @@ class KAMAStrategy(BaseStrategy):
     - fast SC = 2/(fast period + 1)
     - slow SC = 2/(slow period + 1)
     """
+
+    # Required by backtesting framework
+    period = 14
+    fast_sc = 2
+    slow_sc = 30
 
     # Efficiency Ratio period
     er_period = 10
@@ -568,6 +578,9 @@ class FRAMAStrategy(BaseStrategy):
     over specific periods.
     """
 
+    # Required by backtesting framework
+    period = 14
+
     # FRAMA calculation period
     frama_period = 16  # Must be even, commonly 16
 
@@ -730,6 +743,11 @@ class TripleEMACrossStrategy(BaseStrategy):
 
     This strategy generates buy/sell signals based on TEMA crossovers.
     """
+
+    # Required by backtesting framework
+    fast = 5
+    medium = 10
+    slow = 20
 
     fast_period = 9
     slow_period = 21
@@ -998,6 +1016,9 @@ class VAMAStrategy(BaseStrategy):
     VAMA = Cumulative Sum / Cumulative Divisor
     """
 
+    # Required by backtesting framework
+    period = 8
+
     # VAMA calculation period
     vama_period = 8
 
@@ -1144,6 +1165,11 @@ class KaufmanEfficiencyStrategy(BaseStrategy):
     - Buy when ER is above upper threshold (trending up strongly)
     - Sell when ER is below lower threshold (losing trend strength)
     """
+
+    # Required by backtesting framework
+    period = 10
+    fast_sc = 2
+    slow_sc = 30
 
     # Efficiency Ratio calculation period
     er_period = 10

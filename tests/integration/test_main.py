@@ -1,19 +1,11 @@
 """Tests for main CLI module."""
 
 import json
-import sys
 from io import StringIO
 from unittest.mock import Mock, patch
 
-from stockula.main import (
-    get_strategy_class,
-    main,
-    print_results,
-    run_backtest,
-    run_forecast,
-    run_technical_analysis,
-    setup_logging,
-)
+from stockula.cli import print_results, run_stockula
+from stockula.main import setup_logging
 
 
 class TestLoggingSetup:
@@ -79,211 +71,6 @@ class TestLoggingSetup:
         # Verify setup was called with the correct config
         mock_logging_manager.setup.assert_called_once_with(sample_stockula_config)
         # The actual file handler creation is handled inside the LoggingManager
-
-
-class TestStrategyClass:
-    """Test strategy class retrieval."""
-
-    def test_get_strategy_class_valid(self):
-        """Test getting valid strategy classes."""
-        from stockula.backtesting import RSIStrategy, SMACrossStrategy
-
-        assert get_strategy_class("smacross") == SMACrossStrategy
-        assert get_strategy_class("rsi") == RSIStrategy
-        assert get_strategy_class("SMACROSS") == SMACrossStrategy  # Case insensitive
-
-    def test_get_strategy_class_invalid(self):
-        """Test getting invalid strategy class."""
-        assert get_strategy_class("invalid_strategy") is None
-
-
-class TestTechnicalAnalysis:
-    """Test technical analysis functions."""
-
-    def test_run_technical_analysis(self, sample_stockula_config, mock_data_fetcher):
-        """Test running technical analysis."""
-        # Create container and override dependencies
-        from stockula.container import Container
-
-        container = Container()
-        container.data_fetcher.override(mock_data_fetcher)
-        container.wire(modules=["stockula.main"])
-
-        with patch("stockula.main.TechnicalIndicators") as mock_ta:
-            # Setup mock indicators
-            mock_ta_instance = Mock()
-
-            # Create iloc mock that behaves like a pandas object
-            def create_iloc_mock(value):
-                iloc_mock = Mock()
-                iloc_mock.__getitem__ = Mock(return_value=value)
-                return iloc_mock
-
-            # Setup SMA mock
-            sma_mock = Mock()
-            sma_mock.iloc = create_iloc_mock(150.0)
-            mock_ta_instance.sma.return_value = sma_mock
-
-            # Setup EMA mock
-            ema_mock = Mock()
-            ema_mock.iloc = create_iloc_mock(151.0)
-            mock_ta_instance.ema.return_value = ema_mock
-
-            # Setup RSI mock
-            rsi_mock = Mock()
-            rsi_mock.iloc = create_iloc_mock(65.0)
-            mock_ta_instance.rsi.return_value = rsi_mock
-            # Setup MACD mock
-            macd_mock = Mock()
-            macd_iloc = Mock()
-            macd_iloc.to_dict = Mock(return_value={"MACD": 0.5, "MACD_SIGNAL": 0.3})
-            macd_mock.iloc = Mock()
-            macd_mock.iloc.__getitem__ = Mock(return_value=macd_iloc)
-            mock_ta_instance.macd.return_value = macd_mock
-
-            # Setup Bollinger Bands mock
-            bbands_mock = Mock()
-            bbands_iloc = Mock()
-            bbands_iloc.to_dict = Mock(
-                return_value={
-                    "BB_UPPER": 155,
-                    "BB_MIDDLE": 150,
-                    "BB_LOWER": 145,
-                }
-            )
-            bbands_mock.iloc = Mock()
-            bbands_mock.iloc.__getitem__ = Mock(return_value=bbands_iloc)
-            mock_ta_instance.bbands.return_value = bbands_mock
-
-            # Setup ATR mock
-            atr_mock = Mock()
-            atr_mock.iloc = create_iloc_mock(2.5)
-            mock_ta_instance.atr.return_value = atr_mock
-
-            # Setup ADX mock
-            adx_mock = Mock()
-            adx_mock.iloc = create_iloc_mock(25.0)
-            mock_ta_instance.adx.return_value = adx_mock
-            mock_ta.return_value = mock_ta_instance
-
-            results = run_technical_analysis("AAPL", sample_stockula_config)
-
-            assert results["ticker"] == "AAPL"
-            assert "indicators" in results
-            assert "SMA_20" in results["indicators"]
-            assert results["indicators"]["RSI"] == 65.0
-
-
-class TestBacktest:
-    """Test backtesting functions."""
-
-    def test_run_backtest(self, sample_stockula_config, mock_data_fetcher):
-        """Test running backtest."""
-        # Add a strategy to the config
-        from stockula.config.models import StrategyConfig
-
-        sample_stockula_config.backtest.strategies = [
-            StrategyConfig(name="smacross", parameters={"fast_period": 10, "slow_period": 20})
-        ]
-
-        # Create mock runner
-        mock_runner_instance = Mock()
-        mock_runner_instance.run_from_symbol.return_value = {
-            "Return [%]": 15.5,
-            "Sharpe Ratio": 1.2,
-            "Max. Drawdown [%]": -10.0,
-            "# Trades": 25,
-            "Win Rate [%]": 60.0,
-        }
-
-        # Create container and override dependencies
-        from stockula.container import Container
-
-        container = Container()
-        container.data_fetcher.override(mock_data_fetcher)
-        container.backtest_runner.override(mock_runner_instance)
-        container.wire(modules=["stockula.main"])
-
-        results = run_backtest("AAPL", sample_stockula_config)
-
-        assert len(results) > 0
-        assert results[0]["ticker"] == "AAPL"
-        assert results[0]["return_pct"] == 15.5
-        assert results[0]["num_trades"] == 25
-
-    def test_run_backtest_with_error(self, sample_stockula_config):
-        """Test backtest error handling."""
-        # Create mock runner that raises an error
-        mock_runner_instance = Mock()
-        mock_runner_instance.run_from_symbol.side_effect = Exception("Backtest failed")
-
-        # Create container and override dependencies
-        from stockula.container import Container
-
-        container = Container()
-        container.backtest_runner.override(mock_runner_instance)
-        container.wire(modules=["stockula.main"])
-
-        results = run_backtest("AAPL", sample_stockula_config)
-
-        # Should return empty list on error
-        assert results == []
-
-
-class TestForecast:
-    """Test forecasting functions."""
-
-    def test_run_forecast(self, sample_stockula_config):
-        """Test running forecast."""
-        # Create mock forecaster
-        mock_forecaster_instance = Mock()
-        mock_forecaster_instance.forecast_from_symbol.return_value = {
-            "forecast": Mock(
-                iloc=[
-                    Mock(__getitem__=lambda x, y: 150.0),
-                    Mock(__getitem__=lambda x, y: 155.0),
-                ]
-            ),
-            "lower_bound": Mock(iloc=[-1], __getitem__=lambda x, y: 145.0),
-            "upper_bound": Mock(iloc=[-1], __getitem__=lambda x, y: 160.0),
-        }
-        mock_forecaster_instance.get_best_model.return_value = {
-            "model_name": "ARIMA",
-            "model_params": {"p": 1, "d": 1, "q": 1},
-        }
-
-        # Create container and override dependencies
-        from stockula.container import Container
-
-        container = Container()
-        container.stock_forecaster.override(mock_forecaster_instance)
-        container.wire(modules=["stockula.main"])
-
-        result = run_forecast("AAPL", sample_stockula_config)
-
-        assert result["ticker"] == "AAPL"
-        assert result["current_price"] == 150.0
-        assert result["forecast_price"] == 155.0
-        assert result["best_model"] == "ARIMA"
-
-    def test_run_forecast_with_error(self, sample_stockula_config):
-        """Test forecast error handling."""
-        # Create mock forecaster that raises an error
-        mock_forecaster_instance = Mock()
-        mock_forecaster_instance.forecast_from_symbol.side_effect = Exception("Forecast failed")
-
-        # Create container and override dependencies
-        from stockula.container import Container
-
-        container = Container()
-        container.stock_forecaster.override(mock_forecaster_instance)
-        container.wire(modules=["stockula.main"])
-
-        result = run_forecast("AAPL", sample_stockula_config)
-
-        assert result["ticker"] == "AAPL"
-        assert "error" in result
-        assert result["error"] == "Forecast failed"
 
 
 class TestPrintResults:
@@ -360,8 +147,7 @@ class TestPrintResults:
             assert "Initial Capital: $10,000" in output
             assert "Start Date: 2023-01-01" in output
             assert "End Date: 2023-12-31" in output
-            assert "Trading Days: 252" in output
-            assert "Calendar Days: 365" in output
+            # Trading Days and Calendar Days are no longer displayed in the current format
             # Check for backtest result details (these are in table format now)
             assert "AAPL" in output
             assert "15.5" in output  # Return percentage in table
@@ -388,75 +174,102 @@ class TestPrintResults:
             output = mock_stdout.getvalue()
 
             assert "Forecasting Results" in output
-            # Rich tables format the output differently
-            assert "Current Price" in output
-            assert "150" in output
-            assert "Forecast Price" in output
-            assert "155" in output
+            # Rich tables format the output differently - check for price values
+            assert "150" in output  # Current price
+            assert "155" in output  # Forecast price
+            assert "ARIMA" in output  # Best model
 
 
-class TestMainFunction:
-    """Test main entry point."""
+class TestRunStockula:
+    """Test run_stockula function."""
 
-    def test_main_with_config_file(self, temp_config_file):
-        """Test main with config file."""
-        test_args = ["stockula", "--config", temp_config_file, "--mode", "ta"]
+    def test_run_stockula_with_config_file(self, temp_config_file, mock_container):
+        """Test run_stockula with config file."""
+        # Mock the manager methods
+        mock_manager = Mock()
+        mock_manager.create_portfolio.return_value = Mock()
+        mock_manager.display_portfolio_summary = Mock()
+        mock_manager.display_portfolio_holdings = Mock()
+        mock_manager.run_main_processing.return_value = {"technical_analysis": [{"ticker": "AAPL", "indicators": {}}]}
 
-        with patch.object(sys, "argv", test_args):
-            with patch("stockula.main.run_technical_analysis") as mock_ta:
-                mock_ta.return_value = {"ticker": "AAPL", "indicators": {}}
+        with patch("stockula.cli.create_container", return_value=mock_container):
+            with patch("stockula.cli.StockulaManager", return_value=mock_manager):
+                with patch("stockula.cli.print_results") as mock_print:
+                    run_stockula(config=temp_config_file, mode="ta")
 
-                # Main will create its own container and load config
-                main()
+                    # Verify manager methods were called
+                    mock_manager.create_portfolio.assert_called_once()
+                    mock_manager.run_main_processing.assert_called_once()
+                    mock_print.assert_called_once()
 
-                # Check that technical analysis was called
-                assert mock_ta.called
+    def test_run_stockula_with_ticker_override(self, mock_container):
+        """Test run_stockula with ticker override."""
+        # Mock the manager methods
+        mock_manager = Mock()
+        mock_manager.create_portfolio.return_value = Mock()
+        mock_manager.display_portfolio_summary = Mock()
+        mock_manager.display_portfolio_holdings = Mock()
+        mock_manager.run_main_processing.return_value = {"technical_analysis": [{"ticker": "TSLA", "indicators": {}}]}
 
-    def test_main_with_ticker_override(self):
-        """Test main with ticker override."""
-        test_args = ["stockula", "--ticker", "TSLA", "--mode", "ta"]
+        with patch("stockula.cli.create_container", return_value=mock_container):
+            with patch("stockula.cli.StockulaManager", return_value=mock_manager):
+                with patch("stockula.cli.print_results"):
+                    run_stockula(ticker="TSLA", mode="ta")
 
-        with patch.object(sys, "argv", test_args):
-            with patch("stockula.main.run_technical_analysis") as mock_ta:
-                mock_ta.return_value = {"ticker": "TSLA", "indicators": {}}
+                    # Verify config was updated with ticker
+                    mock_config = mock_container.stockula_config()
+                    assert len(mock_config.portfolio.tickers) == 1
+                    assert mock_config.portfolio.tickers[0].symbol == "TSLA"
 
-                main()
-
-                # Check that technical analysis was called with TSLA
-                assert mock_ta.called
-                # The ticker override happens inside main, so we can't check config here
-
-    def test_main_save_config(self, tmp_path):
+    def test_run_stockula_save_config(self, tmp_path, mock_container):
         """Test saving configuration."""
         config_path = str(tmp_path / "saved_config.yaml")
-        test_args = ["stockula", "--save-config", config_path]
 
-        with patch.object(sys, "argv", test_args):
-            with patch("stockula.config.settings.save_config") as mock_save:
-                main()
+        with patch("stockula.cli.create_container", return_value=mock_container):
+            with patch("stockula.cli.save_config") as mock_save:
+                run_stockula(save_config_path=config_path, mode="ta")
 
                 # Check that save_config was called with the correct path
                 mock_save.assert_called_once()
                 assert mock_save.call_args[0][1] == config_path
 
-    def test_main_all_modes(self):
+    def test_run_stockula_optimize_allocation(self, mock_container):
+        """Test optimize allocation mode."""
+        # Mock the manager methods
+        mock_manager = Mock()
+        mock_manager.run_optimize_allocation.return_value = None
+
+        with patch("stockula.cli.create_container", return_value=mock_container):
+            with patch("stockula.cli.StockulaManager", return_value=mock_manager):
+                run_stockula(mode="optimize-allocation")
+
+                # Verify optimize allocation was called
+                mock_manager.run_optimize_allocation.assert_called_once()
+
+    def test_run_stockula_all_modes(self, mock_container):
         """Test running all analysis modes."""
-        test_args = ["stockula", "--mode", "all"]
+        # Mock the manager methods
+        mock_manager = Mock()
+        mock_manager.create_portfolio.return_value = Mock()
+        mock_manager.display_portfolio_summary = Mock()
+        mock_manager.display_portfolio_holdings = Mock()
+        mock_manager.run_main_processing.return_value = {
+            "technical_analysis": [{"ticker": "AAPL", "indicators": {}}],
+            "backtesting": [{"ticker": "AAPL", "strategy": "SMACross", "return_pct": 15.5}],
+            "forecasting": [{"ticker": "AAPL", "forecast_price": 155.0}],
+        }
+        mock_manager.create_portfolio_backtest_results = Mock()
 
-        with patch.object(sys, "argv", test_args):
-            with patch("stockula.main.run_technical_analysis") as mock_ta:
-                with patch("stockula.main.run_backtest") as mock_bt:
-                    with patch("stockula.main.run_forecast") as mock_fc:
-                        mock_ta.return_value = {
-                            "ticker": "AAPL",
-                            "indicators": {},
-                        }
-                        mock_bt.return_value = [{"ticker": "AAPL"}]
-                        mock_fc.return_value = {"ticker": "AAPL"}
+        with patch("stockula.cli.create_container", return_value=mock_container):
+            with patch("stockula.cli.StockulaManager", return_value=mock_manager):
+                with patch("stockula.cli.print_results") as mock_print:
+                    with patch("stockula.cli.ResultsDisplay"):
+                        run_stockula(mode="all")
 
-                        main()
-
-                        # All analysis functions should be called
-                        assert mock_ta.called
-                        assert mock_bt.called
-                        assert mock_fc.called
+                        # Verify all results were processed
+                        mock_manager.run_main_processing.assert_called_once_with("all", mock_manager.create_portfolio())
+                        mock_print.assert_called_once()
+                        results = mock_print.call_args[0][0]
+                        assert "technical_analysis" in results
+                        assert "backtesting" in results
+                        assert "forecasting" in results

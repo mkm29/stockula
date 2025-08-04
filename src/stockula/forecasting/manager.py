@@ -17,12 +17,15 @@ class ForecastingManager:
     """Manages different forecasting strategies and provides unified interface.
 
     The ForecastingManager coordinates between different forecasting approaches:
-    - Standard forecasting with various AutoTS models
-    - Fast forecasting for quick results
+    - Standard forecasting with various AutoTS models and automatic validation
+    - Fast forecasting for quick results using minimal models
+    - Clean forecasting with curated models that avoid warnings (recommended)
     - Financial-specific models optimized for stock data
-    - Train/test evaluation workflows
 
-    It provides a consistent interface regardless of the underlying model configuration.
+    AutoTS automatically handles train/validation splits internally based on the
+    num_validations and validation_method configuration parameters. The 'clean'
+    model list is recommended for production use as it avoids problematic models
+    that generate warnings (Motif, Cassandra, deprecated metrics).
     """
 
     @inject
@@ -79,14 +82,12 @@ class ForecastingManager:
         self,
         symbol: str,
         config: "StockulaConfig",
-        use_evaluation: bool = False,
     ) -> dict[str, Any]:
         """Forecast a single symbol using configuration settings.
 
         Args:
             symbol: Stock symbol to forecast
             config: Stockula configuration
-            use_evaluation: Whether to use train/test evaluation
 
         Returns:
             Dictionary with forecast results
@@ -106,12 +107,8 @@ class ForecastingManager:
             logging_manager=self.logger,
         )
 
-        if use_evaluation:
-            # Use train/test evaluation
-            return self._forecast_with_evaluation(symbol, config, forecaster)
-        else:
-            # Standard forecasting
-            return self._standard_forecast(symbol, config, forecaster)
+        # Use standard forecasting with AutoTS automatic validation
+        return self._standard_forecast(symbol, config, forecaster)
 
     def _standard_forecast(
         self,
@@ -148,6 +145,16 @@ class ForecastingManager:
 
         self.logger.info(f"Forecast completed for {symbol} using {model_info['model_name']}")
 
+        # Calculate proper forecast dates (from tomorrow for forecast_length days)
+        from datetime import datetime, timedelta
+
+        today = datetime.now().date()
+        forecast_start = today + timedelta(days=1)  # Start forecasting from tomorrow
+        forecast_end = forecast_start + timedelta(days=config.forecast.forecast_length - 1)
+
+        start_date = forecast_start.strftime("%Y-%m-%d")
+        end_date = forecast_end.strftime("%Y-%m-%d")
+
         return {
             "ticker": symbol,
             "current_price": float(predictions["forecast"].iloc[0]),
@@ -157,66 +164,9 @@ class ForecastingManager:
             "forecast_length": config.forecast.forecast_length,
             "best_model": model_info["model_name"],
             "model_params": model_info.get("model_params", {}),
+            "start_date": start_date,
+            "end_date": end_date,
         }
-
-    def _forecast_with_evaluation(
-        self,
-        symbol: str,
-        config: "StockulaConfig",
-        forecaster: StockForecaster,
-    ) -> dict[str, Any]:
-        """Perform forecasting with train/test evaluation.
-
-        Args:
-            symbol: Stock symbol to forecast
-            config: Stockula configuration
-            forecaster: Configured forecaster instance
-
-        Returns:
-            Dictionary with forecast results and evaluation metrics
-        """
-        self.logger.info(f"Forecasting {symbol} with train/test evaluation...")
-
-        # Get date ranges
-        train_start = self._date_to_string(config.forecast.train_start_date or config.data.start_date)
-        train_end = self._date_to_string(config.forecast.train_end_date or config.data.end_date)
-        test_start = self._date_to_string(config.forecast.test_start_date)
-        test_end = self._date_to_string(config.forecast.test_end_date)
-
-        # Run forecast with evaluation
-        result = forecaster.forecast_from_symbol_with_evaluation(
-            symbol=symbol,
-            train_start_date=train_start,
-            train_end_date=train_end,
-            test_start_date=test_start,
-            test_end_date=test_end,
-            target_column="Close",
-        )
-
-        # Get model information
-        model_info = forecaster.get_best_model()
-        predictions = result["predictions"]
-
-        self.logger.info(f"Forecast completed for {symbol} using {model_info['model_name']}")
-
-        forecast_result = {
-            "ticker": symbol,
-            "current_price": float(predictions["forecast"].iloc[0]),
-            "forecast_price": float(predictions["forecast"].iloc[-1]),
-            "lower_bound": float(predictions["lower_bound"].iloc[-1]),
-            "upper_bound": float(predictions["upper_bound"].iloc[-1]),
-            "forecast_length": config.forecast.forecast_length,
-            "best_model": model_info["model_name"],
-            "model_params": model_info.get("model_params", {}),
-            "train_period": result["train_period"],
-            "test_period": result["test_period"],
-        }
-
-        # Add evaluation metrics if available
-        if result.get("evaluation_metrics"):
-            forecast_result["evaluation"] = result["evaluation_metrics"]
-
-        return forecast_result
 
     def forecast_multiple_symbols(
         self,
@@ -242,15 +192,7 @@ class ForecastingManager:
             try:
                 self.logger.info(f"Processing {symbol} ({idx}/{len(symbols)})")
 
-                # Determine if we should use evaluation
-                use_evaluation = (
-                    config.forecast.train_start_date is not None
-                    and config.forecast.train_end_date is not None
-                    and config.forecast.test_start_date is not None
-                    and config.forecast.test_end_date is not None
-                )
-
-                result = self.forecast_symbol(symbol, config, use_evaluation)
+                result = self.forecast_symbol(symbol, config)
                 results[symbol] = result
 
             except Exception as e:
@@ -281,7 +223,6 @@ class ForecastingManager:
         forecaster = self.fast_forecaster
 
         # Calculate date range
-        import pandas as pd
 
         end_date = pd.Timestamp.now()
         start_date = end_date - pd.Timedelta(days=historical_days)
@@ -381,6 +322,7 @@ class ForecastingManager:
         return {
             "ultra_fast": StockForecaster.ULTRA_FAST_MODEL_LIST,
             "fast": StockForecaster.FAST_MODEL_LIST,
+            "clean": StockForecaster.CLEAN_MODEL_LIST,
             "financial": StockForecaster.FINANCIAL_MODEL_LIST,
             "fast_financial": [m for m in StockForecaster.FAST_MODEL_LIST if m in StockForecaster.FINANCIAL_MODEL_LIST],
         }
@@ -394,31 +336,17 @@ class ForecastingManager:
         Raises:
             ValueError: If configuration is invalid
         """
-        if config.forecast.forecast_length <= 0:
+        if config.forecast.forecast_length is None or config.forecast.forecast_length <= 0:
             raise ValueError("forecast_length must be positive")
 
         if config.forecast.prediction_interval <= 0 or config.forecast.prediction_interval >= 1:
             raise ValueError("prediction_interval must be between 0 and 1")
 
-        if config.forecast.num_validations < 0:
-            raise ValueError("num_validations must be non-negative")
+        if config.forecast.num_validations < 1:
+            raise ValueError("num_validations must be at least 1")
 
         if config.forecast.max_generations < 1:
             raise ValueError("max_generations must be at least 1")
-
-        # Check if evaluation dates are properly configured
-        has_train_dates = config.forecast.train_start_date is not None and config.forecast.train_end_date is not None
-        has_test_dates = config.forecast.test_start_date is not None and config.forecast.test_end_date is not None
-
-        if has_train_dates != has_test_dates:
-            raise ValueError("Both train and test date ranges must be specified for evaluation")
-
-        if has_train_dates and has_test_dates:
-            # Ensure train end is before test start
-            train_end = pd.to_datetime(config.forecast.train_end_date)
-            test_start = pd.to_datetime(config.forecast.test_start_date)
-            if train_end >= test_start:
-                raise ValueError("Train end date must be before test start date")
 
     def forecast_multiple_symbols_with_progress(
         self,
@@ -473,18 +401,8 @@ class ForecastingManager:
                 )
 
                 try:
-                    # Check if test dates are provided for evaluation
-                    use_evaluation = (
-                        config.forecast.test_start_date is not None and config.forecast.test_end_date is not None
-                    )
-
-                    if use_evaluation:
-                        # Use the evaluation method
-                        forecast_result = self.forecast_symbol(symbol, config, use_evaluation=True)
-                    else:
-                        # Use the standard method
-                        forecast_result = self.forecast_symbol(symbol, config, use_evaluation=False)
-
+                    # Use standard forecasting method with AutoTS automatic validation
+                    forecast_result = self.forecast_symbol(symbol, config)
                     results.append(forecast_result)
 
                     # Update progress to show completion

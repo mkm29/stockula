@@ -272,7 +272,7 @@ class TestForecastConfig:
         assert config.forecast_length is None  # Changed to None for mutual exclusivity
         assert config.frequency == "infer"
         assert config.prediction_interval == 0.9
-        assert config.model_list == "fast"
+        assert config.model_list == "clean"
 
     def test_forecast_config_custom(self):
         """Test custom forecast configuration."""

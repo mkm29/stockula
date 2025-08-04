@@ -1,27 +1,37 @@
 # Strategies API Reference
 
-This reference covers all available trading strategies, their parameters, and how to create custom strategies in Stockula.
+This reference covers all available trading strategies, their parameters, and how to configure them in Stockula.
 
-## Built-in Strategies
+## Strategy Registry
 
-### Simple Moving Average Crossover (SMACROSS)
+All strategies in Stockula are managed through the centralized `StrategyRegistry` class, which provides:
+
+- **Automatic Name Normalization**: Accepts both PascalCase (`SMACross`) and snake_case (`smacross`) formats
+- **Strategy Class Resolution**: Maps strategy names to their implementation classes
+- **Parameter Management**: Provides default parameters for each strategy
+- **Group Organization**: Organizes strategies into logical groups for different trading approaches
+
+The registry ensures consistency across the application and handles configuration compatibility between different naming formats.
+
+## Available Strategies
+
+Stockula provides 11 built-in trading strategies that can be used for backtesting. All strategies are internally normalized to lowercase, snake_case names, but configuration files can use either PascalCase or snake_case formats.
+
+### Simple Moving Average Crossover (`smacross`)
 
 A classic trend-following strategy using two simple moving averages.
 
-**Class**: `SMAStrategy`
+**Class**: `SMACrossStrategy`
 
 **Parameters**:
-
 - `fast_period` (int, default: 10): Period for fast moving average
 - `slow_period` (int, default: 20): Period for slow moving average
 
 **Strategy Logic**:
-
-- **Buy Signal**: Fast MA crosses above slow MA
-- **Sell Signal**: Fast MA crosses below slow MA
+- **Buy Signal**: Fast SMA crosses above slow SMA
+- **Sell Signal**: Fast SMA crosses below slow SMA
 
 **Example Configuration**:
-
 ```yaml
 backtest:
   strategies:
@@ -31,517 +41,401 @@ backtest:
         slow_period: 20
 ```
 
-**Code Example**:
-
-```python
-from stockula.backtesting.runner import BacktestRunner
-
-config = {
-    "backtest": {
-        "strategies": [
-            {
-                "name": "smacross",
-                "parameters": {
-                    "fast_period": 12,
-                    "slow_period": 26
-                }
-            }
-        ]
-    }
-}
-
-runner = BacktestRunner(config)
-results = runner.run_from_symbol("AAPL")
-```
-
-### RSI Strategy
+### RSI Strategy (`rsi`)
 
 Momentum-based strategy using the Relative Strength Index oscillator.
 
 **Class**: `RSIStrategy`
 
 **Parameters**:
-
 - `period` (int, default: 14): RSI calculation period
 - `oversold_threshold` (float, default: 30): Oversold level for buy signals
 - `overbought_threshold` (float, default: 70): Overbought level for sell signals
 
 **Strategy Logic**:
-
 - **Buy Signal**: RSI falls below oversold threshold
 - **Sell Signal**: RSI rises above overbought threshold
 
 **Example Configuration**:
-
 ```yaml
 backtest:
   strategies:
     - name: rsi
       parameters:
         period: 14
-        oversold_threshold: 25
-        overbought_threshold: 75
+        oversold_threshold: 30.0
+        overbought_threshold: 70.0
 ```
 
-### Double EMA Crossover (DOUBLEEMACROSS)
+### MACD Strategy (`macd`)
 
-Advanced trend strategy using exponential moving averages with volatility-based position sizing.
+Uses Moving Average Convergence Divergence for trend and momentum signals.
 
-**Class**: `DoubleEMAStrategy`
+**Class**: `MACDStrategy`
 
 **Parameters**:
-
-- `fast_period` (int, default: 34): Fast EMA period (Fibonacci number)
-- `slow_period` (int, default: 55): Slow EMA period (Fibonacci number)
-- `momentum_atr_multiple` (float, default: 1.25): ATR multiplier for momentum trades
-- `speculative_atr_multiple` (float, default: 1.0): ATR multiplier for speculative trades
+- `fast_period` (int, default: 12): Fast EMA period
+- `slow_period` (int, default: 26): Slow EMA period
+- `signal_period` (int, default: 9): Signal line EMA period
 
 **Strategy Logic**:
-
-- Uses Fibonacci-based EMA periods for natural market harmonics
-- Incorporates Average True Range (ATR) for volatility adjustment
-- Differentiates between momentum and speculative trade types
+- **Buy Signal**: MACD line crosses above signal line
+- **Sell Signal**: MACD line crosses below signal line
 
 **Example Configuration**:
-
 ```yaml
 backtest:
   strategies:
-    - name: doubleemacross
+    - name: macd
       parameters:
-        fast_period: 21
-        slow_period: 55
-        momentum_atr_multiple: 1.5
-        speculative_atr_multiple: 0.8
+        fast_period: 12
+        slow_period: 26
+        signal_period: 9
 ```
 
-## Strategy Base Classes
+### Double EMA Crossover (`double_ema_cross`)
 
-### BaseStrategy
+Advanced trend strategy using exponential moving averages with ATR-based stop losses.
 
-All custom strategies inherit from `BaseStrategy`.
+**Class**: `DoubleEMACrossStrategy`
 
-```python
-from stockula.backtesting.strategies import BaseStrategy
+**Parameters**:
+- `fast_period` (int, default: 34): Fast EMA period
+- `slow_period` (int, default: 55): Slow EMA period
+- `momentum_atr_multiple` (float, default: 1.25): ATR multiplier for momentum positions
+- `speculative_atr_multiple` (float, default: 1.0): ATR multiplier for speculative positions
+- `atr_period` (int, default: 14): ATR calculation period
 
-class MyCustomStrategy(BaseStrategy):
-    def init(self):
-        """Initialize indicators and parameters."""
-        pass
+**Strategy Logic**:
+- **Buy Signal**: Fast EMA crosses above slow EMA
+- **Sell Signal**: Fast EMA crosses below slow EMA
+- **Stop Loss**: ATR-based stop loss with different multipliers for different asset classes
 
-    def next(self):
-        """Execute trading logic for each bar."""
-        pass
+**Example Configuration**:
+```yaml
+backtest:
+  strategies:
+    - name: double_ema_cross
+      parameters: {}  # Uses default parameters
 ```
 
-**Available Data**:
+### Triple EMA Crossover (`triple_ema_cross`)
 
-- `self.data.Open`: Open prices
-- `self.data.High`: High prices
-- `self.data.Low`: Low prices
-- `self.data.Close`: Close prices
-- `self.data.Volume`: Volume data
-- `self.data.df`: Complete DataFrame
+Uses Triple Exponential Moving Average (TEMA) to reduce lag in trend following.
 
-**Available Methods**:
+**Class**: `TripleEMACrossStrategy`
 
-- `self.buy(size=None, limit=None, stop=None, sl=None, tp=None)`: Place buy order
-- `self.sell(size=None, limit=None, stop=None, sl=None, tp=None)`: Place sell order
-- `self.position`: Current position (0 if flat, >0 if long, \<0 if short)
-- `self.equity`: Current account equity
-- `self.I(func, *args, **kwargs)`: Create indicators
+**Parameters**:
+- `fast` (int, default: 5): Fast TEMA parameter
+- `medium` (int, default: 10): Medium TEMA parameter
+- `slow` (int, default: 20): Slow TEMA parameter
+- `fast_period` (int, default: 9): Fast period
+- `slow_period` (int, default: 21): Slow period
 
-### TechnicalStrategy
+**Strategy Logic**:
+- Uses TEMA formula: 3*EMA - 3*EMA(EMA) + EMA(EMA(EMA))
+- **Buy Signal**: Fast TEMA crosses above slow TEMA
+- **Sell Signal**: Fast TEMA crosses below slow TEMA
 
-Base class for strategies using technical indicators.
-
-```python
-from stockula.backtesting.strategies import TechnicalStrategy
-from stockula.technical_analysis.indicators import TechnicalAnalysis
-
-class MACDStrategy(TechnicalStrategy):
-    def init(self):
-        ta = TechnicalAnalysis()
-
-        # MACD indicator
-        macd_data = ta.calculate_macd(self.data.df, fast=12, slow=26, signal=9)
-        self.macd = self.I(lambda: macd_data['macd'])
-        self.macd_signal = self.I(lambda: macd_data['signal'])
-
-        # RSI filter
-        self.rsi = self.I(ta.calculate_rsi, self.data.Close, period=14)
-
-    def next(self):
-        # MACD crossover with RSI filter
-        if (self.macd[-1] > self.macd_signal[-1] and
-            self.macd[-2] <= self.macd_signal[-2] and
-            self.rsi[-1] < 70 and
-            not self.position):
-            self.buy()
-        elif (self.macd[-1] < self.macd_signal[-1] and
-              self.macd[-2] >= self.macd_signal[-2] and
-              self.position):
-            self.sell()
+**Example Configuration**:
+```yaml
+backtest:
+  strategies:
+    - name: triple_ema_cross
+      parameters: {}
 ```
 
-## Custom Strategy Development
+### Triangular Moving Average Crossover (`trima_cross`)
 
-### Creating a Custom Strategy
+Uses Triangular Moving Averages for smoother trend following.
 
-1. **Inherit from BaseStrategy or TechnicalStrategy**
-1. **Implement the `init()` method** to set up indicators
-1. **Implement the `next()` method** for trading logic
-1. **Register the strategy** with the StrategyRegistry
+**Class**: `TRIMACrossStrategy`
 
-```python
-from stockula.backtesting.strategies import BaseStrategy, StrategyRegistry
-from stockula.technical_analysis.indicators import TechnicalAnalysis
+**Parameters**:
+- `fast_period` (int, default: 14): Fast TRIMA period
+- `slow_period` (int, default: 28): Slow TRIMA period
+- `atr_multiple` (float, default: 1.2): ATR multiplier for stop loss
 
-class BollingerBandStrategy(BaseStrategy):
-    """Bollinger Band mean reversion strategy."""
+**Strategy Logic**:
+- TRIMA double-smooths data to filter noise
+- **Buy Signal**: Fast TRIMA crosses above slow TRIMA
+- **Sell Signal**: Fast TRIMA crosses below slow TRIMA
 
-    def __init__(self, period=20, std_dev=2, rsi_period=14):
-        self.period = period
-        self.std_dev = std_dev
-        self.rsi_period = rsi_period
-        super().__init__()
-
-    def init(self):
-        ta = TechnicalAnalysis()
-
-        # Bollinger Bands
-        bbands = ta.calculate_bbands(
-            self.data.df,
-            period=self.period,
-            std=self.std_dev
-        )
-        self.bb_upper = self.I(lambda: bbands['upper'])
-        self.bb_middle = self.I(lambda: bbands['middle'])
-        self.bb_lower = self.I(lambda: bbands['lower'])
-
-        # RSI for additional confirmation
-        self.rsi = self.I(ta.calculate_rsi, self.data.Close, period=self.rsi_period)
-
-    def next(self):
-        price = self.data.Close[-1]
-
-        # Mean reversion logic
-        if (price <= self.bb_lower[-1] and
-            self.rsi[-1] < 30 and
-            not self.position):
-            self.buy()
-        elif (price >= self.bb_upper[-1] and
-              self.rsi[-1] > 70 and
-              self.position):
-            self.sell()
-        elif (price >= self.bb_middle[-1] and
-              self.position and
-              self.position.pl_pct > 0.02):  # 2% profit
-            self.sell()
-
-# Register the strategy
-StrategyRegistry.register("bollinger_bands", BollingerBandStrategy)
+**Example Configuration**:
+```yaml
+backtest:
+  strategies:
+    - name: trima_cross
+      parameters: {}
 ```
 
-### Advanced Strategy Features
+### KAMA Strategy (`kama`)
 
-#### Position Sizing
+Kaufman's Adaptive Moving Average adapts to market volatility and trend strength.
 
-```python
-class VolatilityAdjustedStrategy(BaseStrategy):
-    def init(self):
-        ta = TechnicalAnalysis()
-        self.atr = self.I(ta.calculate_atr, self.data.High, self.data.Low,
-                         self.data.Close, period=14)
-        self.sma = self.I(ta.calculate_sma, self.data.Close, period=20)
+**Class**: `KAMAStrategy`
 
-    def next(self):
-        if self.data.Close[-1] > self.sma[-1] and not self.position:
-            # Risk-based position sizing
-            risk_per_trade = 0.02  # 2% risk per trade
-            stop_distance = 2 * self.atr[-1]  # 2 ATR stop
+**Parameters**:
+- `period` (int, default: 14): Main calculation period
+- `fast_sc` (int, default: 2): Fast smoothing constant
+- `slow_sc` (int, default: 30): Slow smoothing constant
+- `er_period` (int, default: 10): Efficiency Ratio period
 
-            if stop_distance > 0:
-                position_size = (self.equity * risk_per_trade) / stop_distance
-                self.buy(size=position_size)
+**Strategy Logic**:
+- Adapts smoothing based on Efficiency Ratio (ER)
+- **Buy Signal**: Fast KAMA crosses above slow KAMA
+- **Sell Signal**: Fast KAMA crosses below slow KAMA
+
+**Example Configuration**:
+```yaml
+backtest:
+  strategies:
+    - name: kama
+      parameters: {}
 ```
 
-#### Stop Loss and Take Profit
+### FRAMA Strategy (`frama`)
 
-```python
-class StopLossStrategy(BaseStrategy):
-    def init(self):
-        ta = TechnicalAnalysis()
-        self.sma = self.I(ta.calculate_sma, self.data.Close, period=20)
-        self.atr = self.I(ta.calculate_atr, self.data.High, self.data.Low,
-                         self.data.Close, period=14)
+Fractal Adaptive Moving Average uses fractal geometry to adjust smoothing.
 
-    def next(self):
-        if self.data.Close[-1] > self.sma[-1] and not self.position:
-            entry_price = self.data.Close[-1]
+**Class**: `FRAMAStrategy`
 
-            # Dynamic stop loss based on ATR
-            stop_loss = entry_price - (2 * self.atr[-1])
-            take_profit = entry_price + (3 * self.atr[-1])
+**Parameters**:
+- `period` (int, default: 14): Main calculation period
+- `frama_period` (int, default: 16): FRAMA-specific period (must be even)
 
-            self.buy(sl=stop_loss, tp=take_profit)
+**Strategy Logic**:
+- Calculates fractal dimension to determine trend strength
+- **Buy Signal**: Fast FRAMA crosses above slow FRAMA
+- **Sell Signal**: Fast FRAMA crosses below slow FRAMA
+
+**Example Configuration**:
+```yaml
+backtest:
+  strategies:
+    - name: frama
+      parameters: {}
 ```
 
-#### Multiple Timeframe Analysis
+### VAMA Strategy (`vama`)
 
-```python
-class MultiTimeframeStrategy(BaseStrategy):
-    def init(self):
-        ta = TechnicalAnalysis()
+Volume Adjusted Moving Average weights prices by volume.
 
-        # Get daily data for trend filter
-        daily_data = self.get_daily_data()
-        self.daily_sma = self.I(ta.calculate_sma, daily_data.Close, period=50)
+**Class**: `VAMAStrategy`
 
-        # Hourly signals
-        self.hourly_sma = self.I(ta.calculate_sma, self.data.Close, period=20)
-        self.rsi = self.I(ta.calculate_rsi, self.data.Close, period=14)
+**Parameters**:
+- `period` (int, default: 8): Main calculation period
+- `vama_period` (int, default: 8): VAMA calculation period
+- `slow_vama_period` (int, default: 21): Slow VAMA period
 
-    def next(self):
-        # Only trade in direction of daily trend
-        daily_bullish = self.data.Close[-1] > self.daily_sma[-1]
-        hourly_signal = self.data.Close[-1] > self.hourly_sma[-1]
-        momentum_ok = self.rsi[-1] > 50
+**Strategy Logic**:
+- Weights moving average by volume to emphasize volume-driven moves
+- **Buy Signal**: Fast VAMA crosses above slow VAMA
+- **Sell Signal**: Fast VAMA crosses below slow VAMA
 
-        if daily_bullish and hourly_signal and momentum_ok and not self.position:
-            self.buy()
-        elif (not daily_bullish or not hourly_signal) and self.position:
-            self.sell()
+**Example Configuration**:
+```yaml
+backtest:
+  strategies:
+    - name: vama
+      parameters: {}
 ```
 
-## Strategy Registry
+### VIDYA Strategy (`vidya`)
 
-### Registering Strategies
+Variable Index Dynamic Average adapts to market conditions using CMO.
 
-```python
-from stockula.backtesting.strategies import StrategyRegistry
+**Class**: `VIDYAStrategy`
 
-# Register a custom strategy
-StrategyRegistry.register("my_strategy", MyCustomStrategy)
+**Parameters**:
+- `period` (int, default: 14): Main calculation period
+- `alpha` (float, default: 0.2): Base alpha value
+- `cmo_period` (int, default: 9): Chande Momentum Oscillator period
+- `smoothing_period` (int, default: 12): Smoothing period
 
-# Check available strategies
-available = StrategyRegistry.list_strategies()
-print(available)  # ['smacross', 'rsi', 'doubleemacross', 'my_strategy']
+**Strategy Logic**:
+- Uses Chande Momentum Oscillator to adapt smoothing
+- **Buy Signal**: Fast VIDYA crosses above slow VIDYA
+- **Sell Signal**: Fast VIDYA crosses below slow VIDYA
 
-# Get strategy class
-strategy_class = StrategyRegistry.get_strategy("my_strategy")
+**Example Configuration**:
+```yaml
+backtest:
+  strategies:
+    - name: vidya
+      parameters: {}
 ```
 
-### Dynamic Strategy Loading
+### Kaufman Efficiency Strategy (`kaufman_efficiency`)
 
-```python
-def load_custom_strategies(strategy_dir):
-    """Load strategies from Python files."""
-    import importlib.util
-    import os
+Uses Efficiency Ratio to identify trending vs. ranging markets.
 
-    for filename in os.listdir(strategy_dir):
-        if filename.endswith('.py'):
-            module_name = filename[:-3]
-            file_path = os.path.join(strategy_dir, filename)
+**Class**: `KaufmanEfficiencyStrategy`
 
-            spec = importlib.util.spec_from_file_location(module_name, file_path)
-            module = importlib.util.module_from_spec(spec)
-            spec.loader.exec_module(module)
+**Parameters**:
+- `period` (int, default: 10): Efficiency Ratio calculation period
+- `fast_sc` (int, default: 2): Fast smoothing constant
+- `slow_sc` (int, default: 30): Slow smoothing constant
+- `er_upper_threshold` (float, default: 0.5): Upper threshold for buy signals
+- `er_lower_threshold` (float, default: 0.3): Lower threshold for sell signals
 
-            # Auto-register strategies found in module
-            for attr_name in dir(module):
-                attr = getattr(module, attr_name)
-                if (isinstance(attr, type) and
-                    issubclass(attr, BaseStrategy) and
-                    attr != BaseStrategy):
-                    StrategyRegistry.register(module_name, attr)
+**Strategy Logic**:
+- **Buy Signal**: Efficiency Ratio above upper threshold (strong trend)
+- **Sell Signal**: Efficiency Ratio below lower threshold (weak trend)
+
+**Example Configuration**:
+```yaml
+backtest:
+  strategies:
+    - name: kaufman_efficiency
+      parameters: {}
 ```
 
-## Strategy Optimization
+## Strategy Groups
 
-### Parameter Optimization
+The BacktestingManager provides predefined strategy groups for different trading approaches:
+
+### Basic Group
+- `smacross`
+- `rsi`
+
+### Momentum Group  
+- `rsi`
+- `macd`
+- `double_ema_cross`
+
+### Trend Group
+- `smacross`
+- `triple_ema_cross`
+- `trima_cross`
+
+### Advanced Group
+- `kama`
+- `frama`
+- `vama`
+- `vidya`
+
+### Comprehensive Group
+All available strategies combined.
+
+## Configuration Examples
+
+### Single Strategy Configuration
+```yaml
+backtest:
+  strategies:
+    - name: smacross
+      parameters:
+        fast_period: 10
+        slow_period: 20
+```
+
+### Multiple Strategies Configuration
+```yaml
+backtest:
+  strategies:
+    - name: smacross
+      parameters:
+        fast_period: 10
+        slow_period: 20
+    - name: rsi
+      parameters:
+        period: 14
+        oversold_threshold: 30.0
+        overbought_threshold: 70.0
+    - name: double_ema_cross
+      parameters: {}
+    - name: kama
+      parameters: {}
+```
+
+### Using Strategy Registry Programmatically
 
 ```python
-from itertools import product
+from stockula.backtesting import StrategyRegistry, BacktestingManager
 
-def optimize_strategy_parameters(symbol, strategy_class, param_ranges,
-                               start_date, end_date):
-    """Optimize strategy parameters using grid search."""
+# Get strategy information
+available_strategies = StrategyRegistry.get_available_strategy_names()
+strategy_groups = StrategyRegistry.get_strategy_groups()
+strategy_presets = StrategyRegistry.get_strategy_presets()
 
-    best_return = -float('inf')
-    best_params = None
-    results = []
+# Name normalization
+normalized_name = StrategyRegistry.normalize_strategy_name("SMACross")  # Returns "smacross"
 
-    # Generate all parameter combinations
-    param_names = list(param_ranges.keys())
-    param_values = list(param_ranges.values())
+# Strategy class resolution
+strategy_class = StrategyRegistry.get_strategy_class("DoubleEMACross")  # Returns DoubleEMACrossStrategy
 
-    for combination in product(*param_values):
-        params = dict(zip(param_names, combination))
+# Validation
+is_valid = StrategyRegistry.is_valid_strategy("RSI")  # Returns True
 
-        try:
-            # Create strategy with parameters
-            strategy = strategy_class(**params)
+# Get default parameters
+params = StrategyRegistry.get_strategy_preset("smacross")  # Returns {"fast_period": 10, "slow_period": 20}
 
-            # Run backtest
-            runner = BacktestRunner()
-            result = runner.run_strategy(symbol, strategy, start_date, end_date)
+# Using with BacktestingManager
+manager = BacktestingManager(data_fetcher, logging_manager)
 
-            # Track results
-            results.append({
-                'params': params,
-                'return': result['Return [%]'],
-                'sharpe': result['Sharpe Ratio'],
-                'max_drawdown': result['Max. Drawdown [%]'],
-                'trades': result['# Trades']
-            })
-
-            # Update best
-            if result['Return [%]'] > best_return:
-                best_return = result['Return [%]']
-                best_params = params
-
-        except Exception as e:
-            print(f"Error with params {params}: {e}")
-
-    return best_params, best_return, results
-
-# Example usage
-param_ranges = {
-    'fast_period': range(5, 21),
-    'slow_period': range(20, 51),
-}
-
-best_params, best_return, all_results = optimize_strategy_parameters(
-    'AAPL', SMAStrategy, param_ranges, '2020-01-01', '2023-01-01'
+# Run a strategy group
+results = manager.run_multiple_strategies(
+    ticker="AAPL",
+    strategy_group="momentum"
 )
 
-print(f"Best parameters: {best_params}")
-print(f"Best return: {best_return:.2f}%")
+# Run a single strategy with any naming format
+result = manager.run_single_strategy(
+    ticker="AAPL",
+    strategy_name="SMACross"  # PascalCase works
+)
+
+result2 = manager.run_single_strategy(
+    ticker="AAPL", 
+    strategy_name="double_ema_cross"  # snake_case works too
+)
 ```
 
-### Walk-Forward Optimization
+## Performance Considerations
 
-```python
-def walk_forward_optimization(symbol, strategy_class, param_ranges,
-                            lookback_months=12, forward_months=3):
-    """Perform walk-forward optimization."""
+### Data Requirements
 
-    data = fetcher.get_stock_data(symbol, start_date='2018-01-01')
-    results = []
+Each strategy has different minimum data requirements:
 
-    # Define optimization and testing periods
-    start_date = data.index[0]
-    end_date = data.index[-1]
+- **Simple strategies** (SMA, RSI, MACD): ~30-50 days minimum
+- **Adaptive strategies** (KAMA, FRAMA, VIDYA): ~60-100 days minimum  
+- **Complex strategies** (Triple EMA, TRIMA): ~75-120 days minimum
 
-    current_date = start_date + pd.DateOffset(months=lookback_months)
+### Computational Complexity
 
-    while current_date + pd.DateOffset(months=forward_months) <= end_date:
-        # Optimization period
-        opt_start = current_date - pd.DateOffset(months=lookback_months)
-        opt_end = current_date
+Strategies ranked by computational complexity (fastest to slowest):
 
-        # Testing period
-        test_start = current_date
-        test_end = current_date + pd.DateOffset(months=forward_months)
-
-        # Optimize on historical data
-        best_params, _, _ = optimize_strategy_parameters(
-            symbol, strategy_class, param_ranges, opt_start, opt_end
-        )
-
-        # Test on forward period
-        strategy = strategy_class(**best_params)
-        runner = BacktestRunner()
-        test_result = runner.run_strategy(symbol, strategy, test_start, test_end)
-
-        results.append({
-            'test_period': f"{test_start.date()} to {test_end.date()}",
-            'optimized_params': best_params,
-            'forward_return': test_result['Return [%]'],
-            'forward_sharpe': test_result['Sharpe Ratio']
-        })
-
-        current_date += pd.DateOffset(months=forward_months)
-
-    return results
-```
-
-## Performance Metrics
-
-### Built-in Metrics
-
-All strategies automatically calculate these metrics:
-
-- **Return [%]**: Total return percentage
-- **Sharpe Ratio**: Risk-adjusted return
-- **Max. Drawdown [%]**: Largest peak-to-trough decline
-- **Volatility [%]**: Annualized volatility
-- **# Trades**: Number of round-trip trades
-- **Win Rate [%]**: Percentage of profitable trades
-- **Profit Factor**: Gross profit / Gross loss
-
-### Custom Metrics
-
-```python
-def calculate_custom_metrics(strategy_results):
-    """Calculate additional performance metrics."""
-    trades = strategy_results._trades
-
-    # Calmar Ratio
-    annual_return = strategy_results.Return
-    max_drawdown = abs(strategy_results['Max. Drawdown [%]'])
-    calmar_ratio = annual_return / max_drawdown if max_drawdown > 0 else 0
-
-    # Sortino Ratio
-    returns = strategy_results._equity_curve.pct_change().dropna()
-    downside_returns = returns[returns < 0]
-    downside_std = downside_returns.std() * np.sqrt(252)
-    sortino_ratio = annual_return / downside_std if downside_std > 0 else 0
-
-    # Average Trade Duration
-    if len(trades) > 0:
-        durations = [(trade.ExitTime - trade.EntryTime).days for trade in trades]
-        avg_duration = np.mean(durations)
-    else:
-        avg_duration = 0
-
-    return {
-        'Calmar Ratio': calmar_ratio,
-        'Sortino Ratio': sortino_ratio,
-        'Avg Trade Duration': avg_duration
-    }
-```
+1. **SMA Cross** - Simple moving averages
+2. **RSI** - Single oscillator calculation
+3. **MACD** - Exponential moving averages
+4. **Double EMA Cross** - EMAs with ATR
+5. **TRIMA Cross** - Double-smoothed averages
+6. **KAMA** - Efficiency ratio calculations
+7. **VAMA** - Volume-weighted calculations
+8. **VIDYA** - CMO-based adaptation
+9. **FRAMA** - Fractal dimension calculations
+10. **Triple EMA Cross** - Multiple EMA calculations
+11. **Kaufman Efficiency** - Complex efficiency analysis
 
 ## Best Practices
 
-### Strategy Development
+### Strategy Selection
+1. **Start with basic strategies** (SMA, RSI) to understand market behavior
+2. **Use adaptive strategies** (KAMA, VIDYA) for volatile markets
+3. **Combine trend and momentum** strategies for robust portfolios
+4. **Test multiple timeframes** to find optimal parameters
 
-1. **Start Simple**: Begin with basic logic before adding complexity
-1. **Use Proper Indicators**: Leverage the technical analysis module
-1. **Include Risk Management**: Always implement position sizing and stops
-1. **Validate Logic**: Test edge cases and unusual market conditions
+### Parameter Optimization
+1. **Avoid overfitting** - test on out-of-sample data
+2. **Use robust parameter ranges** - avoid extreme values
+3. **Consider transaction costs** in optimization
+4. **Validate across different market regimes**
 
-### Parameter Selection
+### Risk Management
+- All advanced strategies include ATR-based stop losses
+- Consider position sizing based on volatility
+- Use appropriate stop loss multipliers for different asset classes
+- Monitor maximum drawdown across strategies
 
-1. **Avoid Overfitting**: Don't optimize on limited data
-1. **Use Robust Ranges**: Test wide parameter ranges
-1. **Cross-Validate**: Use walk-forward or cross-validation
-1. **Consider Market Regimes**: Parameters may work differently in different markets
-
-### Testing and Validation
-
-1. **Out-of-Sample Testing**: Reserve data for final validation
-1. **Multiple Markets**: Test across different instruments
-1. **Multiple Time Periods**: Include various market conditions
-1. **Transaction Costs**: Always include realistic costs
-
-### Production Considerations
-
-1. **Error Handling**: Handle data issues gracefully
-1. **Performance Monitoring**: Track live performance vs. backtest
-1. **Regular Reoptimization**: Update parameters periodically
-1. **Risk Limits**: Implement portfolio-level risk controls
-
-The strategies API provides a flexible framework for developing, testing, and optimizing trading strategies while maintaining clean separation between strategy logic and execution infrastructure.
+The strategies in Stockula are designed to be robust, well-tested, and suitable for both research and practical trading applications.

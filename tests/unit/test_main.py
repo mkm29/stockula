@@ -8,10 +8,11 @@ from unittest.mock import Mock, patch
 import pandas as pd
 import pytest
 
+from stockula.cli import print_results
 from stockula.config import StockulaConfig, TickerConfig
 from stockula.config.models import BrokerConfig, PortfolioBacktestResults
 from stockula.domain.category import Category
-from stockula.main import main, print_results, setup_logging
+from stockula.main import main, setup_logging
 from stockula.manager import StockulaManager
 
 
@@ -520,11 +521,11 @@ class TestPrintResults:
 class TestMainFunction:
     """Test main function integration."""
 
-    @patch("stockula.main.create_container")
+    @patch("stockula.cli.create_container")
     @patch("stockula.main.setup_logging")
     @patch("stockula.main.log_manager")
     @patch("stockula.manager.StockulaManager.run_main_processing")
-    @patch("stockula.main.print_results")
+    @patch("stockula.cli.print_results")
     @patch("sys.argv", ["stockula", "--mode", "ta", "--ticker", "AAPL"])
     def test_main_ta_mode(self, mock_print, mock_run_main, mock_log_manager, mock_logging, mock_container):
         """Test main function in technical analysis mode."""
@@ -543,11 +544,11 @@ class TestMainFunction:
         mock_run_main.assert_called_once()
         mock_print.assert_called_once()
 
-    @patch("stockula.main.create_container")
+    @patch("stockula.cli.create_container")
     @patch("stockula.main.setup_logging")
     @patch("stockula.main.log_manager")
     @patch("stockula.manager.StockulaManager.run_main_processing")
-    @patch("stockula.main.print_results")
+    @patch("stockula.cli.print_results")
     @patch("sys.argv", ["stockula", "--mode", "forecast"])
     def test_main_forecast_mode(self, mock_print, mock_run_main, mock_log_manager, mock_logging, mock_container):
         """Test main function in forecast mode."""
@@ -578,7 +579,7 @@ class TestMainFunction:
         mock_run_main.assert_called_once()
         mock_print.assert_called_once()
 
-    @patch("stockula.main.create_container")
+    @patch("stockula.cli.create_container")
     @patch("stockula.main.setup_logging")
     @patch("sys.argv", ["stockula", "--save-config", "output.yaml"])
     def test_main_save_config(self, mock_logging, mock_container):
@@ -587,16 +588,16 @@ class TestMainFunction:
         container.logging_manager.return_value = Mock()
         mock_container.return_value = container
 
-        with patch("stockula.main.save_config") as mock_save:
+        with patch("stockula.cli.save_config") as mock_save:
             main()
             mock_save.assert_called_once()
 
-    @patch("stockula.main.create_container")
+    @patch("stockula.cli.create_container")
     @patch("stockula.main.setup_logging")
     @patch("stockula.manager.StockulaManager.run_technical_analysis")
     @patch("stockula.manager.StockulaManager.run_backtest")
     @patch("stockula.manager.StockulaManager.run_forecast")
-    @patch("stockula.main.print_results")
+    @patch("stockula.cli.print_results")
     @patch("pathlib.Path")
     @patch("builtins.open", create=True)
     @patch("stockula.manager.json.dump")
@@ -629,7 +630,7 @@ class TestMainFunction:
         mock_ta.return_value = {"ticker": "AAPL", "indicators": {"SMA_20": 150.0}}
 
         # Mock datetime for consistent behavior
-        with patch("stockula.main.datetime") as mock_datetime:
+        with patch("stockula.cli.datetime") as mock_datetime:
             mock_datetime.now.return_value.strftime.return_value = "20240115_120000"
             main()
 
@@ -1179,7 +1180,7 @@ class TestPortfolioBacktestResultsComplex:
 class TestMainFunctionAdvanced:
     """Test advanced main function scenarios."""
 
-    @patch("stockula.main.create_container")
+    @patch("stockula.cli.create_container")
     @patch("stockula.main.setup_logging")
     @patch("stockula.main.log_manager")
     @patch(
@@ -1225,7 +1226,7 @@ class TestMainFunctionAdvanced:
 
         mock_container.return_value = container
 
-        with patch("stockula.main.print_results"):
+        with patch("stockula.cli.print_results"):
             main()
 
         # Check that dates were overridden
@@ -1234,12 +1235,12 @@ class TestMainFunctionAdvanced:
         assert config.forecast.test_start_date == date(2023, 7, 1)
         assert config.forecast.test_end_date == date(2023, 12, 31)
 
-    @patch("stockula.main.create_container")
+    @patch("stockula.cli.create_container")
     @patch("stockula.main.setup_logging")
     @patch("stockula.main.log_manager")
     @patch("stockula.manager.StockulaManager.run_technical_analysis")
     @patch("stockula.manager.StockulaManager.get_strategy_class")
-    @patch("stockula.main.print_results")
+    @patch("stockula.cli.print_results")
     @patch("sys.argv", ["stockula", "--mode", "all"])
     def test_main_all_mode_with_hold_only_assets(
         self, mock_print, mock_get_strategy, mock_ta, mock_log_manager, mock_logging, mock_container
@@ -1328,11 +1329,11 @@ class TestMainFunctionAdvanced:
         else:  # If called with keyword arguments only
             assert call_args[1]["ticker"] == "AAPL"  # Keyword argument
 
-    @patch("stockula.main.create_container")
+    @patch("stockula.cli.create_container")
     @patch("stockula.main.setup_logging")
     @patch("stockula.main.log_manager")
     @patch("stockula.manager.StockulaManager.run_main_processing")
-    @patch("stockula.main.print_results")
+    @patch("stockula.cli.print_results")
     @patch("sys.argv", ["stockula", "--mode", "forecast"])
     def test_main_forecast_mode_with_portfolio_value(
         self,
@@ -1398,7 +1399,7 @@ class TestMainFunctionAdvanced:
             "initial_capital": 100000.0,
         }
 
-        with patch("stockula.main.console") as mock_console:
+        with patch("stockula.cli.console") as mock_console:
             main()
 
             # Check that portfolio value table was printed
@@ -1415,7 +1416,7 @@ class TestMainFunctionAdvanced:
                 hasattr(call[0][0], "title") and "Portfolio Value" in str(call[0][0].title) for call in table_calls
             )
 
-    @patch("stockula.main.create_container")
+    @patch("stockula.cli.create_container")
     @patch("stockula.main.setup_logging")
     @patch("stockula.main.log_manager")
     @patch("sys.argv", ["stockula", "--mode", "backtest"])
@@ -1459,16 +1460,16 @@ class TestMainFunctionAdvanced:
 
         with patch("stockula.manager.StockulaManager.run_backtest") as mock_backtest:
             mock_backtest.return_value = []
-            with patch("stockula.main.print_results"):
+            with patch("stockula.cli.print_results"):
                 main()
 
         # Check that fetcher was called to get start prices
         assert mock_fetcher.get_stock_data.call_count >= 1
 
-    @patch("stockula.main.create_container")
+    @patch("stockula.cli.create_container")
     @patch("stockula.main.setup_logging")
     @patch("stockula.main.log_manager")
-    @patch("stockula.main.print_results")
+    @patch("stockula.cli.print_results")
     @patch("stockula.manager.StockulaManager.create_portfolio_backtest_results")
     @patch("stockula.manager.StockulaManager.save_detailed_report")
     @patch("sys.argv", ["stockula", "--mode", "backtest"])
@@ -1572,7 +1573,7 @@ class TestMainFunctionAdvanced:
         mock_create_results.return_value = mock_portfolio_results
         mock_save_report.return_value = "results/reports/strategy_report_SMACross_20240101_120000.json"
 
-        with patch("stockula.main.console") as mock_console:
+        with patch("stockula.cli.console") as mock_console:
             main()
 
             # Check that strategy summary panel was printed
@@ -1652,7 +1653,7 @@ class TestDateStringHandling:
 class TestMainHoldingsDisplay:
     """Test portfolio holdings display in main function."""
 
-    @patch("stockula.main.create_container")
+    @patch("stockula.cli.create_container")
     @patch("stockula.main.setup_logging")
     @patch("stockula.main.log_manager")
     @patch("sys.argv", ["stockula", "--mode", "ta"])
@@ -1689,8 +1690,8 @@ class TestMainHoldingsDisplay:
 
         with patch("stockula.manager.StockulaManager.run_technical_analysis") as mock_ta:
             mock_ta.return_value = {"ticker": "AAPL", "indicators": {}}
-            with patch("stockula.main.print_results"):
-                with patch("stockula.main.console") as mock_console:
+            with patch("stockula.cli.print_results"):
+                with patch("stockula.cli.console") as mock_console:
                     main()
 
                     # Check that holdings table was printed with "N/A" for category
@@ -1705,11 +1706,11 @@ class TestMainHoldingsDisplay:
 class TestMainErrorHandling:
     """Test error handling in main function."""
 
-    @patch("stockula.main.create_container")
+    @patch("stockula.cli.create_container")
     @patch("stockula.main.setup_logging")
     @patch("stockula.main.log_manager")
     @patch("stockula.manager.StockulaManager.run_technical_analysis")
-    @patch("stockula.main.print_results")
+    @patch("stockula.cli.print_results")
     @patch("sys.argv", ["stockula", "--mode", "ta"])
     def test_main_with_progress_bars_single_operation(
         self, mock_print, mock_ta, mock_log_manager, mock_logging, mock_container
@@ -1751,11 +1752,11 @@ class TestMainErrorHandling:
         # Should call TA without progress since it's the only operation
         mock_ta.assert_called_once()
 
-    @patch("stockula.main.create_container")
+    @patch("stockula.cli.create_container")
     @patch("stockula.main.setup_logging")
     @patch("stockula.main.log_manager")
     @patch("stockula.manager.StockulaManager.run_main_processing")
-    @patch("stockula.main.print_results")
+    @patch("stockula.cli.print_results")
     @patch("sys.argv", ["stockula", "--mode", "backtest"])
     def test_main_backtest_with_multiple_strategies_progress(
         self, mock_print, mock_run_main, mock_log_manager, mock_logging, mock_container
@@ -1834,11 +1835,11 @@ class TestMainErrorHandling:
         mock_run_main.assert_called_once()
         mock_print.assert_called_once()
 
-    @patch("stockula.main.create_container")
+    @patch("stockula.cli.create_container")
     @patch("stockula.main.setup_logging")
     @patch("stockula.main.log_manager")
     @patch("stockula.manager.StockulaManager.run_main_processing")
-    @patch("stockula.main.print_results")
+    @patch("stockula.cli.print_results")
     @patch("sys.argv", ["stockula", "--mode", "forecast"])
     def test_main_forecast_parallel_processing(
         self, mock_print, mock_run_main, mock_log_manager, mock_logging, mock_container
