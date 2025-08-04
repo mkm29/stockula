@@ -1,5 +1,28 @@
 # Changelog
 
+## [0.9.0](https://github.com/mkm29/stockula/compare/v0.8.0...v0.9.0) (2025-08-04)
+
+
+### Features
+
+* add forecast_multiple_symbols_with_progress method in ForecastingManager for enhanced forecasting ([a1e89dc](https://github.com/mkm29/stockula/commit/a1e89dc15023b8840272006764fc78a0df3e7fd6))
+* implement run_main_processing method in StockulaManager for streamlined processing ([a1e89dc](https://github.com/mkm29/stockula/commit/a1e89dc15023b8840272006764fc78a0df3e7fd6))
+
+
+### Bug Fixes
+
+* reduced logic in main.py ([0ac38b5](https://github.com/mkm29/stockula/commit/0ac38b5effe74dab82b8f784ea081e6a323f8c64))
+
+
+### Tests
+
+* update unit tests to reflect changes in main processing and forecasting methods ([a1e89dc](https://github.com/mkm29/stockula/commit/a1e89dc15023b8840272006764fc78a0df3e7fd6))
+
+
+### Miscellaneous Chores
+
+* update version to 0.8.0 in uv.lock and modify CHANGELOG for new features ([a1e89dc](https://github.com/mkm29/stockula/commit/a1e89dc15023b8840272006764fc78a0df3e7fd6))
+
 ## [0.8.0](https://github.com/mkm29/stockula/compare/v0.7.0...v0.8.0) (2025-08-04)
 
 ### Features
