@@ -305,6 +305,112 @@ class Allocator(BaseAllocator):
 
         return calculated_quantities
 
+    def calculate_equal_weight_quantities(
+        self, config: StockulaConfig, tickers: list[TickerConfig]
+    ) -> dict[str, float]:
+        """Calculate equal weight quantities for each ticker.
+
+        Args:
+            config: Stockula configuration
+            tickers: List of ticker configurations
+
+        Returns:
+            Dictionary mapping ticker symbols to calculated quantities
+        """
+        self._validate_fetcher()
+
+        symbols = [ticker.symbol for ticker in tickers]
+        calculation_prices = self._get_calculation_prices(config, symbols)
+
+        # Calculate equal allocation per ticker
+        num_tickers = len(tickers)
+        if num_tickers == 0:
+            return {}
+
+        allocation_per_ticker = config.portfolio.initial_capital / num_tickers
+        calculated_quantities = {}
+
+        for ticker_config in tickers:
+            if ticker_config.symbol not in calculation_prices:
+                raise ValueError(f"Could not fetch price for {ticker_config.symbol}")
+
+            price = calculation_prices[ticker_config.symbol]
+            quantity = self._calculate_quantity_for_allocation(
+                allocation_per_ticker, price, config.portfolio.allow_fractional_shares
+            )
+            calculated_quantities[ticker_config.symbol] = quantity
+
+        return calculated_quantities
+
+    def calculate_market_cap_quantities(self, config: StockulaConfig, tickers: list[TickerConfig]) -> dict[str, float]:
+        """Calculate market cap weighted quantities for each ticker.
+
+        Args:
+            config: Stockula configuration
+            tickers: List of ticker configurations
+
+        Returns:
+            Dictionary mapping ticker symbols to calculated quantities
+        """
+        self._validate_fetcher()
+
+        symbols = [ticker.symbol for ticker in tickers]
+
+        # Get stock info to fetch market caps
+        market_caps = {}
+        total_market_cap = 0
+
+        for symbol in symbols:
+            try:
+                info = self.fetcher.get_stock_info(symbol)
+                if info and "marketCap" in info and info["marketCap"]:
+                    market_caps[symbol] = info["marketCap"]
+                    total_market_cap += info["marketCap"]
+                else:
+                    self.logger.warning(f"Could not fetch market cap for {symbol}, using equal weight")
+                    market_caps[symbol] = None
+            except Exception as e:
+                self.logger.error(f"Error fetching market cap for {symbol}: {e}")
+                market_caps[symbol] = None
+
+        # If no market caps available, fall back to equal weight
+        if total_market_cap == 0:
+            self.logger.warning("No market cap data available, falling back to equal weight allocation")
+            return self.calculate_equal_weight_quantities(config, tickers)
+
+        # Calculate weights based on market cap
+        weights = {}
+        for symbol, market_cap in market_caps.items():
+            if market_cap is not None:
+                weights[symbol] = market_cap / total_market_cap
+            else:
+                # For missing market caps, use average weight
+                weights[symbol] = 1.0 / len(symbols)
+
+        # Normalize weights to sum to 1
+        total_weight = sum(weights.values())
+        if total_weight > 0:
+            weights = {symbol: weight / total_weight for symbol, weight in weights.items()}
+
+        # Get prices and calculate quantities
+        calculation_prices = self._get_calculation_prices(config, symbols)
+        calculated_quantities = {}
+
+        for ticker_config in tickers:
+            if ticker_config.symbol not in calculation_prices:
+                raise ValueError(f"Could not fetch price for {ticker_config.symbol}")
+
+            price = calculation_prices[ticker_config.symbol]
+            weight = weights.get(ticker_config.symbol, 0)
+            allocation_amount = config.portfolio.initial_capital * weight
+
+            quantity = self._calculate_quantity_for_allocation(
+                allocation_amount, price, config.portfolio.allow_fractional_shares
+            )
+            calculated_quantities[ticker_config.symbol] = quantity
+
+        return calculated_quantities
+
     def calculate_quantities(
         self,
         config: StockulaConfig,

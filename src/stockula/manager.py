@@ -11,7 +11,6 @@ from rich.console import Console
 from rich.progress import BarColumn, Progress, SpinnerColumn, TextColumn, TimeRemainingColumn
 from rich.table import Table
 
-from .allocation import BacktestOptimizedAllocator
 from .backtesting import (
     BaseStrategy,
     DoubleEMACrossStrategy,
@@ -123,16 +122,12 @@ class StockulaManager:
             return 1
 
         try:
-            # Create the backtest allocator
-            backtest_allocator = BacktestOptimizedAllocator(
-                fetcher=self.container.data_fetcher(),
-                logging_manager=self.log_manager,
-                backtest_runner=self.container.backtest_runner(),
-            )
+            # Get the allocator manager
+            allocator_manager = self.container.allocator_manager()
 
-            # Calculate optimized quantities
+            # Calculate optimized quantities using the manager
             self.console.print("\n[blue]Calculating optimized quantities...[/blue]")
-            optimized_quantities = backtest_allocator.calculate_quantities(
+            optimized_quantities = allocator_manager.calculate_backtest_optimized_quantities(
                 config=self.config,
                 tickers=self.config.portfolio.tickers,
             )

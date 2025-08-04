@@ -2,18 +2,16 @@
 
 ## [0.7.0](https://github.com/mkm29/stockula/compare/v0.6.1...v0.7.0) (2025-08-03)
 
-
 ### Features
 
-* add backtest optimized allocator ([7fee370](https://github.com/mkm29/stockula/commit/7fee37083c0fa22afa2ebfe845c9d98b88aecc77))
-* Add backtest-optimized configuration and update main logic for saving configurations ([5d4ab46](https://github.com/mkm29/stockula/commit/5d4ab465ea800ebdc4954b4ce94946b0ebf2653b))
-* Implement backtest-optimized asset allocation strategy ([ba2fe24](https://github.com/mkm29/stockula/commit/ba2fe2476aa015710621b0bf4949d6bc4df3500c))
-* Implement Backtest-Optimized Asset Allocation Strategy ([b08e60f](https://github.com/mkm29/stockula/commit/b08e60f3b89c71ec15be5744b79d4f69a90c5650))
-
+- add backtest optimized allocator ([7fee370](https://github.com/mkm29/stockula/commit/7fee37083c0fa22afa2ebfe845c9d98b88aecc77))
+- Add backtest-optimized configuration and update main logic for saving configurations ([5d4ab46](https://github.com/mkm29/stockula/commit/5d4ab465ea800ebdc4954b4ce94946b0ebf2653b))
+- Implement backtest-optimized asset allocation strategy ([ba2fe24](https://github.com/mkm29/stockula/commit/ba2fe2476aa015710621b0bf4949d6bc4df3500c))
+- Implement Backtest-Optimized Asset Allocation Strategy ([b08e60f](https://github.com/mkm29/stockula/commit/b08e60f3b89c71ec15be5744b79d4f69a90c5650))
 
 ### Bug Fixes
 
-* Rename loop variable for clarity and remove unused mock strategy ([a0209d9](https://github.com/mkm29/stockula/commit/a0209d9a326ca9080da4500a67d2b3a0f65d6cba))
+- Rename loop variable for clarity and remove unused mock strategy ([a0209d9](https://github.com/mkm29/stockula/commit/a0209d9a326ca9080da4500a67d2b3a0f65d6cba))
 
 ## [0.6.1](https://github.com/mkm29/stockula/compare/v0.6.0...v0.6.1) (2025-08-02)
 

@@ -19,7 +19,9 @@ graph TB
         Asset[Asset]
         Ticker[Ticker]
         Category[Category]
-        Allocator[Allocation Module<br/>BacktestOptimizedAllocator]
+        AllocatorManager[Allocator Manager<br/>Manages All Strategies]
+        Allocator[Standard Allocator<br/>Basic Strategies]
+        BacktestAllocator[Backtest Allocator<br/>Optimization]
     end
 
     subgraph "Data Layer"
@@ -50,7 +52,10 @@ graph TB
     Portfolio --> Asset
     Asset --> Ticker
     Asset --> Category
-    Manager --> Allocator
+    Manager --> AllocatorManager
+    AllocatorManager --> Allocator
+    AllocatorManager --> BacktestAllocator
+    Factory --> AllocatorManager
 
     Manager --> TA
     Manager --> BT
@@ -76,7 +81,9 @@ graph TB
     style Factory fill:#9C27B0,stroke:#7B1FA2,color:#fff
     style LogManager fill:#607D8B,stroke:#455A64,color:#fff
     style Container fill:#795548,stroke:#5D4037,color:#fff
+    style AllocatorManager fill:#E91E63,stroke:#C2185B,color:#fff
     style Allocator fill:#E91E63,stroke:#C2185B,color:#fff
+    style BacktestAllocator fill:#E91E63,stroke:#C2185B,color:#fff
 ```
 
 ## Data Flow
@@ -139,7 +146,9 @@ src/stockula/
 │   └── factory.py       # Domain object factory
 ├── allocation/           # Allocation strategies
 │   ├── __init__.py
-│   ├── allocator.py     # Base allocation strategies
+│   ├── manager.py       # AllocatorManager - coordinates strategies
+│   ├── base_allocator.py # Base allocator interface
+│   ├── allocator.py     # Standard allocation strategies
 │   └── backtest_allocator.py  # Backtest-optimized allocation
 ├── data/                 # Data fetching module
 │   ├── __init__.py
@@ -194,7 +203,8 @@ src/stockula/
 - **Ticker**: Maps symbols to detailed information
 - **Factory**: Creates and configures domain objects
 - **Category**: Categorizes assets (INDEX, MOMENTUM, etc.)
-- **Allocator**: Base class for allocation strategies (equal weight, custom, etc.)
+- **AllocatorManager**: Coordinates all allocation strategies and provides unified interface
+- **Allocator**: Standard allocator for basic strategies (equal weight, market cap, custom, dynamic, auto)
 - **BacktestOptimizedAllocator**: Advanced allocation using backtest performance data
 
 **Patterns**:
@@ -284,8 +294,10 @@ container = Container()
 data_fetcher = container.data_fetcher()
 backtest_runner = container.backtest_runner()
 portfolio_factory = container.domain_factory()
-allocator = container.allocator()
-backtest_allocator = container.backtest_allocator()
+allocator_manager = container.allocator_manager()
+
+# The allocator manager provides access to all allocation strategies
+quantities = allocator_manager.calculate_quantities(config, tickers)
 ```
 
 ### Interface-Based Design
