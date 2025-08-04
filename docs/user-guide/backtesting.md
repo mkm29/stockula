@@ -1,62 +1,124 @@
 # Backtesting
 
-Stockula provides a comprehensive backtesting framework that allows you to test trading strategies against historical data with realistic broker costs and constraints.
+Stockula provides comprehensive backtesting capabilities through the backtesting.py library wrapper, offering multiple trading strategies with optimization and validation features.
 
 ## Overview
 
 The backtesting module offers:
 
-- **Pre-built Strategies**: SMA Cross, RSI, Double EMA, and more
-- **Custom Strategies**: Easy framework for implementing your own strategies
-- **Realistic Costs**: Multiple broker fee structures and commission models
-- **Rich Reporting**: Detailed performance metrics and visualizations
-- **Portfolio Testing**: Test strategies across multiple assets
-- **Risk Management**: Built-in position sizing and stop-loss features
+- **BacktestingManager**: Centralized coordinator for all backtesting strategies and execution
+- **10+ Trading Strategies**: Moving averages, momentum, trend-following, and adaptive strategies
+- **Strategy Groups**: Pre-configured strategy groups (basic, momentum, trend, advanced, comprehensive)
+- **Train/Test Split**: Out-of-sample validation with performance degradation metrics
+- **Parameter Optimization**: Automated parameter tuning on training data
+- **Rich Display**: Beautiful tables with comprehensive performance metrics
+- **Portfolio Backtesting**: Test strategies across multiple assets simultaneously
+- **Broker Cost Modeling**: Realistic commission and fee structures
 
-## Available Strategies
+## BacktestingManager
 
-### Simple Moving Average Crossover (SMACROSS)
+The BacktestingManager coordinates different backtesting strategies and provides a unified interface for all backtesting operations.
 
-Classic trend-following strategy using two moving averages.
+### Available Strategy Groups
 
-**Parameters**:
+1. **Basic Group**: Essential strategies for quick testing
 
-- `fast_period` (default: 10): Short-term moving average period
-- `slow_period` (default: 20): Long-term moving average period
+   - SMA Cross: Simple moving average crossover
+   - RSI: Relative strength index mean reversion
 
-**Logic**:
+1. **Momentum Group**: Momentum-based strategies
 
-- **Buy**: When fast MA crosses above slow MA
-- **Sell**: When fast MA crosses below slow MA
+   - RSI, MACD, Double EMA Cross
 
-```yaml
-backtest:
-  strategies:
-    - name: smacross
-      parameters:
-        fast_period: 10
-        slow_period: 20
+1. **Trend Group**: Trend-following strategies
+
+   - SMA Cross, Triple EMA Cross, TRIMA Cross
+
+1. **Advanced Group**: Sophisticated adaptive strategies
+
+   - KAMA, FRAMA, VAMA, VIDYA
+
+1. **Comprehensive Group**: All available strategies for thorough analysis
+
+### Manager Methods
+
+```python
+from stockula.container import Container
+
+container = Container()
+backtesting_manager = container.backtesting_manager()
+
+# Set the BacktestRunner
+runner = container.backtest_runner()
+backtesting_manager.set_runner(runner)
+
+# Run single strategy backtest
+result = backtesting_manager.run_single_strategy('AAPL', 'sma_cross', config)
+
+# Run multiple strategies from a group
+results = backtesting_manager.run_multiple_strategies('AAPL', 'momentum', config)
+
+# Run strategy across multiple tickers
+portfolio_results = backtesting_manager.run_portfolio_backtest(
+    ['AAPL', 'GOOGL', 'MSFT'], 'sma_cross', config
+)
+
+# Comprehensive backtest across all tickers and strategies
+comprehensive_results = backtesting_manager.run_comprehensive_backtest(
+    ['AAPL', 'GOOGL'], 'comprehensive', config
+)
+
+# Train/test split for out-of-sample validation
+validation_result = backtesting_manager.run_with_train_test_split(
+    'AAPL', 'sma_cross', train_ratio=0.7, optimize_on_train=True
+)
+
+# Quick backtest with default parameters
+quick_result = backtesting_manager.quick_backtest('AAPL', 'sma_cross')
 ```
 
-### RSI Strategy
+## Available Trading Strategies
 
-Momentum-based strategy using Relative Strength Index.
+### Moving Average Strategies
 
-**Parameters**:
+| Strategy             | Description                         | Default Parameters             |
+| -------------------- | ----------------------------------- | ------------------------------ |
+| **SMA Cross**        | Simple moving average crossover     | fast_period=10, slow_period=30 |
+| **Double EMA Cross** | Dual exponential moving average     | fast_period=12, slow_period=26 |
+| **Triple EMA Cross** | Triple exponential moving average   | fast=5, medium=10, slow=20     |
+| **TRIMA Cross**      | Triangular moving average crossover | fast_period=10, slow_period=30 |
 
-- `period` (default: 14): RSI calculation period
-- `oversold_threshold` (default: 30): Buy signal threshold
-- `overbought_threshold` (default: 70): Sell signal threshold
+### Oscillator Strategies
 
-**Logic**:
+| Strategy | Description                            | Default Parameters                    |
+| -------- | -------------------------------------- | ------------------------------------- |
+| **RSI**  | Relative strength index mean reversion | period=14, oversold=30, overbought=70 |
+| **MACD** | Moving average convergence divergence  | fast=12, slow=26, signal=9            |
 
-- **Buy**: When RSI falls below oversold threshold
-- **Sell**: When RSI rises above overbought threshold
+### Adaptive Strategies
+
+| Strategy               | Description                       | Default Parameters               |
+| ---------------------- | --------------------------------- | -------------------------------- |
+| **KAMA**               | Kaufman's Adaptive Moving Average | period=14, fast_sc=2, slow_sc=30 |
+| **FRAMA**              | Fractal Adaptive Moving Average   | period=14                        |
+| **VAMA**               | Variable Moving Average           | period=8                         |
+| **VIDYA**              | Variable Index Dynamic Average    | period=14, alpha=0.2             |
+| **Kaufman Efficiency** | Efficiency ratio based strategy   | period=10, fast_sc=2, slow_sc=30 |
+
+## Configuration
+
+### Basic Configuration
 
 ```yaml
 backtest:
+  initial_cash: 10000
+  commission: 0.002  # 0.2%
   strategies:
-    - name: rsi
+    - name: "sma_cross"
+      parameters:
+        fast_period: 10
+        slow_period: 30
+    - name: "rsi"
       parameters:
         period: 14
         oversold_threshold: 30

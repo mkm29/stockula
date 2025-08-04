@@ -11,7 +11,6 @@ from rich.console import Console
 from rich.progress import BarColumn, Progress, SpinnerColumn, TextColumn, TimeRemainingColumn
 from rich.table import Table
 
-from .allocation import BacktestOptimizedAllocator
 from .backtesting import (
     BaseStrategy,
     DoubleEMACrossStrategy,
@@ -123,16 +122,12 @@ class StockulaManager:
             return 1
 
         try:
-            # Create the backtest allocator
-            backtest_allocator = BacktestOptimizedAllocator(
-                fetcher=self.container.data_fetcher(),
-                logging_manager=self.log_manager,
-                backtest_runner=self.container.backtest_runner(),
-            )
+            # Get the allocator manager
+            allocator_manager = self.container.allocator_manager()
 
-            # Calculate optimized quantities
+            # Calculate optimized quantities using the manager
             self.console.print("\n[blue]Calculating optimized quantities...[/blue]")
-            optimized_quantities = backtest_allocator.calculate_quantities(
+            optimized_quantities = allocator_manager.calculate_backtest_optimized_quantities(
                 config=self.config,
                 tickers=self.config.portfolio.tickers,
             )
@@ -337,36 +332,41 @@ class StockulaManager:
         Returns:
             Dictionary with indicator results
         """
-        data_fetcher = self.container.data_fetcher()
-        data = data_fetcher.get_stock_data(
-            ticker,
-            start=self.date_to_string(self.config.data.start_date),
-            end=self.date_to_string(self.config.data.end_date),
-            interval=self.config.data.interval,
-        )
+        # Get the technical analysis manager
+        ta_manager = self.container.technical_analysis_manager()
 
-        ta = TechnicalIndicators(data)
-        results = {"ticker": ticker, "indicators": {}}
+        # Determine which indicators to use based on configuration
         ta_config = self.config.technical_analysis
+        custom_indicators = []
 
-        # Count total indicators to calculate
-        total_indicators = 0
+        # Build custom indicators list based on config
         if "sma" in ta_config.indicators:
-            total_indicators += len(ta_config.sma_periods)
+            custom_indicators.append("sma")
         if "ema" in ta_config.indicators:
-            total_indicators += len(ta_config.ema_periods)
+            custom_indicators.append("ema")
         if "rsi" in ta_config.indicators:
-            total_indicators += 1
+            custom_indicators.append("rsi")
         if "macd" in ta_config.indicators:
-            total_indicators += 1
+            custom_indicators.append("macd")
         if "bbands" in ta_config.indicators:
-            total_indicators += 1
+            custom_indicators.append("bbands")
         if "atr" in ta_config.indicators:
-            total_indicators += 1
+            custom_indicators.append("atr")
         if "adx" in ta_config.indicators:
-            total_indicators += 1
+            custom_indicators.append("adx")
+        if "stoch" in ta_config.indicators:
+            custom_indicators.append("stoch")
+        if "williams_r" in ta_config.indicators:
+            custom_indicators.append("williams_r")
+        if "cci" in ta_config.indicators:
+            custom_indicators.append("cci")
+        if "obv" in ta_config.indicators:
+            custom_indicators.append("obv")
+        if "ichimoku" in ta_config.indicators:
+            custom_indicators.append("ichimoku")
 
-        if show_progress and total_indicators > 0:
+        # Use the manager to analyze the symbol
+        if show_progress:
             with Progress(
                 SpinnerColumn(),
                 TextColumn("[progress.description]{task.description}"),
@@ -374,19 +374,72 @@ class StockulaManager:
                 TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
                 TimeRemainingColumn(),
                 console=self.console,
-                transient=True,  # Remove progress bar when done
+                transient=True,
             ) as progress:
                 task = progress.add_task(
-                    f"[cyan]Computing {total_indicators} technical indicators for {ticker}...",
-                    total=total_indicators,
+                    f"[cyan]Analyzing technical indicators for {ticker}...",
+                    total=1,
                 )
 
-                self._compute_indicators(ta, ta_config, results, progress, task, ticker)
-        else:
-            # Run without progress bars
-            self._compute_indicators(ta, ta_config, results)
+                result = ta_manager.analyze_symbol(
+                    ticker,
+                    self.config,
+                    analysis_type="custom" if custom_indicators else "comprehensive",
+                    custom_indicators=custom_indicators if custom_indicators else None,
+                )
 
-        return results
+                progress.advance(task)
+        else:
+            result = ta_manager.analyze_symbol(
+                ticker,
+                self.config,
+                analysis_type="custom" if custom_indicators else "comprehensive",
+                custom_indicators=custom_indicators if custom_indicators else None,
+            )
+
+        # If we need to maintain backward compatibility with the old format,
+        # we can still compute the specific period values
+        if "indicators" in result and not result.get("error"):
+            # Get the data for period-specific calculations
+            data_fetcher = self.container.data_fetcher()
+            data = data_fetcher.get_stock_data(
+                ticker,
+                start=self.date_to_string(self.config.data.start_date),
+                end=self.date_to_string(self.config.data.end_date),
+                interval=self.config.data.interval,
+            )
+
+            if not data.empty:
+                ta = TechnicalIndicators(data)
+
+                # Add period-specific calculations if needed
+                if "sma" in ta_config.indicators and "sma" in result["indicators"]:
+                    for period in ta_config.sma_periods:
+                        result["indicators"][f"SMA_{period}"] = ta.sma(period).iloc[-1]
+
+                if "ema" in ta_config.indicators and "ema" in result["indicators"]:
+                    for period in ta_config.ema_periods:
+                        result["indicators"][f"EMA_{period}"] = ta.ema(period).iloc[-1]
+
+                # Add simple indicator values for backward compatibility
+                if "rsi" in ta_config.indicators and "rsi" in result["indicators"]:
+                    result["indicators"]["RSI"] = result["indicators"]["rsi"]["current"]
+
+                if "macd" in ta_config.indicators and "macd" in result["indicators"]:
+                    macd_data = result["indicators"]["macd"]["current"]
+                    if isinstance(macd_data, dict):
+                        result["indicators"]["MACD"] = macd_data.get("MACD")
+
+                if "bbands" in ta_config.indicators and "bbands" in result["indicators"]:
+                    result["indicators"]["BBands"] = result["indicators"]["bbands"]["current"]
+
+                if "atr" in ta_config.indicators and "atr" in result["indicators"]:
+                    result["indicators"]["ATR"] = result["indicators"]["atr"]["current"]
+
+                if "adx" in ta_config.indicators and "adx" in result["indicators"]:
+                    result["indicators"]["ADX"] = result["indicators"]["adx"]["current"]
+
+        return result
 
     def _compute_indicators(
         self,
@@ -470,7 +523,7 @@ class StockulaManager:
                 progress.advance(task)
 
     def run_backtest(self, ticker: str) -> list[dict[str, Any]]:
-        """Run backtesting for a ticker.
+        """Run backtesting for a ticker using BacktestingManager.
 
         Args:
             ticker: Stock symbol
@@ -478,7 +531,12 @@ class StockulaManager:
         Returns:
             List of backtest results
         """
+        backtesting_manager = self.container.backtesting_manager()
         runner = self.container.backtest_runner()
+
+        # Set the runner in the manager
+        backtesting_manager.set_runner(runner)
+
         results = []
 
         # Check if we should use train/test split for backtesting
@@ -490,27 +548,18 @@ class StockulaManager:
         )
 
         for strategy_config in self.config.backtest.strategies:
-            strategy_class = self.get_strategy_class(strategy_config.name)
-            if not strategy_class:
-                self.console.print(f"[yellow]Warning: Unknown strategy '{strategy_config.name}'[/yellow]")
-                continue
-
-            # Set strategy parameters if provided
-            if strategy_config.parameters:
-                # Set class attributes from parameters
-                for key, value in strategy_config.parameters.items():
-                    setattr(strategy_class, key, value)
-
             try:
                 if use_train_test_split:
-                    # Run with train/test split
-                    backtest_result = runner.run_with_train_test_split(
-                        ticker,
-                        strategy_class,
-                        train_start_date=self.date_to_string(self.config.forecast.train_start_date),
-                        train_end_date=self.date_to_string(self.config.forecast.train_end_date),
-                        test_start_date=self.date_to_string(self.config.forecast.test_start_date),
-                        test_end_date=self.date_to_string(self.config.forecast.test_end_date),
+                    # Calculate train ratio from dates
+                    train_ratio = 0.7  # Default fallback
+
+                    # Run with train/test split using BacktestingManager
+                    backtest_result = backtesting_manager.run_with_train_test_split(
+                        ticker=ticker,
+                        strategy_name=strategy_config.name,
+                        train_ratio=train_ratio,
+                        config=self.config,
+                        strategy_params=strategy_config.parameters,
                         optimize_on_train=self.config.backtest.optimize,
                         param_ranges=self.config.backtest.optimization_params
                         if self.config.backtest.optimize and self.config.backtest.optimization_params
@@ -524,9 +573,12 @@ class StockulaManager:
                     # Run traditional backtest without train/test split
                     backtest_start, backtest_end = self._get_backtest_dates()
 
-                    backtest_result = runner.run_from_symbol(
-                        ticker,
-                        strategy_class,
+                    # Use BacktestingManager for single strategy backtest
+                    backtest_result = backtesting_manager.run_single_strategy(
+                        ticker=ticker,
+                        strategy_name=strategy_config.name,
+                        config=self.config,
+                        strategy_params=strategy_config.parameters,
                         start_date=backtest_start,
                         end_date=backtest_end,
                     )
@@ -650,55 +702,31 @@ class StockulaManager:
         """
         self.log_manager.info(f"\nForecasting {ticker} with train/test evaluation...")
 
-        forecaster = self.container.stock_forecaster()
+        forecasting_manager = self.container.forecasting_manager()
 
         try:
-            # Use forecast date fields if available, otherwise fall back to data dates
-            train_start = self.config.forecast.train_start_date or self.config.data.start_date
-            train_end = self.config.forecast.train_end_date or self.config.data.end_date
-            test_start = self.config.forecast.test_start_date
-            test_end = self.config.forecast.test_end_date
-
-            result = forecaster.forecast_from_symbol_with_evaluation(
-                ticker,
-                train_start_date=self.date_to_string(train_start),
-                train_end_date=self.date_to_string(train_end),
-                test_start_date=self.date_to_string(test_start),
-                test_end_date=self.date_to_string(test_end),
-                model_list=self.config.forecast.model_list,
-                ensemble=self.config.forecast.ensemble,
-                max_generations=self.config.forecast.max_generations,
+            # Determine if we should use evaluation
+            use_evaluation = (
+                self.config.forecast.train_start_date is not None
+                and self.config.forecast.train_end_date is not None
+                and self.config.forecast.test_start_date is not None
+                and self.config.forecast.test_end_date is not None
             )
 
-            predictions = result["predictions"]
-            model_info = forecaster.get_best_model()
+            result = forecasting_manager.forecast_symbol(
+                ticker,
+                self.config,
+                use_evaluation=use_evaluation,
+            )
 
-            self.log_manager.info(f"Forecast completed for {ticker} using {model_info['model_name']}")
-
-            forecast_result = {
-                "ticker": ticker,
-                "current_price": float(predictions["forecast"].iloc[0]),
-                "forecast_price": float(predictions["forecast"].iloc[-1]),
-                "lower_bound": float(predictions["lower_bound"].iloc[-1]),
-                "upper_bound": float(predictions["upper_bound"].iloc[-1]),
-                "forecast_length": self.config.forecast.forecast_length,
-                "start_date": predictions.index[0].strftime("%Y-%m-%d"),
-                "end_date": predictions.index[-1].strftime("%Y-%m-%d"),
-                "best_model": model_info["model_name"],
-                "model_params": model_info.get("model_params", {}),
-                "train_period": result["train_period"],
-                "test_period": result["test_period"],
-            }
-
-            # Add evaluation metrics if available
-            if result["evaluation_metrics"]:
-                forecast_result["evaluation"] = result["evaluation_metrics"]
+            # Add additional info if evaluation was used
+            if use_evaluation and "evaluation" in result:
                 self.log_manager.info(
-                    f"Evaluation metrics for {ticker}: RMSE={result['evaluation_metrics']['rmse']:.2f}, "
-                    f"MAPE={result['evaluation_metrics']['mape']:.2f}%"
+                    f"Evaluation metrics for {ticker}: RMSE={result['evaluation']['rmse']:.2f}, "
+                    f"MAPE={result['evaluation']['mape']:.2f}%"
                 )
 
-            return forecast_result
+            return result
 
         except KeyboardInterrupt:
             self.log_manager.warning(f"Forecast for {ticker} interrupted by user")
@@ -718,34 +746,16 @@ class StockulaManager:
         """
         self.log_manager.info(f"\nForecasting {ticker} for {self.config.forecast.forecast_length} days...")
 
-        forecaster = self.container.stock_forecaster()
+        forecasting_manager = self.container.forecasting_manager()
 
         try:
-            predictions = forecaster.forecast_from_symbol(
+            result = forecasting_manager.forecast_symbol(
                 ticker,
-                start_date=self.date_to_string(self.config.data.start_date),
-                end_date=self.date_to_string(self.config.data.end_date),
-                model_list=self.config.forecast.model_list,
-                ensemble=self.config.forecast.ensemble,
-                max_generations=self.config.forecast.max_generations,
+                self.config,
+                use_evaluation=False,  # Explicit no evaluation for standard forecast
             )
 
-            model_info = forecaster.get_best_model()
-
-            self.log_manager.info(f"Forecast completed for {ticker} using {model_info['model_name']}")
-
-            return {
-                "ticker": ticker,
-                "current_price": predictions["forecast"].iloc[0],
-                "forecast_price": predictions["forecast"].iloc[-1],
-                "lower_bound": predictions["lower_bound"].iloc[-1],
-                "upper_bound": predictions["upper_bound"].iloc[-1],
-                "forecast_length": self.config.forecast.forecast_length,
-                "start_date": predictions.index[0].strftime("%Y-%m-%d"),
-                "end_date": predictions.index[-1].strftime("%Y-%m-%d"),
-                "best_model": model_info["model_name"],
-                "model_params": model_info.get("model_params", {}),
-            }
+            return result
         except KeyboardInterrupt:
             self.log_manager.warning(f"Forecast for {ticker} interrupted by user")
             return {"ticker": ticker, "error": "Interrupted by user"}

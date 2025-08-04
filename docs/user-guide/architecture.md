@@ -19,7 +19,9 @@ graph TB
         Asset[Asset]
         Ticker[Ticker]
         Category[Category]
-        Allocator[Allocation Module<br/>BacktestOptimizedAllocator]
+        AllocatorManager[Allocator Manager<br/>Manages All Strategies]
+        Allocator[Standard Allocator<br/>Basic Strategies]
+        BacktestAllocator[Backtest Allocator<br/>Optimization]
     end
 
     subgraph "Data Layer"
@@ -30,8 +32,11 @@ graph TB
 
     subgraph "Analysis Modules"
         TA[Technical Analysis<br/>finta]
+        TAM[Technical Analysis Manager<br/>Coordinates Indicators]
         BT[Backtesting<br/>strategies]
+        BTM[Backtesting Manager<br/>Coordinates Strategies]
         FC[Forecasting<br/>AutoTS]
+        FCM[Forecasting Manager<br/>Coordinates Strategies]
     end
 
     subgraph "Configuration & Utilities"
@@ -50,11 +55,17 @@ graph TB
     Portfolio --> Asset
     Asset --> Ticker
     Asset --> Category
-    Manager --> Allocator
+    Manager --> AllocatorManager
+    AllocatorManager --> Allocator
+    AllocatorManager --> BacktestAllocator
+    Factory --> AllocatorManager
 
-    Manager --> TA
-    Manager --> BT
-    Manager --> FC
+    Manager --> TAM
+    Manager --> BTM
+    Manager --> FCM
+    TAM --> TA
+    BTM --> BT
+    FCM --> FC
 
     TA --> Fetcher
     BT --> Fetcher
@@ -76,7 +87,12 @@ graph TB
     style Factory fill:#9C27B0,stroke:#7B1FA2,color:#fff
     style LogManager fill:#607D8B,stroke:#455A64,color:#fff
     style Container fill:#795548,stroke:#5D4037,color:#fff
+    style AllocatorManager fill:#E91E63,stroke:#C2185B,color:#fff
     style Allocator fill:#E91E63,stroke:#C2185B,color:#fff
+    style BacktestAllocator fill:#E91E63,stroke:#C2185B,color:#fff
+    style TAM fill:#00BCD4,stroke:#0097A7,color:#fff
+    style BTM fill:#00BCD4,stroke:#0097A7,color:#fff
+    style FCM fill:#00BCD4,stroke:#0097A7,color:#fff
 ```
 
 ## Data Flow
@@ -139,7 +155,9 @@ src/stockula/
 │   └── factory.py       # Domain object factory
 ├── allocation/           # Allocation strategies
 │   ├── __init__.py
-│   ├── allocator.py     # Base allocation strategies
+│   ├── manager.py       # AllocatorManager - coordinates strategies
+│   ├── base_allocator.py # Base allocator interface
+│   ├── allocator.py     # Standard allocation strategies
 │   └── backtest_allocator.py  # Backtest-optimized allocation
 ├── data/                 # Data fetching module
 │   ├── __init__.py
@@ -150,6 +168,7 @@ src/stockula/
 │   └── cli.py           # Command-line interface
 ├── technical_analysis/   # Technical indicators
 │   ├── __init__.py
+│   ├── manager.py       # TechnicalAnalysisManager - coordinates strategies
 │   └── indicators.py    # finta wrapper
 ├── backtesting/         # Strategy backtesting
 │   ├── __init__.py
@@ -157,6 +176,7 @@ src/stockula/
 │   └── runner.py        # Backtest execution
 ├── forecasting/         # Price prediction
 │   ├── __init__.py
+│   ├── manager.py       # ForecastingManager - coordinates strategies
 │   └── forecaster.py    # AutoTS wrapper
 └── utils/               # Utilities
     ├── __init__.py
@@ -194,8 +214,10 @@ src/stockula/
 - **Ticker**: Maps symbols to detailed information
 - **Factory**: Creates and configures domain objects
 - **Category**: Categorizes assets (INDEX, MOMENTUM, etc.)
-- **Allocator**: Base class for allocation strategies (equal weight, custom, etc.)
+- **AllocatorManager**: Coordinates all allocation strategies and provides unified interface
+- **Allocator**: Standard allocator for basic strategies (equal weight, market cap, custom, dynamic, auto)
 - **BacktestOptimizedAllocator**: Advanced allocation using backtest performance data
+- **ForecastingManager**: Coordinates forecasting strategies and provides unified interface for different forecasting models
 
 **Patterns**:
 
@@ -228,9 +250,12 @@ src/stockula/
 
 1. **Technical Analysis** (`technical_analysis/`)
 
+   - TechnicalAnalysisManager for coordinating analysis strategies
    - Wraps finta library for indicators
+   - Pre-configured analysis groups (basic, momentum, trend, volatility)
    - Vectorized calculations for performance
    - Configurable indicator parameters
+   - Automatic signal generation and summary
 
 1. **Backtesting** (`backtesting/`)
 
@@ -240,9 +265,12 @@ src/stockula/
 
 1. **Forecasting** (`forecasting/`)
 
+   - ForecastingManager for coordinating different forecasting strategies
    - AutoTS integration for time series prediction
-   - Multiple model ensembles
+   - Multiple model ensembles (standard, fast, financial)
    - Confidence intervals and validation
+   - Quick forecast for rapid predictions
+   - Financial-specific forecasting optimizations
 
 ### Utilities
 
@@ -284,8 +312,14 @@ container = Container()
 data_fetcher = container.data_fetcher()
 backtest_runner = container.backtest_runner()
 portfolio_factory = container.domain_factory()
-allocator = container.allocator()
-backtest_allocator = container.backtest_allocator()
+allocator_manager = container.allocator_manager()
+forecasting_manager = container.forecasting_manager()
+
+# The allocator manager provides access to all allocation strategies
+quantities = allocator_manager.calculate_quantities(config, tickers)
+
+# The forecasting manager provides access to all forecasting strategies
+forecast = forecasting_manager.forecast_symbol('AAPL', config)
 ```
 
 ### Interface-Based Design

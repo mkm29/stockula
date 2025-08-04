@@ -26,16 +26,16 @@ Until comprehensive testing is implemented:
 
 ### Overall Project Status
 
-| Module              | Coverage | Status | Notes                   |
-| ------------------- | -------- | ------ | ----------------------- |
-| **Overall Project** | 83%      | ✅     | Excluding strategies.py |
+| Module              | Coverage | Status | Notes                     |
+| ------------------- | -------- | ------ | ------------------------- |
+| **Overall Project** | 83%      | ✅     | Excluding strategies.py   |
 | **main.py**         | 83%      | ✅     | Refactored to entry point |
-| **forecaster.py**   | 83%      | ✅     | +33% improvement        |
-| **factory.py**      | 88%      | ✅     | +9% improvement         |
-| **runner.py**       | 89%      | ✅     | +19% improvement        |
-| **indicators.py**   | 98%      | ✅     | Excellent coverage      |
-| **metrics.py**      | 90%      | ✅     | Good coverage           |
-| **strategies.py**   | Excluded | ⚠️     | 567 lines untested      |
+| **forecaster.py**   | 83%      | ✅     | +33% improvement          |
+| **factory.py**      | 88%      | ✅     | +9% improvement           |
+| **runner.py**       | 89%      | ✅     | +19% improvement          |
+| **indicators.py**   | 98%      | ✅     | Excellent coverage        |
+| **metrics.py**      | 90%      | ✅     | Good coverage             |
+| **strategies.py**   | Excluded | ⚠️     | 567 lines untested        |
 
 ### Recent Improvements
 

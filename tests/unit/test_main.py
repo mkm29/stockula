@@ -67,7 +67,8 @@ def create_mock_container(config=None):
     container.domain_factory.return_value = mock_factory
     container.data_fetcher.return_value = mock_fetcher
     container.backtest_runner.return_value = Mock()
-    container.stock_forecaster.return_value = Mock()
+    container.backtesting_manager.return_value = Mock()
+    container.forecasting_manager.return_value = Mock()
 
     return container
 
@@ -148,9 +149,23 @@ class TestTechnicalAnalysis:
         mock_ta.rsi.return_value = pd.Series([50.0] * 50)
         mock_ta_class.return_value = mock_ta
 
+        # Mock TechnicalAnalysisManager
+        mock_ta_manager = Mock()
+        mock_ta_manager.analyze_symbol.return_value = {
+            "ticker": "AAPL",
+            "current_price": 100,
+            "analysis_type": "custom",
+            "indicators": {
+                "sma": {"current": 100.5},
+                "rsi": {"current": 50.0},
+            },
+            "summary": {"signals": [], "strength": "neutral"},
+        }
+
         manager = create_mock_manager(config)
         # Set up the container's data_fetcher to return our mock
         manager.container.data_fetcher.return_value = mock_data_fetcher
+        manager.container.technical_analysis_manager.return_value = mock_ta_manager
         result = manager.run_technical_analysis("AAPL", show_progress=False)
 
         assert result["ticker"] == "AAPL"
@@ -168,7 +183,13 @@ class TestTechnicalAnalysis:
         config.technical_analysis.ema_periods = [12, 26]
 
         mock_data = pd.DataFrame(
-            {"Close": [100] * 100},
+            {
+                "Open": [99] * 100,
+                "High": [101] * 100,
+                "Low": [98] * 100,
+                "Close": [100] * 100,
+                "Volume": [1000000] * 100,
+            },
             index=pd.date_range("2023-01-01", periods=100),
         )
         mock_data_fetcher = Mock()
@@ -187,11 +208,30 @@ class TestTechnicalAnalysis:
         mock_ta.adx.return_value = pd.Series([25.0] * 100)
         mock_ta_class.return_value = mock_ta
 
+        # Mock TechnicalAnalysisManager
+        mock_ta_manager = Mock()
+        mock_ta_manager.analyze_symbol.return_value = {
+            "ticker": "TEST",
+            "current_price": 100,
+            "analysis_type": "custom",
+            "indicators": {
+                "sma": {"current": 100.0},
+                "ema": {"current": 99.5},
+                "rsi": {"current": 55.0},
+                "macd": {"current": {"MACD": 0.5, "MACD_SIGNAL": 0.3}},
+                "bbands": {"current": {"BB_UPPER": 102, "BB_MIDDLE": 100, "BB_LOWER": 98}},
+                "atr": {"current": 2.0},
+                "adx": {"current": 25.0},
+            },
+            "summary": {"signals": [], "strength": "neutral"},
+        }
+
         # Test with and without progress bar
         for _show_progress in [True, False]:
             manager = create_mock_manager(config)
             # Set up the container's data_fetcher to return our mock
             manager.container.data_fetcher.return_value = mock_data_fetcher
+            manager.container.technical_analysis_manager.return_value = mock_ta_manager
             result = manager.run_technical_analysis("TEST", show_progress=False)
             assert all(
                 ind in result["indicators"]
@@ -210,7 +250,6 @@ class TestBacktesting:
         strategy_config.parameters = {"fast_period": 10, "slow_period": 20}
         config.backtest.strategies = [strategy_config]
 
-        Mock()
         mock_runner = Mock()
         mock_runner.run_from_symbol.return_value = {
             "Return [%]": 15.5,
@@ -220,9 +259,20 @@ class TestBacktesting:
             "Win Rate [%]": 55.0,
         }
 
+        # Mock the backtesting manager
+        mock_backtesting_manager = Mock()
+        mock_backtesting_manager.run_single_strategy.return_value = {
+            "Return [%]": 15.5,
+            "Sharpe Ratio": 1.25,
+            "Max. Drawdown [%]": -8.3,
+            "# Trades": 42,
+            "Win Rate [%]": 55.0,
+        }
+
         manager = create_mock_manager(config)
-        # Set up the container's backtest_runner to return our mock
+        # Set up the container's backtest_runner and backtesting_manager to return our mocks
         manager.container.backtest_runner.return_value = mock_runner
+        manager.container.backtesting_manager.return_value = mock_backtesting_manager
         results = manager.run_backtest("AAPL")
 
         assert len(results) == 1
@@ -249,16 +299,29 @@ class TestBacktesting:
             "Win Rate [%]": float("nan"),
         }
 
+        # Mock the backtesting manager
+        mock_backtesting_manager = Mock()
+        mock_backtesting_manager.run_single_strategy.return_value = {
+            "Return [%]": 0.0,
+            "Sharpe Ratio": 0.0,
+            "Max. Drawdown [%]": 0.0,
+            "# Trades": 0,
+            "Win Rate [%]": float("nan"),
+        }
+
         manager = create_mock_manager(config)
-        # Set up the container's backtest_runner to return our mock
+        # Set up the container's backtest_runner and backtesting_manager to return our mocks
         manager.container.backtest_runner.return_value = mock_runner
+        manager.container.backtesting_manager.return_value = mock_backtesting_manager
         results = manager.run_backtest("TEST")
+        assert len(results) == 1
         assert results[0]["win_rate"] is None
 
         # Test 2: Exception during backtest
-        mock_runner.run_from_symbol.side_effect = Exception("Backtest error")
+        mock_backtesting_manager.run_single_strategy.side_effect = Exception("Backtest error")
         manager = create_mock_manager(config)
         manager.container.backtest_runner.return_value = mock_runner
+        manager.container.backtesting_manager.return_value = mock_backtesting_manager
         results = manager.run_backtest("TEST")
         assert results == []
 
@@ -271,25 +334,21 @@ class TestForecasting:
         config = StockulaConfig()
         config.forecast.forecast_length = 30
 
-        mock_forecaster = Mock()
-        dates = pd.date_range("2024-01-01", periods=5)
-        mock_predictions = pd.DataFrame(
-            {
-                "forecast": [110, 111, 112, 113, 114],
-                "lower_bound": [105, 106, 107, 108, 109],
-                "upper_bound": [115, 116, 117, 118, 119],
-            },
-            index=dates,
-        )
-        mock_forecaster.forecast_from_symbol.return_value = mock_predictions
-        mock_forecaster.get_best_model.return_value = {
-            "model_name": "ARIMA",
+        mock_forecasting_manager = Mock()
+        mock_forecasting_manager.forecast_symbol.return_value = {
+            "ticker": "AAPL",
+            "current_price": 110,
+            "forecast_price": 114,
+            "lower_bound": 109,
+            "upper_bound": 119,
+            "forecast_length": 30,
+            "best_model": "ARIMA",
             "model_params": {"p": 1, "d": 1, "q": 1},
         }
 
         manager = create_mock_manager(config)
-        # Set up the container's stock_forecaster to return our mock
-        manager.container.stock_forecaster.return_value = mock_forecaster
+        # Set up the container's forecasting_manager to return our mock
+        manager.container.forecasting_manager.return_value = mock_forecasting_manager
         result = manager.run_forecast("AAPL")
 
         assert result["ticker"] == "AAPL"
@@ -305,26 +364,24 @@ class TestForecasting:
         config.forecast.test_start_date = date(2024, 1, 1)
         config.forecast.test_end_date = date(2024, 1, 31)
 
-        mock_forecaster = Mock()
-        mock_result = {
-            "predictions": pd.DataFrame(
-                {
-                    "forecast": [150.0, 152.0, 155.0],
-                    "lower_bound": [148.0, 150.0, 152.0],
-                    "upper_bound": [152.0, 154.0, 158.0],
-                },
-                index=pd.date_range("2024-01-01", periods=3),
-            ),
+        mock_forecasting_manager = Mock()
+        mock_forecasting_manager.forecast_symbol.return_value = {
+            "ticker": "AAPL",
+            "current_price": 150.0,
+            "forecast_price": 155.0,
+            "lower_bound": 152.0,
+            "upper_bound": 158.0,
+            "forecast_length": 31,
+            "best_model": "ARIMA",
+            "model_params": {},
             "train_period": {"start": "2023-01-01", "end": "2023-12-31", "days": 365},
             "test_period": {"start": "2024-01-01", "end": "2024-01-31", "days": 31},
-            "evaluation_metrics": {"rmse": 2.5, "mae": 2.0, "mape": 1.5},
+            "evaluation": {"rmse": 2.5, "mae": 2.0, "mape": 1.5},
         }
-        mock_forecaster.forecast_from_symbol_with_evaluation.return_value = mock_result
-        mock_forecaster.get_best_model.return_value = {"model_name": "ARIMA"}
 
         manager = create_mock_manager(config)
-        # Set up the container's stock_forecaster to return our mock
-        manager.container.stock_forecaster.return_value = mock_forecaster
+        # Set up the container's forecasting_manager to return our mock
+        manager.container.forecasting_manager.return_value = mock_forecasting_manager
         result = manager.run_forecast_with_evaluation("AAPL")
 
         assert result["ticker"] == "AAPL"
@@ -336,19 +393,19 @@ class TestForecasting:
         config = StockulaConfig()
 
         # Test keyboard interrupt
-        mock_forecaster = Mock()
-        mock_forecaster.forecast_from_symbol.side_effect = KeyboardInterrupt()
+        mock_forecasting_manager = Mock()
+        mock_forecasting_manager.forecast_symbol.side_effect = KeyboardInterrupt()
         manager = create_mock_manager(config)
-        # Set up the container's stock_forecaster to return our mock
-        manager.container.stock_forecaster.return_value = mock_forecaster
+        # Set up the container's forecasting_manager to return our mock
+        manager.container.forecasting_manager.return_value = mock_forecasting_manager
         result = manager.run_forecast("TEST")
         assert result["error"] == "Interrupted by user"
 
         # Test general exception
-        mock_forecaster.forecast_from_symbol.side_effect = Exception("API error")
+        mock_forecasting_manager.forecast_symbol.side_effect = Exception("API error")
         manager = create_mock_manager(config)
-        # Set up the container's stock_forecaster to return our mock
-        manager.container.stock_forecaster.return_value = mock_forecaster
+        # Set up the container's forecasting_manager to return our mock
+        manager.container.forecasting_manager.return_value = mock_forecasting_manager
         result = manager.run_forecast("TEST")
         assert result["error"] == "API error"
 
@@ -752,9 +809,33 @@ class TestTrainTestSplitBacktesting:
             "performance_degradation": {"return_diff": -7.2, "sharpe_diff": -0.4},
         }
 
+        # Mock the backtesting manager
+        mock_backtesting_manager = Mock()
+        mock_backtesting_manager.run_with_train_test_split.return_value = {
+            "train_period": {"start": "2023-01-01", "end": "2023-06-30", "days": 180},
+            "test_period": {"start": "2023-07-01", "end": "2023-12-31", "days": 183},
+            "train_results": {
+                "return_pct": 25.5,
+                "sharpe_ratio": 2.1,
+                "max_drawdown_pct": -5.2,
+                "num_trades": 30,
+                "win_rate": 62.0,
+            },
+            "test_results": {
+                "return_pct": 18.3,
+                "sharpe_ratio": 1.7,
+                "max_drawdown_pct": -7.8,
+                "num_trades": 25,
+                "win_rate": 58.0,
+            },
+            "optimized_parameters": {"fast_period": 15, "slow_period": 35},
+            "performance_degradation": {"return_diff": -7.2, "sharpe_diff": -0.4},
+        }
+
         manager = create_mock_manager(config)
-        # Set up the container's backtest_runner to return our mock
+        # Set up the container's backtest_runner and backtesting_manager to return our mocks
         manager.container.backtest_runner.return_value = mock_runner
+        manager.container.backtesting_manager.return_value = mock_backtesting_manager
         results = manager.run_backtest("AAPL")
 
         assert len(results) == 1
@@ -795,9 +876,25 @@ class TestTrainTestSplitBacktesting:
             "Calendar Days": 365,
         }
 
+        # Mock the backtesting manager
+        mock_backtesting_manager = Mock()
+        mock_backtesting_manager.run_single_strategy.return_value = {
+            "Return [%]": 22.5,
+            "Sharpe Ratio": 1.85,
+            "Max. Drawdown [%]": -6.3,
+            "# Trades": 35,
+            "Win Rate [%]": 60.0,
+            "Initial Cash": 100000.0,
+            "Start Date": "2023-01-01",
+            "End Date": "2023-12-31",
+            "Trading Days": 252,
+            "Calendar Days": 365,
+        }
+
         manager = create_mock_manager(config)
-        # Set up the container's backtest_runner to return our mock
+        # Set up the container's backtest_runner and backtesting_manager to return our mocks
         manager.container.backtest_runner.return_value = mock_runner
+        manager.container.backtesting_manager.return_value = mock_backtesting_manager
         results = manager.run_backtest("AAPL")
 
         assert len(results) == 1
@@ -1186,6 +1283,17 @@ class TestMainFunctionAdvanced:
         }
         container.backtest_runner.return_value = mock_runner
 
+        # Mock backtesting manager
+        mock_backtesting_manager = Mock()
+        mock_backtesting_manager.run_single_strategy.return_value = {
+            "Return [%]": 10.5,
+            "Sharpe Ratio": 1.8,
+            "Max. Drawdown [%]": -5.2,
+            "# Trades": 15,
+            "Win Rate [%]": 65.0,
+        }
+        container.backtesting_manager.return_value = mock_backtesting_manager
+
         mock_container.return_value = container
 
         mock_ta.return_value = {"ticker": "AAPL", "indicators": {}}
@@ -1198,10 +1306,14 @@ class TestMainFunctionAdvanced:
         assert mock_ta.call_count == 2
 
         # Should only backtest AAPL (not GLD which is hold-only)
-        assert mock_runner.run_from_symbol.call_count == 1
+        assert mock_backtesting_manager.run_single_strategy.call_count == 1
         # Verify it was called with AAPL
-        call_args = mock_runner.run_from_symbol.call_args[0]
-        assert call_args[0] == "AAPL"
+        call_args = mock_backtesting_manager.run_single_strategy.call_args
+        # Check if ticker was passed as positional or keyword argument
+        if call_args[0]:  # If there are positional arguments
+            assert call_args[0][0] == "AAPL"  # First positional argument (ticker)
+        else:  # If called with keyword arguments only
+            assert call_args[1]["ticker"] == "AAPL"  # Keyword argument
 
     @patch("stockula.main.create_container")
     @patch("stockula.main.setup_logging")
@@ -1252,7 +1364,7 @@ class TestMainFunctionAdvanced:
         mock_fetcher.get_current_prices.return_value = {"AAPL": 150.0}
         mock_fetcher.get_stock_data.return_value = pd.DataFrame()  # For start date fetch
         container.data_fetcher.return_value = mock_fetcher
-        container.stock_forecaster.return_value = Mock()
+        container.forecasting_manager.return_value = Mock()
 
         # Ensure portfolio value is numeric
         mock_portfolio.get_portfolio_value.return_value = 101500.0
@@ -1416,6 +1528,19 @@ class TestMainFunctionAdvanced:
         }
         container.backtest_runner.return_value = mock_runner
 
+        # Mock backtesting manager
+        mock_backtesting_manager = Mock()
+        mock_backtesting_manager.run_single_strategy.return_value = {
+            "Return [%]": 15.0,
+            "Sharpe Ratio": 1.5,
+            "Max. Drawdown [%]": -8.0,
+            "# Trades": 25,
+            "Win Rate [%]": 60.0,
+            "Start Date": "2023-01-01",
+            "End Date": "2023-12-31",
+        }
+        container.backtesting_manager.return_value = mock_backtesting_manager
+
         mock_container.return_value = container
 
         # Manager handles strategy class lookup internally
@@ -1456,14 +1581,13 @@ class TestForecastingEdgeCases:
         config = StockulaConfig()
         config.forecast.forecast_length = 30
 
-        mock_forecaster = Mock()
-        # Return empty DataFrame
-        mock_forecaster.forecast_from_symbol.return_value = pd.DataFrame()
-        mock_forecaster.get_best_model.return_value = {"model_name": "ARIMA"}
+        mock_forecasting_manager = Mock()
+        # Return error result
+        mock_forecasting_manager.forecast_symbol.return_value = {"ticker": "AAPL", "error": "No data available"}
 
         manager = create_mock_manager(config)
-        # Set up the container's stock_forecaster to return our mock
-        manager.container.stock_forecaster.return_value = mock_forecaster
+        # Set up the container's forecasting_manager to return our mock
+        manager.container.forecasting_manager.return_value = mock_forecasting_manager
         result = manager.run_forecast("AAPL")
 
         assert result["ticker"] == "AAPL"
@@ -1480,30 +1604,27 @@ class TestForecastingEdgeCases:
         config.forecast.test_start_date = None
         config.forecast.test_end_date = None
 
-        mock_forecaster = Mock()
-        mock_result = {
-            "predictions": pd.DataFrame(
-                {
-                    "forecast": [150.0],
-                    "lower_bound": [148.0],
-                    "upper_bound": [152.0],
-                },
-                index=pd.date_range("2024-01-01", periods=1),
-            ),
-            "train_period": {"start": "2023-01-01", "end": "2023-12-31", "days": 365},
-            "test_period": {"start": "2024-01-01", "end": "2024-01-31", "days": 31},
-            "evaluation_metrics": {"rmse": 2.5, "mae": 2.0, "mape": 1.5},
+        mock_forecasting_manager = Mock()
+        # Since no evaluation dates, should return regular forecast without evaluation
+        mock_forecasting_manager.forecast_symbol.return_value = {
+            "ticker": "AAPL",
+            "current_price": 150.0,
+            "forecast_price": 152.0,
+            "lower_bound": 148.0,
+            "upper_bound": 152.0,
+            "forecast_length": 14,
+            "best_model": "ARIMA",
+            "model_params": {},
         }
-        mock_forecaster.forecast_from_symbol_with_evaluation.return_value = mock_result
-        mock_forecaster.get_best_model.return_value = {"model_name": "ARIMA"}
 
         manager = create_mock_manager(config)
-        # Set up the container's stock_forecaster to return our mock
-        manager.container.stock_forecaster.return_value = mock_forecaster
+        # Set up the container's forecasting_manager to return our mock
+        manager.container.forecasting_manager.return_value = mock_forecasting_manager
         result = manager.run_forecast_with_evaluation("AAPL")
 
         assert result["ticker"] == "AAPL"
-        assert "evaluation" in result
+        # Should not have evaluation since no test dates were set
+        assert "evaluation" not in result
 
 
 class TestDateStringHandling:
@@ -1758,7 +1879,7 @@ class TestMainErrorHandling:
         mock_fetcher = Mock()
         mock_fetcher.get_current_prices.return_value = {"AAPL": 150.0, "MSFT": 300.0}
         container.data_fetcher.return_value = mock_fetcher
-        container.stock_forecaster.return_value = Mock()
+        container.forecasting_manager.return_value = Mock()
 
         mock_container.return_value = container
 

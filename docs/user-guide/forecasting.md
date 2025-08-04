@@ -6,13 +6,66 @@ Stockula provides advanced time series forecasting capabilities using AutoTS, en
 
 The forecasting module offers:
 
+- **ForecastingManager**: Centralized coordinator for all forecasting strategies
 - **AutoTS Integration**: Automated model selection and optimization
 - **Multiple Models**: Ensemble of forecasting algorithms optimized for financial data
+- **Multiple Forecasters**: Standard, fast (ultra_fast), and financial-specific forecasters
 - **Confidence Intervals**: Statistical uncertainty quantification
 - **Model Validation**: Cross-validation and backtesting
 - **Train/Test Evaluation**: Historical accuracy assessment with RMSE, MAE, and MAPE metrics
 - **Performance Optimization**: Configurable speed vs. accuracy trade-offs
 - **Rich Visualization**: Progress tracking and result display
+
+## ForecastingManager
+
+The ForecastingManager coordinates different forecasting strategies and provides a unified interface for all forecasting operations.
+
+### Available Forecasters
+
+1. **Standard Forecaster**: Balanced approach for general forecasting
+
+   - Uses the configured model list from settings
+   - Suitable for most use cases
+
+1. **Fast Forecaster**: Optimized for speed
+
+   - Uses "ultra_fast" model list
+   - Ideal for quick predictions or real-time applications
+   - Lower confidence but much faster execution
+
+1. **Financial Forecaster**: Optimized for financial time series
+
+   - Uses "financial" model list with specialized settings
+   - Enhanced ensemble methods (distance-based)
+   - More validation rounds for better accuracy
+   - Enforces no negative prices
+
+### Manager Methods
+
+```python
+from stockula.container import Container
+
+container = Container()
+forecasting_manager = container.forecasting_manager()
+
+# Forecast a single symbol
+result = forecasting_manager.forecast_symbol('AAPL', config)
+
+# Forecast multiple symbols
+results = forecasting_manager.forecast_multiple_symbols(['AAPL', 'GOOGL'], config)
+
+# Quick forecast with reduced confidence
+quick_result = forecasting_manager.quick_forecast('AAPL', forecast_days=7)
+
+# Financial-specific forecast
+financial_result = forecasting_manager.financial_forecast('AAPL', config)
+
+# Get available model lists
+models = forecasting_manager.get_available_models()
+
+# Validate configuration
+forecasting_manager.validate_forecast_config(config)
+```
 
 ## AutoTS Models
 
@@ -230,6 +283,35 @@ This confirms:
 
 ### Programmatic Usage
 
+#### Using ForecastingManager (Recommended)
+
+```python
+from stockula.container import Container
+from stockula.config.settings import load_config
+
+# Load configuration and get manager
+config = load_config("myconfig.yaml")
+container = Container()
+forecasting_manager = container.forecasting_manager()
+
+# Standard forecast
+result = forecasting_manager.forecast_symbol("AAPL", config)
+print(f"Current Price: ${result['current_price']:.2f}")
+print(f"Forecast Price: ${result['forecast_price']:.2f}")
+print(f"Confidence Range: ${result['lower_bound']:.2f} - ${result['upper_bound']:.2f}")
+print(f"Best Model: {result['best_model']}")
+
+# Quick forecast
+quick_result = forecasting_manager.quick_forecast("AAPL", forecast_days=7)
+print(f"Quick Forecast: ${quick_result['forecast_price']:.2f}")
+
+# Financial forecast
+financial_result = forecasting_manager.financial_forecast("AAPL", config)
+print(f"Financial Forecast: ${financial_result['forecast_price']:.2f}")
+```
+
+#### Direct StockForecaster Usage
+
 ```python
 from stockula.forecasting.forecaster import StockForecaster
 from stockula.data.fetcher import DataFetcher
@@ -257,6 +339,35 @@ print(f"Upper Bound: {forecast_result['upper_bound'].iloc[-1]:.2f}")
 ```
 
 ### Batch Forecasting
+
+#### Using ForecastingManager (Recommended)
+
+```python
+from stockula.container import Container
+from stockula.domain.factory import DomainFactory
+
+# Load portfolio configuration
+config = load_config("myconfig.yaml")
+container = Container()
+forecasting_manager = container.forecasting_manager()
+
+factory = DomainFactory(config)
+portfolio = factory.create_portfolio()
+
+# Forecast entire portfolio efficiently
+symbols = [asset.ticker for asset in portfolio.assets]
+portfolio_forecasts = forecasting_manager.forecast_multiple_symbols(symbols, config)
+
+# Display results
+for ticker, forecast in portfolio_forecasts.items():
+    if 'error' not in forecast:
+        print(f"{ticker}: ${forecast['forecast_price']:.2f} "
+              f"(${forecast['lower_bound']:.2f} - ${forecast['upper_bound']:.2f})")
+    else:
+        print(f"{ticker}: Error - {forecast['error']}")
+```
+
+#### Using Direct StockForecaster
 
 ```python
 from stockula.domain.factory import DomainFactory
@@ -513,34 +624,40 @@ forecast:
 ### Model Comparison
 
 ```python
-def compare_forecast_models(symbol, forecast_length=30):
-    """Compare different model configurations."""
-    configs = {
-        'fast': {'model_list': 'fast', 'max_generations': 2},
-        'financial': {'model_list': 'financial', 'max_generations': 3},
-        'slow': {'model_list': 'slow', 'max_generations': 10}
-    }
-
+def compare_forecast_models(symbol, config):
+    """Compare different forecasting strategies using ForecastingManager."""
+    from stockula.container import Container
+    
+    container = Container()
+    forecasting_manager = container.forecasting_manager()
+    
     results = {}
-
-    for name, config_params in configs.items():
-        # Create forecaster with specific config
-        forecaster = StockForecaster(
-            forecast_length=forecast_length,
-            model_list=config_params['model_list'],
-            max_generations=config_params['max_generations'],
-            data_fetcher=fetcher
-        )
-
-        data = fetcher.get_stock_data(symbol)
-        forecast = forecaster.fit_predict(data)
-
-        results[name] = {
-            'forecast_price': forecast['forecast'].iloc[-1],
-            'confidence_width': forecast['upper_bound'].iloc[-1] - forecast['lower_bound'].iloc[-1],
-            'best_model': forecaster.get_best_model()['model_name']
-        }
-
+    
+    # Standard forecast
+    standard_result = forecasting_manager.forecast_symbol(symbol, config)
+    results['standard'] = {
+        'forecast_price': standard_result['forecast_price'],
+        'confidence_width': standard_result['upper_bound'] - standard_result['lower_bound'],
+        'best_model': standard_result['best_model']
+    }
+    
+    # Quick forecast
+    quick_result = forecasting_manager.quick_forecast(symbol, forecast_days=30)
+    results['quick'] = {
+        'forecast_price': quick_result['forecast_price'],
+        'confidence_width': quick_result['upper_bound'] - quick_result['lower_bound'],
+        'confidence': quick_result['confidence']
+    }
+    
+    # Financial forecast
+    financial_result = forecasting_manager.financial_forecast(symbol, config)
+    results['financial'] = {
+        'forecast_price': financial_result['forecast_price'],
+        'confidence_width': financial_result['upper_bound'] - financial_result['lower_bound'],
+        'best_model': financial_result['best_model'],
+        'model_type': financial_result['model_type']
+    }
+    
     return results
 ```
 

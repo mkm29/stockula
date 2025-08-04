@@ -297,7 +297,11 @@ GLD      | Strategy: VIDYAStrategy            | Return [%]:  6.5000 | Allocation
 
 ## Integration with Portfolio Management
 
-### Using Allocators in Practice
+### AllocatorManager Overview
+
+Stockula uses an `AllocatorManager` to coordinate between different allocation strategies. This manager provides a unified interface for all allocation methods and automatically selects the appropriate allocator based on the configured allocation method.
+
+### Using AllocatorManager in Practice
 
 ```python
 from stockula.container import create_container
@@ -305,17 +309,36 @@ from stockula.container import create_container
 # Create container with configuration
 container = create_container("config.yaml")
 
-# Get the appropriate allocator based on configuration
-if config.portfolio.allocation_method == "backtest_optimized":
-    allocator = container.backtest_allocator()
-else:
-    allocator = container.allocator()
+# Get the allocator manager (handles all allocation strategies)
+allocator_manager = container.allocator_manager()
 
-# Calculate quantities
-quantities = allocator.calculate_quantities(
+# Calculate quantities using the configured allocation method
+quantities = allocator_manager.calculate_quantities(
     config=config,
     tickers=config.portfolio.tickers
 )
+```
+
+### Direct Access to Specific Allocators
+
+While the AllocatorManager handles allocation method selection automatically, you can also access specific allocators directly when needed:
+
+```python
+# Get specific allocation methods
+allocator_manager = container.allocator_manager()
+
+# Access standard allocator for basic methods
+standard_allocator = allocator_manager.standard_allocator
+
+# Access backtest allocator for optimization
+backtest_allocator = allocator_manager.backtest_allocator
+
+# Or use the manager's convenience methods
+quantities = allocator_manager.calculate_equal_weight_quantities(config, tickers)
+quantities = allocator_manager.calculate_market_cap_quantities(config, tickers)
+quantities = allocator_manager.calculate_dynamic_quantities(config, tickers)
+quantities = allocator_manager.calculate_auto_allocation_quantities(config, tickers)
+quantities = allocator_manager.calculate_backtest_optimized_quantities(config, tickers)
 ```
 
 ### Allocation Validation

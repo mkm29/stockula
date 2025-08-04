@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 
 from dependency_injector.wiring import Provide, inject
 
-from ..allocation import Allocator
+from ..allocation import AllocatorManager
 from ..config import StockulaConfig, TickerConfig
 from ..interfaces import ILoggingManager
 from .asset import Asset
@@ -35,7 +35,7 @@ class DomainFactory:
         config: StockulaConfig | None = None,
         fetcher: "IDataFetcher | None" = None,
         ticker_registry: TickerRegistry | None = None,
-        allocator: Allocator | None = None,
+        allocator_manager: AllocatorManager | None = None,
         logging_manager: ILoggingManager = Provide["logging_manager"],
     ):
         """Initialize factory with dependencies.
@@ -44,14 +44,13 @@ class DomainFactory:
             config: Configuration object
             fetcher: Data fetcher instance
             ticker_registry: Ticker registry instance
-            allocator: Allocator instance (if not provided, will be created from fetcher)
+            allocator_manager: AllocatorManager instance for managing allocation strategies
             logging_manager: Injected logging manager
         """
         self.config = config
         self.fetcher = fetcher
         self.ticker_registry = ticker_registry or TickerRegistry()
-        # If allocator is provided, use it; otherwise create one if fetcher is available
-        self.allocator = allocator if allocator is not None else (Allocator(fetcher) if fetcher else None)
+        self.allocator_manager = allocator_manager
         self.logger = logging_manager
 
     def _create_ticker(self, ticker_config: TickerConfig) -> Ticker:
@@ -130,9 +129,9 @@ class DomainFactory:
                 "Using auto-allocation - optimizing quantities based on category ratios "
                 "and capital utilization target..."
             )
-            if not self.allocator:
-                raise ValueError("Allocator not configured - data fetcher required for dynamic allocation")
-            calculated_quantities = self.allocator.calculate_auto_allocation_quantities(config, tickers_to_add)
+            if not self.allocator_manager:
+                raise ValueError("AllocatorManager not configured - required for auto allocation")
+            calculated_quantities = self.allocator_manager.calculate_auto_allocation_quantities(config, tickers_to_add)
 
             for ticker_config in tickers_to_add:
                 calculated_quantity = calculated_quantities.get(ticker_config.symbol, 0.0)
@@ -152,9 +151,10 @@ class DomainFactory:
                 self.logger.info(
                     "Using dynamic allocation - calculating quantities based on allocation percentages/amounts..."
                 )
-            if not self.allocator:
-                raise ValueError("Allocator not configured - data fetcher required for dynamic allocation")
-            calculated_quantities = self.allocator.calculate_dynamic_quantities(config, tickers_to_add)
+            if not self.allocator_manager:
+                raise ValueError("AllocatorManager not configured - required for dynamic allocation")
+            # Use allocator manager to calculate quantities based on the allocation method
+            calculated_quantities = self.allocator_manager.calculate_quantities(config, tickers_to_add)
 
             for ticker_config in tickers_to_add:
                 calculated_quantity = calculated_quantities.get(ticker_config.symbol)

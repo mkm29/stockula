@@ -23,15 +23,15 @@ open htmlcov/index.html
 
 ### Coverage Status
 
-| Module          | Coverage | Notes                   |
-| --------------- | -------- | ----------------------- |
-| Overall Project | 83%      | Excluding strategies.py |
+| Module          | Coverage | Notes                     |
+| --------------- | -------- | ------------------------- |
+| Overall Project | 83%      | Excluding strategies.py   |
 | main.py         | 83%      | Refactored to entry point |
-| forecaster.py   | 83%      | +33% improvement        |
-| factory.py      | 88%      | +9% improvement         |
-| runner.py       | 89%      | +19% improvement        |
-| indicators.py   | 98%      | Comprehensive coverage  |
-| strategies.py   | Excluded | Framework constraints   |
+| forecaster.py   | 83%      | +33% improvement          |
+| factory.py      | 88%      | +9% improvement           |
+| runner.py       | 89%      | +19% improvement          |
+| indicators.py   | 98%      | Comprehensive coverage    |
+| strategies.py   | Excluded | Framework constraints     |
 
 ## Testing Strategy
 
