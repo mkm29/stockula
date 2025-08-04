@@ -22,25 +22,29 @@ The TechnicalAnalysisManager coordinates different technical analysis strategies
 ### Available Analysis Types
 
 1. **Basic Analysis**: Essential indicators for quick overview
+
    - Simple Moving Average (SMA)
    - Exponential Moving Average (EMA)
    - Relative Strength Index (RSI)
    - Volume analysis
 
-2. **Momentum Analysis**: Focus on momentum indicators
+1. **Momentum Analysis**: Focus on momentum indicators
+
    - RSI, MACD, Stochastic
    - ADX, CCI, Williams %R
 
-3. **Trend Analysis**: Trend-following indicators
+1. **Trend Analysis**: Trend-following indicators
+
    - SMA, EMA, MACD
    - ADX, Ichimoku Cloud
 
-4. **Volatility Analysis**: Volatility measurement
+1. **Volatility Analysis**: Volatility measurement
+
    - Bollinger Bands
    - Average True Range (ATR)
    - Stochastic
 
-5. **Comprehensive Analysis**: All available indicators
+1. **Comprehensive Analysis**: All available indicators
 
 ### Manager Methods
 

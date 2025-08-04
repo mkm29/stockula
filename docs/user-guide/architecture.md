@@ -32,7 +32,9 @@ graph TB
 
     subgraph "Analysis Modules"
         TA[Technical Analysis<br/>finta]
+        TAM[Technical Analysis Manager<br/>Coordinates Indicators]
         BT[Backtesting<br/>strategies]
+        BTM[Backtesting Manager<br/>Coordinates Strategies]
         FC[Forecasting<br/>AutoTS]
         FCM[Forecasting Manager<br/>Coordinates Strategies]
     end
@@ -58,9 +60,11 @@ graph TB
     AllocatorManager --> BacktestAllocator
     Factory --> AllocatorManager
 
-    Manager --> TA
-    Manager --> BT
+    Manager --> TAM
+    Manager --> BTM
     Manager --> FCM
+    TAM --> TA
+    BTM --> BT
     FCM --> FC
 
     TA --> Fetcher
@@ -86,6 +90,8 @@ graph TB
     style AllocatorManager fill:#E91E63,stroke:#C2185B,color:#fff
     style Allocator fill:#E91E63,stroke:#C2185B,color:#fff
     style BacktestAllocator fill:#E91E63,stroke:#C2185B,color:#fff
+    style TAM fill:#00BCD4,stroke:#0097A7,color:#fff
+    style BTM fill:#00BCD4,stroke:#0097A7,color:#fff
     style FCM fill:#00BCD4,stroke:#0097A7,color:#fff
 ```
 

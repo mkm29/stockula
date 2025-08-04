@@ -44,6 +44,7 @@ class TestStockulaManager:
         container.data_fetcher.return_value = Mock()
         container.domain_factory.return_value = Mock()
         container.backtest_runner.return_value = Mock()
+        container.backtesting_manager.return_value = Mock()
         container.forecasting_manager.return_value = Mock()
         container.technical_analysis_manager.return_value = Mock()
         container.allocator_manager.return_value = Mock()
@@ -488,6 +489,22 @@ class TestStockulaManager:
         }
         mock_container.backtest_runner.return_value = mock_runner
 
+        # Mock backtesting manager
+        mock_backtesting_manager = Mock()
+        mock_backtesting_manager.run_single_strategy.return_value = {
+            "Return [%]": 15.0,
+            "Sharpe Ratio": 1.2,
+            "Max. Drawdown [%]": -8.0,
+            "# Trades": 25,
+            "Win Rate [%]": 60.0,
+            "Initial Cash": 100000.0,
+            "Start Date": "2023-01-01",
+            "End Date": "2023-12-31",
+            "Trading Days": 252,
+            "Calendar Days": 365,
+        }
+        mock_container.backtesting_manager.return_value = mock_backtesting_manager
+
         manager = StockulaManager(mock_config, mock_container)
         results = manager.run_backtest("AAPL")
 
@@ -539,6 +556,30 @@ class TestStockulaManager:
         }
         mock_container.backtest_runner.return_value = mock_runner
 
+        # Mock backtesting manager
+        mock_backtesting_manager = Mock()
+        mock_backtesting_manager.run_with_train_test_split.return_value = {
+            "train_period": {"start": "2023-01-01", "end": "2023-06-30", "days": 180},
+            "test_period": {"start": "2023-07-01", "end": "2023-12-31", "days": 183},
+            "train_results": {
+                "return_pct": 20.0,
+                "sharpe_ratio": 1.8,
+                "max_drawdown_pct": -5.0,
+                "num_trades": 30,
+                "win_rate": 65.0,
+            },
+            "test_results": {
+                "return_pct": 15.0,
+                "sharpe_ratio": 1.5,
+                "max_drawdown_pct": -7.0,
+                "num_trades": 25,
+                "win_rate": 60.0,
+            },
+            "optimized_parameters": {"period": 21},
+            "performance_degradation": {"return_diff": -5.0, "sharpe_diff": -0.3},
+        }
+        mock_container.backtesting_manager.return_value = mock_backtesting_manager
+
         manager = StockulaManager(mock_config, mock_container)
         results = manager.run_backtest("AAPL")
 
@@ -575,6 +616,11 @@ class TestStockulaManager:
         mock_runner.run_from_symbol.side_effect = Exception("Test error")
         mock_container.backtest_runner.return_value = mock_runner
 
+        # Mock backtesting manager to raise exception
+        mock_backtesting_manager = Mock()
+        mock_backtesting_manager.run_single_strategy.side_effect = Exception("Test error")
+        mock_container.backtesting_manager.return_value = mock_backtesting_manager
+
         manager = StockulaManager(mock_config, mock_container)
         results = manager.run_backtest("AAPL")
 
@@ -597,6 +643,17 @@ class TestStockulaManager:
             "Win Rate [%]": float("nan"),
         }
         mock_container.backtest_runner.return_value = mock_runner
+
+        # Mock backtesting manager with NaN win rate
+        mock_backtesting_manager = Mock()
+        mock_backtesting_manager.run_single_strategy.return_value = {
+            "Return [%]": 0.0,
+            "Sharpe Ratio": 0.0,
+            "Max. Drawdown [%]": 0.0,
+            "# Trades": 0,
+            "Win Rate [%]": float("nan"),
+        }
+        mock_container.backtesting_manager.return_value = mock_backtesting_manager
 
         manager = StockulaManager(mock_config, mock_container)
         results = manager.run_backtest("AAPL")

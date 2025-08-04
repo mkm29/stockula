@@ -1,5 +1,6 @@
 """Backtesting module using backtesting.py library."""
 
+from .manager import BacktestingManager
 from .metrics import (
     calculate_dynamic_sharpe_ratio,
     calculate_rolling_sharpe_ratio,
@@ -35,6 +36,7 @@ __all__ = [
     "FRAMAStrategy",
     "VAMAStrategy",
     "KaufmanEfficiencyStrategy",
+    "BacktestingManager",
     "BacktestRunner",
     "calculate_dynamic_sharpe_ratio",
     "calculate_rolling_sharpe_ratio",

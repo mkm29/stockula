@@ -523,7 +523,7 @@ class StockulaManager:
                 progress.advance(task)
 
     def run_backtest(self, ticker: str) -> list[dict[str, Any]]:
-        """Run backtesting for a ticker.
+        """Run backtesting for a ticker using BacktestingManager.
 
         Args:
             ticker: Stock symbol
@@ -531,7 +531,12 @@ class StockulaManager:
         Returns:
             List of backtest results
         """
+        backtesting_manager = self.container.backtesting_manager()
         runner = self.container.backtest_runner()
+
+        # Set the runner in the manager
+        backtesting_manager.set_runner(runner)
+
         results = []
 
         # Check if we should use train/test split for backtesting
@@ -543,27 +548,18 @@ class StockulaManager:
         )
 
         for strategy_config in self.config.backtest.strategies:
-            strategy_class = self.get_strategy_class(strategy_config.name)
-            if not strategy_class:
-                self.console.print(f"[yellow]Warning: Unknown strategy '{strategy_config.name}'[/yellow]")
-                continue
-
-            # Set strategy parameters if provided
-            if strategy_config.parameters:
-                # Set class attributes from parameters
-                for key, value in strategy_config.parameters.items():
-                    setattr(strategy_class, key, value)
-
             try:
                 if use_train_test_split:
-                    # Run with train/test split
-                    backtest_result = runner.run_with_train_test_split(
-                        ticker,
-                        strategy_class,
-                        train_start_date=self.date_to_string(self.config.forecast.train_start_date),
-                        train_end_date=self.date_to_string(self.config.forecast.train_end_date),
-                        test_start_date=self.date_to_string(self.config.forecast.test_start_date),
-                        test_end_date=self.date_to_string(self.config.forecast.test_end_date),
+                    # Calculate train ratio from dates
+                    train_ratio = 0.7  # Default fallback
+
+                    # Run with train/test split using BacktestingManager
+                    backtest_result = backtesting_manager.run_with_train_test_split(
+                        ticker=ticker,
+                        strategy_name=strategy_config.name,
+                        train_ratio=train_ratio,
+                        config=self.config,
+                        strategy_params=strategy_config.parameters,
                         optimize_on_train=self.config.backtest.optimize,
                         param_ranges=self.config.backtest.optimization_params
                         if self.config.backtest.optimize and self.config.backtest.optimization_params
@@ -577,9 +573,12 @@ class StockulaManager:
                     # Run traditional backtest without train/test split
                     backtest_start, backtest_end = self._get_backtest_dates()
 
-                    backtest_result = runner.run_from_symbol(
-                        ticker,
-                        strategy_class,
+                    # Use BacktestingManager for single strategy backtest
+                    backtest_result = backtesting_manager.run_single_strategy(
+                        ticker=ticker,
+                        strategy_name=strategy_config.name,
+                        config=self.config,
+                        strategy_params=strategy_config.parameters,
                         start_date=backtest_start,
                         end_date=backtest_end,
                     )

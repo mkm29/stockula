@@ -67,6 +67,7 @@ def create_mock_container(config=None):
     container.domain_factory.return_value = mock_factory
     container.data_fetcher.return_value = mock_fetcher
     container.backtest_runner.return_value = Mock()
+    container.backtesting_manager.return_value = Mock()
     container.forecasting_manager.return_value = Mock()
 
     return container
@@ -249,7 +250,6 @@ class TestBacktesting:
         strategy_config.parameters = {"fast_period": 10, "slow_period": 20}
         config.backtest.strategies = [strategy_config]
 
-        Mock()
         mock_runner = Mock()
         mock_runner.run_from_symbol.return_value = {
             "Return [%]": 15.5,
@@ -259,9 +259,20 @@ class TestBacktesting:
             "Win Rate [%]": 55.0,
         }
 
+        # Mock the backtesting manager
+        mock_backtesting_manager = Mock()
+        mock_backtesting_manager.run_single_strategy.return_value = {
+            "Return [%]": 15.5,
+            "Sharpe Ratio": 1.25,
+            "Max. Drawdown [%]": -8.3,
+            "# Trades": 42,
+            "Win Rate [%]": 55.0,
+        }
+
         manager = create_mock_manager(config)
-        # Set up the container's backtest_runner to return our mock
+        # Set up the container's backtest_runner and backtesting_manager to return our mocks
         manager.container.backtest_runner.return_value = mock_runner
+        manager.container.backtesting_manager.return_value = mock_backtesting_manager
         results = manager.run_backtest("AAPL")
 
         assert len(results) == 1
@@ -288,16 +299,29 @@ class TestBacktesting:
             "Win Rate [%]": float("nan"),
         }
 
+        # Mock the backtesting manager
+        mock_backtesting_manager = Mock()
+        mock_backtesting_manager.run_single_strategy.return_value = {
+            "Return [%]": 0.0,
+            "Sharpe Ratio": 0.0,
+            "Max. Drawdown [%]": 0.0,
+            "# Trades": 0,
+            "Win Rate [%]": float("nan"),
+        }
+
         manager = create_mock_manager(config)
-        # Set up the container's backtest_runner to return our mock
+        # Set up the container's backtest_runner and backtesting_manager to return our mocks
         manager.container.backtest_runner.return_value = mock_runner
+        manager.container.backtesting_manager.return_value = mock_backtesting_manager
         results = manager.run_backtest("TEST")
+        assert len(results) == 1
         assert results[0]["win_rate"] is None
 
         # Test 2: Exception during backtest
-        mock_runner.run_from_symbol.side_effect = Exception("Backtest error")
+        mock_backtesting_manager.run_single_strategy.side_effect = Exception("Backtest error")
         manager = create_mock_manager(config)
         manager.container.backtest_runner.return_value = mock_runner
+        manager.container.backtesting_manager.return_value = mock_backtesting_manager
         results = manager.run_backtest("TEST")
         assert results == []
 
@@ -785,9 +809,33 @@ class TestTrainTestSplitBacktesting:
             "performance_degradation": {"return_diff": -7.2, "sharpe_diff": -0.4},
         }
 
+        # Mock the backtesting manager
+        mock_backtesting_manager = Mock()
+        mock_backtesting_manager.run_with_train_test_split.return_value = {
+            "train_period": {"start": "2023-01-01", "end": "2023-06-30", "days": 180},
+            "test_period": {"start": "2023-07-01", "end": "2023-12-31", "days": 183},
+            "train_results": {
+                "return_pct": 25.5,
+                "sharpe_ratio": 2.1,
+                "max_drawdown_pct": -5.2,
+                "num_trades": 30,
+                "win_rate": 62.0,
+            },
+            "test_results": {
+                "return_pct": 18.3,
+                "sharpe_ratio": 1.7,
+                "max_drawdown_pct": -7.8,
+                "num_trades": 25,
+                "win_rate": 58.0,
+            },
+            "optimized_parameters": {"fast_period": 15, "slow_period": 35},
+            "performance_degradation": {"return_diff": -7.2, "sharpe_diff": -0.4},
+        }
+
         manager = create_mock_manager(config)
-        # Set up the container's backtest_runner to return our mock
+        # Set up the container's backtest_runner and backtesting_manager to return our mocks
         manager.container.backtest_runner.return_value = mock_runner
+        manager.container.backtesting_manager.return_value = mock_backtesting_manager
         results = manager.run_backtest("AAPL")
 
         assert len(results) == 1
@@ -828,9 +876,25 @@ class TestTrainTestSplitBacktesting:
             "Calendar Days": 365,
         }
 
+        # Mock the backtesting manager
+        mock_backtesting_manager = Mock()
+        mock_backtesting_manager.run_single_strategy.return_value = {
+            "Return [%]": 22.5,
+            "Sharpe Ratio": 1.85,
+            "Max. Drawdown [%]": -6.3,
+            "# Trades": 35,
+            "Win Rate [%]": 60.0,
+            "Initial Cash": 100000.0,
+            "Start Date": "2023-01-01",
+            "End Date": "2023-12-31",
+            "Trading Days": 252,
+            "Calendar Days": 365,
+        }
+
         manager = create_mock_manager(config)
-        # Set up the container's backtest_runner to return our mock
+        # Set up the container's backtest_runner and backtesting_manager to return our mocks
         manager.container.backtest_runner.return_value = mock_runner
+        manager.container.backtesting_manager.return_value = mock_backtesting_manager
         results = manager.run_backtest("AAPL")
 
         assert len(results) == 1
@@ -1219,6 +1283,17 @@ class TestMainFunctionAdvanced:
         }
         container.backtest_runner.return_value = mock_runner
 
+        # Mock backtesting manager
+        mock_backtesting_manager = Mock()
+        mock_backtesting_manager.run_single_strategy.return_value = {
+            "Return [%]": 10.5,
+            "Sharpe Ratio": 1.8,
+            "Max. Drawdown [%]": -5.2,
+            "# Trades": 15,
+            "Win Rate [%]": 65.0,
+        }
+        container.backtesting_manager.return_value = mock_backtesting_manager
+
         mock_container.return_value = container
 
         mock_ta.return_value = {"ticker": "AAPL", "indicators": {}}
@@ -1231,10 +1306,14 @@ class TestMainFunctionAdvanced:
         assert mock_ta.call_count == 2
 
         # Should only backtest AAPL (not GLD which is hold-only)
-        assert mock_runner.run_from_symbol.call_count == 1
+        assert mock_backtesting_manager.run_single_strategy.call_count == 1
         # Verify it was called with AAPL
-        call_args = mock_runner.run_from_symbol.call_args[0]
-        assert call_args[0] == "AAPL"
+        call_args = mock_backtesting_manager.run_single_strategy.call_args
+        # Check if ticker was passed as positional or keyword argument
+        if call_args[0]:  # If there are positional arguments
+            assert call_args[0][0] == "AAPL"  # First positional argument (ticker)
+        else:  # If called with keyword arguments only
+            assert call_args[1]["ticker"] == "AAPL"  # Keyword argument
 
     @patch("stockula.main.create_container")
     @patch("stockula.main.setup_logging")
@@ -1448,6 +1527,19 @@ class TestMainFunctionAdvanced:
             "End Date": "2023-12-31",
         }
         container.backtest_runner.return_value = mock_runner
+
+        # Mock backtesting manager
+        mock_backtesting_manager = Mock()
+        mock_backtesting_manager.run_single_strategy.return_value = {
+            "Return [%]": 15.0,
+            "Sharpe Ratio": 1.5,
+            "Max. Drawdown [%]": -8.0,
+            "# Trades": 25,
+            "Win Rate [%]": 60.0,
+            "Start Date": "2023-01-01",
+            "End Date": "2023-12-31",
+        }
+        container.backtesting_manager.return_value = mock_backtesting_manager
 
         mock_container.return_value = container
 

@@ -5,6 +5,7 @@ import threading
 from dependency_injector import containers, providers
 
 from .allocation import Allocator, AllocatorManager, BacktestOptimizedAllocator
+from .backtesting import BacktestingManager
 from .backtesting.runner import BacktestRunner
 from .config import load_config
 from .data.fetcher import DataFetcher
@@ -97,6 +98,13 @@ class Container(containers.DeclarativeContainer):
         logging_manager=logging_manager,
     )
 
+    # Backtesting manager - thread-safe singleton
+    backtesting_manager = providers.ThreadSafeSingleton(
+        BacktestingManager,
+        data_fetcher=data_fetcher,
+        logging_manager=logging_manager,
+    )
+
     # Domain factory - thread-safe singleton
     domain_factory = providers.ThreadSafeSingleton(
         DomainFactory, config=stockula_config, fetcher=data_fetcher, allocator_manager=allocator_manager
@@ -144,6 +152,7 @@ def create_container(config_path: str | None = None) -> Container:
             "stockula.forecasting.forecaster",
             "stockula.forecasting.manager",
             "stockula.technical_analysis.manager",
+            "stockula.backtesting.manager",
         ]
     )
 
