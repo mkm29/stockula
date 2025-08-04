@@ -420,6 +420,104 @@ class ForecastingManager:
             if train_end >= test_start:
                 raise ValueError("Train end date must be before test start date")
 
+    def forecast_multiple_symbols_with_progress(
+        self,
+        symbols: list[str],
+        config: "StockulaConfig",
+        console=None,
+    ) -> list[dict[str, Any]]:
+        """Forecast multiple symbols with progress tracking.
+
+        Args:
+            symbols: List of stock symbols to forecast
+            config: Stockula configuration
+            console: Rich console for progress display
+
+        Returns:
+            List of forecast results
+        """
+        from rich.console import Console
+        from rich.progress import BarColumn, Progress, SpinnerColumn, TextColumn, TimeRemainingColumn
+
+        if console is None:
+            console = Console()
+
+        console.print("\n[bold blue]Starting sequential forecasting...[/bold blue]")
+        console.print(
+            f"[dim]Configuration: max_generations={config.forecast.max_generations}, "
+            f"num_validations={config.forecast.num_validations}[/dim]"
+        )
+
+        results = []
+
+        # Create a separate progress display for sequential forecasting
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            BarColumn(),
+            TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
+            TimeRemainingColumn(),
+            console=console,
+            transient=True,
+        ) as forecast_progress:
+            forecast_task = forecast_progress.add_task(
+                f"[blue]Forecasting {len(symbols)} tickers...",
+                total=len(symbols),
+            )
+
+            # Process each ticker sequentially
+            for idx, symbol in enumerate(symbols, 1):
+                forecast_progress.update(
+                    forecast_task,
+                    description=f"[blue]Forecasting {symbol} ({idx}/{len(symbols)})...",
+                )
+
+                try:
+                    # Check if test dates are provided for evaluation
+                    use_evaluation = (
+                        config.forecast.test_start_date is not None and config.forecast.test_end_date is not None
+                    )
+
+                    if use_evaluation:
+                        # Use the evaluation method
+                        forecast_result = self.forecast_symbol(symbol, config, use_evaluation=True)
+                    else:
+                        # Use the standard method
+                        forecast_result = self.forecast_symbol(symbol, config, use_evaluation=False)
+
+                    results.append(forecast_result)
+
+                    # Update progress to show completion
+                    forecast_progress.update(
+                        forecast_task,
+                        description=f"[green]✅ Forecasted {symbol}[/green] ({idx}/{len(symbols)})",
+                    )
+
+                except KeyboardInterrupt:
+                    self.logger.warning(f"Forecast for {symbol} interrupted by user")
+                    results.append({"ticker": symbol, "error": "Interrupted by user"})
+                    break
+                except Exception as e:
+                    self.logger.error(f"Error forecasting {symbol}: {e}")
+                    results.append({"ticker": symbol, "error": str(e)})
+
+                    # Update progress to show error
+                    forecast_progress.update(
+                        forecast_task,
+                        description=f"[red]❌ Failed {symbol}[/red] ({idx}/{len(symbols)})",
+                    )
+
+                # Advance progress
+                forecast_progress.advance(forecast_task)
+
+            # Mark progress as complete
+            forecast_progress.update(
+                forecast_task,
+                description="[green]Forecasting complete!",
+            )
+
+        return results
+
     @staticmethod
     def _date_to_string(date_value) -> str | None:
         """Convert date to string format.

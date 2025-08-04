@@ -2,18 +2,16 @@
 
 ## [0.8.0](https://github.com/mkm29/stockula/compare/v0.7.0...v0.8.0) (2025-08-04)
 
-
 ### Features
 
-* Introduce BacktestingManager for unified backtesting interface ([dc05572](https://github.com/mkm29/stockula/commit/dc055720c5865c690bc9230073ddcf9bbe0d0849))
-* Introduce ForecastingManager for enhanced forecasting capabilities ([4be81d0](https://github.com/mkm29/stockula/commit/4be81d01d2586284676fb2dc2898700ec9559be2))
-* Introduce TechnicalAnalysisManager for enhanced technical analysis capabilities ([9a23b4e](https://github.com/mkm29/stockula/commit/9a23b4e6ab68adf2ea75aac2c408c7511f575f32))
-* module managers ([5812251](https://github.com/mkm29/stockula/commit/581225168b516fbbb4c024622bad5d8694123f4b))
-
+- Introduce BacktestingManager for unified backtesting interface ([dc05572](https://github.com/mkm29/stockula/commit/dc055720c5865c690bc9230073ddcf9bbe0d0849))
+- Introduce ForecastingManager for enhanced forecasting capabilities ([4be81d0](https://github.com/mkm29/stockula/commit/4be81d01d2586284676fb2dc2898700ec9559be2))
+- Introduce TechnicalAnalysisManager for enhanced technical analysis capabilities ([9a23b4e](https://github.com/mkm29/stockula/commit/9a23b4e6ab68adf2ea75aac2c408c7511f575f32))
+- module managers ([5812251](https://github.com/mkm29/stockula/commit/581225168b516fbbb4c024622bad5d8694123f4b))
 
 ### Bug Fixes
 
-* Improve formatting of coverage status tables in documentation ([69f7a75](https://github.com/mkm29/stockula/commit/69f7a75d375497cbe4c9a3f30e41f8883836c654))
+- Improve formatting of coverage status tables in documentation ([69f7a75](https://github.com/mkm29/stockula/commit/69f7a75d375497cbe4c9a3f30e41f8883836c654))
 
 ## [0.7.0](https://github.com/mkm29/stockula/compare/v0.6.1...v0.7.0) (2025-08-03)
 
