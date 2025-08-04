@@ -25,7 +25,9 @@ class ResultsDisplay:
         """
         self.console = console or Console()
 
-    def print_results(self, results: dict[str, Any], output_format: str = "console", config=None, container=None):
+    def print_results(
+        self, results: dict[str, Any], output_format: str = "console", config=None, container=None, portfolio=None
+    ):
         """Print results in specified format.
 
         Args:
@@ -33,6 +35,7 @@ class ResultsDisplay:
             output_format: Output format (console, json)
             config: Optional configuration object for portfolio composition
             container: Optional DI container for fetching data
+            portfolio: Optional portfolio instance for forecast display
         """
         if output_format == "json":
             self.console.print_json(json.dumps(results, indent=2, default=str))
@@ -45,7 +48,7 @@ class ResultsDisplay:
                 self._display_backtesting_results(results, config, container)
 
             if "forecasting" in results:
-                self._display_forecast_results(results["forecasting"])
+                self._display_forecast_results(results["forecasting"], portfolio)
 
     def _display_technical_analysis(self, ta_results: list[dict[str, Any]]):
         """Display technical analysis results.
@@ -122,6 +125,9 @@ class ResultsDisplay:
 
         # Show ticker-level backtest results
         self._display_backtest_ticker_results(results["backtesting"])
+
+        # Show strategy average returns summary
+        self._display_strategy_average_returns(results["backtesting"])
 
     def _display_portfolio_composition(self, config: StockulaConfig, container: Container):
         """Display portfolio composition table.
@@ -339,11 +345,80 @@ class ResultsDisplay:
         self.console.print(table)
         self.console.print()  # Add blank line
 
-    def _display_forecast_results(self, forecast_results: list[dict[str, Any]]):
+    def _display_strategy_average_returns(self, backtest_results: list[dict[str, Any]]):
+        """Display average returns for each strategy across all tickers.
+
+        Args:
+            backtest_results: List of backtest results
+        """
+        # Calculate average returns by strategy
+        from collections import defaultdict
+
+        strategy_returns = defaultdict(list)
+
+        for backtest in backtest_results:
+            strategy = backtest["strategy"]
+
+            # Get the return percentage based on result type
+            if "test_results" in backtest:
+                # Use test period returns for train/test split results
+                return_pct = backtest["test_results"]["return_pct"]
+            else:
+                # Use standard return percentage
+                return_pct = backtest["return_pct"]
+
+            strategy_returns[strategy].append(return_pct)
+
+        # Calculate averages and sort by highest to lowest
+        strategy_averages = []
+        for strategy, returns in strategy_returns.items():
+            avg_return = sum(returns) / len(returns)
+            strategy_averages.append({"strategy": strategy, "avg_return": avg_return, "num_tickers": len(returns)})
+
+        # Sort by average return (highest to lowest)
+        strategy_averages.sort(key=lambda x: x["avg_return"], reverse=True)
+
+        # Display the summary table
+        self.console.print("\n[bold cyan]=== Strategy Average Returns Summary ===[/bold cyan]")
+
+        table = Table(title="Average Returns by Strategy (Sorted Highest to Lowest)")
+        table.add_column("Strategy", style="yellow", no_wrap=True)
+        table.add_column("Average Return %", style="green", justify="right")
+        table.add_column("# Tickers Tested", style="white", justify="right")
+
+        for strategy_data in strategy_averages:
+            avg_return = strategy_data["avg_return"]
+            # Color code the return
+            if avg_return >= 0:
+                return_style = "green"
+            else:
+                return_style = "red"
+
+            table.add_row(
+                strategy_data["strategy"].upper(),
+                f"[{return_style}]{avg_return:+.2f}%[/{return_style}]",
+                str(strategy_data["num_tickers"]),
+            )
+
+        self.console.print(table)
+        self.console.print()  # Add blank line
+
+        # Show the best performing strategy
+        if strategy_averages:
+            best_strategy = strategy_averages[0]
+            self.console.print(
+                f"[bold green]Best Performing Strategy:[/bold green] "
+                f"[yellow]{best_strategy['strategy'].upper()}[/yellow] "
+                f"with average return of [green]{best_strategy['avg_return']:+.2f}%[/green]"
+            )
+            self.console.print()
+
+    def _display_forecast_results(self, forecast_results: list[dict[str, Any]], portfolio=None):
         """Display forecasting results.
 
         Args:
             forecast_results: List of forecast results
+            portfolio: Optional portfolio instance for displaying quantities and values
         """
         self.console.print("\n[bold purple]=== Forecasting Results ===[/bold purple]")
 
@@ -354,10 +429,19 @@ class ResultsDisplay:
                 date_info = f" ({forecast['start_date']} to {forecast['end_date']})"
                 break
 
+        # Check if we have actual prices (evaluation mode)
+        has_actual_prices = any("actual_price" in f for f in forecast_results if "error" not in f)
+
         table = Table(title=f"Price Forecasts{date_info}")
         table.add_column("Ticker", style="cyan", no_wrap=True)
+        table.add_column("Quantity", style="green", justify="right")
         table.add_column("Current Price", style="white", justify="right")
+        table.add_column("Current Value", style="blue", justify="right")
+        if has_actual_prices:
+            table.add_column("Actual Price", style="yellow", justify="right")
+            table.add_column("Actual Value", style="yellow", justify="right")
         table.add_column("Forecast Price", style="green", justify="right")
+        table.add_column("Forecast Value", style="blue", justify="right")
         table.add_column("Return %", style="magenta", justify="right")
         table.add_column("Confidence Range", style="yellow", justify="center")
         table.add_column("Best Model", style="blue")
@@ -380,18 +464,46 @@ class ResultsDisplay:
         all_forecasts = sorted_forecasts + error_forecasts
 
         for forecast in all_forecasts:
+            ticker = forecast["ticker"]
+
+            # Get quantity from portfolio if available
+            quantity = 0.0
+            if portfolio:
+                asset = next((a for a in portfolio.get_all_assets() if a.symbol == ticker), None)
+                if asset and hasattr(asset, "quantity"):
+                    quantity = asset.quantity
+
             if "error" in forecast:
-                table.add_row(
-                    forecast["ticker"],
-                    "[red]Error[/red]",
-                    "[red]Error[/red]",
-                    "[red]Error[/red]",
-                    "[red]Error[/red]",
-                    f"[red]{forecast['error']}[/red]",
+                row_data = [
+                    ticker,
+                    "[red]Error[/red]",  # Quantity
+                    "[red]Error[/red]",  # Current Price
+                    "[red]Error[/red]",  # Current Value
+                ]
+                if has_actual_prices:
+                    row_data.extend(
+                        [
+                            "[red]Error[/red]",  # Actual Price
+                            "[red]Error[/red]",  # Actual Value
+                        ]
+                    )
+                row_data.extend(
+                    [
+                        "[red]Error[/red]",  # Forecast Price
+                        "[red]Error[/red]",  # Forecast Value
+                        "[red]Error[/red]",  # Return %
+                        "[red]Error[/red]",  # Confidence Range
+                        f"[red]{forecast['error']}[/red]",  # Best Model/Error
+                    ]
                 )
+                table.add_row(*row_data)
             else:
                 current_price = forecast["current_price"]
                 forecast_price = forecast["forecast_price"]
+
+                # Calculate values
+                current_value = quantity * current_price
+                forecast_value = quantity * forecast_price
 
                 # Calculate return percentage
                 return_pct = ((forecast_price - current_price) / current_price) * 100
@@ -401,18 +513,52 @@ class ResultsDisplay:
                     "green" if forecast_price > current_price else "red" if forecast_price < current_price else "white"
                 )
                 forecast_str = f"[{forecast_color}]${forecast_price:.2f}[/{forecast_color}]"
+                forecast_value_str = f"[{forecast_color}]${forecast_value:,.2f}[/{forecast_color}]"
 
                 # Format return percentage with color
                 return_str = f"[{forecast_color}]{return_pct:+.2f}%[/{forecast_color}]"
 
-                table.add_row(
-                    forecast["ticker"],
+                # Build row data
+                row_data = [
+                    ticker,
+                    f"{quantity:.2f}",
                     f"${current_price:.2f}",
-                    forecast_str,
-                    return_str,
-                    f"${forecast['lower_bound']:.2f} - ${forecast['upper_bound']:.2f}",
-                    forecast["best_model"],
+                    f"${current_value:,.2f}",
+                ]
+
+                # Add actual price and value if available
+                if has_actual_prices:
+                    if "actual_price" in forecast:
+                        actual_price = forecast["actual_price"]
+                        actual_value = quantity * actual_price
+                        # Color code actual vs forecast
+                        actual_color = (
+                            "green"
+                            if actual_price < forecast_price
+                            else "red"
+                            if actual_price > forecast_price
+                            else "white"
+                        )
+                        row_data.extend(
+                            [
+                                f"[{actual_color}]${actual_price:.2f}[/{actual_color}]",
+                                f"[{actual_color}]${actual_value:,.2f}[/{actual_color}]",
+                            ]
+                        )
+                    else:
+                        row_data.extend(["N/A", "N/A"])
+
+                row_data.extend(
+                    [
+                        forecast_str,
+                        forecast_value_str,
+                        return_str,
+                        f"${forecast['lower_bound']:.2f} - ${forecast['upper_bound']:.2f}",
+                        forecast["best_model"],
+                    ]
                 )
+
+                table.add_row(*row_data)
 
         self.console.print(table)
 
@@ -488,12 +634,23 @@ class ResultsDisplay:
         )
 
     def show_portfolio_forecast_value(self, config: StockulaConfig, portfolio, results: dict[str, Any]):
-        """Show portfolio value for forecast mode.
+        """Show portfolio value for forecast mode with consistent price calculations.
+
+        This method calculates portfolio values using consistent price baselines to ensure
+        accurate portfolio return calculations. The current value is calculated using the
+        same historical prices that the forecasting algorithm uses as its baseline, rather
+        than real-time market prices, to maintain consistency between current and forecast
+        values.
 
         Args:
             config: Configuration object
             portfolio: Portfolio instance
-            results: Results dictionary
+            results: Results dictionary containing forecasting results
+
+        Note:
+            The current portfolio value is calculated using the forecast algorithm's
+            "current price" baseline to ensure the portfolio return percentage accurately
+            reflects the forecasted price changes.
         """
         # Show portfolio value in a nice table
         portfolio_value_table = Table(title="Portfolio Value")
@@ -508,11 +665,39 @@ class ResultsDisplay:
         else:
             # Future prediction mode - use today's date
             test_start = datetime.now().strftime("%Y-%m-%d")
-        portfolio_value_table.add_row("Observed Value", test_start, f"${portfolio.initial_capital:,.2f}")
+
+        # For forecast mode, calculate current value based on the prices used in forecasting
+        # This ensures consistency between current and forecast values
+        #
+        # Important: The forecasting algorithm uses the last price in the historical training
+        # data as its "current price" baseline, which may differ from real-time market prices.
+        # To ensure accurate portfolio return calculations, we use the same price baseline
+        # for both current and forecast values. This prevents misleading return percentages
+        # that could occur if different price sources were used.
+        current_portfolio_value = 0.0
+        if "forecasting" in results and results["forecasting"]:
+            # Calculate current value using the same prices that forecasting uses
+            for forecast in results["forecasting"]:
+                if "error" not in forecast:
+                    ticker = forecast["ticker"]
+                    asset = next(
+                        (a for a in portfolio.get_all_assets() if a.symbol == ticker),
+                        None,
+                    )
+                    if asset and asset.quantity:
+                        current_portfolio_value += asset.quantity * forecast["current_price"]
+
+        # Fallback to initial capital if no forecast data available
+        if current_portfolio_value == 0.0:
+            current_portfolio_value = portfolio.initial_capital
+
+        # Show initial capital and current value
+        portfolio_value_table.add_row("Initial Capital", "Start", f"${portfolio.initial_capital:,.2f}")
+        portfolio_value_table.add_row("Current Value", test_start, f"${current_portfolio_value:,.2f}")
 
         # Calculate forecasted portfolio value based on forecast results
         if "forecasting" in results and results["forecasting"]:
-            forecasted_value = portfolio.initial_capital
+            forecasted_value = 0.0
             total_accuracy = 0
             valid_forecasts = 0
 
@@ -526,17 +711,12 @@ class ResultsDisplay:
                         (a for a in portfolio.get_all_assets() if a.symbol == ticker),
                         None,
                     )
-                    if asset:
-                        # Get the asset's current value
-                        asset_value = asset.quantity * forecast["current_price"]
-
-                        # Calculate the forecasted change
-                        forecast_change = (forecast["forecast_price"] - forecast["current_price"]) / forecast[
-                            "current_price"
-                        ]
-
-                        # Apply the change to the portfolio value
-                        forecasted_value += asset_value * forecast_change
+                    if asset and asset.quantity:
+                        # Calculate the forecasted value for this asset based on quantity and forecast price
+                        # This simple calculation (quantity × forecast_price) ensures the forecast value
+                        # represents what the portfolio would be worth at the forecasted prices
+                        forecasted_asset_value = asset.quantity * forecast["forecast_price"]
+                        forecasted_value += forecasted_asset_value
 
                         # If in evaluation mode, track accuracy
                         if "evaluation" in forecast:
@@ -548,6 +728,12 @@ class ResultsDisplay:
             test_end = None
             if config.forecast.test_end_date:
                 test_end = config.forecast.test_end_date.strftime("%Y-%m-%d")
+            elif config.forecast.forecast_length:
+                # Calculate future date based on forecast length
+                from datetime import timedelta
+
+                future_date = datetime.now() + timedelta(days=config.forecast.forecast_length)
+                test_end = future_date.strftime("%Y-%m-%d")
             else:
                 # Try to get end date from any forecast result
                 for forecast in results["forecasting"]:
@@ -555,8 +741,21 @@ class ResultsDisplay:
                         test_end = forecast["end_date"]
                         break
 
-            if test_end:
-                portfolio_value_table.add_row("Predicted Value", test_end, f"${forecasted_value:,.2f}")
+            if not test_end:
+                # Default to 14 days if no forecast length specified
+                from datetime import timedelta
+
+                future_date = datetime.now() + timedelta(days=14)
+                test_end = future_date.strftime("%Y-%m-%d")
+
+            portfolio_value_table.add_row("Forecast Value", test_end, f"${forecasted_value:,.2f}")
+
+            # Show portfolio return
+            if current_portfolio_value > 0:
+                portfolio_return = ((forecasted_value - current_portfolio_value) / current_portfolio_value) * 100
+                portfolio_value_table.add_row(
+                    "Portfolio Return", f"{test_start} → {test_end}", f"{portfolio_return:+.2f}%"
+                )
 
             # Add average accuracy row only for evaluation mode
             if is_evaluation_mode and valid_forecasts > 0 and test_end:

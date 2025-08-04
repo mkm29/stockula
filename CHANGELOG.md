@@ -8,10 +8,20 @@
 - Introduce ForecastingManager for enhanced forecasting capabilities ([4be81d0](https://github.com/mkm29/stockula/commit/4be81d01d2586284676fb2dc2898700ec9559be2))
 - Introduce TechnicalAnalysisManager for enhanced technical analysis capabilities ([9a23b4e](https://github.com/mkm29/stockula/commit/9a23b4e6ab68adf2ea75aac2c408c7511f575f32))
 - module managers ([5812251](https://github.com/mkm29/stockula/commit/581225168b516fbbb4c024622bad5d8694123f4b))
+- Replace argparse with Typer for modern CLI interface
+- Extract CLI logic to dedicated cli.py module for better separation of concerns
+- Refactor main.py logic into managers for improved code organization
 
 ### Bug Fixes
 
 - Improve formatting of coverage status tables in documentation ([69f7a75](https://github.com/mkm29/stockula/commit/69f7a75d375497cbe4c9a3f30e41f8883836c654))
+- Fix B008 linting errors in CLI module by using Annotated type syntax
+
+### Code Refactoring
+
+- Move business logic from main.py to StockulaManager
+- Add progress tracking methods to ForecastingManager
+- Reduce main.py from ~300 lines to 53 lines
 
 ## [0.7.0](https://github.com/mkm29/stockula/compare/v0.6.1...v0.7.0) (2025-08-03)
 

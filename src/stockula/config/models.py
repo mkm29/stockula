@@ -461,8 +461,12 @@ class ForecastConfig(BaseModel):
     )
     prediction_interval: float = Field(default=0.9, ge=0, le=1, description="Confidence interval for predictions")
     model_list: str = Field(
-        default="fast",
-        description="Model subset to use ('fast', 'default', 'slow', 'parallel', 'financial')",
+        default="clean",
+        description=(
+            "Model subset to use. Options: 'ultra_fast' (3 models, fastest), 'fast' (6 models, balanced), "
+            "'clean' (8 models, no warnings, recommended), 'financial' (12 models, finance-optimized), "
+            "'fast_financial' (intersection of fast + financial)"
+        ),
     )
     ensemble: str = Field(
         default="auto",
@@ -472,13 +476,28 @@ class ForecastConfig(BaseModel):
         default=True,
         description="Use financial-appropriate models to avoid statsmodels warnings",
     )
-    max_generations: int = Field(default=2, ge=1, description="Maximum generations for model search")
-    num_validations: int = Field(default=1, ge=1, description="Number of validation splits")
+    max_generations: int = Field(
+        default=2,
+        ge=1,
+        description=(
+            "Maximum generations for model evolution. 1=basic (try original models), "
+            "2=balanced (try variations of best models), 3+=thorough but slow"
+        ),
+    )
+    num_validations: int = Field(
+        default=2,
+        ge=1,
+        description=(
+            "Number of time-based validation splits for model selection. "
+            "1=faster but less robust, 2=good balance, 3+=more robust but slower"
+        ),
+    )
     validation_method: str = Field(
         default="backwards",
         description="Validation method ('backwards', 'seasonal', 'similarity')",
     )
     max_workers: int = Field(default=1, ge=1, description="Maximum parallel workers for forecasting")
+    no_negatives: bool = Field(default=True, description="Constraint predictions to be non-negative")
 
     @field_validator(
         "train_start_date",

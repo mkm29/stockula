@@ -70,16 +70,19 @@ Stockula is a comprehensive Python trading platform that provides tools for tech
 
 ```bash
 # Analyze a single stock
-uv run python -m stockula.main --ticker AAPL
+uv run python -m stockula --ticker AAPL
 
 # Run with configuration file
 cp examples/config.simple.yaml .config.yaml
-uv run python -m stockula.main
+uv run python -m stockula
 
 # Run specific analysis modes
-uv run python -m stockula.main --ticker GOOGL --mode ta        # Technical analysis
-uv run python -m stockula.main --ticker MSFT --mode backtest  # Backtesting (results sorted by return, highest first)
-uv run python -m stockula.main --ticker NVDA --mode forecast  # Forecasting (results sorted by return, highest first)
+uv run python -m stockula --ticker GOOGL --mode ta        # Technical analysis
+uv run python -m stockula --ticker MSFT --mode backtest  # Backtesting (results sorted by return, highest first)
+uv run python -m stockula --ticker NVDA --mode forecast  # Forecasting (results sorted by return, highest first)
+
+# Show help
+uv run python -m stockula --help
 ```
 
 ### Configuration Example
@@ -228,8 +231,16 @@ For comprehensive documentation, visit our [**MkDocs Documentation Site**](https
 ```mermaid
 graph TB
     subgraph "User Interface"
-        CLI[CLI main.py]
+        CLI[CLI (cli.py)]
         Config[Configuration<br/>.config.yaml]
+    end
+
+    subgraph "Managers"
+        SM[Stockula Manager]
+        TAM[Technical Analysis<br/>Manager]
+        BTM[Backtesting<br/>Manager]
+        FCM[Forecasting<br/>Manager]
+        ALM[Allocator<br/>Manager]
     end
 
     subgraph "Core Domain"
@@ -256,18 +267,28 @@ graph TB
     end
 
     CLI --> Config
+    CLI --> SM
+    SM --> TAM
+    SM --> BTM
+    SM --> FCM
+    SM --> ALM
+    SM --> Factory
     Config --> Factory
     Factory --> Portfolio
-    Factory --> Allocator
+    ALM --> Allocator
     STD --> Allocator
     OPT --> Allocator
-    OPT --> BT
+    OPT --> BTM
+    TAM --> TA
+    BTM --> BT
+    FCM --> FC
     TA --> Fetcher
     BT --> Fetcher
     FC --> Fetcher
     Fetcher --> DB
 
     style CLI fill:#2196F3,stroke:#1976D2,color:#fff
+    style SM fill:#9C27B0,stroke:#7B1FA2,color:#fff
     style Config fill:#4CAF50,stroke:#388E3C,color:#fff
     style DB fill:#FF9800,stroke:#F57C00,color:#fff
 ```

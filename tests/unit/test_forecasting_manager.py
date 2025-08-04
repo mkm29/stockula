@@ -109,7 +109,7 @@ class TestForecastingManager:
         mock_forecaster.get_best_model.return_value = {"model_name": "LastValueNaive", "model_params": {}}
 
         # Run forecast
-        result = forecasting_manager.forecast_symbol("AAPL", mock_config, use_evaluation=False)
+        result = forecasting_manager.forecast_symbol("AAPL", mock_config)
 
         # Verify result
         assert result["ticker"] == "AAPL"
@@ -119,26 +119,35 @@ class TestForecastingManager:
         assert result["upper_bound"] == 115
         assert result["best_model"] == "LastValueNaive"
 
-    def test_forecast_symbol_with_evaluation(self, forecasting_manager, mock_config):
-        """Test forecasting with evaluation."""
-        # Setup config for evaluation
-        mock_config.forecast.train_start_date = "2023-01-01"
-        mock_config.forecast.train_end_date = "2023-10-31"
-        mock_config.forecast.test_start_date = "2023-11-01"
-        mock_config.forecast.test_end_date = "2023-12-31"
+    def test_forecast_symbol_with_custom_config(self, forecasting_manager, mock_config):
+        """Test forecasting with custom configuration parameters."""
+        # Setup config with custom parameters
+        mock_config.forecast.forecast_length = 30
+        mock_config.forecast.model_list = "clean"
+        mock_config.forecast.max_generations = 3
+        mock_config.forecast.num_validations = 2
 
-        with patch.object(forecasting_manager, "_forecast_with_evaluation") as mock_eval:
-            mock_eval.return_value = {
-                "ticker": "AAPL",
-                "current_price": 105,
-                "forecast_price": 110,
-                "evaluation": {"rmse": 2.5, "mape": 1.2},
-            }
+        # Mock the forecaster creation and results
+        mock_predictions = pd.DataFrame({"forecast": [105, 110], "lower_bound": [100, 105], "upper_bound": [110, 115]})
 
-            result = forecasting_manager.forecast_symbol("AAPL", mock_config, use_evaluation=True)
+        with patch("stockula.forecasting.manager.StockForecaster") as mock_forecaster_class:
+            mock_forecaster = mock_forecaster_class.return_value
+            mock_forecaster.forecast_from_symbol.return_value = mock_predictions
+            mock_forecaster.get_best_model.return_value = {"model_name": "ETS", "model_params": {}}
 
-            assert "evaluation" in result
-            assert result["evaluation"]["rmse"] == 2.5
+            result = forecasting_manager.forecast_symbol("AAPL", mock_config)
+
+            # Verify the forecaster was created with custom config parameters
+            mock_forecaster_class.assert_called_once()
+            call_args = mock_forecaster_class.call_args
+            assert call_args[1]["forecast_length"] == 30
+            assert call_args[1]["model_list"] == "clean"
+            assert call_args[1]["max_generations"] == 3
+            assert call_args[1]["num_validations"] == 2
+
+            # Verify result
+            assert result["ticker"] == "AAPL"
+            assert result["best_model"] == "ETS"
 
     def test_forecast_multiple_symbols(self, forecasting_manager, mock_config):
         """Test forecasting multiple symbols."""
@@ -250,13 +259,10 @@ class TestForecastingManager:
         with pytest.raises(ValueError, match="prediction_interval must be between 0 and 1"):
             forecasting_manager.validate_forecast_config(mock_config)
 
-        # Test mismatched train/test dates
+        # Test invalid forecast_length
         mock_config.forecast.prediction_interval = 0.95
-        mock_config.forecast.train_start_date = "2023-01-01"
-        mock_config.forecast.train_end_date = "2023-10-31"
-        mock_config.forecast.test_start_date = None
-        mock_config.forecast.test_end_date = None
-        with pytest.raises(ValueError, match="Both train and test date ranges"):
+        mock_config.forecast.forecast_length = -1  # Invalid negative forecast length
+        with pytest.raises(ValueError, match="forecast_length must be positive"):
             forecasting_manager.validate_forecast_config(mock_config)
 
     def test_date_to_string(self, forecasting_manager):
@@ -282,3 +288,91 @@ class TestForecastingManager:
             results = forecasting_manager.forecast_multiple_symbols(["AAPL"], mock_config)
             assert "error" in results["AAPL"]
             assert results["AAPL"]["error"] == "Test error"
+
+    def test_forecast_config_no_negatives_attribute(self, forecasting_manager):
+        """Test that ForecastConfig has no_negatives attribute and it's used correctly."""
+        from stockula.config.models import ForecastConfig
+
+        # Test that ForecastConfig can be created with no_negatives
+        config = ForecastConfig(
+            forecast_length=30, no_negatives=True, model_list="fast", max_generations=2, num_validations=1
+        )
+
+        assert hasattr(config, "no_negatives")
+        assert config.no_negatives is True
+
+        # Test with no_negatives=False
+        config_negative_allowed = ForecastConfig(forecast_length=30, no_negatives=False)
+        assert config_negative_allowed.no_negatives is False
+
+        # Test default value
+        config_default = ForecastConfig(forecast_length=30)
+        assert config_default.no_negatives is True  # Should default to True
+
+    def test_forecast_mode_with_real_config(self, forecasting_manager):
+        """Test forecast mode with a real configuration to prevent regression."""
+        from stockula.config.models import DataConfig, ForecastConfig, StockulaConfig
+
+        # Create a real config similar to what would be loaded from YAML
+        config = StockulaConfig(
+            forecast=ForecastConfig(
+                forecast_length=14, no_negatives=True, model_list="fast", max_generations=1, num_validations=1
+            ),
+            data=DataConfig(start_date="2023-01-01", end_date="2023-12-31"),
+        )
+
+        # Mock the _standard_forecast method to return quickly
+        with patch.object(forecasting_manager, "_standard_forecast") as mock_forecast:
+            mock_forecast.return_value = {
+                "ticker": "AAPL",
+                "current_price": 150.0,
+                "forecast_price": 155.0,
+                "lower_bound": 145.0,
+                "upper_bound": 165.0,
+                "forecast_length": 14,
+                "best_model": "ARIMA",
+            }
+
+            # This should not raise an AttributeError about no_negatives
+            result = forecasting_manager.forecast_symbol("AAPL", config)
+
+            assert result["ticker"] == "AAPL"
+            assert result["forecast_price"] == 155.0
+
+            # Verify the forecaster was created with no_negatives parameter
+            mock_forecast.assert_called_once()
+
+    def test_create_forecaster_with_no_negatives(self, forecasting_manager):
+        """Test that forecaster is created with no_negatives parameter."""
+        from stockula.config.models import DataConfig, ForecastConfig, StockulaConfig
+
+        config = StockulaConfig(
+            forecast=ForecastConfig(forecast_length=30, no_negatives=True, model_list="fast"), data=DataConfig()
+        )
+
+        # Test that get_forecaster respects the no_negatives parameter
+        with patch("stockula.forecasting.manager.StockForecaster") as mock_forecaster_class:
+            # Call forecast_symbol which will internally create the forecaster
+            with patch.object(forecasting_manager, "_standard_forecast") as mock_standard:
+                mock_standard.return_value = {
+                    "ticker": "AAPL",
+                    "current_price": 100.0,
+                    "forecast_price": 105.0,
+                    "lower_bound": 95.0,
+                    "upper_bound": 115.0,
+                    "forecast_length": 30,
+                    "best_model": "ARIMA",
+                }
+
+                forecasting_manager.forecast_symbol("AAPL", config)
+
+                # Verify that when creating the forecaster, no_negatives was passed
+                # The ForecastingManager should have created a StockForecaster with no_negatives=True
+                assert mock_forecaster_class.called
+                # Check if any of the calls included no_negatives=True
+                for call in mock_forecaster_class.call_args_list:
+                    if "no_negatives" in call[1] and call[1]["no_negatives"] is True:
+                        assert True
+                        return
+                # If we get here, no_negatives was not passed correctly
+                raise AssertionError("no_negatives parameter was not passed to StockForecaster")

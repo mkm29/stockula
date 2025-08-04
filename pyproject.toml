@@ -26,6 +26,7 @@ dependencies = [
     "sqlalchemy>=2.0.41",
     "sqlmodel>=0.0.22",
     "rich>=14.1.0",
+    "typer>=0.16.0",
 ]
 
 [project.optional-dependencies]

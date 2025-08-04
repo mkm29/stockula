@@ -7,6 +7,7 @@ from .metrics import (
     calculate_sortino_ratio_dynamic,
     enhance_backtest_metrics,
 )
+from .registry import StrategyRegistry
 from .runner import BacktestRunner
 from .strategies import (
     BaseStrategy,
@@ -38,6 +39,7 @@ __all__ = [
     "KaufmanEfficiencyStrategy",
     "BacktestingManager",
     "BacktestRunner",
+    "StrategyRegistry",
     "calculate_dynamic_sharpe_ratio",
     "calculate_rolling_sharpe_ratio",
     "calculate_sortino_ratio_dynamic",

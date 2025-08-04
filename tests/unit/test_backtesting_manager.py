@@ -60,10 +60,13 @@ class TestBacktestingManagerInitialization:
         assert manager.data_fetcher == mock_data_fetcher
         assert manager.logger == mock_logging_manager
         assert manager._runner is None
-        assert "basic" in manager.strategy_groups
-        assert "comprehensive" in manager.strategy_groups
-        assert "sma_cross" in manager.strategy_presets
-        assert "rsi" in manager.strategy_presets
+        # Use public API methods instead of accessing private attributes
+        strategy_groups = manager.get_strategy_groups()
+        assert "basic" in strategy_groups
+        assert "comprehensive" in strategy_groups
+        strategy_presets = manager.get_strategy_presets()
+        assert "smacross" in strategy_presets  # Note: normalized to smacross
+        assert "rsi" in strategy_presets
 
     def test_strategy_groups_structure(self, backtesting_manager):
         """Test that strategy groups are properly structured."""
@@ -88,19 +91,20 @@ class TestBacktestingManagerInitialization:
         presets = backtesting_manager.get_strategy_presets()
 
         assert isinstance(presets, dict)
-        assert "sma_cross" in presets
+        assert "smacross" in presets  # Note: normalized to smacross
         assert "rsi" in presets
         assert "macd" in presets
 
         # Check that presets contain proper parameters
-        sma_preset = presets["sma_cross"]
+        # Note: sma_cross is normalized to smacross
+        sma_preset = presets["smacross"]
         assert "fast_period" in sma_preset
         assert "slow_period" in sma_preset
 
         rsi_preset = presets["rsi"]
         assert "period" in rsi_preset
-        assert "oversold" in rsi_preset
-        assert "overbought" in rsi_preset
+        assert "oversold_threshold" in rsi_preset  # Correct key name
+        assert "overbought_threshold" in rsi_preset  # Correct key name
 
 
 class TestBacktestingManagerSetRunner:
@@ -181,7 +185,8 @@ class TestBacktestingManagerMultipleStrategies:
         results = backtesting_manager.run_multiple_strategies("AAPL", "basic")
 
         assert isinstance(results, dict)
-        basic_strategies = backtesting_manager.strategy_groups["basic"]
+        strategy_groups = backtesting_manager.get_strategy_groups()
+        basic_strategies = strategy_groups["basic"]
 
         for strategy in basic_strategies:
             assert strategy in results
@@ -201,7 +206,8 @@ class TestBacktestingManagerMultipleStrategies:
         results = backtesting_manager.run_multiple_strategies("AAPL", "comprehensive")
 
         assert isinstance(results, dict)
-        comprehensive_strategies = backtesting_manager.strategy_groups["comprehensive"]
+        strategy_groups = backtesting_manager.get_strategy_groups()
+        comprehensive_strategies = strategy_groups["comprehensive"]
 
         assert len(results) == len(comprehensive_strategies)
         for strategy in comprehensive_strategies:
@@ -251,7 +257,8 @@ class TestBacktestingManagerComprehensiveBacktest:
         assert isinstance(results, dict)
         assert len(results) == len(tickers)
 
-        basic_strategies = backtesting_manager.strategy_groups["basic"]
+        strategy_groups = backtesting_manager.get_strategy_groups()
+        basic_strategies = strategy_groups["basic"]
 
         for ticker in tickers:
             assert ticker in results
@@ -353,18 +360,23 @@ class TestBacktestingManagerUtilityMethods:
         strategies = backtesting_manager.get_available_strategies()
 
         assert isinstance(strategies, list)
-        assert "sma_cross" in strategies
+        assert "smacross" in strategies  # Note: normalized name
+        assert "sma_cross" in strategies  # Alternative name also available
         assert "rsi" in strategies
         assert "macd" in strategies
 
     def test_customize_strategy_parameters(self, backtesting_manager):
         """Test customizing strategy parameters."""
-        original_params = backtesting_manager.strategy_presets["sma_cross"].copy()
+        # Get original parameters using the public API
+        original_presets = backtesting_manager.get_strategy_presets()
+        original_params = original_presets["smacross"].copy()  # Note: normalized name
         new_params = {"fast_period": 5}
 
-        backtesting_manager.customize_strategy_parameters("sma_cross", new_params)
+        backtesting_manager.customize_strategy_parameters("smacross", new_params)
 
-        updated_params = backtesting_manager.strategy_presets["sma_cross"]
+        # Get updated parameters using the public API
+        updated_presets = backtesting_manager.get_strategy_presets()
+        updated_params = updated_presets["smacross"]
         assert updated_params["fast_period"] == 5
         assert updated_params["slow_period"] == original_params["slow_period"]
 
@@ -381,7 +393,8 @@ class TestBacktestingManagerUtilityMethods:
 
         groups = backtesting_manager.get_strategy_groups()
         assert "my_group" in groups
-        assert groups["my_group"] == custom_strategies
+        # Note: strategy names get normalized, so sma_cross becomes smacross
+        assert groups["my_group"] == ["smacross", "rsi"]
 
     def test_create_custom_group_invalid_strategies_raises_error(self, backtesting_manager):
         """Test creating custom group with invalid strategies raises error."""

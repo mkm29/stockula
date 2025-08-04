@@ -3,6 +3,7 @@
 from typing import TYPE_CHECKING, Any, Optional
 
 from ..interfaces import ILoggingManager
+from .registry import StrategyRegistry
 
 if TYPE_CHECKING:
     from ..config.models import Config
@@ -26,41 +27,8 @@ class BacktestingManager:
         # Initialize BacktestRunner (will be set with proper configuration)
         self._runner = None
 
-        # Predefined strategy groups for different backtesting approaches
-        self.strategy_groups = {
-            "basic": ["sma_cross", "rsi"],
-            "momentum": ["rsi", "macd", "double_ema_cross"],
-            "trend": ["sma_cross", "triple_ema_cross", "trima_cross"],
-            "advanced": ["kama", "frama", "vama", "vidya"],
-            "comprehensive": [
-                "sma_cross",
-                "rsi",
-                "macd",
-                "double_ema_cross",
-                "triple_ema_cross",
-                "trima_cross",
-                "kama",
-                "frama",
-                "vama",
-                "vidya",
-                "kaufman_efficiency",
-            ],
-        }
-
-        # Strategy parameter presets for quick backtesting
-        self.strategy_presets = {
-            "sma_cross": {"fast_period": 10, "slow_period": 30},
-            "rsi": {"period": 14, "oversold": 30, "overbought": 70},
-            "macd": {"fast": 12, "slow": 26, "signal": 9},
-            "double_ema_cross": {"fast_period": 12, "slow_period": 26},
-            "triple_ema_cross": {"fast": 5, "medium": 10, "slow": 20},
-            "trima_cross": {"fast_period": 10, "slow_period": 30},
-            "kama": {"period": 14, "fast_sc": 2, "slow_sc": 30},
-            "frama": {"period": 14},
-            "vama": {"period": 8},
-            "vidya": {"period": 14, "alpha": 0.2},
-            "kaufman_efficiency": {"period": 10, "fast_sc": 2, "slow_sc": 30},
-        }
+        # Use centralized strategy registry
+        self.strategy_registry = StrategyRegistry
 
     def set_runner(self, runner: "BacktestRunner") -> None:
         """Set the BacktestRunner instance.
@@ -99,31 +67,18 @@ class BacktestingManager:
             self.logger.info(f"Running {strategy_name} strategy backtest for {ticker}")
 
             # Use provided parameters or fall back to presets
-            params = strategy_params or self.strategy_presets.get(strategy_name, {})
+            params = strategy_params or self.strategy_registry.get_strategy_preset(strategy_name)
 
-            # Map strategy names to class names that BacktestRunner expects
-            strategy_name_mapping = {
-                "sma_cross": "SMACross",
-                "smacross": "SMACross",
-                "rsi": "RSI",
-                "macd": "MACD",
-                "double_ema_cross": "DoubleEMACross",
-                "triple_ema_cross": "TripleEMACross",
-                "trima_cross": "TRIMACross",
-                "kama": "KAMA",
-                "frama": "FRAMA",
-                "vama": "VAMA",
-                "vidya": "VIDYA",
-                "kaufman_efficiency": "KaufmanEfficiency",
-            }
-
-            # Get the mapped strategy name or use original if not found
-            mapped_strategy_name = strategy_name_mapping.get(strategy_name.lower(), strategy_name)
+            # Get the strategy class using the registry
+            strategy_class = self.strategy_registry.get_strategy_class(strategy_name)
+            if not strategy_class:
+                available_strategies = self.strategy_registry.get_available_strategy_names()
+                raise ValueError(f"Unknown strategy: {strategy_name}. Available: {available_strategies}")
 
             # Run backtest using the runner
             result = self._runner.run_from_symbol(
-                ticker=ticker,
-                strategy_name=mapped_strategy_name,
+                symbol=ticker,
+                strategy=strategy_class,
                 start_date=start_date,
                 end_date=end_date,
                 **params,
@@ -156,15 +111,14 @@ class BacktestingManager:
         Returns:
             Dictionary with strategy names as keys and results as values
         """
-        if strategy_group not in self.strategy_groups:
-            raise ValueError(
-                f"Unknown strategy group: {strategy_group}. Available: {list(self.strategy_groups.keys())}"
-            )
+        if not self.strategy_registry.is_valid_strategy_group(strategy_group):
+            available_groups = list(self.strategy_registry.get_strategy_groups().keys())
+            raise ValueError(f"Unknown strategy group: {strategy_group}. Available: {available_groups}")
 
         self.logger.info(f"Running {strategy_group} strategy group backtest for {ticker}")
 
         results = {}
-        strategies = self.strategy_groups[strategy_group]
+        strategies = self.strategy_registry.get_strategies_in_group(strategy_group)
 
         for strategy_name in strategies:
             result = self.run_single_strategy(
@@ -285,31 +239,18 @@ class BacktestingManager:
             self.logger.info(f"Running train/test split backtest for {ticker} with {strategy_name}")
 
             # Use provided parameters or fall back to presets
-            params = strategy_params or self.strategy_presets.get(strategy_name, {})
+            params = strategy_params or self.strategy_registry.get_strategy_preset(strategy_name)
 
-            # Map strategy names to class names that BacktestRunner expects
-            strategy_name_mapping = {
-                "sma_cross": "SMACross",
-                "smacross": "SMACross",
-                "rsi": "RSI",
-                "macd": "MACD",
-                "double_ema_cross": "DoubleEMACross",
-                "triple_ema_cross": "TripleEMACross",
-                "trima_cross": "TRIMACross",
-                "kama": "KAMA",
-                "frama": "FRAMA",
-                "vama": "VAMA",
-                "vidya": "VIDYA",
-                "kaufman_efficiency": "KaufmanEfficiency",
-            }
-
-            # Get the mapped strategy name or use original if not found
-            mapped_strategy_name = strategy_name_mapping.get(strategy_name.lower(), strategy_name)
+            # Get the strategy class using the registry
+            strategy_class = self.strategy_registry.get_strategy_class(strategy_name)
+            if not strategy_class:
+                available_strategies = self.strategy_registry.get_available_strategy_names()
+                raise ValueError(f"Unknown strategy: {strategy_name}. Available: {available_strategies}")
 
             # Run train/test split backtest using the runner
             result = self._runner.run_with_train_test_split(
-                ticker=ticker,
-                strategy_name=mapped_strategy_name,
+                symbol=ticker,
+                strategy=strategy_class,
                 train_ratio=train_ratio,
                 optimize_on_train=optimize_on_train,
                 param_ranges=param_ranges,
@@ -368,7 +309,7 @@ class BacktestingManager:
         Returns:
             List of strategy names
         """
-        return list(self.strategy_presets.keys())
+        return self.strategy_registry.get_available_strategy_names()
 
     def get_strategy_groups(self) -> dict[str, list[str]]:
         """Get all available strategy groups.
@@ -376,7 +317,7 @@ class BacktestingManager:
         Returns:
             Dictionary of strategy groups and their constituent strategies
         """
-        return self.strategy_groups.copy()
+        return self.strategy_registry.get_strategy_groups()
 
     def get_strategy_presets(self) -> dict[str, dict[str, Any]]:
         """Get default parameter presets for all strategies.
@@ -384,7 +325,7 @@ class BacktestingManager:
         Returns:
             Dictionary of strategy names and their default parameters
         """
-        return self.strategy_presets.copy()
+        return self.strategy_registry.get_strategy_presets()
 
     def customize_strategy_parameters(
         self,
@@ -397,11 +338,14 @@ class BacktestingManager:
             strategy_name: Name of the strategy
             new_params: New parameter values to set
         """
-        if strategy_name not in self.strategy_presets:
-            raise ValueError(f"Unknown strategy: {strategy_name}. Available: {list(self.strategy_presets.keys())}")
+        if not self.strategy_registry.is_valid_strategy(strategy_name):
+            available_strategies = self.strategy_registry.get_available_strategy_names()
+            raise ValueError(f"Unknown strategy: {strategy_name}. Available: {available_strategies}")
 
-        self.strategy_presets[strategy_name].update(new_params)
-        self.logger.info(f"Updated {strategy_name} parameters: {new_params}")
+        # Note: This modifies the class-level registry, affecting all instances
+        normalized_name = self.strategy_registry.normalize_strategy_name(strategy_name)
+        self.strategy_registry.STRATEGY_PRESETS[normalized_name].update(new_params)
+        self.logger.info(f"Updated {normalized_name} parameters: {new_params}")
 
     def create_custom_strategy_group(
         self,
@@ -417,11 +361,13 @@ class BacktestingManager:
         Raises:
             ValueError: If any strategy name is not available
         """
-        available_strategies = self.get_available_strategies()
-        invalid_strategies = [s for s in strategies if s not in available_strategies]
+        # Validate and normalize strategy names
+        valid_strategies, invalid_strategies = self.strategy_registry.validate_strategies(strategies)
 
         if invalid_strategies:
+            available_strategies = self.strategy_registry.get_available_strategy_names()
             raise ValueError(f"Invalid strategies: {invalid_strategies}. Available: {available_strategies}")
 
-        self.strategy_groups[group_name] = strategies
-        self.logger.info(f"Created custom strategy group '{group_name}' with strategies: {strategies}")
+        # Note: This modifies the class-level registry, affecting all instances
+        self.strategy_registry.STRATEGY_GROUPS[group_name] = valid_strategies
+        self.logger.info(f"Created custom strategy group '{group_name}' with strategies: {valid_strategies}")

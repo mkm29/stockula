@@ -7,7 +7,8 @@ Stockula is built with a modular, domain-driven architecture that separates conc
 ```mermaid
 graph TB
     subgraph "User Interface"
-        CLI[CLI Entry Point<br/>main.py]
+        CLI[CLI Entry Point<br/>cli.py]
+        Main[Legacy Entry Point<br/>main.py]
         Manager[Business Logic<br/>StockulaManager]
         Display[Results Display<br/>ResultsDisplay]
         Config[Configuration<br/>.config.yaml]
@@ -46,6 +47,7 @@ graph TB
     end
 
     CLI --> Manager
+    Main --> CLI
     CLI --> Config
     Manager --> Display
     Manager --> Container
@@ -79,6 +81,7 @@ graph TB
     LogManager --> Models
 
     style CLI fill:#2196F3,stroke:#1976D2,color:#fff
+    style Main fill:#90CAF9,stroke:#64B5F6,color:#333
     style Manager fill:#FF5722,stroke:#D84315,color:#fff
     style Display fill:#607D8B,stroke:#455A64,color:#fff
     style Config fill:#4CAF50,stroke:#388E3C,color:#fff
@@ -137,7 +140,8 @@ sequenceDiagram
 ```
 src/stockula/
 ├── __init__.py           # Main package exports
-├── main.py               # CLI entry point (minimal orchestration)
+├── main.py               # Legacy entry point (for backward compatibility)
+├── cli.py               # CLI entry point with Typer
 ├── manager.py            # Business logic manager (StockulaManager)
 ├── display.py            # Results display and formatting (ResultsDisplay)
 ├── container.py          # Dependency injection container
@@ -172,6 +176,7 @@ src/stockula/
 │   └── indicators.py    # finta wrapper
 ├── backtesting/         # Strategy backtesting
 │   ├── __init__.py
+│   ├── manager.py       # BacktestingManager - coordinates strategies
 │   ├── strategies.py    # Pre-built strategies
 │   └── runner.py        # Backtest execution
 ├── forecasting/         # Price prediction
@@ -225,6 +230,60 @@ src/stockula/
 - Factory pattern for object creation
 - Value objects for immutable data
 
+### Strategy Registry
+
+The `StrategyRegistry` is a centralized static class that manages all trading strategies, their mappings, parameters, and groups. It provides a single source of truth for strategy-related operations across the entire application.
+
+#### Key Features
+
+**Strategy Management:**
+- **Centralized Class Registry**: Maps strategy names to strategy classes
+- **Name Normalization**: Automatically converts between PascalCase and snake_case formats
+- **Parameter Presets**: Default parameters for each strategy
+- **Strategy Groups**: Predefined collections of strategies for different trading approaches
+
+**API Methods:**
+```python
+# Strategy class resolution
+StrategyRegistry.get_strategy_class("SMACross")  # Returns SMACrossStrategy
+StrategyRegistry.get_strategy_class("double_ema_cross")  # Same class
+
+# Name normalization
+StrategyRegistry.normalize_strategy_name("DoubleEMACross")  # Returns "double_ema_cross"
+
+# Validation and discovery
+StrategyRegistry.is_valid_strategy("SMACross")  # Returns True
+StrategyRegistry.get_available_strategy_names()  # List all strategies
+StrategyRegistry.get_strategy_groups()  # Get predefined groups
+
+# Parameter management
+StrategyRegistry.get_strategy_preset("smacross")  # Get default parameters
+StrategyRegistry.get_strategy_presets()  # Get all presets
+```
+
+#### Strategy Groups
+
+Predefined strategy collections for different trading approaches:
+
+- **basic**: `["smacross", "rsi"]` - Simple strategies for beginners
+- **momentum**: `["rsi", "macd", "double_ema_cross"]` - Momentum-based strategies
+- **trend**: `["smacross", "triple_ema_cross", "trima_cross"]` - Trend following strategies
+- **advanced**: `["kama", "frama", "vama", "vidya"]` - Adaptive and sophisticated strategies
+- **comprehensive**: All available strategies combined
+
+#### Name Normalization
+
+The registry handles multiple naming formats automatically:
+
+| Input Format | Normalized Output | Strategy Class |
+|-------------|------------------|----------------|
+| `"SMACross"` | `"smacross"` | `SMACrossStrategy` |
+| `"DoubleEMACross"` | `"double_ema_cross"` | `DoubleEMACrossStrategy` |
+| `"KaufmanEfficiency"` | `"kaufman_efficiency"` | `KaufmanEfficiencyStrategy` |
+| `"ER"` | `"kaufman_efficiency"` | `KaufmanEfficiencyStrategy` |
+
+This ensures configuration files can use any naming convention while maintaining consistency internally.
+
 ### Data Layer
 
 **Purpose**: Handles all data fetching and caching
@@ -259,9 +318,12 @@ src/stockula/
 
 1. **Backtesting** (`backtesting/`)
 
+   - BacktestingManager for coordinating backtesting strategies
    - Strategy implementation framework
    - Integration with backtesting.py library
    - Risk management features
+   - Support for multiple strategies per asset
+   - Strategy name mapping for compatibility
 
 1. **Forecasting** (`forecasting/`)
 
@@ -271,6 +333,7 @@ src/stockula/
    - Confidence intervals and validation
    - Quick forecast for rapid predictions
    - Financial-specific forecasting optimizations
+   - Sequential and parallel processing support
 
 ### Utilities
 
@@ -288,14 +351,15 @@ src/stockula/
 
 Each module has a single responsibility:
 
-- **main.py**: CLI entry point and minimal orchestration
+- **cli.py**: Modern CLI entry point with Typer
+- **main.py**: Legacy entry point for backward compatibility
 - **manager.py**: Business logic orchestration and coordination
 - **display.py**: Results formatting and presentation
 - **Config**: Settings and validation
 - **Domain**: Business logic and rules
-- **Allocation**: Portfolio allocation strategies
+- **Allocation**: Portfolio allocation strategies with AllocatorManager
 - **Data**: External data access
-- **Analysis**: Financial computations
+- **Analysis**: Financial computations with dedicated managers
 - **Utils**: Shared utilities
 
 ### Dependency Injection
@@ -310,16 +374,19 @@ container = Container()
 
 # Automatic injection of configured services
 data_fetcher = container.data_fetcher()
-backtest_runner = container.backtest_runner()
 portfolio_factory = container.domain_factory()
+
+# Manager-based access to strategies
 allocator_manager = container.allocator_manager()
+backtesting_manager = container.backtesting_manager()
 forecasting_manager = container.forecasting_manager()
+technical_analysis_manager = container.technical_analysis_manager()
 
-# The allocator manager provides access to all allocation strategies
+# The managers provide access to all strategies
 quantities = allocator_manager.calculate_quantities(config, tickers)
-
-# The forecasting manager provides access to all forecasting strategies
+backtest_results = backtesting_manager.run_backtests(symbols, config)
 forecast = forecasting_manager.forecast_symbol('AAPL', config)
+ta_results = technical_analysis_manager.analyze(symbol, config)
 ```
 
 ### Interface-Based Design
@@ -435,10 +502,33 @@ tests/
 
 ### Adding New Strategies
 
-1. Create strategy class inheriting from base strategy
+1. Create strategy class inheriting from `BaseStrategy`
 1. Implement required methods (`init`, `next`)
-1. Add strategy name mapping in factory
-1. Add configuration model if needed
+1. Add strategy to `StrategyRegistry.STRATEGIES` mapping
+1. Add normalized name to `StrategyRegistry.STRATEGY_NAME_MAPPING`
+1. Add default parameters to `StrategyRegistry.STRATEGY_PRESETS`
+1. Optionally add to strategy groups in `StrategyRegistry.STRATEGY_GROUPS`
+
+**Example:**
+```python
+# 1. Create the strategy class
+class MyCustomStrategy(BaseStrategy):
+    period = 20  # Required class variable
+    
+    def init(self):
+        # Strategy initialization
+        pass
+    
+    def next(self):
+        # Strategy logic
+        pass
+
+# 2. Add to StrategyRegistry
+StrategyRegistry.STRATEGIES["my_custom"] = MyCustomStrategy
+StrategyRegistry.STRATEGY_NAME_MAPPING["MyCustom"] = "my_custom"
+StrategyRegistry.STRATEGY_NAME_MAPPING["my_custom"] = "my_custom"
+StrategyRegistry.STRATEGY_PRESETS["my_custom"] = {"period": 20}
+```
 
 ### Custom Data Sources
 
