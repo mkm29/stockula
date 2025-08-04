@@ -1085,3 +1085,126 @@ class StockulaManager:
                 self.log_manager.info(f"  {asset.symbol} ({asset.category})")
 
         return tradeable_assets, hold_only_assets, hold_only_categories
+
+    def run_main_processing(
+        self,
+        mode: str,
+        portfolio,
+        show_forecast_warning: bool = True,
+    ) -> dict[str, Any]:
+        """Run the main processing loop for ticker analysis.
+
+        Args:
+            mode: Processing mode ('all', 'ta', 'backtest', 'forecast')
+            portfolio: Portfolio instance
+            show_forecast_warning: Whether to show forecast warning
+
+        Returns:
+            Dictionary containing all results
+        """
+        from rich.progress import BarColumn, Progress, SpinnerColumn, TextColumn, TimeRemainingColumn
+
+        # Get portfolio value at start of backtest period
+        start_date_str = self.date_to_string(self.config.data.start_date) if mode in ["all", "backtest"] else None
+        initial_portfolio_value, _ = self.get_portfolio_value_at_date(portfolio, start_date_str)
+
+        # Calculate returns
+        initial_return = initial_portfolio_value - portfolio.initial_capital
+        initial_return_pct = (initial_return / portfolio.initial_capital) * 100
+
+        self.log_manager.info(f"Initial Capital: ${portfolio.initial_capital:,.2f}")
+        self.log_manager.info(f"Return Since Inception: ${initial_return:,.2f} ({initial_return_pct:+.2f}%)")
+
+        # Initialize results
+        results = {
+            "initial_portfolio_value": initial_portfolio_value,
+            "initial_capital": portfolio.initial_capital,
+        }
+
+        # Categorize assets
+        all_assets = portfolio.get_all_assets()
+        tradeable_assets, hold_only_assets, hold_only_categories = self.categorize_assets(portfolio)
+
+        # Get ticker symbols for processing
+        ticker_symbols = [asset.symbol for asset in all_assets]
+
+        # Determine what operations will be performed
+        will_backtest = mode in ["all", "backtest"]
+        will_forecast = mode in ["all", "forecast"]
+
+        # Create appropriate progress display
+        if will_backtest or will_forecast:
+            with Progress(
+                SpinnerColumn(),
+                TextColumn("[progress.description]{task.description}"),
+                BarColumn(),
+                TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
+                TimeRemainingColumn(),
+                console=self.console,
+            ) as progress:
+                # Show forecast warning if needed
+                if will_forecast and show_forecast_warning:
+                    from .display import ResultsDisplay
+
+                    display = ResultsDisplay(self.console)
+                    display.show_forecast_warning(self.config)
+
+                # Create progress tasks
+                backtest_task = None
+                if will_backtest:
+                    # Count tradeable assets for backtesting
+                    tradeable_count = len([a for a in all_assets if a.category not in hold_only_categories])
+                    if tradeable_count > 0:
+                        num_strategies = len(self.config.backtest.strategies)
+                        backtest_task = progress.add_task(
+                            f"[green]Backtesting {num_strategies} strategies across {tradeable_count} stocks...",
+                            total=tradeable_count * num_strategies,
+                        )
+
+                # Process each ticker with progress tracking
+                for ticker in ticker_symbols:
+                    self.log_manager.debug(f"\nProcessing {ticker}...")
+
+                    # Get the asset to check its category
+                    asset = next((a for a in all_assets if a.symbol == ticker), None)
+                    is_hold_only = asset and asset.category in hold_only_categories
+
+                    if mode in ["all", "ta"]:
+                        if "technical_analysis" not in results:
+                            results["technical_analysis"] = []
+                        # Show progress for TA when it's the only operation
+                        show_ta_progress = mode == "ta" or not will_backtest and not will_forecast
+                        results["technical_analysis"].append(self.run_technical_analysis(ticker, show_ta_progress))
+
+                    if will_backtest and not is_hold_only:
+                        if "backtesting" not in results:
+                            results["backtesting"] = []
+
+                        # Run backtest and update progress
+                        backtest_results = self.run_backtest(ticker)
+                        results["backtesting"].extend(backtest_results)
+
+                        # Update progress
+                        if backtest_task is not None:
+                            for _ in backtest_results:
+                                progress.advance(backtest_task)
+
+                # Run sequential forecasting if needed
+                if will_forecast and ticker_symbols:
+                    forecasting_manager = self.container.forecasting_manager()
+                    forecast_results = forecasting_manager.forecast_multiple_symbols_with_progress(
+                        ticker_symbols, self.config, self.console
+                    )
+                    results["forecasting"] = forecast_results
+        else:
+            # No progress bars needed for TA only
+            for ticker in ticker_symbols:
+                self.log_manager.debug(f"\nProcessing {ticker}...")
+
+                if mode in ["all", "ta"]:
+                    if "technical_analysis" not in results:
+                        results["technical_analysis"] = []
+                    # Always show progress for standalone TA mode
+                    results["technical_analysis"].append(self.run_technical_analysis(ticker, show_progress=True))
+
+        return results

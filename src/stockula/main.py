@@ -20,7 +20,6 @@ from typing import Any
 
 from dependency_injector.wiring import Provide, inject
 from rich.console import Console
-from rich.progress import BarColumn, Progress, SpinnerColumn, TextColumn, TimeRemainingColumn
 
 from .config import StockulaConfig, TickerConfig
 from .config.settings import save_config
@@ -142,102 +141,8 @@ def main():
     manager.display_portfolio_summary(portfolio)
     manager.display_portfolio_holdings(portfolio)
 
-    # Get portfolio value at start of backtest period
-    start_date_str = manager.date_to_string(config.data.start_date) if args.mode in ["all", "backtest"] else None
-    initial_portfolio_value, _ = manager.get_portfolio_value_at_date(portfolio, start_date_str)
-
-    # Calculate returns
-    initial_return = initial_portfolio_value - portfolio.initial_capital
-    initial_return_pct = (initial_return / portfolio.initial_capital) * 100
-
-    log_manager.info(f"Initial Capital: ${portfolio.initial_capital:,.2f}")
-    log_manager.info(f"Return Since Inception: ${initial_return:,.2f} ({initial_return_pct:+.2f}%)")
-
-    # Initialize results
-    results = {
-        "initial_portfolio_value": initial_portfolio_value,
-        "initial_capital": portfolio.initial_capital,
-    }
-
-    # Categorize assets
-    all_assets = portfolio.get_all_assets()
-    tradeable_assets, hold_only_assets, hold_only_categories = manager.categorize_assets(portfolio)
-
-    # Get ticker symbols for processing
-    ticker_symbols = [asset.symbol for asset in all_assets]
-
-    # Determine what operations will be performed
-    will_backtest = args.mode in ["all", "backtest"]
-    will_forecast = args.mode in ["all", "forecast"]
-
-    # Create appropriate progress display
-    if will_backtest or will_forecast:
-        with Progress(
-            SpinnerColumn(),
-            TextColumn("[progress.description]{task.description}"),
-            BarColumn(),
-            TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
-            TimeRemainingColumn(),
-            console=console,
-        ) as progress:
-            # Show forecast warning if needed
-            if will_forecast:
-                display = ResultsDisplay(console)
-                display.show_forecast_warning(config)
-
-            # Create progress tasks
-            backtest_task = None
-            if will_backtest:
-                # Count tradeable assets for backtesting
-                tradeable_count = len([a for a in all_assets if a.category not in hold_only_categories])
-                if tradeable_count > 0:
-                    num_strategies = len(config.backtest.strategies)
-                    backtest_task = progress.add_task(
-                        f"[green]Backtesting {num_strategies} strategies across {tradeable_count} stocks...",
-                        total=tradeable_count * num_strategies,
-                    )
-
-            # Process each ticker with progress tracking
-            for ticker in ticker_symbols:
-                log_manager.debug(f"\nProcessing {ticker}...")
-
-                # Get the asset to check its category
-                asset = next((a for a in all_assets if a.symbol == ticker), None)
-                is_hold_only = asset and asset.category in hold_only_categories
-
-                if args.mode in ["all", "ta"]:
-                    if "technical_analysis" not in results:
-                        results["technical_analysis"] = []
-                    # Show progress for TA when it's the only operation
-                    show_ta_progress = args.mode == "ta" or not will_backtest and not will_forecast
-                    results["technical_analysis"].append(manager.run_technical_analysis(ticker, show_ta_progress))
-
-                if will_backtest and not is_hold_only:
-                    if "backtesting" not in results:
-                        results["backtesting"] = []
-
-                    # Run backtest and update progress
-                    backtest_results = manager.run_backtest(ticker)
-                    results["backtesting"].extend(backtest_results)
-
-                    # Update progress
-                    if backtest_task is not None:
-                        for _ in backtest_results:
-                            progress.advance(backtest_task)
-
-            # Run sequential forecasting if needed
-            if will_forecast and ticker_symbols:
-                _run_sequential_forecasting(manager, config, ticker_symbols, results)
-    else:
-        # No progress bars needed for TA only
-        for ticker in ticker_symbols:
-            log_manager.debug(f"\nProcessing {ticker}...")
-
-            if args.mode in ["all", "ta"]:
-                if "technical_analysis" not in results:
-                    results["technical_analysis"] = []
-                # Always show progress for standalone TA mode
-                results["technical_analysis"].append(manager.run_technical_analysis(ticker, show_progress=True))
+    # Run main processing through StockulaManager
+    results = manager.run_main_processing(args.mode, portfolio)
 
     # Show current portfolio value for forecast mode
     if args.mode == "forecast":
@@ -252,91 +157,6 @@ def main():
     if args.mode in ["all", "backtest"] and "backtesting" in results:
         display = ResultsDisplay(console)
         display.show_strategy_summaries(manager, config, results)
-
-
-def _run_sequential_forecasting(
-    manager: StockulaManager, config: StockulaConfig, ticker_symbols: list[str], results: dict[str, Any]
-):
-    """Run sequential forecasting for all tickers.
-
-    Args:
-        manager: StockulaManager instance
-        config: Configuration object
-        ticker_symbols: List of ticker symbols
-        results: Results dictionary to populate
-    """
-    console.print("\n[bold blue]Starting sequential forecasting...[/bold blue]")
-    console.print(
-        f"[dim]Configuration: max_generations={config.forecast.max_generations}, "
-        f"num_validations={config.forecast.num_validations}[/dim]"
-    )
-
-    # Create a separate progress display for sequential forecasting
-    with Progress(
-        SpinnerColumn(),
-        TextColumn("[progress.description]{task.description}"),
-        BarColumn(),
-        TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
-        TimeRemainingColumn(),
-        console=console,
-        transient=True,
-    ) as forecast_progress:
-        forecast_task = forecast_progress.add_task(
-            f"[blue]Forecasting {len(ticker_symbols)} tickers...",
-            total=len(ticker_symbols),
-        )
-
-        # Initialize results
-        results["forecasting"] = []
-
-        # Process each ticker sequentially
-        for idx, symbol in enumerate(ticker_symbols, 1):
-            forecast_progress.update(
-                forecast_task,
-                description=f"[blue]Forecasting {symbol} ({idx}/{len(ticker_symbols)})...",
-            )
-
-            try:
-                # Check if test dates are provided for evaluation
-                if config.forecast.test_start_date and config.forecast.test_end_date:
-                    # Use the new evaluation method
-                    forecast_result = manager.run_forecast_with_evaluation(symbol)
-                else:
-                    # Use the original method
-                    forecast_result = manager.run_forecast(symbol)
-
-                results["forecasting"].append(forecast_result)
-
-                # Update progress to show completion
-                forecast_progress.update(
-                    forecast_task,
-                    description=f"[green]✅ Forecasted {symbol}[/green] ({idx}/{len(ticker_symbols)})",
-                )
-
-            except KeyboardInterrupt:
-                if log_manager:
-                    log_manager.warning(f"Forecast for {symbol} interrupted by user")
-                results["forecasting"].append({"ticker": symbol, "error": "Interrupted by user"})
-                break
-            except Exception as e:
-                if log_manager:
-                    log_manager.error(f"Error forecasting {symbol}: {e}")
-                results["forecasting"].append({"ticker": symbol, "error": str(e)})
-
-                # Update progress to show error
-                forecast_progress.update(
-                    forecast_task,
-                    description=f"[red]❌ Failed {symbol}[/red] ({idx}/{len(ticker_symbols)})",
-                )
-
-            # Advance progress
-            forecast_progress.advance(forecast_task)
-
-        # Mark progress as complete
-        forecast_progress.update(
-            forecast_task,
-            description="[green]Forecasting complete!",
-        )
 
 
 if __name__ == "__main__":

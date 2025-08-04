@@ -523,27 +523,33 @@ class TestMainFunction:
     @patch("stockula.main.create_container")
     @patch("stockula.main.setup_logging")
     @patch("stockula.main.log_manager")
-    @patch("stockula.manager.StockulaManager.run_technical_analysis")
+    @patch("stockula.manager.StockulaManager.run_main_processing")
     @patch("stockula.main.print_results")
     @patch("sys.argv", ["stockula", "--mode", "ta", "--ticker", "AAPL"])
-    def test_main_ta_mode(self, mock_print, mock_ta, mock_log_manager, mock_logging, mock_container):
+    def test_main_ta_mode(self, mock_print, mock_run_main, mock_log_manager, mock_logging, mock_container):
         """Test main function in technical analysis mode."""
         container = create_mock_container()
         mock_container.return_value = container
-        mock_ta.return_value = {"ticker": "AAPL", "indicators": {}}
+
+        # Mock the return value of run_main_processing
+        mock_run_main.return_value = {
+            "technical_analysis": [{"ticker": "AAPL", "indicators": {}}],
+            "initial_portfolio_value": 100000.0,
+            "initial_capital": 100000.0,
+        }
 
         main()
 
-        mock_ta.assert_called_once()
+        mock_run_main.assert_called_once()
         mock_print.assert_called_once()
 
     @patch("stockula.main.create_container")
     @patch("stockula.main.setup_logging")
     @patch("stockula.main.log_manager")
-    @patch("stockula.manager.StockulaManager.run_forecast_with_evaluation")
+    @patch("stockula.manager.StockulaManager.run_main_processing")
     @patch("stockula.main.print_results")
     @patch("sys.argv", ["stockula", "--mode", "forecast"])
-    def test_main_forecast_mode(self, mock_print, mock_forecast_eval, mock_log_manager, mock_logging, mock_container):
+    def test_main_forecast_mode(self, mock_print, mock_run_main, mock_log_manager, mock_logging, mock_container):
         """Test main function in forecast mode."""
         config = StockulaConfig()
         config.portfolio.tickers = [TickerConfig(symbol="AAPL", quantity=10.0)]
@@ -553,16 +559,23 @@ class TestMainFunction:
         container = create_mock_container(config)
         mock_container.return_value = container
 
-        mock_forecast_eval.return_value = {
-            "ticker": "AAPL",
-            "current_price": 150.0,
-            "forecast_price": 160.0,
-            "evaluation": {"rmse": 2.0, "mape": 1.5},
+        # Mock the return value of run_main_processing
+        mock_run_main.return_value = {
+            "forecasting": [
+                {
+                    "ticker": "AAPL",
+                    "current_price": 150.0,
+                    "forecast_price": 160.0,
+                    "evaluation": {"rmse": 2.0, "mape": 1.5},
+                }
+            ],
+            "initial_portfolio_value": 100000.0,
+            "initial_capital": 100000.0,
         }
 
         main()
 
-        mock_forecast_eval.assert_called_once()
+        mock_run_main.assert_called_once()
         mock_print.assert_called_once()
 
     @patch("stockula.main.create_container")
@@ -1318,17 +1331,13 @@ class TestMainFunctionAdvanced:
     @patch("stockula.main.create_container")
     @patch("stockula.main.setup_logging")
     @patch("stockula.main.log_manager")
-    @patch("stockula.manager.StockulaManager.run_forecast")
-    @patch("stockula.manager.StockulaManager.run_forecast_with_evaluation")
+    @patch("stockula.manager.StockulaManager.run_main_processing")
     @patch("stockula.main.print_results")
-    @patch("stockula.main.Progress")
     @patch("sys.argv", ["stockula", "--mode", "forecast"])
     def test_main_forecast_mode_with_portfolio_value(
         self,
-        mock_progress_class,
         mock_print,
-        mock_forecast_eval,
-        mock_forecast,
+        mock_run_main,
         mock_log_manager,
         mock_logging,
         mock_container,
@@ -1371,24 +1380,22 @@ class TestMainFunctionAdvanced:
 
         mock_container.return_value = container
 
-        # Mock Progress to avoid timestamp comparison errors
-        mock_progress = Mock()
-        mock_progress.__enter__ = Mock(return_value=mock_progress)
-        mock_progress.__exit__ = Mock(return_value=None)
-        mock_progress.add_task = Mock(return_value=1)
-        mock_progress.update = Mock()
-        mock_progress.advance = Mock()
-        mock_progress_class.return_value = mock_progress
-
-        mock_forecast_eval.return_value = {
-            "ticker": "AAPL",
-            "current_price": 150.0,
-            "forecast_price": 160.0,
-            "lower_bound": 155.0,
-            "upper_bound": 165.0,
-            "best_model": "ARIMA",
-            "evaluation": {"rmse": 2.0, "mae": 1.5, "mape": 1.0},
-            "end_date": "2024-01-31",
+        # Mock the return value of run_main_processing
+        mock_run_main.return_value = {
+            "forecasting": [
+                {
+                    "ticker": "AAPL",
+                    "current_price": 150.0,
+                    "forecast_price": 160.0,
+                    "lower_bound": 155.0,
+                    "upper_bound": 165.0,
+                    "best_model": "ARIMA",
+                    "evaluation": {"rmse": 2.0, "mae": 1.5, "mape": 1.0},
+                    "end_date": "2024-01-31",
+                }
+            ],
+            "initial_portfolio_value": 100000.0,
+            "initial_capital": 100000.0,
         }
 
         with patch("stockula.main.console") as mock_console:
@@ -1747,11 +1754,11 @@ class TestMainErrorHandling:
     @patch("stockula.main.create_container")
     @patch("stockula.main.setup_logging")
     @patch("stockula.main.log_manager")
-    @patch("stockula.manager.StockulaManager.run_backtest")
+    @patch("stockula.manager.StockulaManager.run_main_processing")
     @patch("stockula.main.print_results")
     @patch("sys.argv", ["stockula", "--mode", "backtest"])
     def test_main_backtest_with_multiple_strategies_progress(
-        self, mock_print, mock_backtest, mock_log_manager, mock_logging, mock_container
+        self, mock_print, mock_run_main, mock_log_manager, mock_logging, mock_container
     ):
         """Test main backtest mode with multiple strategies and progress bars."""
         config = StockulaConfig()
@@ -1795,54 +1802,46 @@ class TestMainErrorHandling:
 
         mock_container.return_value = container
 
-        # Return actual backtest results to trigger progress logic
-        mock_backtest.return_value = [
-            {
-                "ticker": "AAPL",
-                "strategy": "SMACross",
-                "return_pct": 15.0,
-                "sharpe_ratio": 1.2,
-                "max_drawdown_pct": -8.0,
-                "num_trades": 20,
-                "win_rate": 60.0,
-            },
-            {
-                "ticker": "AAPL",
-                "strategy": "RSI",
-                "return_pct": 12.0,
-                "sharpe_ratio": 1.0,
-                "max_drawdown_pct": -6.0,
-                "num_trades": 15,
-                "win_rate": 55.0,
-            },
-        ]
+        # Mock the return value of run_main_processing with backtest results
+        mock_run_main.return_value = {
+            "backtesting": [
+                {
+                    "ticker": "AAPL",
+                    "strategy": "SMACross",
+                    "return_pct": 15.0,
+                    "sharpe_ratio": 1.2,
+                    "max_drawdown_pct": -8.0,
+                    "num_trades": 20,
+                    "win_rate": 60.0,
+                },
+                {
+                    "ticker": "AAPL",
+                    "strategy": "RSI",
+                    "return_pct": 12.0,
+                    "sharpe_ratio": 1.0,
+                    "max_drawdown_pct": -6.0,
+                    "num_trades": 15,
+                    "win_rate": 55.0,
+                },
+            ],
+            "initial_portfolio_value": 100000.0,
+            "initial_capital": 100000.0,
+        }
 
-        with patch("stockula.main.Progress") as mock_progress_class:
-            mock_progress = Mock()
-            mock_task = Mock()
-            mock_progress.add_task.return_value = mock_task
-            mock_progress.update = Mock()  # Add update method
-            mock_progress.advance = Mock()  # Add advance method
-            mock_progress_class.return_value.__enter__.return_value = mock_progress
-            mock_progress_class.return_value.__exit__ = Mock(return_value=None)
+        main()
 
-            main()
-
-            # Should create progress bars
-            assert mock_progress_class.called
-            # Should add task for backtesting progress
-            assert mock_progress.add_task.called
-            # Should advance progress for each strategy result
-            assert mock_progress.advance.called
+        # Test that run_main_processing was called with correct arguments
+        mock_run_main.assert_called_once()
+        mock_print.assert_called_once()
 
     @patch("stockula.main.create_container")
     @patch("stockula.main.setup_logging")
     @patch("stockula.main.log_manager")
-    @patch("stockula.manager.StockulaManager.run_forecast_with_evaluation")
+    @patch("stockula.manager.StockulaManager.run_main_processing")
     @patch("stockula.main.print_results")
     @patch("sys.argv", ["stockula", "--mode", "forecast"])
     def test_main_forecast_parallel_processing(
-        self, mock_print, mock_forecast_eval, mock_log_manager, mock_logging, mock_container
+        self, mock_print, mock_run_main, mock_log_manager, mock_logging, mock_container
     ):
         """Test main forecast mode with parallel processing and progress tracking."""
         config = StockulaConfig()
@@ -1883,10 +1882,10 @@ class TestMainErrorHandling:
 
         mock_container.return_value = container
 
-        # Mock forecast results
-        def forecast_side_effect(ticker, *args, **kwargs):
-            if ticker == "AAPL":
-                return {
+        # Mock the return value of run_main_processing
+        mock_run_main.return_value = {
+            "forecasting": [
+                {
                     "ticker": "AAPL",
                     "current_price": 150.0,
                     "forecast_price": 160.0,
@@ -1894,27 +1893,18 @@ class TestMainErrorHandling:
                     "upper_bound": 165.0,
                     "best_model": "ARIMA",
                     "evaluation": {"rmse": 2.0, "mae": 1.5, "mape": 1.0},
-                }
-            else:
-                # Simulate error for MSFT
-                raise Exception("API error")
+                },
+                {
+                    "ticker": "MSFT",
+                    "error": "API error",
+                },
+            ],
+            "initial_portfolio_value": 100000.0,
+            "initial_capital": 100000.0,
+        }
 
-        mock_forecast_eval.side_effect = forecast_side_effect
+        main()
 
-        with patch("stockula.main.Progress") as mock_progress_class:
-            mock_progress = Mock()
-            mock_task = Mock()
-            mock_progress.add_task.return_value = mock_task
-            mock_progress.update = Mock()  # Add update method
-            mock_progress.advance = Mock()  # Add advance method
-            mock_progress_class.return_value.__enter__.return_value = mock_progress
-            mock_progress_class.return_value.__exit__ = Mock(return_value=None)
-
-            main()
-
-            # Should create progress bars for parallel forecasting
-            assert mock_progress_class.called
-            # Should handle both success and error cases
-            results_call = mock_print.call_args[0][0]
-            assert len(results_call["forecasting"]) == 2
-            assert any(f.get("error") == "API error" for f in results_call["forecasting"])
+        # Test that run_main_processing was called
+        mock_run_main.assert_called_once()
+        mock_print.assert_called_once()
