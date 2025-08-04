@@ -34,6 +34,7 @@ graph TB
         TA[Technical Analysis<br/>finta]
         BT[Backtesting<br/>strategies]
         FC[Forecasting<br/>AutoTS]
+        FCM[Forecasting Manager<br/>Coordinates Strategies]
     end
 
     subgraph "Configuration & Utilities"
@@ -59,7 +60,8 @@ graph TB
 
     Manager --> TA
     Manager --> BT
-    Manager --> FC
+    Manager --> FCM
+    FCM --> FC
 
     TA --> Fetcher
     BT --> Fetcher
@@ -84,6 +86,7 @@ graph TB
     style AllocatorManager fill:#E91E63,stroke:#C2185B,color:#fff
     style Allocator fill:#E91E63,stroke:#C2185B,color:#fff
     style BacktestAllocator fill:#E91E63,stroke:#C2185B,color:#fff
+    style FCM fill:#00BCD4,stroke:#0097A7,color:#fff
 ```
 
 ## Data Flow
@@ -166,6 +169,7 @@ src/stockula/
 │   └── runner.py        # Backtest execution
 ├── forecasting/         # Price prediction
 │   ├── __init__.py
+│   ├── manager.py       # ForecastingManager - coordinates strategies
 │   └── forecaster.py    # AutoTS wrapper
 └── utils/               # Utilities
     ├── __init__.py
@@ -206,6 +210,7 @@ src/stockula/
 - **AllocatorManager**: Coordinates all allocation strategies and provides unified interface
 - **Allocator**: Standard allocator for basic strategies (equal weight, market cap, custom, dynamic, auto)
 - **BacktestOptimizedAllocator**: Advanced allocation using backtest performance data
+- **ForecastingManager**: Coordinates forecasting strategies and provides unified interface for different forecasting models
 
 **Patterns**:
 
@@ -250,9 +255,12 @@ src/stockula/
 
 1. **Forecasting** (`forecasting/`)
 
+   - ForecastingManager for coordinating different forecasting strategies
    - AutoTS integration for time series prediction
-   - Multiple model ensembles
+   - Multiple model ensembles (standard, fast, financial)
    - Confidence intervals and validation
+   - Quick forecast for rapid predictions
+   - Financial-specific forecasting optimizations
 
 ### Utilities
 
@@ -295,9 +303,13 @@ data_fetcher = container.data_fetcher()
 backtest_runner = container.backtest_runner()
 portfolio_factory = container.domain_factory()
 allocator_manager = container.allocator_manager()
+forecasting_manager = container.forecasting_manager()
 
 # The allocator manager provides access to all allocation strategies
 quantities = allocator_manager.calculate_quantities(config, tickers)
+
+# The forecasting manager provides access to all forecasting strategies
+forecast = forecasting_manager.forecast_symbol('AAPL', config)
 ```
 
 ### Interface-Based Design

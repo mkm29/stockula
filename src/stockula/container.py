@@ -10,7 +10,7 @@ from .config import load_config
 from .data.fetcher import DataFetcher
 from .database.manager import DatabaseManager
 from .domain.factory import DomainFactory
-from .forecasting.forecaster import StockForecaster
+from .forecasting import ForecastingManager, StockForecaster
 from .technical_analysis.indicators import TechnicalIndicators
 from .utils.logging_manager import LoggingManager
 
@@ -83,6 +83,13 @@ class Container(containers.DeclarativeContainer):
         logging_manager=logging_manager,
     )
 
+    # Forecasting manager - thread-safe singleton
+    forecasting_manager = providers.ThreadSafeSingleton(
+        ForecastingManager,
+        data_fetcher=data_fetcher,
+        logging_manager=logging_manager,
+    )
+
     # Domain factory - thread-safe singleton
     domain_factory = providers.ThreadSafeSingleton(
         DomainFactory, config=stockula_config, fetcher=data_fetcher, allocator_manager=allocator_manager
@@ -128,6 +135,7 @@ def create_container(config_path: str | None = None) -> Container:
             "stockula.domain.factory",
             "stockula.domain.portfolio",
             "stockula.forecasting.forecaster",
+            "stockula.forecasting.manager",
         ]
     )
 

@@ -645,55 +645,31 @@ class StockulaManager:
         """
         self.log_manager.info(f"\nForecasting {ticker} with train/test evaluation...")
 
-        forecaster = self.container.stock_forecaster()
+        forecasting_manager = self.container.forecasting_manager()
 
         try:
-            # Use forecast date fields if available, otherwise fall back to data dates
-            train_start = self.config.forecast.train_start_date or self.config.data.start_date
-            train_end = self.config.forecast.train_end_date or self.config.data.end_date
-            test_start = self.config.forecast.test_start_date
-            test_end = self.config.forecast.test_end_date
-
-            result = forecaster.forecast_from_symbol_with_evaluation(
-                ticker,
-                train_start_date=self.date_to_string(train_start),
-                train_end_date=self.date_to_string(train_end),
-                test_start_date=self.date_to_string(test_start),
-                test_end_date=self.date_to_string(test_end),
-                model_list=self.config.forecast.model_list,
-                ensemble=self.config.forecast.ensemble,
-                max_generations=self.config.forecast.max_generations,
+            # Determine if we should use evaluation
+            use_evaluation = (
+                self.config.forecast.train_start_date is not None
+                and self.config.forecast.train_end_date is not None
+                and self.config.forecast.test_start_date is not None
+                and self.config.forecast.test_end_date is not None
             )
 
-            predictions = result["predictions"]
-            model_info = forecaster.get_best_model()
+            result = forecasting_manager.forecast_symbol(
+                ticker,
+                self.config,
+                use_evaluation=use_evaluation,
+            )
 
-            self.log_manager.info(f"Forecast completed for {ticker} using {model_info['model_name']}")
-
-            forecast_result = {
-                "ticker": ticker,
-                "current_price": float(predictions["forecast"].iloc[0]),
-                "forecast_price": float(predictions["forecast"].iloc[-1]),
-                "lower_bound": float(predictions["lower_bound"].iloc[-1]),
-                "upper_bound": float(predictions["upper_bound"].iloc[-1]),
-                "forecast_length": self.config.forecast.forecast_length,
-                "start_date": predictions.index[0].strftime("%Y-%m-%d"),
-                "end_date": predictions.index[-1].strftime("%Y-%m-%d"),
-                "best_model": model_info["model_name"],
-                "model_params": model_info.get("model_params", {}),
-                "train_period": result["train_period"],
-                "test_period": result["test_period"],
-            }
-
-            # Add evaluation metrics if available
-            if result["evaluation_metrics"]:
-                forecast_result["evaluation"] = result["evaluation_metrics"]
+            # Add additional info if evaluation was used
+            if use_evaluation and "evaluation" in result:
                 self.log_manager.info(
-                    f"Evaluation metrics for {ticker}: RMSE={result['evaluation_metrics']['rmse']:.2f}, "
-                    f"MAPE={result['evaluation_metrics']['mape']:.2f}%"
+                    f"Evaluation metrics for {ticker}: RMSE={result['evaluation']['rmse']:.2f}, "
+                    f"MAPE={result['evaluation']['mape']:.2f}%"
                 )
 
-            return forecast_result
+            return result
 
         except KeyboardInterrupt:
             self.log_manager.warning(f"Forecast for {ticker} interrupted by user")
@@ -713,34 +689,16 @@ class StockulaManager:
         """
         self.log_manager.info(f"\nForecasting {ticker} for {self.config.forecast.forecast_length} days...")
 
-        forecaster = self.container.stock_forecaster()
+        forecasting_manager = self.container.forecasting_manager()
 
         try:
-            predictions = forecaster.forecast_from_symbol(
+            result = forecasting_manager.forecast_symbol(
                 ticker,
-                start_date=self.date_to_string(self.config.data.start_date),
-                end_date=self.date_to_string(self.config.data.end_date),
-                model_list=self.config.forecast.model_list,
-                ensemble=self.config.forecast.ensemble,
-                max_generations=self.config.forecast.max_generations,
+                self.config,
+                use_evaluation=False,  # Explicit no evaluation for standard forecast
             )
 
-            model_info = forecaster.get_best_model()
-
-            self.log_manager.info(f"Forecast completed for {ticker} using {model_info['model_name']}")
-
-            return {
-                "ticker": ticker,
-                "current_price": predictions["forecast"].iloc[0],
-                "forecast_price": predictions["forecast"].iloc[-1],
-                "lower_bound": predictions["lower_bound"].iloc[-1],
-                "upper_bound": predictions["upper_bound"].iloc[-1],
-                "forecast_length": self.config.forecast.forecast_length,
-                "start_date": predictions.index[0].strftime("%Y-%m-%d"),
-                "end_date": predictions.index[-1].strftime("%Y-%m-%d"),
-                "best_model": model_info["model_name"],
-                "model_params": model_info.get("model_params", {}),
-            }
+            return result
         except KeyboardInterrupt:
             self.log_manager.warning(f"Forecast for {ticker} interrupted by user")
             return {"ticker": ticker, "error": "Interrupted by user"}
