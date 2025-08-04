@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.1](https://github.com/mkm29/stockula/compare/v0.9.0...v0.9.1) (2025-08-04)
+
+
+### Bug Fixes
+
+* Refactor tests and main CLI functionality ([109397e](https://github.com/mkm29/stockula/commit/109397e1711caf71d302d3e7f319bcfbb359d6b0))
+
 ## [0.9.0](https://github.com/mkm29/stockula/compare/v0.8.0...v0.9.0) (2025-08-04)
 
 
