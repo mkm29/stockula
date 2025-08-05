@@ -1,9 +1,11 @@
-"""Strategy Repository - Simple repository for managing trading strategies."""
+"""Strategy Repository - Repository for managing trading strategies with database support."""
 
 from copy import deepcopy
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from .strategies import (
+from sqlalchemy.orm import Session
+
+from ..backtesting.strategies import (
     BaseStrategy,
     DoubleEMACrossStrategy,
     FRAMAStrategy,
@@ -17,19 +19,23 @@ from .strategies import (
     VAMAStrategy,
     VIDYAStrategy,
 )
+from ..database.models import Strategy, StrategyPreset
+from .repository import Repository
+
+if TYPE_CHECKING:
+    from ..database.manager import DatabaseManager
 
 
-class StrategyRepository:
-    """Repository for trading strategies.
+class StrategyRepository(Repository[type[BaseStrategy]]):
+    """Repository for trading strategies with database persistence.
 
     This class manages all available trading strategies and provides methods
-    for strategy discovery, validation, and configuration.
-
-    Strategy names are always stored and accessed in lowercase.
+    for strategy discovery, validation, and configuration. It can operate
+    in both in-memory mode and database-backed mode.
     """
 
     # Class property: mappings of strategy names to classes
-    mappings = {
+    DEFAULT_MAPPINGS = {
         "smacross": SMACrossStrategy,
         "rsi": RSIStrategy,
         "macd": MACDStrategy,
@@ -91,14 +97,94 @@ class StrategyRepository:
         },
     }
 
-    def __init__(self):
-        """Initialize the strategy repository."""
+    def __init__(self, db_manager: "DatabaseManager | None" = None):
+        """Initialize the strategy repository.
+
+        Args:
+            db_manager: Optional database manager for persistence
+        """
+        super().__init__()
+        self.db_manager = db_manager
+
         # Initialize groups and values (deep copies to prevent mutation)
         self.groups = deepcopy(self.DEFAULT_GROUPS)
-        self._values = deepcopy(self.DEFAULT_PRESETS)
+        self._preset_values = deepcopy(self.DEFAULT_PRESETS)
 
-        # Internal storage for strategies (lowercase keys)
-        self._strategies = self.mappings.copy()
+        # Initialize with default strategies
+        self._items = self.DEFAULT_MAPPINGS.copy()
+
+        # Load from database if available
+        if self.db_manager:
+            self._load_from_database()
+
+    def _load_from_database(self) -> None:
+        """Load strategies and presets from the database."""
+        if not self.db_manager:
+            return
+
+        with self.db_manager.get_session() as session:
+            # Load active strategies
+            strategies = session.query(Strategy).filter(Strategy.is_active).all()
+            for strategy in strategies:
+                # For now, we only load presets - actual strategy classes
+                # would need to be dynamically imported from module_path
+                self._load_strategy_presets(session, strategy)
+
+    def _load_strategy_presets(self, session: Session, strategy: Strategy) -> None:
+        """Load presets for a specific strategy from the database."""
+        presets = session.query(StrategyPreset).filter(StrategyPreset.strategy_id == strategy.id).all()
+
+        for preset in presets:
+            if preset.is_default:
+                self._preset_values[strategy.name] = preset.parameters
+
+    def sync_to_database(self) -> None:
+        """Sync current strategies and presets to the database."""
+        if not self.db_manager:
+            return
+
+        from sqlalchemy.exc import IntegrityError, OperationalError
+
+        try:
+            with self.db_manager.get_session() as session:
+                # Sync strategies
+                for name, strategy_class in self._items.items():
+                    existing = session.query(Strategy).filter(Strategy.name == name).first()
+                    if not existing:
+                        strategy = Strategy(
+                            name=name,
+                            class_name=strategy_class.__name__,
+                            module_path=strategy_class.__module__,
+                            description=strategy_class.__doc__.split("\n")[0] if strategy_class.__doc__ else None,
+                            category=self._get_strategy_category(name),
+                        )
+                        session.add(strategy)
+                        session.flush()  # Get the ID
+
+                        # Add default preset
+                        if name in self._preset_values:
+                            preset = StrategyPreset(
+                                strategy_id=strategy.id,
+                                name="default",
+                                is_default=True,
+                            )
+                            preset.set_parameters(self._preset_values[name])
+                            session.add(preset)
+
+                session.commit()
+        except (IntegrityError, OperationalError):
+            # Handle cases where:
+            # - Strategy already exists (IntegrityError on unique constraint)
+            # - Tables don't exist yet (OperationalError)
+            # - Concurrent access from multiple processes/threads
+            session.rollback()
+
+    def _get_strategy_category(self, strategy_name: str) -> str | None:
+        """Determine the category of a strategy based on groups."""
+        for group_name, strategies in self.groups.items():
+            if strategy_name in strategies and group_name != "comprehensive":
+                return group_name
+        return None
 
     @property
     def presets(self) -> dict[str, dict[str, Any]]:
@@ -116,7 +202,7 @@ class StrategyRepository:
         Returns:
             Dictionary of current preset values (can be modified)
         """
-        return self._values
+        return self._preset_values
 
     def add(self, name: str, strategy_class: type[BaseStrategy]) -> None:
         """Add a strategy to the repository.
@@ -125,10 +211,8 @@ class StrategyRepository:
             name: Strategy name (will be converted to lowercase)
             strategy_class: The strategy class
         """
-        # Always store with lowercase key
         lowercase_name = name.lower()
-        self._strategies[lowercase_name] = strategy_class
-        self.mappings[lowercase_name] = strategy_class
+        self._items[lowercase_name] = strategy_class
 
     def get(self, key: str, default=None):
         """Get a strategy by name (case-insensitive).
@@ -140,7 +224,21 @@ class StrategyRepository:
         Returns:
             Strategy class or default
         """
-        return self._strategies.get(key.lower(), default)
+        return self._items.get(key.lower(), default)
+
+    def remove(self, key: str) -> None:
+        """Remove a strategy from the repository.
+
+        Args:
+            key: Strategy name to remove
+
+        Raises:
+            KeyError: If strategy not found
+        """
+        lowercase_key = key.lower()
+        if lowercase_key not in self._items:
+            raise KeyError(f"Strategy '{key}' not found")
+        del self._items[lowercase_key]
 
     def validate(self, name: str) -> None:
         """Validate that a strategy name exists.
@@ -152,8 +250,8 @@ class StrategyRepository:
             ValueError: If the strategy name is not valid
         """
         lowercase_name = name.lower()
-        if lowercase_name not in self._strategies:
-            available = list(self._strategies.keys())
+        if lowercase_name not in self._items:
+            available = list(self._items.keys())
             raise ValueError(f"Unknown strategy: {name}. Available strategies: {available}")
 
     def get_strategy_class(self, strategy_name: str) -> type[BaseStrategy] | None:
@@ -184,7 +282,7 @@ class StrategyRepository:
         Returns:
             List of all strategy names
         """
-        return list(self._strategies.keys())
+        return list(self._items.keys())
 
     def is_valid_strategy(self, strategy_name: str) -> bool:
         """Check if a strategy name is valid.
@@ -195,7 +293,7 @@ class StrategyRepository:
         Returns:
             True if valid, False otherwise
         """
-        return strategy_name.lower() in self._strategies
+        return strategy_name.lower() in self._items
 
     def get_strategy_groups(self) -> dict[str, list[str]]:
         """Get all strategy groups.
@@ -240,7 +338,7 @@ class StrategyRepository:
         Returns:
             Dictionary of strategy names to parameter presets
         """
-        return self._values.copy()
+        return self._preset_values.copy()
 
     def get_strategy_preset(self, strategy_name: str) -> dict[str, Any]:
         """Get parameter preset for a specific strategy.
@@ -252,7 +350,7 @@ class StrategyRepository:
             Dictionary of default parameters
         """
         normalized_name = self.normalize_strategy_name(strategy_name)
-        return self._values.get(normalized_name, {}).copy()
+        return self._preset_values.get(normalized_name, {}).copy()
 
     def validate_strategies(self, strategy_names: list[str]) -> tuple[list[str], list[str]]:
         """Validate a list of strategy names.
@@ -268,7 +366,7 @@ class StrategyRepository:
 
         for name in strategy_names:
             lowercase_name = name.lower()
-            if lowercase_name in self._strategies:
+            if lowercase_name in self._items:
                 valid.append(lowercase_name)
             else:
                 invalid.append(name)
@@ -305,11 +403,42 @@ class StrategyRepository:
         self.validate(strategy_name)
 
         lowercase_name = strategy_name.lower()
-        if lowercase_name not in self._values:
-            self._values[lowercase_name] = {}
+        if lowercase_name not in self._preset_values:
+            self._preset_values[lowercase_name] = {}
 
-        self._values[lowercase_name].update(parameters)
+        self._preset_values[lowercase_name].update(parameters)
+
+        # Sync to database if available
+        if self.db_manager:
+            self._save_preset_to_database(lowercase_name, self._preset_values[lowercase_name])
+
+    def _save_preset_to_database(self, strategy_name: str, parameters: dict[str, Any]) -> None:
+        """Save a preset to the database."""
+        if not self.db_manager:
+            return
+
+        with self.db_manager.get_session() as session:
+            strategy = session.query(Strategy).filter(Strategy.name == strategy_name).first()
+            if strategy:
+                preset = (
+                    session.query(StrategyPreset)
+                    .filter(StrategyPreset.strategy_id == strategy.id, StrategyPreset.name == "default")
+                    .first()
+                )
+
+                if preset:
+                    preset.set_parameters(parameters)
+                else:
+                    preset = StrategyPreset(
+                        strategy_id=strategy.id,
+                        name="default",
+                        is_default=True,
+                    )
+                    preset.set_parameters(parameters)
+                    session.add(preset)
+
+                session.commit()
 
 
-# Create a singleton instance
+# Create a singleton instance (without database for backward compatibility)
 strategy_repository = StrategyRepository()

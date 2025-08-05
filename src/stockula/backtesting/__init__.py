@@ -1,5 +1,6 @@
 """Backtesting module using backtesting.py library."""
 
+from ..data import StrategyRepository, strategy_repository
 from .manager import BacktestingManager
 from .metrics import (
     calculate_dynamic_sharpe_ratio,
@@ -22,7 +23,6 @@ from .strategies import (
     VAMAStrategy,
     VIDYAStrategy,
 )
-from .strategy_repository import StrategyRepository, strategy_repository
 
 # strategy_repository is the singleton instance
 

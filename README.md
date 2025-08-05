@@ -213,9 +213,9 @@ For comprehensive documentation, visit our [**MkDocs Documentation Site**](https
 ### 🔧 API Reference
 
 - [**Strategies API**](https://github.com/mkm29/stockula/blob/main/docs/api/strategies.md) - Built-in and custom trading strategies
-- [**Broker Configuration**](https://github.com/mkm29/stockula/blob/main/docs/api) - _TODO_ Commission structures and fee models
-- [**Data Models**](https://github.com/mkm29/stockula/blob/main/docs/api/) - _TODO_ Pydantic models and validation
-- [**Database API**](https://github.com/mkm29/stockula/blob/main/docs/api/) - _TODO_ SQLite operations and CLI
+- [**Broker Configuration**](https://github.com/mkm29/stockula/blob/main/docs/api) - *TODO* Commission structures and fee models
+- [**Data Models**](https://github.com/mkm29/stockula/blob/main/docs/api/) - *TODO* Pydantic models and validation
+- [**Database API**](https://github.com/mkm29/stockula/blob/main/docs/api/) - *TODO* SQLite operations and CLI
 
 ### 🛠️ Development
 

@@ -21,12 +21,15 @@ from stockula.backtesting import StrategyRegistry
 Returns the strategy class for a given strategy name (with automatic normalization).
 
 **Parameters:**
+
 - `strategy_name` (str): Strategy name in any format
 
 **Returns:**
+
 - `Type[BaseStrategy] | None`: Strategy class or None if not found
 
 **Example:**
+
 ```python
 # Both formats work
 cls1 = StrategyRegistry.get_strategy_class("SMACross")
@@ -42,9 +45,11 @@ assert cls3.__name__ == "DoubleEMACrossStrategy"
 Returns all available strategies as a dictionary mapping names to classes.
 
 **Returns:**
+
 - `dict[str, Type[BaseStrategy]]`: Dictionary of strategy names to classes
 
 **Example:**
+
 ```python
 all_strategies = StrategyRegistry.get_all_strategies()
 print(f"Available: {list(all_strategies.keys())}")
@@ -58,12 +63,15 @@ print(f"Available: {list(all_strategies.keys())}")
 Normalizes strategy name to canonical snake_case format.
 
 **Parameters:**
+
 - `strategy_name` (str): Strategy name in any format
 
 **Returns:**
+
 - `str`: Normalized strategy name in snake_case
 
 **Example:**
+
 ```python
 # PascalCase to snake_case
 assert StrategyRegistry.normalize_strategy_name("SMACross") == "smacross"
@@ -85,9 +93,11 @@ assert StrategyRegistry.normalize_strategy_name("sma_cross") == "smacross"
 Returns list of all available strategy names (canonical snake_case).
 
 **Returns:**
+
 - `list[str]`: List of strategy names
 
 **Example:**
+
 ```python
 strategies = StrategyRegistry.get_available_strategy_names()
 print(strategies)
@@ -99,12 +109,15 @@ print(strategies)
 Checks if a strategy name is valid.
 
 **Parameters:**
+
 - `strategy_name` (str): Strategy name to check
 
 **Returns:**
+
 - `bool`: True if the strategy exists, False otherwise
 
 **Example:**
+
 ```python
 assert StrategyRegistry.is_valid_strategy("SMACross") == True
 assert StrategyRegistry.is_valid_strategy("smacross") == True
@@ -118,9 +131,11 @@ assert StrategyRegistry.is_valid_strategy("InvalidStrategy") == False
 Returns all available strategy groups.
 
 **Returns:**
+
 - `dict[str, list[str]]`: Dictionary of group names to strategy lists
 
 **Example:**
+
 ```python
 groups = StrategyRegistry.get_strategy_groups()
 print(groups)
@@ -138,12 +153,15 @@ print(groups)
 Checks if a strategy group name is valid.
 
 **Parameters:**
+
 - `group_name` (str): Strategy group name to check
 
 **Returns:**
+
 - `bool`: True if the group exists, False otherwise
 
 **Example:**
+
 ```python
 assert StrategyRegistry.is_valid_strategy_group("momentum") == True
 assert StrategyRegistry.is_valid_strategy_group("invalid_group") == False
@@ -154,15 +172,19 @@ assert StrategyRegistry.is_valid_strategy_group("invalid_group") == False
 Returns strategies in a specific group.
 
 **Parameters:**
+
 - `group_name` (str): Name of the strategy group
 
 **Returns:**
+
 - `list[str]`: List of strategy names in the group
 
 **Raises:**
+
 - `ValueError`: If the group name is not valid
 
 **Example:**
+
 ```python
 momentum_strategies = StrategyRegistry.get_strategies_in_group("momentum")
 print(momentum_strategies)
@@ -176,9 +198,11 @@ print(momentum_strategies)
 Returns default parameter presets for all strategies.
 
 **Returns:**
+
 - `dict[str, dict[str, Any]]`: Dictionary of strategy names to their default parameters
 
 **Example:**
+
 ```python
 presets = StrategyRegistry.get_strategy_presets()
 print(presets["smacross"])
@@ -190,12 +214,15 @@ print(presets["smacross"])
 Returns parameter preset for a specific strategy.
 
 **Parameters:**
+
 - `strategy_name` (str): Strategy name (will be normalized)
 
 **Returns:**
+
 - `dict[str, Any]`: Dictionary of default parameters for the strategy
 
 **Example:**
+
 ```python
 # Both naming formats work
 params1 = StrategyRegistry.get_strategy_preset("SMACross")
@@ -215,12 +242,15 @@ print(rsi_params)
 Validates a list of strategy names.
 
 **Parameters:**
+
 - `strategy_names` (list[str]): List of strategy names to validate
 
 **Returns:**
+
 - `tuple[list[str], list[str]]`: Tuple of (valid_strategies, invalid_strategies)
 
 **Example:**
+
 ```python
 names = ["SMACross", "InvalidStrategy", "double_ema_cross", "BadName"]
 valid, invalid = StrategyRegistry.validate_strategies(names)
@@ -234,26 +264,31 @@ print(invalid)  # ['InvalidStrategy', 'BadName']
 The registry provides predefined strategy groups for different trading approaches:
 
 ### Basic Group
+
 **Strategies**: `["smacross", "rsi"]`
 **Purpose**: Simple strategies suitable for beginners
 **Characteristics**: Easy to understand, minimal parameters
 
 ### Momentum Group
+
 **Strategies**: `["rsi", "macd", "double_ema_cross"]`
 **Purpose**: Strategies that capitalize on price momentum
 **Characteristics**: Focus on trend strength and momentum indicators
 
 ### Trend Group
+
 **Strategies**: `["smacross", "triple_ema_cross", "trima_cross"]`
 **Purpose**: Trend-following strategies
 **Characteristics**: Moving average based, good for trending markets
 
 ### Advanced Group
+
 **Strategies**: `["kama", "frama", "vama", "vidya"]`
 **Purpose**: Sophisticated adaptive strategies
 **Characteristics**: Dynamic parameters, adapt to market conditions
 
 ### Comprehensive Group
+
 **Strategies**: All available strategies combined
 **Purpose**: Complete strategy testing
 **Characteristics**: Includes all 11 strategies for comprehensive backtesting
@@ -262,19 +297,19 @@ The registry provides predefined strategy groups for different trading approache
 
 The registry handles automatic conversion between different naming formats:
 
-| PascalCase Input | Alternative Input | Normalized Output | Strategy Class |
-|-----------------|------------------|------------------|----------------|
-| `SMACross` | `sma_cross` | `smacross` | `SMACrossStrategy` |
-| `RSI` | - | `rsi` | `RSIStrategy` |
-| `MACD` | - | `macd` | `MACDStrategy` |
-| `DoubleEMACross` | - | `double_ema_cross` | `DoubleEMACrossStrategy` |
-| `TripleEMACross` | - | `triple_ema_cross` | `TripleEMACrossStrategy` |
-| `TRIMACross` | - | `trima_cross` | `TRIMACrossStrategy` |
-| `KAMA` | - | `kama` | `KAMAStrategy` |
-| `FRAMA` | - | `frama` | `FRAMAStrategy` |
-| `VAMA` | - | `vama` | `VAMAStrategy` |
-| `VIDYA` | - | `vidya` | `VIDYAStrategy` |
-| `KaufmanEfficiency` | `ER` | `kaufman_efficiency` | `KaufmanEfficiencyStrategy` |
+| PascalCase Input    | Alternative Input | Normalized Output    | Strategy Class              |
+| ------------------- | ----------------- | -------------------- | --------------------------- |
+| `SMACross`          | `sma_cross`       | `smacross`           | `SMACrossStrategy`          |
+| `RSI`               | -                 | `rsi`                | `RSIStrategy`               |
+| `MACD`              | -                 | `macd`               | `MACDStrategy`              |
+| `DoubleEMACross`    | -                 | `double_ema_cross`   | `DoubleEMACrossStrategy`    |
+| `TripleEMACross`    | -                 | `triple_ema_cross`   | `TripleEMACrossStrategy`    |
+| `TRIMACross`        | -                 | `trima_cross`        | `TRIMACrossStrategy`        |
+| `KAMA`              | -                 | `kama`               | `KAMAStrategy`              |
+| `FRAMA`             | -                 | `frama`              | `FRAMAStrategy`             |
+| `VAMA`              | -                 | `vama`               | `VAMAStrategy`              |
+| `VIDYA`             | -                 | `vidya`              | `VIDYAStrategy`             |
+| `KaufmanEfficiency` | `ER`              | `kaufman_efficiency` | `KaufmanEfficiencyStrategy` |
 
 ## Usage Examples
 
@@ -365,9 +400,9 @@ available = manager.get_available_strategies()  # Uses registry internally
 ## Best Practices
 
 1. **Use snake_case in new configurations** for consistency
-2. **Leverage strategy groups** for organized backtesting
-3. **Validate strategy names** before running backtests
-4. **Use the registry API** instead of hardcoding strategy names
-5. **Check available strategies** programmatically for dynamic interfaces
+1. **Leverage strategy groups** for organized backtesting
+1. **Validate strategy names** before running backtests
+1. **Use the registry API** instead of hardcoding strategy names
+1. **Check available strategies** programmatically for dynamic interfaces
 
 The StrategyRegistry provides a robust, flexible foundation for strategy management that grows with your application needs while maintaining backward compatibility.

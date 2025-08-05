@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 import pandas as pd
+import sqlalchemy as sa
 from sqlalchemy import event
 from sqlmodel import Session, SQLModel, create_engine, select
 
@@ -26,6 +27,9 @@ from .models import (
 
 class DatabaseManager:
     """Manages SQLite database using SQLModel for type-safe operations."""
+
+    # Class-level tracking of migrations per database URL
+    _migrations_run: dict[str, bool] = {}
 
     def __init__(self, db_path: str = "stockula.db"):
         """Initialize database manager.
@@ -48,14 +52,20 @@ class DatabaseManager:
 
         self._run_migrations()
         # Create tables if they don't exist (for development)
-        SQLModel.metadata.create_all(self.engine)
+        # Use checkfirst=True to avoid errors if tables already exist
+        SQLModel.metadata.create_all(self.engine, checkfirst=True)
 
     def _run_migrations(self) -> None:
         """Run Alembic migrations to ensure database schema is up to date."""
+        import logging
         import os
 
         # Skip migrations in test environment
         if os.environ.get("PYTEST_CURRENT_TEST"):
+            return
+
+        # Check if migrations have already been run for this database URL
+        if self.db_url in DatabaseManager._migrations_run:
             return
 
         # Find alembic.ini file relative to the project root
@@ -80,15 +90,44 @@ class DatabaseManager:
         alembic_cfg = Config(str(alembic_ini_path))
         alembic_cfg.set_main_option("sqlalchemy.url", self.db_url)
 
+        # Check if tables already exist to avoid duplicate creation errors
+        with self.engine.connect() as conn:
+            # Check if strategies table exists
+            result = conn.execute(sa.text("SELECT name FROM sqlite_master WHERE type='table' AND name='strategies'"))
+            strategies_exists = result.fetchone() is not None
+
+            # Check if alembic_version table exists
+            result = conn.execute(
+                sa.text("SELECT name FROM sqlite_master WHERE type='table' AND name='alembic_version'")
+            )
+            alembic_exists = result.fetchone() is not None
+
         # Run migrations
         try:
-            # Suppress Alembic info messages
-            import logging
+            # Set up logging to capture warnings
+            alembic_logger = logging.getLogger("alembic")
+            original_level = alembic_logger.level
 
-            logging.getLogger("alembic.runtime.migration").setLevel(logging.WARNING)
-            command.upgrade(alembic_cfg, "head")
+            # If strategies table exists but alembic tracking doesn't show it,
+            # we need to stamp the database to mark migrations as applied
+            if strategies_exists and not alembic_exists:
+                # Create alembic version table and stamp to current head
+                command.stamp(alembic_cfg, "head")
+            else:
+                # Normal migration path
+                alembic_logger.setLevel(logging.WARNING)
+                command.upgrade(alembic_cfg, "head")
+
+            # Restore original logging level
+            alembic_logger.setLevel(original_level)
+
+            # Mark migrations as run for this database URL
+            DatabaseManager._migrations_run[self.db_url] = True
+
         except Exception as e:
-            print(f"Warning: Could not run migrations: {e}")
+            # Only show warning if it's not about existing tables
+            if "already exists" not in str(e):
+                print(f"Warning: Could not run migrations: {e}")
 
     def close(self) -> None:
         """Close the database engine and dispose of all connections."""

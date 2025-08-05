@@ -133,7 +133,9 @@ uv run lint
 ### Output
 
 - ✅ **Success**: All checks pass (same as CI)
+
 - ❌ **Failure**: Shows specific issues and provides fix commands:
+
   ```bash
   🔧 To fix these issues, run:
     uv run ruff check src tests --fix
@@ -174,13 +176,17 @@ uv run ruff format src tests
 ### 2. Creating a Pull Request
 
 1. Create feature branch: `git checkout -b feat/my-feature`
+
 1. Make changes following Conventional Commits:
+
    ```bash
    git commit -m "feat: add new trading strategy"
    git commit -m "fix: correct calculation in backtest"
    git commit -m "chore: update dependencies"
    ```
+
 1. Push branch and create PR
+
 1. CI will automatically run tests and linting
 
 ### 3. Release Process
@@ -209,7 +215,7 @@ uv run ruff format src tests
 1. **`CODECOV_TOKEN`**
 
    - Required for uploading coverage reports to Codecov
-   - Get token from: https://app.codecov.io/gh/mkm29/stockula/settings
+   - Get token from: <https://app.codecov.io/gh/mkm29/stockula/settings>
    - Used in test workflow for coverage reporting
 
 ### Optional Secrets
@@ -267,9 +273,13 @@ chore: bump pandas to 2.2.0
 1. **Docker build failures**
 
    - Check multi-platform compatibility
+
    - Ensure base images support all target architectures
+
    - Review build logs for architecture-specific issues
+
    - Clear caches if encountering stale cache issues:
+
      ```bash
      # Clear GitHub Actions cache (automatic on workflow update)
      # Clear registry cache by pushing new buildcache tag

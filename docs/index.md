@@ -68,6 +68,7 @@ A comprehensive Python trading platform that provides tools for technical analys
 - [Architecture Overview](user-guide/architecture.md) - Understand how Stockula works
 - [Backtesting Guide](user-guide/backtesting.md) - Start testing trading strategies
 - [API Reference](api/strategies.md) - Explore available strategies and APIs
+- [DataManager API](api/data-manager.md) - Centralized data management
 
 ## License
 
