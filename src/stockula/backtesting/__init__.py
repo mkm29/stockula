@@ -7,7 +7,6 @@ from .metrics import (
     calculate_sortino_ratio_dynamic,
     enhance_backtest_metrics,
 )
-from .registry import StrategyRegistry
 from .runner import BacktestRunner
 from .strategies import (
     BaseStrategy,
@@ -23,6 +22,13 @@ from .strategies import (
     VAMAStrategy,
     VIDYAStrategy,
 )
+from .strategy_repository import StrategyRepository, strategy_repository
+
+# strategy_repository is the singleton instance
+
+# For backward compatibility
+StrategyRegistry = StrategyRepository  # Alias for backward compatibility
+strategy_registry = strategy_repository  # Alias for backward compatibility
 
 __all__ = [
     "BaseStrategy",
@@ -39,7 +45,10 @@ __all__ = [
     "KaufmanEfficiencyStrategy",
     "BacktestingManager",
     "BacktestRunner",
-    "StrategyRegistry",
+    "StrategyRepository",
+    "strategy_repository",
+    "StrategyRegistry",  # Keep for backward compatibility
+    "strategy_registry",  # Keep for backward compatibility
     "calculate_dynamic_sharpe_ratio",
     "calculate_rolling_sharpe_ratio",
     "calculate_sortino_ratio_dynamic",

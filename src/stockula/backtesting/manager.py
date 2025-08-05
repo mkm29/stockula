@@ -3,7 +3,7 @@
 from typing import TYPE_CHECKING, Any, Optional
 
 from ..interfaces import ILoggingManager
-from .registry import StrategyRegistry
+from .strategy_repository import strategy_repository as strategy_registry
 
 if TYPE_CHECKING:
     from ..config.models import Config
@@ -28,7 +28,7 @@ class BacktestingManager:
         self._runner = None
 
         # Use centralized strategy registry
-        self.strategy_registry = StrategyRegistry
+        self.strategy_registry = strategy_registry
 
     def set_runner(self, runner: "BacktestRunner") -> None:
         """Set the BacktestRunner instance.
@@ -267,14 +267,14 @@ class BacktestingManager:
     def quick_backtest(
         self,
         ticker: str,
-        strategy_name: str = "sma_cross",
+        strategy_name: str = "smacross",
         config: Optional["Config"] = None,
     ) -> dict[str, Any]:
         """Run a quick backtest with default parameters for rapid testing.
 
         Args:
             ticker: Stock ticker symbol
-            strategy_name: Name of the strategy to test (default: 'sma_cross')
+            strategy_name: Name of the strategy to test (default: 'smacross')
             config: Configuration object (optional)
 
         Returns:
@@ -343,8 +343,8 @@ class BacktestingManager:
             raise ValueError(f"Unknown strategy: {strategy_name}. Available: {available_strategies}")
 
         # Note: This modifies the class-level registry, affecting all instances
+        self.strategy_registry.update_strategy_preset(strategy_name, new_params)
         normalized_name = self.strategy_registry.normalize_strategy_name(strategy_name)
-        self.strategy_registry.STRATEGY_PRESETS[normalized_name].update(new_params)
         self.logger.info(f"Updated {normalized_name} parameters: {new_params}")
 
     def create_custom_strategy_group(
@@ -369,5 +369,5 @@ class BacktestingManager:
             raise ValueError(f"Invalid strategies: {invalid_strategies}. Available: {available_strategies}")
 
         # Note: This modifies the class-level registry, affecting all instances
-        self.strategy_registry.STRATEGY_GROUPS[group_name] = valid_strategies
+        self.strategy_registry.add_strategy_group(group_name, valid_strategies)
         self.logger.info(f"Created custom strategy group '{group_name}' with strategies: {valid_strategies}")

@@ -96,7 +96,7 @@ class TestBacktestingManagerInitialization:
         assert "macd" in presets
 
         # Check that presets contain proper parameters
-        # Note: sma_cross is normalized to smacross
+        # Note: smacross is normalized to smacross
         sma_preset = presets["smacross"]
         assert "fast_period" in sma_preset
         assert "slow_period" in sma_preset
@@ -118,12 +118,12 @@ class TestBacktestingManagerSetRunner:
     def test_operations_without_runner_raise_error(self, backtesting_manager):
         """Test that operations without runner raise ValueError."""
         with pytest.raises(ValueError, match="BacktestRunner not initialized"):
-            backtesting_manager.run_single_strategy("AAPL", "sma_cross")
+            backtesting_manager.run_single_strategy("AAPL", "smacross")
 
     def test_train_test_split_without_runner_raises_error(self, backtesting_manager):
         """Test that train/test split without runner raises ValueError."""
         with pytest.raises(ValueError, match="BacktestRunner not initialized"):
-            backtesting_manager.run_with_train_test_split("AAPL", "sma_cross")
+            backtesting_manager.run_with_train_test_split("AAPL", "smacross")
 
 
 class TestBacktestingManagerSingleStrategy:
@@ -133,7 +133,7 @@ class TestBacktestingManagerSingleStrategy:
         """Test successful single strategy backtest."""
         backtesting_manager.set_runner(mock_backtest_runner)
 
-        result = backtesting_manager.run_single_strategy("AAPL", "sma_cross")
+        result = backtesting_manager.run_single_strategy("AAPL", "smacross")
 
         assert "Return [%]" in result
         assert result["Return [%]"] == 15.5
@@ -145,7 +145,7 @@ class TestBacktestingManagerSingleStrategy:
         backtesting_manager.set_runner(mock_backtest_runner)
         custom_params = {"fast_period": 5, "slow_period": 20}
 
-        result = backtesting_manager.run_single_strategy("AAPL", "sma_cross", strategy_params=custom_params)
+        result = backtesting_manager.run_single_strategy("AAPL", "smacross", strategy_params=custom_params)
 
         assert "Return [%]" in result
         mock_backtest_runner.run_from_symbol.assert_called_once()
@@ -155,7 +155,7 @@ class TestBacktestingManagerSingleStrategy:
         backtesting_manager.set_runner(mock_backtest_runner)
 
         result = backtesting_manager.run_single_strategy(
-            "AAPL", "sma_cross", start_date="2023-01-01", end_date="2023-12-31"
+            "AAPL", "smacross", start_date="2023-01-01", end_date="2023-12-31"
         )
 
         assert "Return [%]" in result
@@ -166,12 +166,12 @@ class TestBacktestingManagerSingleStrategy:
         backtesting_manager.set_runner(mock_backtest_runner)
         mock_backtest_runner.run_from_symbol.side_effect = Exception("Test error")
 
-        result = backtesting_manager.run_single_strategy("AAPL", "sma_cross")
+        result = backtesting_manager.run_single_strategy("AAPL", "smacross")
 
         assert "error" in result
         assert result["error"] == "Test error"
         assert result["ticker"] == "AAPL"
-        assert result["strategy"] == "sma_cross"
+        assert result["strategy"] == "smacross"
         mock_logging_manager.error.assert_called_once()
 
 
@@ -222,7 +222,7 @@ class TestBacktestingManagerPortfolioBacktest:
         backtesting_manager.set_runner(mock_backtest_runner)
         tickers = ["AAPL", "GOOGL", "MSFT"]
 
-        results = backtesting_manager.run_portfolio_backtest(tickers, "sma_cross")
+        results = backtesting_manager.run_portfolio_backtest(tickers, "smacross")
 
         assert isinstance(results, dict)
         assert len(results) == len(tickers)
@@ -276,7 +276,7 @@ class TestBacktestingManagerTrainTestSplit:
         """Test train/test split backtest."""
         backtesting_manager.set_runner(mock_backtest_runner)
 
-        result = backtesting_manager.run_with_train_test_split("AAPL", "sma_cross")
+        result = backtesting_manager.run_with_train_test_split("AAPL", "smacross")
 
         assert "train_results" in result
         assert "test_results" in result
@@ -289,7 +289,7 @@ class TestBacktestingManagerTrainTestSplit:
         param_ranges = {"fast_period": [5, 10, 15]}
 
         result = backtesting_manager.run_with_train_test_split(
-            "AAPL", "sma_cross", optimize_on_train=True, param_ranges=param_ranges
+            "AAPL", "smacross", optimize_on_train=True, param_ranges=param_ranges
         )
 
         assert "train_results" in result
@@ -300,7 +300,7 @@ class TestBacktestingManagerTrainTestSplit:
         """Test train/test split with custom train ratio."""
         backtesting_manager.set_runner(mock_backtest_runner)
 
-        result = backtesting_manager.run_with_train_test_split("AAPL", "sma_cross", train_ratio=0.8)
+        result = backtesting_manager.run_with_train_test_split("AAPL", "smacross", train_ratio=0.8)
 
         assert "train_results" in result
         mock_backtest_runner.run_with_train_test_split.assert_called_once()
@@ -310,7 +310,7 @@ class TestBacktestingManagerTrainTestSplit:
         backtesting_manager.set_runner(mock_backtest_runner)
         mock_backtest_runner.run_with_train_test_split.side_effect = Exception("Split error")
 
-        result = backtesting_manager.run_with_train_test_split("AAPL", "sma_cross")
+        result = backtesting_manager.run_with_train_test_split("AAPL", "smacross")
 
         assert "error" in result
         assert result["error"] == "Split error"
@@ -327,7 +327,7 @@ class TestBacktestingManagerQuickBacktest:
         result = backtesting_manager.quick_backtest("AAPL")
 
         assert result["ticker"] == "AAPL"
-        assert result["strategy"] == "sma_cross"
+        assert result["strategy"] == "smacross"
         assert "return_pct" in result
         assert "sharpe_ratio" in result
         assert "max_drawdown_pct" in result
@@ -361,7 +361,6 @@ class TestBacktestingManagerUtilityMethods:
 
         assert isinstance(strategies, list)
         assert "smacross" in strategies  # Note: normalized name
-        assert "sma_cross" in strategies  # Alternative name also available
         assert "rsi" in strategies
         assert "macd" in strategies
 
@@ -387,18 +386,18 @@ class TestBacktestingManagerUtilityMethods:
 
     def test_create_custom_strategy_group(self, backtesting_manager):
         """Test creating custom strategy group."""
-        custom_strategies = ["sma_cross", "rsi"]
+        custom_strategies = ["smacross", "rsi"]
 
         backtesting_manager.create_custom_strategy_group("my_group", custom_strategies)
 
         groups = backtesting_manager.get_strategy_groups()
         assert "my_group" in groups
-        # Note: strategy names get normalized, so sma_cross becomes smacross
+        # Note: strategy names get normalized, so smacross becomes smacross
         assert groups["my_group"] == ["smacross", "rsi"]
 
     def test_create_custom_group_invalid_strategies_raises_error(self, backtesting_manager):
         """Test creating custom group with invalid strategies raises error."""
-        invalid_strategies = ["sma_cross", "invalid_strategy"]
+        invalid_strategies = ["smacross", "invalid_strategy"]
 
         with pytest.raises(ValueError, match="Invalid strategies"):
             backtesting_manager.create_custom_strategy_group("bad_group", invalid_strategies)
