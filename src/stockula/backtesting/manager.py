@@ -2,8 +2,8 @@
 
 from typing import TYPE_CHECKING, Any, Optional
 
+from ..data import strategy_repository as strategy_registry
 from ..interfaces import ILoggingManager
-from .strategy_repository import strategy_repository as strategy_registry
 
 if TYPE_CHECKING:
     from ..config.models import Config

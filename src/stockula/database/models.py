@@ -287,3 +287,52 @@ class StockInfo(SQLModel, table=True):  # type: ignore[call-arg]
     def set_info(self, info: dict) -> None:
         """Set info from dictionary."""
         self.info_json = json.dumps(info, default=str)
+
+
+class Strategy(SQLModel, table=True):
+    """Model for trading strategies."""
+
+    __tablename__ = "strategies"
+
+    id: int | None = Field(default=None, primary_key=True)
+    name: str = Field(index=True, unique=True)
+    class_name: str = Field()  # Full class name (e.g., 'SMACrossStrategy')
+    module_path: str = Field()  # Module path for importing
+    description: str | None = Field(default=None)
+    category: str | None = Field(default=None)  # e.g., 'momentum', 'trend'
+    is_active: bool = Field(default=True)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+    # Relationships
+    presets: list["StrategyPreset"] = Relationship(back_populates="strategy")
+
+
+class StrategyPreset(SQLModel, table=True):
+    """Model for strategy parameter presets."""
+
+    __tablename__ = "strategy_presets"
+
+    id: int | None = Field(default=None, primary_key=True)
+    strategy_id: int = Field(foreign_key="strategies.id", index=True)
+    name: str = Field(index=True)  # e.g., 'default', 'conservative', 'aggressive'
+    parameters_json: str = Field()  # JSON string of parameters
+    description: str | None = Field(default=None)
+    is_default: bool = Field(default=False)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+    # Relationships
+    strategy: Strategy = Relationship(back_populates="presets")
+
+    # Unique constraint on strategy_id + name
+    __table_args__ = (UniqueConstraint("strategy_id", "name", name="unique_strategy_preset"),)
+
+    @property
+    def parameters(self) -> dict:
+        """Parse JSON parameters to dictionary."""
+        return json.loads(self.parameters_json)
+
+    def set_parameters(self, params: dict) -> None:
+        """Set parameters from dictionary."""
+        self.parameters_json = json.dumps(params, default=str)

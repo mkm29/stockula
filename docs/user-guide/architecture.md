@@ -26,7 +26,10 @@ graph TB
     end
 
     subgraph "Data Layer"
+        DataMgr[Data Manager<br/>Centralized Access]
         Fetcher[Data Fetcher<br/>yfinance wrapper]
+        Registry[Registry<br/>Repository Pattern]
+        StrategyRepo[Strategy Repository]
         DB[(SQLite Database<br/>stockula.db)]
         Cache[Cache Manager]
     end
@@ -69,9 +72,15 @@ graph TB
     BTM --> BT
     FCM --> FC
 
+    Container --> DataMgr
+    DataMgr --> Fetcher
+    DataMgr --> Registry
+    Registry --> StrategyRepo
+    
     TA --> Fetcher
     BT --> Fetcher
     FC --> Fetcher
+    BTM --> StrategyRepo
 
     Fetcher --> DB
     Fetcher --> Cache
@@ -96,6 +105,9 @@ graph TB
     style TAM fill:#00BCD4,stroke:#0097A7,color:#fff
     style BTM fill:#00BCD4,stroke:#0097A7,color:#fff
     style FCM fill:#00BCD4,stroke:#0097A7,color:#fff
+    style DataMgr fill:#3F51B5,stroke:#303F9F,color:#fff
+    style Registry fill:#3F51B5,stroke:#303F9F,color:#fff
+    style StrategyRepo fill:#3F51B5,stroke:#303F9F,color:#fff
 ```
 
 ## Data Flow
@@ -230,6 +242,31 @@ src/stockula/
 - Factory pattern for object creation
 - Value objects for immutable data
 
+### Data Management Layer
+
+**Purpose**: Provides centralized access to data fetching, registry, and repository components
+
+**Key Components**:
+
+- **DataManager**: Central coordinator for all data-related operations
+- **DataFetcher**: Wrapper around yfinance for market data retrieval
+- **Registry**: Global registry for managing repositories
+- **StrategyRepository**: Repository for trading strategy classes and metadata
+
+**Features**:
+
+- Single point of access for data operations
+- Automatic initialization of components
+- Database connection management across all components
+- Support for custom repository registration
+
+**Benefits**:
+
+- Consistent initialization and configuration
+- Simplified dependency management
+- Easy database connection updates
+- Extensible repository pattern
+
 ### Strategy Registry
 
 The `StrategyRegistry` is a centralized static class that manages all trading strategies, their mappings, parameters, and groups. It provides a single source of truth for strategy-related operations across the entire application.
@@ -237,12 +274,14 @@ The `StrategyRegistry` is a centralized static class that manages all trading st
 #### Key Features
 
 **Strategy Management:**
+
 - **Centralized Class Registry**: Maps strategy names to strategy classes
 - **Name Normalization**: Automatically converts between PascalCase and snake_case formats
 - **Parameter Presets**: Default parameters for each strategy
 - **Strategy Groups**: Predefined collections of strategies for different trading approaches
 
 **API Methods:**
+
 ```python
 # Strategy class resolution
 StrategyRegistry.get_strategy_class("SMACross")  # Returns SMACrossStrategy
@@ -275,12 +314,12 @@ Predefined strategy collections for different trading approaches:
 
 The registry handles multiple naming formats automatically:
 
-| Input Format | Normalized Output | Strategy Class |
-|-------------|------------------|----------------|
-| `"SMACross"` | `"smacross"` | `SMACrossStrategy` |
-| `"DoubleEMACross"` | `"double_ema_cross"` | `DoubleEMACrossStrategy` |
+| Input Format          | Normalized Output      | Strategy Class              |
+| --------------------- | ---------------------- | --------------------------- |
+| `"SMACross"`          | `"smacross"`           | `SMACrossStrategy`          |
+| `"DoubleEMACross"`    | `"double_ema_cross"`   | `DoubleEMACrossStrategy`    |
 | `"KaufmanEfficiency"` | `"kaufman_efficiency"` | `KaufmanEfficiencyStrategy` |
-| `"ER"` | `"kaufman_efficiency"` | `KaufmanEfficiencyStrategy` |
+| `"ER"`                | `"kaufman_efficiency"` | `KaufmanEfficiencyStrategy` |
 
 This ensures configuration files can use any naming convention while maintaining consistency internally.
 
@@ -510,6 +549,7 @@ tests/
 1. Optionally add to strategy groups in `StrategyRegistry.STRATEGY_GROUPS`
 
 **Example:**
+
 ```python
 # 1. Create the strategy class
 class MyCustomStrategy(BaseStrategy):

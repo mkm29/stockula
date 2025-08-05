@@ -43,11 +43,15 @@ error: Microsoft Visual C++ 14.0 is required
 **Solutions**:
 
 1. **Windows**: Install Microsoft C++ Build Tools
+
 1. **macOS**: Install Xcode command line tools:
+
    ```bash
    xcode-select --install
    ```
+
 1. **Linux**: Install build essentials:
+
    ```bash
    sudo apt-get install build-essential python3-dev
    ```
@@ -150,11 +154,15 @@ ConnectionError: Failed to fetch data for AAPL
 **Solutions**:
 
 1. Check internet connection
+
 1. Try with cached data:
+
    ```bash
    uv run python -m stockula.database.cli query AAPL
    ```
+
 1. Use different ticker symbols
+
 1. Wait and retry (API rate limiting)
 
 ### Invalid Ticker Symbols
@@ -200,11 +208,15 @@ sqlite3.OperationalError: database is locked
 **Solutions**:
 
 1. Close other applications using the database
+
 1. Delete the database file and let it recreate:
+
    ```bash
    rm stockula.db
    ```
+
 1. Check file permissions:
+
    ```bash
    ls -la stockula.db
    chmod 644 stockula.db

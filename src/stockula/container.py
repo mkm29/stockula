@@ -8,7 +8,7 @@ from .allocation import Allocator, AllocatorManager, BacktestOptimizedAllocator
 from .backtesting import BacktestingManager
 from .backtesting.runner import BacktestRunner
 from .config import load_config
-from .data.fetcher import DataFetcher
+from .data.manager import DataManager
 from .database.manager import DatabaseManager
 from .domain.factory import DomainFactory
 from .forecasting import ForecastingManager, StockForecaster
@@ -47,13 +47,19 @@ class Container(containers.DeclarativeContainer):
         db_path=providers.Callable(lambda config: config.data.db_path, stockula_config),
     )
 
-    # Data fetcher with injected database manager and logging - thread-safe singleton
-    data_fetcher = providers.ThreadSafeSingleton(
-        DataFetcher,
+    # Data manager - thread-safe singleton
+    data_manager = providers.ThreadSafeSingleton(
+        DataManager,
+        db_manager=database_manager,
+        logging_manager=logging_manager,
         use_cache=providers.Callable(lambda config: config.data.use_cache, stockula_config),
         db_path=providers.Callable(lambda config: config.data.db_path, stockula_config),
-        database_manager=database_manager,
-        logging_manager=logging_manager,
+    )
+
+    # Data fetcher extracted from data manager - thread-safe singleton
+    data_fetcher = providers.ThreadSafeSingleton(
+        lambda data_mgr: data_mgr.fetcher,
+        data_mgr=data_manager,
     )
 
     # Allocator - thread-safe singleton
@@ -147,6 +153,7 @@ def create_container(config_path: str | None = None) -> Container:
             "stockula.allocation.manager",
             # Note: backtest_allocator doesn't need wiring as it doesn't use @inject
             "stockula.data.fetcher",
+            "stockula.data.manager",
             "stockula.domain.factory",
             "stockula.domain.portfolio",
             "stockula.forecasting.forecaster",
@@ -155,5 +162,8 @@ def create_container(config_path: str | None = None) -> Container:
             "stockula.backtesting.manager",
         ]
     )
+
+    # Initialize data manager to set up registry
+    container.data_manager()
 
     return container

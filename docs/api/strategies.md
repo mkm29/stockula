@@ -24,14 +24,17 @@ A classic trend-following strategy using two simple moving averages.
 **Class**: `SMACrossStrategy`
 
 **Parameters**:
+
 - `fast_period` (int, default: 10): Period for fast moving average
 - `slow_period` (int, default: 20): Period for slow moving average
 
 **Strategy Logic**:
+
 - **Buy Signal**: Fast SMA crosses above slow SMA
 - **Sell Signal**: Fast SMA crosses below slow SMA
 
 **Example Configuration**:
+
 ```yaml
 backtest:
   strategies:
@@ -48,15 +51,18 @@ Momentum-based strategy using the Relative Strength Index oscillator.
 **Class**: `RSIStrategy`
 
 **Parameters**:
+
 - `period` (int, default: 14): RSI calculation period
 - `oversold_threshold` (float, default: 30): Oversold level for buy signals
 - `overbought_threshold` (float, default: 70): Overbought level for sell signals
 
 **Strategy Logic**:
+
 - **Buy Signal**: RSI falls below oversold threshold
 - **Sell Signal**: RSI rises above overbought threshold
 
 **Example Configuration**:
+
 ```yaml
 backtest:
   strategies:
@@ -74,15 +80,18 @@ Uses Moving Average Convergence Divergence for trend and momentum signals.
 **Class**: `MACDStrategy`
 
 **Parameters**:
+
 - `fast_period` (int, default: 12): Fast EMA period
 - `slow_period` (int, default: 26): Slow EMA period
 - `signal_period` (int, default: 9): Signal line EMA period
 
 **Strategy Logic**:
+
 - **Buy Signal**: MACD line crosses above signal line
 - **Sell Signal**: MACD line crosses below signal line
 
 **Example Configuration**:
+
 ```yaml
 backtest:
   strategies:
@@ -100,6 +109,7 @@ Advanced trend strategy using exponential moving averages with ATR-based stop lo
 **Class**: `DoubleEMACrossStrategy`
 
 **Parameters**:
+
 - `fast_period` (int, default: 34): Fast EMA period
 - `slow_period` (int, default: 55): Slow EMA period
 - `momentum_atr_multiple` (float, default: 1.25): ATR multiplier for momentum positions
@@ -107,11 +117,13 @@ Advanced trend strategy using exponential moving averages with ATR-based stop lo
 - `atr_period` (int, default: 14): ATR calculation period
 
 **Strategy Logic**:
+
 - **Buy Signal**: Fast EMA crosses above slow EMA
 - **Sell Signal**: Fast EMA crosses below slow EMA
 - **Stop Loss**: ATR-based stop loss with different multipliers for different asset classes
 
 **Example Configuration**:
+
 ```yaml
 backtest:
   strategies:
@@ -126,6 +138,7 @@ Uses Triple Exponential Moving Average (TEMA) to reduce lag in trend following.
 **Class**: `TripleEMACrossStrategy`
 
 **Parameters**:
+
 - `fast` (int, default: 5): Fast TEMA parameter
 - `medium` (int, default: 10): Medium TEMA parameter
 - `slow` (int, default: 20): Slow TEMA parameter
@@ -133,11 +146,13 @@ Uses Triple Exponential Moving Average (TEMA) to reduce lag in trend following.
 - `slow_period` (int, default: 21): Slow period
 
 **Strategy Logic**:
+
 - Uses TEMA formula: 3*EMA - 3*EMA(EMA) + EMA(EMA(EMA))
 - **Buy Signal**: Fast TEMA crosses above slow TEMA
 - **Sell Signal**: Fast TEMA crosses below slow TEMA
 
 **Example Configuration**:
+
 ```yaml
 backtest:
   strategies:
@@ -152,16 +167,19 @@ Uses Triangular Moving Averages for smoother trend following.
 **Class**: `TRIMACrossStrategy`
 
 **Parameters**:
+
 - `fast_period` (int, default: 14): Fast TRIMA period
 - `slow_period` (int, default: 28): Slow TRIMA period
 - `atr_multiple` (float, default: 1.2): ATR multiplier for stop loss
 
 **Strategy Logic**:
+
 - TRIMA double-smooths data to filter noise
 - **Buy Signal**: Fast TRIMA crosses above slow TRIMA
 - **Sell Signal**: Fast TRIMA crosses below slow TRIMA
 
 **Example Configuration**:
+
 ```yaml
 backtest:
   strategies:
@@ -176,17 +194,20 @@ Kaufman's Adaptive Moving Average adapts to market volatility and trend strength
 **Class**: `KAMAStrategy`
 
 **Parameters**:
+
 - `period` (int, default: 14): Main calculation period
 - `fast_sc` (int, default: 2): Fast smoothing constant
 - `slow_sc` (int, default: 30): Slow smoothing constant
 - `er_period` (int, default: 10): Efficiency Ratio period
 
 **Strategy Logic**:
+
 - Adapts smoothing based on Efficiency Ratio (ER)
 - **Buy Signal**: Fast KAMA crosses above slow KAMA
 - **Sell Signal**: Fast KAMA crosses below slow KAMA
 
 **Example Configuration**:
+
 ```yaml
 backtest:
   strategies:
@@ -201,15 +222,18 @@ Fractal Adaptive Moving Average uses fractal geometry to adjust smoothing.
 **Class**: `FRAMAStrategy`
 
 **Parameters**:
+
 - `period` (int, default: 14): Main calculation period
 - `frama_period` (int, default: 16): FRAMA-specific period (must be even)
 
 **Strategy Logic**:
+
 - Calculates fractal dimension to determine trend strength
 - **Buy Signal**: Fast FRAMA crosses above slow FRAMA
 - **Sell Signal**: Fast FRAMA crosses below slow FRAMA
 
 **Example Configuration**:
+
 ```yaml
 backtest:
   strategies:
@@ -224,16 +248,19 @@ Volume Adjusted Moving Average weights prices by volume.
 **Class**: `VAMAStrategy`
 
 **Parameters**:
+
 - `period` (int, default: 8): Main calculation period
 - `vama_period` (int, default: 8): VAMA calculation period
 - `slow_vama_period` (int, default: 21): Slow VAMA period
 
 **Strategy Logic**:
+
 - Weights moving average by volume to emphasize volume-driven moves
 - **Buy Signal**: Fast VAMA crosses above slow VAMA
 - **Sell Signal**: Fast VAMA crosses below slow VAMA
 
 **Example Configuration**:
+
 ```yaml
 backtest:
   strategies:
@@ -248,17 +275,20 @@ Variable Index Dynamic Average adapts to market conditions using CMO.
 **Class**: `VIDYAStrategy`
 
 **Parameters**:
+
 - `period` (int, default: 14): Main calculation period
 - `alpha` (float, default: 0.2): Base alpha value
 - `cmo_period` (int, default: 9): Chande Momentum Oscillator period
 - `smoothing_period` (int, default: 12): Smoothing period
 
 **Strategy Logic**:
+
 - Uses Chande Momentum Oscillator to adapt smoothing
 - **Buy Signal**: Fast VIDYA crosses above slow VIDYA
 - **Sell Signal**: Fast VIDYA crosses below slow VIDYA
 
 **Example Configuration**:
+
 ```yaml
 backtest:
   strategies:
@@ -273,6 +303,7 @@ Uses Efficiency Ratio to identify trending vs. ranging markets.
 **Class**: `KaufmanEfficiencyStrategy`
 
 **Parameters**:
+
 - `period` (int, default: 10): Efficiency Ratio calculation period
 - `fast_sc` (int, default: 2): Fast smoothing constant
 - `slow_sc` (int, default: 30): Slow smoothing constant
@@ -280,10 +311,12 @@ Uses Efficiency Ratio to identify trending vs. ranging markets.
 - `er_lower_threshold` (float, default: 0.3): Lower threshold for sell signals
 
 **Strategy Logic**:
+
 - **Buy Signal**: Efficiency Ratio above upper threshold (strong trend)
 - **Sell Signal**: Efficiency Ratio below lower threshold (weak trend)
 
 **Example Configuration**:
+
 ```yaml
 backtest:
   strategies:
@@ -296,31 +329,37 @@ backtest:
 The BacktestingManager provides predefined strategy groups for different trading approaches:
 
 ### Basic Group
+
 - `smacross`
 - `rsi`
 
-### Momentum Group  
+### Momentum Group
+
 - `rsi`
 - `macd`
 - `double_ema_cross`
 
 ### Trend Group
+
 - `smacross`
 - `triple_ema_cross`
 - `trima_cross`
 
 ### Advanced Group
+
 - `kama`
 - `frama`
 - `vama`
 - `vidya`
 
 ### Comprehensive Group
+
 All available strategies combined.
 
 ## Configuration Examples
 
 ### Single Strategy Configuration
+
 ```yaml
 backtest:
   strategies:
@@ -331,6 +370,7 @@ backtest:
 ```
 
 ### Multiple Strategies Configuration
+
 ```yaml
 backtest:
   strategies:
@@ -399,7 +439,7 @@ result2 = manager.run_single_strategy(
 Each strategy has different minimum data requirements:
 
 - **Simple strategies** (SMA, RSI, MACD): ~30-50 days minimum
-- **Adaptive strategies** (KAMA, FRAMA, VIDYA): ~60-100 days minimum  
+- **Adaptive strategies** (KAMA, FRAMA, VIDYA): ~60-100 days minimum
 - **Complex strategies** (Triple EMA, TRIMA): ~75-120 days minimum
 
 ### Computational Complexity
@@ -407,32 +447,35 @@ Each strategy has different minimum data requirements:
 Strategies ranked by computational complexity (fastest to slowest):
 
 1. **SMA Cross** - Simple moving averages
-2. **RSI** - Single oscillator calculation
-3. **MACD** - Exponential moving averages
-4. **Double EMA Cross** - EMAs with ATR
-5. **TRIMA Cross** - Double-smoothed averages
-6. **KAMA** - Efficiency ratio calculations
-7. **VAMA** - Volume-weighted calculations
-8. **VIDYA** - CMO-based adaptation
-9. **FRAMA** - Fractal dimension calculations
-10. **Triple EMA Cross** - Multiple EMA calculations
-11. **Kaufman Efficiency** - Complex efficiency analysis
+1. **RSI** - Single oscillator calculation
+1. **MACD** - Exponential moving averages
+1. **Double EMA Cross** - EMAs with ATR
+1. **TRIMA Cross** - Double-smoothed averages
+1. **KAMA** - Efficiency ratio calculations
+1. **VAMA** - Volume-weighted calculations
+1. **VIDYA** - CMO-based adaptation
+1. **FRAMA** - Fractal dimension calculations
+1. **Triple EMA Cross** - Multiple EMA calculations
+1. **Kaufman Efficiency** - Complex efficiency analysis
 
 ## Best Practices
 
 ### Strategy Selection
+
 1. **Start with basic strategies** (SMA, RSI) to understand market behavior
-2. **Use adaptive strategies** (KAMA, VIDYA) for volatile markets
-3. **Combine trend and momentum** strategies for robust portfolios
-4. **Test multiple timeframes** to find optimal parameters
+1. **Use adaptive strategies** (KAMA, VIDYA) for volatile markets
+1. **Combine trend and momentum** strategies for robust portfolios
+1. **Test multiple timeframes** to find optimal parameters
 
 ### Parameter Optimization
+
 1. **Avoid overfitting** - test on out-of-sample data
-2. **Use robust parameter ranges** - avoid extreme values
-3. **Consider transaction costs** in optimization
-4. **Validate across different market regimes**
+1. **Use robust parameter ranges** - avoid extreme values
+1. **Consider transaction costs** in optimization
+1. **Validate across different market regimes**
 
 ### Risk Management
+
 - All advanced strategies include ATR-based stop losses
 - Consider position sizing based on volatility
 - Use appropriate stop loss multipliers for different asset classes

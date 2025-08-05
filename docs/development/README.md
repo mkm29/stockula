@@ -34,7 +34,7 @@ Detailed test coverage metrics, recent improvements, and important warnings abou
 
 When adding new development documentation:
 
-1. Create a new markdown file in this directory
+1. Create a new Markdown file in this directory
 1. Use clear, descriptive filenames
 1. Add a link and description in this README
 1. Follow the existing documentation style

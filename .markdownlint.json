@@ -1,0 +1,72 @@
+{
+  "default": true,
+  "code-block-style": {
+    "style": "fenced"
+  },
+  "code-fence-style": {
+    "style": "backtick"
+  },
+  "emphasis-style": {
+    "style": "asterisk"
+  },
+  "strong-style": {
+    "style": "asterisk"
+  },
+  "heading-style": {
+    "style": "atx"
+  },
+  "hr-style": {
+    "style": "consistent"
+  },
+  "ul-style": {
+    "style": "consistent"
+  },
+  "ol-prefix": false,
+  "no-trailing-spaces": {
+    "br_spaces": 2,
+    "list_item_empty_lines": false,
+    "strict": false
+  },
+  "no-hard-tabs": {
+    "code_blocks": false,
+    "spaces_per_tab": 4
+  },
+  "no-multiple-blanks": {
+    "maximum": 2
+  },
+  "no-missing-space-atx": true,
+  "no-multiple-space-atx": true,
+  "blanks-around-headings": true,
+  "blanks-around-lists": true,
+  "blanks-around-fences": true,
+  "fenced-code-language": false,
+  "no-bare-urls": false,
+  "link-image-style": {
+    "collapsed": true,
+    "shortcut": true,
+    "url_inline": true
+  },
+  "reference-links-images": false,
+  "no-emphasis-as-heading": false,
+  "no-duplicate-heading": false,
+  "single-trailing-newline": true,
+  "no-trailing-punctuation": false,
+  "line-length": false,
+  "commands-show-output": false,
+  "no-inline-html": false,
+  "extended-ascii": false,
+  "proper-names": {
+    "code_blocks": false,
+    "names": [
+      "GitHub",
+      "JavaScript", 
+      "TypeScript",
+      "Python",
+      "Markdown",
+      "PostgreSQL",
+      "SQLite",
+      "Node.js"
+    ]
+  },
+  "ignores": ["CHANGELOG.md"]
+}
