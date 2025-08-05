@@ -30,7 +30,7 @@ from .forecasting import StockForecaster
 from .manager import StockulaManager
 from .technical_analysis import TechnicalIndicators
 
-__version__ = "0.9.1"
+__version__ = "0.10.0"
 
 __all__ = [
     "DataFetcher",
