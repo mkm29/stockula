@@ -11,7 +11,7 @@ from rich.console import Console
 from rich.progress import BarColumn, Progress, SpinnerColumn, TextColumn, TimeRemainingColumn
 from rich.table import Table
 
-from .backtesting import BaseStrategy, StrategyRegistry
+from .backtesting import BaseStrategy, strategy_registry
 from .config import StockulaConfig
 from .config.models import BacktestResult, PortfolioBacktestResults, StrategyBacktestSummary
 from .container import Container
@@ -41,7 +41,7 @@ class StockulaManager:
         self.log_manager = container.logging_manager()
 
         # Strategy registry provides centralized strategy management
-        self.strategy_registry = StrategyRegistry
+        self.strategy_registry = strategy_registry
 
     def get_strategy_class(self, strategy_name: str) -> type[BaseStrategy] | None:
         """Get strategy class by name.
