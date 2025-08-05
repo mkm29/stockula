@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.11.0](https://github.com/mkm29/stockula/compare/v0.10.0...v0.11.0) (2025-08-05)
+
+
+### Features
+
+* **database:** Implement strategy and strategy preset models with mi… ([88f67f6](https://github.com/mkm29/stockula/commit/88f67f6a25bb772adad8d683146ddc33d640a25c))
+* **database:** Implement strategy and strategy preset models with migration handling ([07ac5a9](https://github.com/mkm29/stockula/commit/07ac5a9ecf422812b1c2c50d41114512125b3267))
+
 ## [0.10.0](https://github.com/mkm29/stockula/compare/v0.9.1...v0.10.0) (2025-08-05)
 
 
