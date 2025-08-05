@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.10.0](https://github.com/mkm29/stockula/compare/v0.9.1...v0.10.0) (2025-08-05)
+
+
+### Features
+
+* introduce StrategyRepository and UniversalRepositoryRegistry for enhanced strategy management ([e5a34bf](https://github.com/mkm29/stockula/commit/e5a34bf230f2b6e9159d79f2a9fdbc797c2800a8))
+
+
+### Bug Fixes
+
+* introduce StrategyRepository and UniversalRepositoryRegistry fo… ([26f87eb](https://github.com/mkm29/stockula/commit/26f87eb281bfbf962f682b1de187d2bbce6f3fa8))
+
 ## [0.9.1](https://github.com/mkm29/stockula/compare/v0.9.0...v0.9.1) (2025-08-04)
 
 
