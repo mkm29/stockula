@@ -6,7 +6,7 @@ data:
   db_path: stockula.db
 portfolio:
   name: Backtest-Optimized Portfolio
-  initial_capital: 20000.0
+  initial_capital: 25000.0
   allocation_method: custom
   dynamic_allocation: false
   auto_allocate: false
