@@ -46,7 +46,7 @@ jobs:
               ;;
 
             develop)
-              # Feature branches, bugfix branches, and hotfix backports can merge to develop
+              # Feature branches, bugfix branches, hotfix backports, and Release Please branches can merge to develop
               if [[ "$SOURCE_BRANCH" == feature/* ]] || \
                  [[ "$SOURCE_BRANCH" == bugfix/* ]] || \
                  [[ "$SOURCE_BRANCH" == fix/* ]] || \
@@ -54,7 +54,8 @@ jobs:
                  [[ "$SOURCE_BRANCH" == chore/* ]] || \
                  [[ "$SOURCE_BRANCH" == docs/* ]] || \
                  [[ "$SOURCE_BRANCH" == test/* ]] || \
-                 [[ "$SOURCE_BRANCH" == refactor/* ]]; then
+                 [[ "$SOURCE_BRANCH" == refactor/* ]] || \
+                 [[ "$SOURCE_BRANCH" == release-please--* ]]; then
                 MESSAGE="✅ Valid: $SOURCE_BRANCH -> develop"
               else
                 VALID=false
@@ -121,6 +122,8 @@ jobs:
               labels.push('hotfix', 'urgent');
             } else if (branch.startsWith('release/')) {
               labels.push('release');
+            } else if (branch.startsWith('release-please--')) {
+              labels.push('release', 'automated');
             } else if (branch.startsWith('chore/')) {
               labels.push('chore');
             } else if (branch.startsWith('docs/')) {
