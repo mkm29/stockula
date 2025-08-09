@@ -42,11 +42,13 @@ class Portfolio:
     initial_capital_init: InitVar[float]
     name_init: InitVar[str] = "Main Portfolio"
     allocation_method_init: InitVar[str] = "equal_weight"  # equal_weight, market_cap, custom
+    data_fetcher_init: InitVar[IDataFetcher | None] = None
     logging_manager_init: InitVar[ILoggingManager] = None
     # Regular fields
     _name: str = field(init=False, repr=False)
     _initial_capital: float = field(init=False, repr=False)
     _allocation_method: str = field(init=False, repr=False)
+    _data_fetcher: IDataFetcher | None = field(init=False, repr=False)
     _logger: ILoggingManager = field(init=False, repr=False)
     assets: list[Asset] = field(default_factory=list)
     rebalance_frequency: str | None = "monthly"
@@ -59,6 +61,7 @@ class Portfolio:
         initial_capital_init: float,
         name_init: str,
         allocation_method_init: str,
+        data_fetcher_init: IDataFetcher | None = None,
         logging_manager_init: ILoggingManager | None = None,
         logging_manager: ILoggingManager = Provide["logging_manager"],
     ):
@@ -68,6 +71,7 @@ class Portfolio:
             raise ValueError("Initial capital must be positive")
         self._initial_capital = initial_capital_init
         self._allocation_method = allocation_method_init
+        self._data_fetcher = data_fetcher_init
         self._logger = logging_manager_init or logging_manager
 
         if self.max_position_size is not None:
@@ -271,18 +275,19 @@ class Portfolio:
         use get_portfolio_value(prices) instead.
 
         Args:
-            fetcher: Optional data fetcher instance. If not provided, creates a new one.
+            fetcher: Optional data fetcher instance. If not provided, uses the injected one or creates a new one.
 
         Returns:
             Current total portfolio value
         """
-        if fetcher is None:
+        # Use provided fetcher, then injected fetcher, then create new one
+        data_fetcher = fetcher or self._data_fetcher
+        if data_fetcher is None:
             from ..data.fetcher import DataFetcher
 
             data_fetcher = DataFetcher()
-            prices = data_fetcher.get_current_prices(self.symbols)
-        else:
-            prices = fetcher.get_current_prices(self.symbols)
+
+        prices = data_fetcher.get_current_prices(self.symbols)
         return self.get_portfolio_value(prices)
 
     def validate_capital_sufficiency(
@@ -305,13 +310,14 @@ class Portfolio:
             return  # No assets to validate
 
         if validation_prices is None:
-            if fetcher is None:
+            # Use provided fetcher, then injected fetcher, then create new one
+            data_fetcher = fetcher or self._data_fetcher
+            if data_fetcher is None:
                 from ..data.fetcher import DataFetcher
 
                 data_fetcher = DataFetcher()
-                validation_prices = data_fetcher.get_current_prices(self.symbols)
-            else:
-                validation_prices = fetcher.get_current_prices(self.symbols)
+
+            validation_prices = data_fetcher.get_current_prices(self.symbols)
 
         # Calculate required capital based on asset quantities
         required_capital = self.get_portfolio_value(validation_prices)
@@ -354,13 +360,14 @@ class Portfolio:
             return  # No assets to validate
 
         if prices is None:
-            if fetcher is None:
+            # Use provided fetcher, then injected fetcher, then create new one
+            data_fetcher = fetcher or self._data_fetcher
+            if data_fetcher is None:
                 from ..data.fetcher import DataFetcher
 
                 data_fetcher = DataFetcher()
-                prices = data_fetcher.get_current_prices(self.symbols)
-            else:
-                prices = fetcher.get_current_prices(self.symbols)
+
+            prices = data_fetcher.get_current_prices(self.symbols)
 
         if not prices:
             self._logger.warning("Could not fetch prices for allocation validation")

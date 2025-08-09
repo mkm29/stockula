@@ -329,6 +329,180 @@ chore: bump pandas to 2.2.0
    - Monitor workflow run times
    - Track test coverage trends
 
+## Local CI Testing with Act
+
+[Act](https://github.com/nektos/act) allows you to run GitHub Actions workflows locally using Docker. This is invaluable for debugging CI failures without pushing commits to GitHub.
+
+### Installation
+
+```bash
+# macOS (via Homebrew)
+brew install act
+
+# Or via GitHub CLI
+gh extension install https://github.com/nektos/gh-act
+
+# Alternative: Download binary from releases
+# https://github.com/nektos/act/releases
+```
+
+### Basic Usage
+
+```bash
+# Run all workflows (like a push to main)
+act
+
+# Run a specific workflow
+act -W .github/workflows/test.yml
+
+# Run a specific job within a workflow
+act -W .github/workflows/test.yml -j unit-tests
+
+# Simulate different events
+act pull_request          # PR events
+act push                 # Push events  
+act workflow_dispatch    # Manual triggers
+```
+
+### Running Stockula CI Locally
+
+#### 1. Test Workflow
+
+```bash
+# Run the entire test workflow
+act -W .github/workflows/test.yml
+
+# Run only linting (fastest feedback)
+act -W .github/workflows/test.yml -j lint
+
+# Run only unit tests
+act -W .github/workflows/test.yml -j unit-tests
+
+# Run with specific Python version matrix
+act -W .github/workflows/test.yml -j unit-tests --matrix python-version:3.13
+```
+
+#### 2. Debug Database Issues
+
+When debugging the database table creation race conditions we experienced:
+
+```bash
+# Run unit tests with verbose output
+act -W .github/workflows/test.yml -j unit-tests --verbose
+
+# Override the test command to add debugging flags
+act -W .github/workflows/test.yml -j unit-tests \
+  -s PYTEST_ADDOPTS="-v -s --tb=long --no-cov -x"
+```
+
+#### 3. Environment Variables and Secrets
+
+```bash
+# Use a .secrets file for sensitive data
+echo "CODECOV_TOKEN=fake_token_for_testing" > .secrets
+act -W .github/workflows/test.yml --secret-file .secrets
+
+# Set environment variables inline
+act -W .github/workflows/test.yml \
+  --env STOCKULA_DEBUG=true \
+  --env PYTEST_CURRENT_TEST=true
+```
+
+### Configuration
+
+Create `.actrc` in your project root for consistent settings:
+
+```bash
+# .actrc
+--container-architecture linux/amd64
+--artifact-server-path /tmp/artifacts
+--env-file .env.act
+--secret-file .secrets
+```
+
+### Useful Act Options
+
+```bash
+# Use specific runner image (matches GitHub's exactly)
+act --pull=false --runner-image catthehacker/ubuntu:act-latest
+
+# Bind mount source code (faster than copying)
+act --bind
+
+# Keep containers running for debugging
+act --reuse
+
+# Dry run to see what would execute
+act --dry-run
+
+# List available workflows and jobs
+act --list
+
+# Debug a specific failing step
+act -W .github/workflows/test.yml -j unit-tests \
+  --verbose \
+  --env ACTIONS_STEP_DEBUG=true
+```
+
+### Debugging Database Race Conditions
+
+The specific database table creation errors we encountered can be debugged locally:
+
+```bash
+# 1. First, identify the issue
+act -W .github/workflows/test.yml -j unit-tests --dry-run
+
+# 2. Run with database debugging
+act -W .github/workflows/test.yml -j unit-tests \
+  --env STOCKULA_DEBUG=true \
+  --env PYTEST_CURRENT_TEST=true \
+  -s PYTEST_ADDOPTS="-v -s --tb=short -x"
+
+# 3. Test parallel execution specifically
+act -W .github/workflows/test.yml -j unit-tests \
+  -s PYTEST_ADDOPTS="-n auto --tb=short -v"
+
+# 4. Debug with sequential execution to isolate race conditions
+act -W .github/workflows/test.yml -j unit-tests \
+  -s PYTEST_ADDOPTS="-n 0 --tb=long -v"
+```
+
+### Limitations of Act
+
+1. **Performance**: Slower than GitHub Actions due to local Docker overhead
+1. **Environment Differences**: Some system-specific behaviors may differ
+1. **Services**: External services (databases, caches) need manual setup
+1. **Secrets**: Real secrets should never be used in local testing
+1. **Matrix Jobs**: Limited support for complex matrix strategies
+
+### Best Practices
+
+1. **Start Small**: Test individual jobs before running entire workflows
+1. **Use .actrc**: Configure consistent settings for your project
+1. **Mock Secrets**: Never use real API tokens or credentials
+1. **Fast Iteration**: Use `--reuse` flag to keep containers running
+1. **Debug Incrementally**: Add `--verbose` and environment variables as needed
+1. **Match Versions**: Ensure local Python/Node versions match CI
+
+### Integration with Development Workflow
+
+```bash
+# Before pushing changes
+act -W .github/workflows/test.yml -j lint    # Fast feedback
+act -W .github/workflows/test.yml -j unit-tests  # Comprehensive testing
+
+# Debug failing tests
+act -W .github/workflows/test.yml -j unit-tests \
+  --verbose \
+  --env ACTIONS_STEP_DEBUG=true \
+  -s PYTEST_ADDOPTS="-k test_specific_failing_test -v -s"
+
+# Test release workflow (without actually releasing)
+act -W .github/workflows/release-please.yml --dry-run
+```
+
+Act has been instrumental in identifying and fixing the database isolation issues we encountered, allowing us to reproduce the exact conditions that caused parallel test failures in GitHub Actions.
+
 ## Future Improvements
 
 1. **PostgreSQL Migration**

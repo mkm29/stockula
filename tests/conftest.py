@@ -197,12 +197,13 @@ def mock_logging_manager():
 
 
 @pytest.fixture(scope="function")
-def sample_portfolio(mock_logging_manager):
+def sample_portfolio(mock_logging_manager, mock_data_fetcher):
     """Create a sample portfolio."""
     return Portfolio(
         name_init="Test Portfolio",
         initial_capital_init=100000.0,
         allocation_method_init="equal_weight",
+        data_fetcher_init=mock_data_fetcher,
         logging_manager_init=mock_logging_manager,
     )
 

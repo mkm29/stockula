@@ -126,6 +126,7 @@ class DomainFactory:
             name_init=config.portfolio.name,
             initial_capital_init=config.portfolio.initial_capital,
             allocation_method_init=config.portfolio.allocation_method,
+            data_fetcher_init=self.fetcher,
             logging_manager_init=self.logger,
             rebalance_frequency=config.portfolio.rebalance_frequency,
             max_position_size=config.portfolio.max_position_size,
