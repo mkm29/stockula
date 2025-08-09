@@ -345,22 +345,24 @@ Stockula uses GitHub Actions for automated Docker image builds and publishing to
 
 #### Release Process
 
-Docker images are automatically built when releases are created:
+Docker images are automatically built in the following scenarios:
 
+- **Feature Branches**: Built on push to `feature/*` or `feat/*` branches (Docker only, no Git tags)
 - **Release Candidates**: Built from `develop` branch when RC tags are created (e.g., `0.12.1-rc.1`)
 - **Stable Releases**: Built from `main` branch when version tags are created (e.g., `v0.12.1`)
 
 #### Available Images
 
-| Image                        | Description                | Tags                                   |
-| ---------------------------- | -------------------------- | -------------------------------------- |
-| `ghcr.io/mkm29/stockula`     | CLI with development tools | `latest`, `vX.Y.Z`, `0.Y.Z-rc.N`, `rc` |
-| `ghcr.io/mkm29/stockula-gpu` | GPU-accelerated CLI        | `latest`, `vX.Y.Z`, `0.Y.Z-rc.N`, `rc` |
+| Image                        | Description                | Tags                                                           |
+| ---------------------------- | -------------------------- | -------------------------------------------------------------- |
+| `ghcr.io/mkm29/stockula`     | CLI with development tools | `latest`, `vX.Y.Z`, `0.Y.Z-rc.N`, `X.Y.Z-feat.*`, `rc`, `feat` |
+| `ghcr.io/mkm29/stockula-gpu` | GPU-accelerated CLI        | `latest`, `vX.Y.Z`, `0.Y.Z-rc.N`, `X.Y.Z-feat.*`, `rc`, `feat` |
 
-Docker tags always match Git tags exactly:
+Docker tag formats:
 
-- Stable releases: `v0.12.1`
-- Release candidates: `0.12.1-rc.1`
+- Feature branches: `0.12.1-feat.<branch-name>.<short-sha>` (e.g., `0.12.1-feat.new-api.a1b2c3d`)
+- Release candidates: `0.12.1-rc.1` (matches Git tag)
+- Stable releases: `v0.12.1` (matches Git tag)
 
 ### Production Deployment
 
@@ -368,7 +370,7 @@ Docker tags always match Git tags exactly:
 # Pull latest stable release
 docker pull ghcr.io/mkm29/stockula:latest
 
-# Pull specific version (tags match Git tags)
+# Pull specific version (tags match Git tags for releases)
 docker pull ghcr.io/mkm29/stockula:v0.12.1
 
 # Pull latest release candidate
@@ -376,6 +378,12 @@ docker pull ghcr.io/mkm29/stockula:rc
 
 # Pull specific RC
 docker pull ghcr.io/mkm29/stockula:0.12.1-rc.1
+
+# Pull latest feature branch build (for testing)
+docker pull ghcr.io/mkm29/stockula:feat
+
+# Pull specific feature branch build
+docker pull ghcr.io/mkm29/stockula:0.12.1-feat.new-api.a1b2c3d
 
 # Deploy to production
 docker run -d \

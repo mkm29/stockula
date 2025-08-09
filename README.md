@@ -442,7 +442,9 @@ We follow a Git Flow branching strategy with automated releases via [Release Ple
 
 ```mermaid
 graph LR
-    A[feature/*] -->|PR| B[develop]
+    A[feature/*] -->|Push| K[Docker Build<br/>0.12.1-feat.branch.sha]
+    K -->|GHCR| L[ghcr.io/mkm29/stockula:feat]
+    A -->|PR| B[develop]
     C[bugfix/*] -->|PR| B
     B -->|Release Please| D[RC Release<br/>0.12.1-rc.1]
     D -->|Docker Build| E[ghcr.io/mkm29/stockula:0.12.1-rc.1]
@@ -462,19 +464,20 @@ graph LR
 
 ### Release Types
 
-| Type              | Branch  | Git Tag      | Docker Tag   | Example                              |
-| ----------------- | ------- | ------------ | ------------ | ------------------------------------ |
-| Release Candidate | develop | `0.Y.Z-rc.N` | `0.Y.Z-rc.N` | `ghcr.io/mkm29/stockula:0.12.1-rc.1` |
-| Stable Release    | main    | `vX.Y.Z`     | `vX.Y.Z`     | `ghcr.io/mkm29/stockula:v0.12.1`     |
+| Type              | Branch     | Git Tag      | Docker Tag                  | Example                                              |
+| ----------------- | ---------- | ------------ | --------------------------- | ---------------------------------------------------- |
+| Feature Branch    | feature/\* | None         | `X.Y.Z-feat.<branch>.<sha>` | `ghcr.io/mkm29/stockula:0.12.1-feat.new-api.a1b2c3d` |
+| Release Candidate | develop    | `0.Y.Z-rc.N` | `0.Y.Z-rc.N`                | `ghcr.io/mkm29/stockula:0.12.1-rc.1`                 |
+| Stable Release    | main       | `vX.Y.Z`     | `vX.Y.Z`                    | `ghcr.io/mkm29/stockula:v0.12.1`                     |
 
 ### Docker Images
 
-Automated builds are triggered on every release:
+Automated builds are triggered on releases and feature branch pushes:
 
-| Image                        | Description                | Latest RC | Latest Stable |
-| ---------------------------- | -------------------------- | --------- | ------------- |
-| `ghcr.io/mkm29/stockula`     | CLI with development tools | `:rc`     | `:latest`     |
-| `ghcr.io/mkm29/stockula-gpu` | GPU-accelerated CLI        | `:rc`     | `:latest`     |
+| Image                        | Description                | Latest Feature | Latest RC | Latest Stable |
+| ---------------------------- | -------------------------- | -------------- | --------- | ------------- |
+| `ghcr.io/mkm29/stockula`     | CLI with development tools | `:feat`        | `:rc`     | `:latest`     |
+| `ghcr.io/mkm29/stockula-gpu` | GPU-accelerated CLI        | `:feat`        | `:rc`     | `:latest`     |
 
 ```bash
 # Pull latest stable
@@ -483,9 +486,15 @@ docker pull ghcr.io/mkm29/stockula:latest
 # Pull latest RC for testing
 docker pull ghcr.io/mkm29/stockula:rc
 
-# Pull specific versions (tags match Git tags)
+# Pull latest feature branch build
+docker pull ghcr.io/mkm29/stockula:feat
+
+# Pull specific versions (tags match Git tags for releases)
 docker pull ghcr.io/mkm29/stockula:v0.12.1      # Stable release
 docker pull ghcr.io/mkm29/stockula:0.12.1-rc.1  # Release candidate
+
+# Pull specific feature branch build
+docker pull ghcr.io/mkm29/stockula:0.12.1-feat.new-api.a1b2c3d
 
 # Run GPU-accelerated version
 docker run --gpus all ghcr.io/mkm29/stockula-gpu:latest

@@ -4,6 +4,10 @@ name: Docker Build and Push
 on:
   release:
     types: [published]
+  push:
+    branches:
+      - 'feature/**'
+      - 'feat/**'
   workflow_dispatch:
     inputs:
       version:
@@ -56,24 +60,7 @@ jobs:
 
       - name: Determine version
         id: version
-        run: |
-          # Use input version if provided, otherwise use release tag
-          if [[ -n "${{ inputs.version }}" ]]; then
-            VERSION="${{ inputs.version }}"
-          elif [[ "${{ github.event_name }}" == "release" ]]; then
-            VERSION="${{ github.event.release.tag_name }}"
-          else
-            # Get the latest tag
-            VERSION=$(git describe --tags --abbrev=0 2>/dev/null || echo "dev")
-          fi
-
-          # Docker tags should match Git tags exactly
-          # - RC versions: 0.12.1-rc.1
-          # - Stable versions: v0.12.1
-
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "Using version: $VERSION"
-
+        run: "# Use input version if provided, otherwise determine based on event\nif [[ -n \"${{ inputs.version }}\" ]]; then\n  VERSION=\"${{ inputs.version }}\"\nelif [[ \"${{ github.event_name }}\" == \"release\" ]]; then\n  VERSION=\"${{ github.event.release.tag_name }}\"\nelif [[ \"${{ github.event_name }}\" == \"push\" ]] && [[ \"${{ github.ref }}\" == refs/heads/feature/* || \"${{ github.ref }}\" == refs/heads/feat/* ]]; then\n  # For feature branches, create a special Docker tag (no Git tag)\n  # Format: feat-<branch-name>-<short-sha>\n  BRANCH_NAME=\"${{ github.ref_name }}\"\n  # Replace slashes with dashes and remove feature/ or feat/ prefix\n  BRANCH_NAME=\"${BRANCH_NAME#feature/}\"\n  BRANCH_NAME=\"${BRANCH_NAME#feat/}\"\n  BRANCH_NAME=\"${BRANCH_NAME//\\//-}\"\n  # Get short SHA\n  SHORT_SHA=\"${{ github.sha }}\"\n  SHORT_SHA=\"${SHORT_SHA:0:7}\"\n  # Get current version from pyproject.toml or latest tag\n  BASE_VERSION=$(grep -E '^version = ' pyproject.toml | sed 's/version = \"\\(.*\\)\"/\\1/' || echo \"0.0.0\")\n  # Create version tag for feature branch\n  VERSION=\"${BASE_VERSION}-feat.${BRANCH_NAME}.${SHORT_SHA}\"\nelse\n  # Get the latest tag or use dev\n  VERSION=$(git describe --tags --abbrev=0 2>/dev/null || echo \"dev\")\nfi\n  #magic___^_^___line\n# Docker tags format:\n# - RC versions: 0.12.1-rc.1\n# - Stable versions: v0.12.1  \n# - Feature branches: 0.12.1-feat.<branch-name>.<short-sha>\n  #magic___^_^___line\necho \"version=$VERSION\" >> $GITHUB_OUTPUT\necho \"Using version: $VERSION\"\n  #magic___^_^___line\n"
       - name: Extract metadata
         id: meta
         uses: docker/metadata-action@v5
@@ -88,6 +75,8 @@ jobs:
             type=raw,value=latest,enable=${{ startsWith(steps.version.outputs.version, 'v') && matrix.suffix == '' }}
             # For RC releases, also tag as 'rc' for latest RC
             type=raw,value=rc,enable=${{ contains(steps.version.outputs.version, 'rc') && matrix.suffix == '' }}
+            # For feature branches, also tag as 'feat' for latest feature build
+            type=raw,value=feat,enable=${{ contains(steps.version.outputs.version, 'feat') && matrix.suffix == '' }}
             # For development builds
             type=raw,value=dev,enable=${{ steps.version.outputs.version == 'dev' }}
             # SHA-based tag for traceability
@@ -100,7 +89,7 @@ jobs:
           file: ${{ matrix.dockerfile }}
           target: ${{ matrix.target }}
           platforms: ${{ matrix.platforms }}
-          push: ${{ github.event_name == 'release' || inputs.push }}
+          push: ${{ github.event_name == 'release' || (github.event_name == 'push' && (startsWith(github.ref, 'refs/heads/feature/') || startsWith(github.ref, 'refs/heads/feat/'))) || inputs.push }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
@@ -134,6 +123,10 @@ jobs:
           if [[ "$VERSION" == *"rc"* ]]; then
             echo "" >> $GITHUB_STEP_SUMMARY
             echo "ℹ️ **Note**: This is a release candidate image." >> $GITHUB_STEP_SUMMARY
+          elif [[ "$VERSION" == *"feat"* ]]; then
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "🚧 **Note**: This is a feature branch development image." >> $GITHUB_STEP_SUMMARY
+            echo "You can also pull the latest feature build with: \`docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}$SUFFIX:feat\`" >> $GITHUB_STEP_SUMMARY
           fi
 
   publish-manifest:

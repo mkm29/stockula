@@ -281,23 +281,32 @@ All PRs require review before merging:
 
 Docker images are automatically built and pushed to GitHub Container Registry (GHCR):
 
-| Image                        | Description                | Tags                             |
-| ---------------------------- | -------------------------- | -------------------------------- |
-| `ghcr.io/mkm29/stockula`     | CLI with development tools | `latest`, `vX.Y.Z`, `0.Y.Z-rc.N` |
-| `ghcr.io/mkm29/stockula-gpu` | GPU-accelerated CLI        | `latest`, `vX.Y.Z`, `0.Y.Z-rc.N` |
+| Image                        | Description                | Tags                                                     |
+| ---------------------------- | -------------------------- | -------------------------------------------------------- |
+| `ghcr.io/mkm29/stockula`     | CLI with development tools | `latest`, `vX.Y.Z`, `0.Y.Z-rc.N`, `X.Y.Z-feat.*`, `feat` |
+| `ghcr.io/mkm29/stockula-gpu` | GPU-accelerated CLI        | `latest`, `vX.Y.Z`, `0.Y.Z-rc.N`, `X.Y.Z-feat.*`, `feat` |
 
 ### Image Tagging Strategy
 
-Docker tags match Git tags exactly:
+Docker tags match Git tags for releases, with special formatting for feature branches:
+
+- **Feature Branches**: `X.Y.Z-feat.<branch-name>.<short-sha>`
+
+  - Built automatically when pushing to `feature/*` or `feat/*` branches
+  - No Git tags created (Docker images only)
+  - Also tagged as `:feat` for latest feature build
+  - Example: `0.12.1-feat.new-api.a1b2c3d`
 
 - **Release Candidates**: `0.12.1-rc.1`, `0.12.1-rc.2`, etc.
 
   - Built when Release Please PR is merged on `develop`
+  - Git tag and Docker tag match exactly
   - Also tagged as `:rc` for latest RC
 
 - **Stable Releases**: `v0.12.1`, `v0.13.0`, etc.
 
   - Built when Release Please PR is merged on `main`
+  - Git tag and Docker tag match exactly
   - Also tagged as `:latest` for latest stable
 
 - **Development**: `:dev`
@@ -310,12 +319,18 @@ Docker tags match Git tags exactly:
 # Pull latest stable
 docker pull ghcr.io/mkm29/stockula:latest
 
-# Pull specific versions (Docker tags match Git tags)
+# Pull specific versions (Docker tags match Git tags for releases)
 docker pull ghcr.io/mkm29/stockula:v0.12.1      # Stable release
 docker pull ghcr.io/mkm29/stockula:0.12.1-rc.1  # Release candidate
 
 # Pull latest RC
 docker pull ghcr.io/mkm29/stockula:rc
+
+# Pull latest feature branch build
+docker pull ghcr.io/mkm29/stockula:feat
+
+# Pull specific feature branch build
+docker pull ghcr.io/mkm29/stockula:0.12.1-feat.new-api.a1b2c3d
 
 # Run with GPU support
 docker run --gpus all ghcr.io/mkm29/stockula-gpu:latest
