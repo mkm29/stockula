@@ -1,8 +1,8 @@
 # syntax=docker/dockerfile:1
 # GPU-enabled Dockerfile for Stockula trading platform with NVIDIA CUDA support
 #
-# This Dockerfile extends the base Stockula image with GPU acceleration for
-# time series forecasting using AutoTS with PyTorch, TensorFlow, and GluonTS.
+# This Dockerfile provides GPU acceleration for time series forecasting using
+# PyTorch-based models in AutoTS, XGBoost, and LightGBM with GPU support.
 #
 # Requirements:
 #   - NVIDIA Container Runtime (nvidia-docker2)
@@ -11,10 +11,10 @@
 #
 # Build stages:
 #   - nvidia-base: NVIDIA CUDA base with system dependencies
-#   - gpu-dependencies: Python packages with GPU support
+#   - gpu-dependencies: Python packages with minimal GPU support
 #   - gpu-source: Application source code
 #   - gpu-production: Minimal runtime image with GPU support
-#   - gpu-cli: GPU production + interactive tools
+#   - gpu-cli: GPU production + minimal CLI tools
 #
 # Usage:
 #   docker buildx build -f Dockerfile.nvidia --target gpu-production -t stockula:gpu-prod .
@@ -76,70 +76,46 @@ FROM nvidia-base AS gpu-dependencies
 
 WORKDIR /app
 
-# Copy dependency files and README (required by pyproject.toml)
+# Copy ONLY dependency files needed for package installation
+# DO NOT copy source code here to maintain cache efficiency
 COPY pyproject.toml uv.lock README.md ./
-COPY src/ src/
+
+# Generate requirements.txt from pyproject.toml using uv
+# This ensures consistency with the project dependencies
+RUN uv pip compile pyproject.toml -o requirements.txt
 
 # Create virtual environment and install base dependencies
-# Note: We manually install dependencies to bypass Python version check
 RUN --mount=type=cache,target=/root/.cache/uv,sharing=locked \
+    --mount=type=cache,target=/root/.cache/pip,sharing=locked \
     uv venv /opt/venv --python 3.12 && \
-    # Install pip in the venv using ensurepip
+    # Install pip in the venv
     /opt/venv/bin/python -m ensurepip --upgrade && \
     /opt/venv/bin/python -m pip install --upgrade pip && \
-    # Install core dependencies manually (from pyproject.toml)
-    /opt/venv/bin/pip install \
-        "pandas>=2.0.0" \
-        "numpy>=1.24.0" \
-        "yfinance>=0.2.33" \
-        "scikit-learn>=1.3.0" \
-        "scipy>=1.10.0" \
-        "statsmodels>=0.14.0" \
-        "sqlmodel>=0.0.16" \
-        "alembic>=1.13.0" \
-        "pydantic>=2.6.0" \
-        "pydantic-settings>=2.2.0" \
-        "python-dotenv>=1.0.0" \
-        "rich>=13.7.0" \
-        "typer>=0.9.0" \
-        "click>=8.1.7" \
-        "pyyaml>=6.0" \
-        "dependency-injector>=4.41.0" \
-        "autots>=0.6.14" \
-        "backtesting>=0.6.4" \
-        "finta>=1.3" \
-        "curl-cffi>=0.12.0" && \
-    # Add stockula to Python path instead of installing (to avoid version check)
-    echo "/app/src" > /opt/venv/lib/python3.12/site-packages/stockula.pth
+    # Install all dependencies from generated requirements
+    /opt/venv/bin/pip install -r requirements.txt
 
-# Install GPU-specific packages for AutoTS acceleration
-# Using CUDA 11.8 packages for better compatibility with current ecosystem
+# Install GPU packages in a separate RUN to maximize caching
+# These are the heaviest packages and should be cached separately
 RUN --mount=type=cache,target=/root/.cache/pip,sharing=locked \
-    # PyTorch with CUDA 11.8 support (most stable)
-    /opt/venv/bin/pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118 && \
-    # TensorFlow with GPU support (2.16+ for Python 3.12)
-    /opt/venv/bin/pip install tensorflow[and-cuda]==2.16.* && \
-    # Core GPU-accelerated time series libraries
-    /opt/venv/bin/pip install neuralforecast && \
-    /opt/venv/bin/pip install pytorch-forecasting && \
-    # GluonTS for time series forecasting (CPU version for compatibility)
-    /opt/venv/bin/pip install gluonts[torch] && \
-    # XGBoost with GPU support
-    /opt/venv/bin/pip install xgboost && \
-    # LightGBM (standard version, GPU will be detected at runtime)
-    /opt/venv/bin/pip install lightgbm
+    # PyTorch with CUDA 11.8 support (for neural network models in AutoTS)
+    /opt/venv/bin/pip install torch --index-url https://download.pytorch.org/whl/cu118 && \
+    # XGBoost and LightGBM (both have GPU support)
+    /opt/venv/bin/pip install xgboost lightgbm
 
 # Stage 3: GPU Source builder
 FROM gpu-dependencies AS gpu-source
 
-# Copy additional source files (src already copied in dependencies stage)
+# Now copy source code and other application files
+COPY src/ src/
 COPY alembic.ini ./
 COPY alembic/ alembic/
 COPY examples/ examples/
 COPY data/ data/
 
-# Package is already installed in dependencies stage, just verify
-RUN . /opt/venv/bin/activate && python -c "import stockula; print(f'Stockula {stockula.__version__} installed')"
+# Add stockula to Python path (to avoid Python version check)
+RUN echo "/app/src" > /opt/venv/lib/python3.12/site-packages/stockula.pth && \
+    # Verify the package can be imported
+    /opt/venv/bin/python -c "import stockula; print('Stockula package accessible')"
 
 # Stage 4: GPU Production runtime - optimized for GPU inference
 FROM nvidia/cuda:13.0.0-runtime-ubuntu24.04 AS gpu-production
@@ -188,9 +164,7 @@ ENV VIRTUAL_ENV=/opt/venv \
     AUTOTS_GPU_ENABLED=true \
     # Reduce job count for stability as recommended by AutoTS
     AUTOTS_N_JOBS=1 \
-    # TensorFlow GPU settings
-    TF_FORCE_GPU_ALLOW_GROWTH=true \
-    # PyTorch settings
+    # PyTorch CUDA architecture support
     TORCH_CUDA_ARCH_LIST="6.0 6.1 7.0 7.5 8.0 8.6 9.0+PTX"
 
 # Create data directories with proper permissions
@@ -205,60 +179,37 @@ VOLUME ["/app/data", "/app/results", "/app/models"]
 HEALTHCHECK --interval=30s --timeout=15s --start-period=120s --retries=3 \
     CMD python -c "import stockula; import torch; print(f'Stockula GPU Health: CUDA Available={torch.cuda.is_available()}, Device Count={torch.cuda.device_count()}')" || exit 1
 
-# Expose metadata about the image
-EXPOSE 8888/tcp
-
 # Default entrypoint and command
 ENTRYPOINT ["python", "-m"]
 CMD ["stockula", "--help"]
 
-# Stage 5: GPU CLI stage - optimized for interactive GPU development
+# Stage 5: GPU CLI stage - minimal CLI for GPU-accelerated forecasting
 FROM gpu-production AS gpu-cli
 
 # Add stage-specific label
 LABEL com.stockula.build.stage="gpu-cli" \
-      org.opencontainers.image.description="Stockula GPU CLI - Interactive GPU-accelerated trading analysis with NVIDIA CUDA support"
+      org.opencontainers.image.description="Stockula GPU CLI - Minimal CLI for GPU-accelerated time series forecasting"
 
 USER root
 
-# Install development and debugging tools
+# Install minimal CLI tools
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
     apt-get update && apt-get install -y --no-install-recommends \
-    # Interactive tools
+    # Basic text viewing
     less \
-    nano \
-    htop \
-    # GPU debugging tools
-    nvidia-utils-535 \
     && rm -rf /var/lib/apt/lists/*
 
-# Install additional development packages in virtual environment
-RUN /opt/venv/bin/pip install \
-    jupyter \
-    ipython \
-    matplotlib \
-    seaborn \
-    plotly \
-    # GPU profiling tools
-    py3nvml \
-    pynvml
+# GPU CLI doesn't need additional packages - core functionality is sufficient
 
 USER stockula
 
-# Create Jupyter configuration for GPU usage
-RUN mkdir -p /home/stockula/.jupyter && \
-    echo "c.NotebookApp.ip = '0.0.0.0'" >> /home/stockula/.jupyter/jupyter_notebook_config.py && \
-    echo "c.NotebookApp.port = 8888" >> /home/stockula/.jupyter/jupyter_notebook_config.py && \
-    echo "c.NotebookApp.open_browser = False" >> /home/stockula/.jupyter/jupyter_notebook_config.py && \
-    echo "c.NotebookApp.allow_root = False" >> /home/stockula/.jupyter/jupyter_notebook_config.py
 
 # Create a GPU info script for easy checking
 RUN echo '#!/bin/bash' > /home/stockula/gpu_info.sh && \
     echo 'echo "=== GPU Information ==="' >> /home/stockula/gpu_info.sh && \
-    echo 'python -c "import torch; print(f\"PyTorch CUDA: {torch.cuda.is_available()}, Devices: {torch.cuda.device_count()}\")' >> /home/stockula/gpu_info.sh && \
-    echo 'python -c "import tensorflow as tf; print(f\"TensorFlow GPUs: {len(tf.config.list_physical_devices('"'"'GPU'"'"'))}\")' >> /home/stockula/gpu_info.sh && \
-    echo 'nvidia-smi --query-gpu=name,memory.total,memory.used --format=csv' >> /home/stockula/gpu_info.sh && \
+    echo 'python -c "import torch; print(f\"PyTorch CUDA: {torch.cuda.is_available()}, Devices: {torch.cuda.device_count()}\")"' >> /home/stockula/gpu_info.sh && \
+    echo 'nvidia-smi --query-gpu=name,memory.total,memory.used --format=csv 2>/dev/null || echo "nvidia-smi not available"' >> /home/stockula/gpu_info.sh && \
     chmod +x /home/stockula/gpu_info.sh
 
 # OCI Standard Labels with GPU-specific metadata
