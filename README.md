@@ -231,39 +231,39 @@ For comprehensive documentation, visit our [**MkDocs Documentation Site**](https
 ```mermaid
 graph TB
     subgraph "User Interface"
-        CLI[CLI (cli.py)]
-        Config[Configuration<br/>.stockula.yaml]
+        CLI["CLI<br/>cli.py"]
+        Config["Configuration<br/>.stockula.yaml"]
     end
 
     subgraph "Managers"
-        SM[Stockula Manager]
-        TAM[Technical Analysis<br/>Manager]
-        BTM[Backtesting<br/>Manager]
-        FCM[Forecasting<br/>Manager]
-        ALM[Allocator<br/>Manager]
+        SM["Stockula Manager"]
+        TAM["Technical Analysis<br/>Manager"]
+        BTM["Backtesting<br/>Manager"]
+        FCM["Forecasting<br/>Manager"]
+        ALM["Allocator<br/>Manager"]
     end
 
     subgraph "Core Domain"
-        Factory[Domain Factory]
-        Portfolio[Portfolio]
-        Asset[Asset]
+        Factory["Domain Factory"]
+        Portfolio["Portfolio"]
+        Asset["Asset"]
     end
 
     subgraph "Allocation Module"
-        Allocator[Base Allocator]
-        STD[Standard Allocator]
-        OPT[Backtest Optimized<br/>Allocator]
+        Allocator["Base Allocator"]
+        STD["Standard Allocator"]
+        OPT["Backtest Optimized<br/>Allocator"]
     end
 
     subgraph "Data Layer"
-        Fetcher[Data Fetcher<br/>yfinance wrapper]
-        DB[(SQLite Database<br/>stockula.db)]
+        Fetcher["Data Fetcher<br/>yfinance wrapper"]
+        DB[("SQLite Database<br/>stockula.db")]
     end
 
     subgraph "Analysis Modules"
-        TA[Technical Analysis<br/>finta]
-        BT[Backtesting<br/>strategies]
-        FC[Forecasting<br/>AutoTS]
+        TA["Technical Analysis<br/>finta"]
+        BT["Backtesting<br/>strategies"]
+        FC["Forecasting<br/>AutoTS"]
     end
 
     CLI --> Config
