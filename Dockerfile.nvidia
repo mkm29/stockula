@@ -110,7 +110,6 @@ COPY src/ src/
 COPY alembic.ini ./
 COPY alembic/ alembic/
 COPY examples/ examples/
-COPY data/ data/
 
 # Add stockula to Python path (to avoid Python version check)
 RUN echo "/app/src" > /opt/venv/lib/python3.12/site-packages/stockula.pth && \
