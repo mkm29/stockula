@@ -156,9 +156,9 @@ The system now uses a database-driven approach for AutoTS model validation:
 - **AutoTSModel**: SQLModel-based model with self-validation capabilities
 - **AutoTSPreset**: Database-stored preset configurations
 - **AutoTSRepository**: Repository pattern for model and preset management
-- **Database Seeding**: Automatic population from `data/models.json` if database is empty
+- **Database Seeding**: Automatic population directly from AutoTS library if database is empty
 
-This architecture eliminates hardcoded model lists and provides flexibility for adding new models without code changes.
+This architecture eliminates hardcoded model lists and provides flexibility for adding new models as AutoTS is updated.
 
 ## Module Structure
 

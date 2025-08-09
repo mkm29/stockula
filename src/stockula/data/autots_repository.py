@@ -1,6 +1,5 @@
 """Repository for AutoTS model management."""
 
-import json
 from pathlib import Path
 from typing import Any
 
@@ -163,48 +162,36 @@ class AutoTSRepository:
         self.session.commit()
         return preset
 
-    def seed_from_json(self, json_path: str | Path) -> tuple[int, int]:
-        """Seed the database from a models.json file.
+    def seed_from_autots(self) -> tuple[int, int]:
+        """Seed the database directly from AutoTS library.
 
-        This method reads the models.json file (generated from AutoTS) and uses it
-        as the single source of truth for models and presets. No hardcoded values
-        are used - everything comes from the JSON data.
-
-        Args:
-            json_path: Path to models.json file
+        This method uses AutoTS's model_lists as the single source of truth
+        for models and presets.
 
         Returns:
             Tuple of (models_count, presets_count) created/updated
         """
-        json_path = Path(json_path)
-        if not json_path.exists():
-            raise FileNotFoundError(f"Models JSON file not found: {json_path}")
-
-        with open(json_path) as f:
-            data = json.load(f)
+        try:
+            from autots.models.model_list import model_lists
+        except ImportError:
+            raise ImportError("AutoTS is required to seed the database") from None
 
         models_count = 0
         presets_count = 0
 
-        # Get all unique models from the JSON data
-        all_models = set(data.get("all", []))
+        # Get all unique models from AutoTS
+        # Only use models from the "all" list as it's the authoritative list
+        all_models = set(model_lists.get("all", []))
 
-        # Add models from all presets to ensure we capture everything
-        for preset_name, preset_data in data.items():
-            if preset_name == "all":
-                continue
-            if isinstance(preset_data, list):
-                all_models.update(preset_data)
-            elif isinstance(preset_data, dict):
-                all_models.update(preset_data.keys())
-
-        # Build categories map from JSON data - these are the only valid categories
-        # that AutoTS actually uses
+        # Build categories map from AutoTS data
         categories_map = {}
-        for key in data.keys():
-            categories_map[key] = set(data.get(key, []))
+        for key in model_lists.keys():
+            if isinstance(model_lists[key], list):
+                categories_map[key] = set(model_lists[key])
+            elif isinstance(model_lists[key], dict):
+                categories_map[key] = set(model_lists[key].keys())
 
-        # Create/update models based purely on JSON data
+        # Create/update models based on AutoTS data
         for model_name in all_models:
             model_categories = []
             for category, models in categories_map.items():
@@ -226,34 +213,47 @@ class AutoTSRepository:
             self.create_or_update_model(model_data)
             models_count += 1
 
-        # Create/update presets - only process actual presets from the JSON
-        # Skip meta-categories and special lists
-        skip_keys = {
-            "all",
-            "univariate",
-            "multivariate",
+        # Create/update presets - these are the actual presets for AutoTS
+        # We'll store the main presets that are commonly used
+        preset_keys = {
+            "default",
+            "fast",
+            "superfast",
+            "parallel",
+            "fast_parallel",
+            "fast_parallel_no_arima",
+            "scalable",
             "probabilistic",
+            "multivariate",
+            "univariate",
+            "best",
             "slow",
             "gpu",
             "regressor",
             "motifs",
             "regressions",
-            "no_params",
             "experimental",
-            "recombination_approved",
-            "no_shared",
-            "no_shared_fast",
-            "all_result_path",
-            "update_fit",
         }
 
-        # Also skip keys that start with certain prefixes
-        skip_prefixes = ("all_", "no_")
-
-        for preset_name, preset_data in data.items():
-            # Skip non-preset entries
-            if preset_name in skip_keys or any(preset_name.startswith(prefix) for prefix in skip_prefixes):
+        for preset_name in preset_keys:
+            if preset_name not in model_lists:
                 continue
+
+            preset_data = model_lists[preset_name]
+
+            # Filter preset models to only include valid models
+            if isinstance(preset_data, list):
+                # Filter out any models not in the "all" list
+                filtered_models = [m for m in preset_data if m in all_models]
+                if not filtered_models:
+                    continue  # Skip empty presets
+                preset_data = filtered_models
+            elif isinstance(preset_data, dict):
+                # Filter out any models not in the "all" list
+                filtered_models = {k: v for k, v in preset_data.items() if k in all_models}
+                if not filtered_models:
+                    continue  # Skip empty presets
+                preset_data = filtered_models
 
             preset_info = {
                 "name": preset_name,
@@ -269,6 +269,22 @@ class AutoTSRepository:
             self.logger.info(f"Seeded {models_count} models and {presets_count} presets")
 
         return models_count, presets_count
+
+    def seed_from_json(self, json_path: str | Path) -> tuple[int, int]:
+        """Deprecated: Use seed_from_autots() instead.
+
+        This method is kept for backward compatibility but now just calls
+        seed_from_autots() directly, ignoring the json_path parameter.
+
+        Args:
+            json_path: Path to models.json file (ignored)
+
+        Returns:
+            Tuple of (models_count, presets_count) created/updated
+        """
+        if self.logger:
+            self.logger.warning("seed_from_json is deprecated. Using seed_from_autots() instead.")
+        return self.seed_from_autots()
 
     def validate_model_list(self, model_list: list[str] | str) -> tuple[bool, list[str]]:
         """Validate a model list against the database.

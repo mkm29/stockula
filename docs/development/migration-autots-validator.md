@@ -182,10 +182,9 @@ forecaster = StockForecaster(
 
 ## Database Seeding
 
-The database is automatically seeded from `models.json` when empty:
+The database is automatically seeded directly from the AutoTS library when empty:
 
 ```python
-from pathlib import Path
 from sqlmodel import Session, create_engine
 from stockula.data.autots_repository import AutoTSRepository
 
@@ -193,32 +192,31 @@ engine = create_engine("sqlite:///stockula.db")
 with Session(engine) as session:
     repo = AutoTSRepository(session)
     
-    # Seed from data/models.json if database is empty
+    # Seed from AutoTS library if database is empty
     if not repo.get_all_models():
-        models_count, presets_count = repo.seed_from_json("data/models.json")
+        models_count, presets_count = repo.seed_from_autots()
         print(f"Seeded {models_count} models and {presets_count} presets")
 ```
 
-## Custom Model Management
+## Model Management
 
-You can now add custom models programmatically:
+Models are validated against the AutoTS library's authoritative list:
 
 ```python
 with Session(engine) as session:
     repo = AutoTSRepository(session)
     
-    # Add a custom model
+    # Add a model (must be a valid AutoTS model)
     model_data = {
-        "name": "CustomModel",
-        "description": "My custom forecasting model",
-        "categories": ["custom", "experimental"],
+        "name": "ARIMA",  # Must be a valid AutoTS model
+        "description": "ARIMA forecasting model",
+        "categories": ["univariate"],
         "is_slow": True,
         "is_gpu_enabled": False,
         "requires_regressor": False,
         "min_data_points": 100,
     }
     
-    # Note: This will fail if "CustomModel" is not in data/models.json
     # The validation ensures only valid AutoTS models are stored
     try:
         model = repo.create_or_update_model(model_data)
@@ -233,8 +231,8 @@ with Session(engine) as session:
 
 If models are not being found:
 
-1. Check that the database has been seeded
-1. Verify `data/models.json` exists in the project
+1. Check that the database has been seeded using `seed_from_autots()`
+1. Verify AutoTS is installed properly (`pip install autots`)
 1. Ensure database tables are created
 
 ```python
@@ -244,17 +242,17 @@ SQLModel.metadata.create_all(engine)
 
 ### Validation Errors
 
-The new system is stricter about validation:
+The new system validates against AutoTS's authoritative model list:
 
-- Models must exist in `data/models.json` to be added to the database
-- Presets validate that all their models are valid
+- Models must exist in AutoTS's model_lists to be added to the database
+- Presets validate that all their models are valid AutoTS models
 - Validation happens automatically when saving
 
 ### Performance
 
 The new system uses class-level caching:
 
-- Models from `data/models.json` are loaded once and cached
+- Models from AutoTS are loaded once and cached
 - Database queries are optimized with indexes
 - Repository pattern allows for efficient batch operations
 

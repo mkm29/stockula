@@ -16,7 +16,6 @@ on:
       - 'src/stockula/domain/**'
       - 'src/stockula/config/**'
       - 'tests/integration/**'
-      - 'data/models.json'
       - 'pyproject.toml'  # Dependency changes could break integration
 env:
   UV_CACHE_DIR: /tmp/.uv-cache
@@ -165,7 +164,7 @@ jobs:
           print('✓ Portfolio creation working')
 
           # Test asset properties
-          apple = next((a for a in portfolio.assets if a.ticker == 'AAPL'), None)
+          apple = next((a for a in portfolio.assets if a.ticker.symbol == 'AAPL'), None)
           assert apple is not None, 'AAPL asset not found'
           assert apple.quantity == 10, 'AAPL quantity should be 10'
           print('✓ Asset creation working')

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Seed AutoTS models into the database from data/models.json."""
+"""Seed AutoTS models into the database directly from the AutoTS library."""
 
 import sys
 from pathlib import Path
@@ -14,13 +14,6 @@ from stockula.data.autots_repository import AutoTSRepository
 
 def main():
     """Main function to seed AutoTS models."""
-    # Path to models.json
-    models_json_path = Path(__file__).parent.parent / "data" / "models.json"
-
-    if not models_json_path.exists():
-        print(f"Error: models.json not found at {models_json_path}")
-        sys.exit(1)
-
     # Database path
     db_path = Path(__file__).parent.parent / "stockula.db"
     engine = create_engine(f"sqlite:///{db_path}")
@@ -28,11 +21,11 @@ def main():
     # Create tables if they don't exist
     SQLModel.metadata.create_all(engine)
 
-    # Seed the database
+    # Seed the database directly from AutoTS
     with Session(engine) as session:
         repo = AutoTSRepository(session)
-        models_count, presets_count = repo.seed_from_json(models_json_path)
-        print(f"Successfully seeded {models_count} models and {presets_count} presets")
+        models_count, presets_count = repo.seed_from_autots()
+        print(f"Successfully seeded {models_count} models and {presets_count} presets from AutoTS")
 
         # Show some statistics
         print("\nDatabase contents:")

@@ -10,7 +10,7 @@
 ### Added
 
 - `AutoTSRepository` for managing AutoTS models and presets in the database
-- Database seeding from `data/models.json` when database is empty
+- Database seeding directly from AutoTS library when database is empty
 - Comprehensive test coverage for `autots_repository.py` (95% coverage)
 - Complete test coverage for `backtesting/registry.py` (100% coverage)
 - Complete test coverage for `config/exceptions.py` (100% coverage)

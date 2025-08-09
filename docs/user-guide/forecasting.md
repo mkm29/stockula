@@ -78,8 +78,8 @@ Model validation is now managed through the database:
 - **AutoTSModel**: Database table storing valid model definitions
 - **AutoTSPreset**: Database table storing model presets (fast, financial, etc.)
 - **Dynamic Loading**: Models are loaded from the database on first use
-- **Automatic Seeding**: If the database is empty, models are loaded from `data/models.json`
-- **Self-Validation**: Models validate themselves when saved to the database
+- **Automatic Seeding**: If the database is empty, models are loaded directly from the AutoTS library
+- **Self-Validation**: Models validate themselves against AutoTS's authoritative model list
 
 ### Model Lists
 

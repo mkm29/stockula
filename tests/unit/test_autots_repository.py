@@ -1,6 +1,5 @@
 """Tests for AutoTS repository."""
 
-import json
 from unittest.mock import MagicMock
 
 import pytest
@@ -290,81 +289,73 @@ class TestAutoTSRepository:
         with pytest.raises(ValueError, match="contains invalid models"):
             repository.create_or_update_preset(preset_data)
 
-    def test_seed_from_json(self, repository, tmp_path):
-        """Test seeding database from JSON file."""
-        # Create a test JSON file
-        models_json = {
-            "all": ["ARIMA", "ETS", "VAR", "VECM"],
-            "univariate": ["ARIMA", "ETS"],
-            "multivariate": ["VAR", "VECM"],
-            "slow": ["VECM"],
-            "gpu": [],
-            "regressor": ["VAR"],
-            "fast": ["ARIMA", "ETS"],
-            "default": {"ARIMA": 0.5, "ETS": 0.3, "VAR": 0.2},
-            "probabilistic": ["ETS"],
-            "motifs": [],
-            "regressions": [],
-        }
+    def test_seed_from_autots(self, repository):
+        """Test seeding database from AutoTS library."""
+        # Seed the database directly from AutoTS
+        models_count, presets_count = repository.seed_from_autots()
 
-        json_path = tmp_path / "models.json"
-        with open(json_path, "w") as f:
-            json.dump(models_json, f)
+        # We should have at least the core models and presets
+        assert models_count >= 40  # AutoTS has around 49 models
+        assert presets_count >= 10  # AutoTS has various presets
 
-        # Seed the database
-        models_count, presets_count = repository.seed_from_json(json_path)
-
-        assert models_count == 4  # ARIMA, ETS, VAR, VECM
-        assert presets_count == 2  # fast, default (probabilistic is a category, not a preset)
-
-        # Verify models were created
+        # Verify key models were created
         all_models = repository.get_all_models()
-        assert len(all_models) == 4
+        assert len(all_models) >= 40
         model_names = {m.name for m in all_models}
-        assert model_names == {"ARIMA", "ETS", "VAR", "VECM"}
+        # Check for some core models
+        assert "ARIMA" in model_names
+        assert "ETS" in model_names
+        assert "VAR" in model_names
+        assert "VECM" in model_names
 
         # Verify model categories
         univariate_models = repository.get_models_by_category("univariate")
-        assert {m.name for m in univariate_models} == {"ARIMA", "ETS"}
+        assert len(univariate_models) > 0
+        univariate_names = {m.name for m in univariate_models}
+        # ARIMA and ETS should be in univariate
+        assert "ARIMA" in univariate_names or "ETS" in univariate_names
 
         # Verify presets were created
         all_presets = repository.get_all_presets()
-        assert len(all_presets) == 2  # Should match presets_count
+        assert len(all_presets) >= 10
         preset_names = {p.name for p in all_presets}
-        # Should include our test presets
+        # Should include core presets
         assert "fast" in preset_names
         assert "default" in preset_names
-        # Note: "probabilistic" is a category for models, not a preset
+        assert "superfast" in preset_names
 
         # Verify preset content
         fast_preset = repository.get_preset("fast")
-        assert fast_preset.model_list == ["ARIMA", "ETS"]
+        assert fast_preset is not None
+        assert len(fast_preset.model_list) > 0  # Should have models
 
         default_preset = repository.get_preset("default")
-        assert default_preset.model_list == {"ARIMA": 0.5, "ETS": 0.3, "VAR": 0.2}
+        assert default_preset is not None
+        assert len(default_preset.model_list) > 0  # Should have models
 
-    def test_seed_from_json_file_not_found(self, repository):
-        """Test seeding from non-existent JSON file."""
-        with pytest.raises(FileNotFoundError, match="Models JSON file not found"):
-            repository.seed_from_json("/nonexistent/path.json")
+    def test_seed_from_json_deprecated(self, repository, logger):
+        """Test that seed_from_json is deprecated and calls seed_from_autots."""
+        # The deprecated method should still work but warn
+        models_count, presets_count = repository.seed_from_json("/any/path.json")
 
-    def test_seed_from_json_with_logger(self, repository, tmp_path, logger):
+        # Should have seeded from AutoTS, not the file
+        assert models_count >= 40
+        assert presets_count >= 10
+
+        # Should have logged a deprecation warning
+        logger.warning.assert_called_once_with("seed_from_json is deprecated. Using seed_from_autots() instead.")
+
+    def test_seed_from_autots_with_logger(self, repository, logger):
         """Test that seeding logs the result."""
-        # Create a minimal JSON file
-        models_json = {
-            "all": ["ARIMA"],
-            "fast": ["ARIMA"],
-        }
+        # Seed the database from AutoTS
+        models_count, presets_count = repository.seed_from_autots()
 
-        json_path = tmp_path / "models.json"
-        with open(json_path, "w") as f:
-            json.dump(models_json, f)
-
-        # Seed the database
-        repository.seed_from_json(json_path)
-
-        # Verify logging
-        logger.info.assert_called_once_with("Seeded 1 models and 1 presets")
+        # Verify logging (should log the actual counts)
+        logger.info.assert_called_once()
+        call_args = logger.info.call_args[0][0]
+        assert "Seeded" in call_args
+        assert "models" in call_args
+        assert "presets" in call_args
 
     def test_validate_model_list_with_string_preset(self, repository, session):
         """Test validating a preset name."""

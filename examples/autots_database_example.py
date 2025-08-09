@@ -31,13 +31,11 @@ def main():
         print("=" * 60)
 
         # Ensure database is seeded
-        models_json_path = Path(__file__).parent.parent / "data" / "models.json"
-        if models_json_path.exists():
-            all_models = repo.get_all_models()
-            if not all_models:
-                print("\nSeeding database from models.json...")
-                models_count, presets_count = repo.seed_from_json(models_json_path)
-                print(f"Seeded {models_count} models and {presets_count} presets")
+        all_models = repo.get_all_models()
+        if not all_models:
+            print("\nSeeding database from AutoTS library...")
+            models_count, presets_count = repo.seed_from_autots()
+            print(f"Seeded {models_count} models and {presets_count} presets")
 
         # 1. Validate individual models directly using AutoTSModel
         print("\n1. Validating individual models:")

@@ -356,7 +356,7 @@ class AutoTSModel(SQLModel, table=True):
 
     @classmethod
     def load_valid_models(cls, force_reload: bool = False) -> None:
-        """Load valid models from models.json file.
+        """Load valid models from AutoTS library.
 
         Args:
             force_reload: Force reload even if already loaded
@@ -364,29 +364,20 @@ class AutoTSModel(SQLModel, table=True):
         if cls._valid_models is not None and not force_reload:
             return
 
-        from pathlib import Path
+        try:
+            # Get the authoritative model list from AutoTS itself
+            from autots.models.model_list import model_lists
 
-        # Try to load from models.json
-        models_json_path = Path(__file__).parent.parent.parent / "data" / "models.json"
-        if models_json_path.exists():
-            with open(models_json_path) as f:
-                data = json.load(f)
-
-            # Extract all unique models
-            all_models = set(data.get("all", []))
-            for preset_name, preset_data in data.items():
-                if preset_name == "all":
-                    continue
-                if isinstance(preset_data, list):
-                    all_models.update(preset_data)
-                elif isinstance(preset_data, dict):
-                    all_models.update(preset_data.keys())
+            # The model_lists is a dictionary of presets
+            # The 'all' preset contains all available models
+            all_models = set(model_lists.get("all", []))
 
             cls._valid_models = all_models
-            cls._models_data = data
-        else:
-            # Fallback to a comprehensive set of known valid models
-            # This list should match the models in data/models.json["all"]
+            cls._models_data = model_lists  # Store the full model_lists for reference
+
+        except ImportError:
+            # Fallback if AutoTS is not available (shouldn't happen in normal operation)
+            # Use a minimal set of known models
             cls._valid_models = {
                 "ARIMA",
                 "ETS",
@@ -394,7 +385,6 @@ class AutoTSModel(SQLModel, table=True):
                 "GluonTS",
                 "VAR",
                 "VECM",
-                "VARMAX",  # Added missing model
                 "Theta",
                 "UnivariateMotif",
                 "MultivariateMotif",
@@ -414,29 +404,6 @@ class AutoTSModel(SQLModel, table=True):
                 "MultivariateRegression",
                 "ARDL",
                 "NeuralProphet",
-                "ARCH",
-                "RRVAR",
-                "MAR",
-                "TMF",
-                "LATC",
-                "KalmanStateSpace",
-                "MetricMotif",
-                "Cassandra",
-                "SeasonalityMotif",
-                "MLEnsemble",
-                "PreprocessingRegression",
-                "FFT",
-                "DMD",
-                "BasicLinearModel",
-                "TVVAR",
-                "MotifSimulation",
-                "SectionalMotif",
-                "DynamicFactorMQ",
-                "PytorchForecasting",
-                "BallTreeMultivariateMotif",
-                "TiDE",
-                "NeuralForecast",
-                "BallTreeRegressionMotif",
             }
             cls._models_data = {}
 
@@ -522,7 +489,7 @@ class AutoTSPreset(SQLModel, table=True):
 
     @classmethod
     def load_valid_presets(cls, force_reload: bool = False) -> None:
-        """Load valid presets from models.json file.
+        """Load valid presets from AutoTS library.
 
         Args:
             force_reload: Force reload even if already loaded
@@ -530,22 +497,13 @@ class AutoTSPreset(SQLModel, table=True):
         if cls._valid_presets is not None and not force_reload:
             return
 
-        from pathlib import Path
+        try:
+            # Get presets directly from AutoTS
+            from autots.models.model_list import model_lists
 
-        # Try to load from models.json
-        models_json_path = Path(__file__).parent.parent.parent / "data" / "models.json"
-        if models_json_path.exists():
-            with open(models_json_path) as f:
-                data = json.load(f)
-
-            # Extract preset names (excluding special ones)
-            presets = set()
-            for key in data.keys():
-                if key != "all" and not key.startswith("all_") and not key.startswith("no_"):
-                    presets.add(key)
-
-            cls._valid_presets = presets
-        else:
+            # All keys in model_lists are valid presets
+            cls._valid_presets = set(model_lists.keys())
+        except ImportError:
             # Fallback to known AutoTS presets
             cls._valid_presets = {
                 "fast",
@@ -563,6 +521,9 @@ class AutoTSPreset(SQLModel, table=True):
                 "regressor",
                 "motifs",
                 "regressions",
+                "all",
+                "no_shared",
+                "experimental",
             }
 
     @classmethod
@@ -576,26 +537,7 @@ class AutoTSPreset(SQLModel, table=True):
             True if preset is valid, False otherwise
         """
         cls.load_valid_presets()
-        # Check both our presets and AutoTS built-in presets
-        autots_builtins = {
-            "fast",
-            "superfast",
-            "default",
-            "parallel",
-            "fast_parallel",
-            "scalable",
-            "probabilistic",
-            "multivariate",
-            "univariate",
-            "all",
-            "no_shared",
-            "motifs",
-            "regressor",
-            "best",
-            "slow",
-            "gpu",
-        }
-        return name in (cls._valid_presets or set()) or name in autots_builtins
+        return name in (cls._valid_presets or set())
 
     def validate(self) -> None:
         """Validate the preset before saving.
