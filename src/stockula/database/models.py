@@ -385,7 +385,8 @@ class AutoTSModel(SQLModel, table=True):
             cls._valid_models = all_models
             cls._models_data = data
         else:
-            # Fallback to a minimal set of known valid models
+            # Fallback to a comprehensive set of known valid models
+            # This list should match the models in data/models.json["all"]
             cls._valid_models = {
                 "ARIMA",
                 "ETS",
@@ -393,6 +394,7 @@ class AutoTSModel(SQLModel, table=True):
                 "GluonTS",
                 "VAR",
                 "VECM",
+                "VARMAX",  # Added missing model
                 "Theta",
                 "UnivariateMotif",
                 "MultivariateMotif",
@@ -402,6 +404,39 @@ class AutoTSModel(SQLModel, table=True):
                 "SeasonalNaive",
                 "GLM",
                 "GLS",
+                "RollingRegression",
+                "UnobservedComponents",
+                "DynamicFactor",
+                "WindowRegression",
+                "DatepartRegression",
+                "UnivariateRegression",
+                "NVAR",
+                "MultivariateRegression",
+                "ARDL",
+                "NeuralProphet",
+                "ARCH",
+                "RRVAR",
+                "MAR",
+                "TMF",
+                "LATC",
+                "KalmanStateSpace",
+                "MetricMotif",
+                "Cassandra",
+                "SeasonalityMotif",
+                "MLEnsemble",
+                "PreprocessingRegression",
+                "FFT",
+                "DMD",
+                "BasicLinearModel",
+                "TVVAR",
+                "MotifSimulation",
+                "SectionalMotif",
+                "DynamicFactorMQ",
+                "PytorchForecasting",
+                "BallTreeMultivariateMotif",
+                "TiDE",
+                "NeuralForecast",
+                "BallTreeRegressionMotif",
             }
             cls._models_data = {}
 

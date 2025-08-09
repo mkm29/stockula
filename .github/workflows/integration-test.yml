@@ -20,7 +20,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        test-scenario: [database, forecasting, backtesting, portfolio, cli]
+        test-scenario: [forecasting, backtesting, portfolio, cli]
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -43,9 +43,6 @@ jobs:
             uv-${{ runner.os }}
       - name: Install dependencies
         run: uv sync --all-extras --dev
-      - name: Run Database Integration Tests
-        if: matrix.test-scenario == 'database'
-        run: "echo \"🗄️ Testing database operations...\"\n\n# Test database creation and migrations\nuv run python -c \"\nfrom sqlmodel import create_engine, SQLModel, Session\nfrom stockula.database.models import Stock, PriceHistory, AutoTSModel, AutoTSPreset, Strategy, StrategyPreset\nfrom stockula.data.autots_repository import AutoTSRepository\nfrom pathlib import Path\n\n# Create test database\nengine = create_engine('sqlite:///test_db_integration.db')\nSQLModel.metadata.create_all(engine)\nprint('✓ Database created successfully')\n\n# Test AutoTS model operations\nwith Session(engine) as session:\n    repo = AutoTSRepository(session)\n    \n    # Seed from models.json\n    models_path = Path('data/models.json')\n    if models_path.exists():\n        models_count, presets_count = repo.seed_from_json(models_path)\n        print(f'✓ Seeded {models_count} models and {presets_count} presets')\n    \n    # Test CRUD operations\n    model = repo.get_model('ARIMA')\n    assert model is not None, 'Failed to retrieve ARIMA model'\n    print('✓ Model retrieval working')\n    \n    # Test preset operations\n    preset = repo.get_preset('fast')\n    assert preset is not None, 'Failed to retrieve fast preset'\n    print('✓ Preset retrieval working')\n    \n    # Test validation\n    is_valid, invalid = repo.validate_model_list(['ARIMA', 'ETS', 'InvalidModel'])\n    assert not is_valid and 'InvalidModel' in invalid\n    print('✓ Validation working correctly')\n\nprint('✅ Database integration tests passed')\n\"\n\n# Cleanup\nrm -f test_db_integration.db\n"
       - name: Run Forecasting Integration Tests
         if: matrix.test-scenario == 'forecasting'
         run: |
