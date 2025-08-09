@@ -223,7 +223,7 @@ class TestRunStockula:
 
     def test_run_stockula_save_config(self, tmp_path, mock_container):
         """Test saving configuration."""
-        config_path = str(tmp_path / "saved_config.yaml")
+        config_path = str(tmp_path / "saved_.stockula.yaml")
 
         with patch("stockula.cli.create_container", return_value=mock_container):
             with patch("stockula.cli.save_config") as mock_save:

@@ -1,0 +1,347 @@
+---
+name: Integration Tests
+on:
+  workflow_dispatch:  # Allow manual triggering
+  schedule:
+    - cron: '0 0 * * 0'  # Run weekly on Sunday at midnight
+  pull_request:
+    paths:
+      - 'src/stockula/database/**'
+      - 'src/stockula/data/**'
+      - 'src/stockula/forecasting/**'
+      - 'tests/integration/**'
+      - 'models.json'
+env:
+  UV_CACHE_DIR: /tmp/.uv-cache
+  PYTHONWARNINGS: ignore
+  STOCKULA_LOG_LEVEL: WARNING
+jobs:
+  integration-suite:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        test-scenario: [database, forecasting, backtesting, portfolio, cli]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
+      - name: Restore uv cache
+        uses: actions/cache@v4
+        with:
+          path: /tmp/.uv-cache
+          key: uv-${{ runner.os }}-${{ hashFiles('uv.lock') }}
+          restore-keys: |
+            uv-${{ runner.os }}-${{ hashFiles('uv.lock') }}
+            uv-${{ runner.os }}
+      - name: Install dependencies
+        run: uv sync --all-extras --dev
+      - name: Run Database Integration Tests
+        if: matrix.test-scenario == 'database'
+        run: "echo \"🗄️ Testing database operations...\"\n\n# Test database creation and migrations\nuv run python -c \"\nfrom sqlmodel import create_engine, SQLModel, Session\nfrom stockula.database.models import Stock, PriceHistory, AutoTSModel, AutoTSPreset, Strategy, StrategyPreset\nfrom stockula.data.autots_repository import AutoTSRepository\nfrom pathlib import Path\n\n# Create test database\nengine = create_engine('sqlite:///test_db_integration.db')\nSQLModel.metadata.create_all(engine)\nprint('✓ Database created successfully')\n\n# Test AutoTS model operations\nwith Session(engine) as session:\n    repo = AutoTSRepository(session)\n    \n    # Seed from models.json\n    models_path = Path('data/models.json')\n    if models_path.exists():\n        models_count, presets_count = repo.seed_from_json(models_path)\n        print(f'✓ Seeded {models_count} models and {presets_count} presets')\n    \n    # Test CRUD operations\n    model = repo.get_model('ARIMA')\n    assert model is not None, 'Failed to retrieve ARIMA model'\n    print('✓ Model retrieval working')\n    \n    # Test preset operations\n    preset = repo.get_preset('fast')\n    assert preset is not None, 'Failed to retrieve fast preset'\n    print('✓ Preset retrieval working')\n    \n    # Test validation\n    is_valid, invalid = repo.validate_model_list(['ARIMA', 'ETS', 'InvalidModel'])\n    assert not is_valid and 'InvalidModel' in invalid\n    print('✓ Validation working correctly')\n\nprint('✅ Database integration tests passed')\n\"\n\n# Cleanup\nrm -f test_db_integration.db\n"
+      - name: Run Forecasting Integration Tests
+        if: matrix.test-scenario == 'forecasting'
+        run: |
+          echo "🔮 Testing forecasting operations..."
+
+          # Test forecasting with database integration
+          uv run python -c "
+          from stockula.container import Container
+          from stockula.database.models import AutoTSModel
+          from sqlmodel import create_engine, SQLModel
+          import warnings
+          warnings.filterwarnings('ignore')
+
+          # Setup database
+          engine = create_engine('sqlite:///test_forecast_integration.db')
+          SQLModel.metadata.create_all(engine)
+
+          # Initialize container
+          container = Container()
+          container.config.database.url.override('sqlite:///test_forecast_integration.db')
+
+          # Test model validation
+          assert AutoTSModel.is_valid_model('ARIMA'), 'ARIMA should be valid'
+          assert not AutoTSModel.is_valid_model('InvalidModel'), 'InvalidModel should be invalid'
+          print('✓ Model validation working')
+
+          # Test forecasting manager
+          forecasting_manager = container.forecasting_manager()
+          assert forecasting_manager is not None, 'Failed to create forecasting manager'
+          print('✓ Forecasting manager created')
+
+          print('✅ Forecasting integration tests passed')
+          "
+
+          # Cleanup
+          rm -f test_forecast_integration.db
+      - name: Run Backtesting Integration Tests
+        if: matrix.test-scenario == 'backtesting'
+        run: |
+          echo "📊 Testing backtesting operations..."
+
+          # Test backtesting with strategy registry
+          uv run python -c "
+          from stockula.backtesting.registry import StrategyRegistry
+          from stockula.backtesting.strategies import BaseStrategy
+          import warnings
+          warnings.filterwarnings('ignore')
+
+          # Test strategy registry
+          strategy_class = StrategyRegistry.get_strategy_class('SMACross')
+          assert strategy_class is not None, 'Failed to get SMACross strategy'
+          assert issubclass(strategy_class, BaseStrategy), 'Strategy should inherit from BaseStrategy'
+          print('✓ Strategy registry working')
+
+          # Test strategy validation
+          is_valid = StrategyRegistry.is_valid_strategy('RSI')
+          assert is_valid, 'RSI should be a valid strategy'
+          print('✓ Strategy validation working')
+
+          # Test strategy groups
+          strategies = StrategyRegistry.get_strategies_in_group('basic')
+          assert 'smacross' in strategies, 'SMACross should be in basic group'
+          assert 'rsi' in strategies, 'RSI should be in basic group'
+          print('✓ Strategy groups working')
+
+          # Test presets
+          preset = StrategyRegistry.get_strategy_preset('RSI')
+          assert 'period' in preset, 'RSI preset should have period parameter'
+          assert preset['period'] == 14, 'RSI period should be 14'
+          print('✓ Strategy presets working')
+
+          print('✅ Backtesting integration tests passed')
+          "
+      - name: Run Portfolio Integration Tests
+        if: matrix.test-scenario == 'portfolio'
+        run: |
+          echo "💼 Testing portfolio operations..."
+
+          # Test portfolio with database
+          uv run python -c "
+          from stockula.domain.factory import DomainFactory
+          from stockula.config.models import Config, PortfolioConfig, DataConfig
+          from datetime import date
+          import warnings
+          warnings.filterwarnings('ignore')
+
+          # Create test configuration
+          config = Config(
+              portfolio=PortfolioConfig(
+                  initial_capital=100000,
+                  allocation_method='equal_weight',
+                  tickers=[
+                      {'symbol': 'AAPL', 'quantity': 10},
+                      {'symbol': 'GOOGL', 'quantity': 5}
+                  ]
+              ),
+              data=DataConfig(
+                  start_date=date(2024, 1, 1),
+                  end_date=date(2024, 12, 31)
+              )
+          )
+
+          # Create portfolio
+          factory = DomainFactory(config)
+          portfolio = factory.create_portfolio()
+          assert portfolio is not None, 'Failed to create portfolio'
+          assert len(portfolio.assets) == 2, 'Portfolio should have 2 assets'
+          print('✓ Portfolio creation working')
+
+          # Test asset properties
+          apple = next((a for a in portfolio.assets if a.ticker == 'AAPL'), None)
+          assert apple is not None, 'AAPL asset not found'
+          assert apple.quantity == 10, 'AAPL quantity should be 10'
+          print('✓ Asset creation working')
+
+          print('✅ Portfolio integration tests passed')
+          "
+      - name: Run CLI Integration Tests
+        if: matrix.test-scenario == 'cli'
+        run: |
+          echo "🖥️ Testing CLI operations..."
+
+          # Test CLI help
+          uv run python -m stockula --help > /dev/null
+          echo "✓ CLI help working"
+
+          # Test configuration validation
+          cat > test_.stockula.yaml << EOF
+          data:
+            start_date: "2024-01-01"
+            end_date: "2024-12-31"
+          portfolio:
+            initial_capital: 100000
+            allocation_method: equal_weight
+            tickers:
+              - symbol: AAPL
+                quantity: 10
+          EOF
+
+          # Validate configuration loads correctly
+          uv run python -c "
+          from stockula.config.settings import load_config
+          config = load_config('test_.stockula.yaml')
+          assert config.portfolio.initial_capital == 100000
+          assert len(config.portfolio.tickers) == 1
+          print('✓ Configuration loading working')
+          "
+
+          # Cleanup
+          rm -f test_.stockula.yaml
+
+          echo "✅ CLI integration tests passed"
+      - name: Minimize uv cache
+        run: uv cache prune --ci
+  end-to-end:
+    runs-on: ubuntu-latest
+    needs: integration-suite
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
+      - name: Restore uv cache
+        uses: actions/cache@v4
+        with:
+          path: /tmp/.uv-cache
+          key: uv-${{ runner.os }}-${{ hashFiles('uv.lock') }}
+          restore-keys: |
+            uv-${{ runner.os }}-${{ hashFiles('uv.lock') }}
+            uv-${{ runner.os }}
+      - name: Install dependencies
+        run: uv sync --all-extras --dev
+      - name: Run End-to-End Test
+        run: |
+          echo "🚀 Running end-to-end test..."
+
+          # Create a complete configuration
+          cat > e2e_.stockula.yaml << EOF
+          data:
+            start_date: "2024-01-01"
+            end_date: "2024-03-31"
+            cache_dir: "./cache"
+
+          portfolio:
+            initial_capital: 100000
+            allocation_method: equal_weight
+            tickers:
+              - symbol: AAPL
+                quantity: 100
+              - symbol: MSFT
+                quantity: 50
+
+          technical_analysis:
+            indicators:
+              - RSI
+              - MACD
+              - SMA
+
+          backtesting:
+            strategies:
+              - SMACross
+              - RSI
+            commission: 0.001
+            cash: 100000
+
+          forecast:
+            model_list: "fast"
+            forecast_length: 7
+            prediction_interval: 0.95
+          EOF
+
+          # Run complete workflow test
+          uv run python -c "
+          from stockula.container import Container
+          from stockula.config.settings import load_config
+          from stockula.domain.factory import DomainFactory
+          import warnings
+          warnings.filterwarnings('ignore')
+
+          # Load configuration
+          config = load_config('e2e_.stockula.yaml')
+          print('✓ Configuration loaded')
+
+          # Initialize container
+          container = Container()
+          container.config.from_dict(config.model_dump())
+          print('✓ Container initialized')
+
+          # Create portfolio
+          factory = DomainFactory(config)
+          portfolio = factory.create_portfolio()
+          assert len(portfolio.assets) == 2
+          print('✓ Portfolio created')
+
+          # Test managers
+          ta_manager = container.technical_analysis_manager()
+          assert ta_manager is not None
+          print('✓ Technical Analysis Manager ready')
+
+          bt_manager = container.backtesting_manager()
+          assert bt_manager is not None
+          print('✓ Backtesting Manager ready')
+
+          fc_manager = container.forecasting_manager()
+          assert fc_manager is not None
+          print('✓ Forecasting Manager ready')
+
+          # Test database
+          db_manager = container.database_manager()
+          assert db_manager is not None
+          print('✓ Database Manager ready')
+
+          print('✅ End-to-end test completed successfully!')
+          "
+
+          # Cleanup
+          rm -f e2e_.stockula.yaml
+          rm -rf cache
+          rm -f *.db
+      - name: Minimize uv cache
+        run: uv cache prune --ci
+  integration-report:
+    runs-on: ubuntu-latest
+    needs: [integration-suite, end-to-end]
+    if: always()
+    steps:
+      - name: Integration Test Summary
+        run: |-
+          echo "📋 Integration Test Results"
+          echo "=========================="
+
+          if [[ "${{ needs.integration-suite.result }}" == "success" ]]; then
+            echo "✅ Integration Suite: PASSED"
+          else
+            echo "❌ Integration Suite: FAILED"
+          fi
+
+          if [[ "${{ needs.end-to-end.result }}" == "success" ]]; then
+            echo "✅ End-to-End Test: PASSED"
+          else
+            echo "❌ End-to-End Test: FAILED"
+          fi
+
+          if [[ "${{ needs.integration-suite.result }}" == "success" && "${{ needs.end-to-end.result }}" == "success" ]]; then
+            echo ""
+            echo "🎉 All integration tests passed!"
+            exit 0
+          else
+            echo ""
+            echo "⚠️ Some integration tests failed. Please review the logs."
+            exit 1
+          fi

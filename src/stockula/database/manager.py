@@ -14,15 +14,7 @@ from sqlmodel import Session, SQLModel, create_engine, select
 from alembic import command  # type: ignore[attr-defined]
 from alembic.config import Config
 
-from .models import (
-    Dividend,
-    OptionsCall,
-    OptionsPut,
-    PriceHistory,
-    Split,
-    Stock,
-    StockInfo,
-)
+from .models import Dividend, OptionsCall, OptionsPut, PriceHistory, Split, Stock, StockInfo
 
 
 class DatabaseManager:

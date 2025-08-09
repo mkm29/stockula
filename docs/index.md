@@ -51,14 +51,14 @@ A comprehensive Python trading platform that provides tools for technical analys
 
    ```bash
    # Simple ticker analysis
-   uv run python -m stockula.main --ticker AAPL
+   uv run python -m stockula --ticker AAPL
 
    # Use configuration file
-   uv run python -m stockula.main --config examples/config.simple.yaml
+   uv run python -m stockula --config examples/config.simple.yaml
 
    # Run specific modes
-   uv run python -m stockula.main --ticker GOOGL --mode backtest
-   uv run python -m stockula.main --ticker MSFT --mode forecast
+   uv run python -m stockula --ticker GOOGL --mode backtest
+   uv run python -m stockula --ticker MSFT --mode forecast
    ```
 
 ## Next Steps

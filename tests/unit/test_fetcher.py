@@ -202,9 +202,15 @@ class TestDataFetcherRealtimePrice:
 
         with patch("yfinance.Ticker", return_value=mock_ticker):
             fetcher = DataFetcher(use_cache=False, logging_manager=mock_logging_manager)
-            # Exception should propagate
-            with pytest.raises(Exception, match="API error"):
+            # Should raise APIException now
+            from stockula.config import APIException
+
+            with pytest.raises(APIException) as exc_info:
                 fetcher.get_realtime_price("TEST")
+
+            # Verify the exception attributes
+            assert exc_info.value.symbol == "TEST"
+            assert "yfinance API failed" in str(exc_info.value)
 
 
 class TestDataFetcherInfo:
@@ -561,17 +567,16 @@ class TestDataFetcherErrorHandling:
 
         with patch("stockula.data.fetcher.DatabaseManager", return_value=mock_db):
             with patch("yfinance.Ticker", return_value=mock_ticker):
-                with patch("builtins.print") as mock_print:
-                    fetcher = DataFetcher(use_cache=True, logging_manager=mock_logging_manager)
-                    data = fetcher.get_stock_data("TEST")
+                fetcher = DataFetcher(use_cache=True, logging_manager=mock_logging_manager)
+                data = fetcher.get_stock_data("TEST")
 
-                    # Should print database error message
-                    mock_print.assert_called_with(
-                        "Database error, falling back to yfinance: Database connection failed"
-                    )
-                    # Should still return data from yfinance
-                    assert not data.empty
-                    assert len(data) == 1
+                # Should log database error message with logger.warning
+                mock_logging_manager.warning.assert_called_with(
+                    "Database error, falling back to yfinance: Database connection failed"
+                )
+                # Should still return data from yfinance
+                assert not data.empty
+                assert len(data) == 1
 
     def test_get_multiple_stocks_with_errors(self, mock_logging_manager):
         """Test get_multiple_stocks with individual stock errors - covers lines 123-124."""
@@ -589,17 +594,16 @@ class TestDataFetcherErrorHandling:
 
             mock_yf.side_effect = side_effect
 
-            with patch("builtins.print") as mock_print:
-                fetcher = DataFetcher(use_cache=False, logging_manager=mock_logging_manager)
-                results = fetcher.get_multiple_stocks(["AAPL", "INVALID", "GOOGL"])
+            fetcher = DataFetcher(use_cache=False, logging_manager=mock_logging_manager)
 
-                # Should print error for invalid symbol
-                mock_print.assert_called_with("Error fetching data for INVALID: Error fetching data for INVALID")
-                # Should return data for valid symbols only
-                assert len(results) == 2
-                assert "AAPL" in results
-                assert "GOOGL" in results
-                assert "INVALID" not in results
+            # The exception should be raised (converted to APIException)
+            from stockula.config import APIException
+
+            with pytest.raises(APIException) as exc_info:
+                fetcher.get_multiple_stocks(["AAPL", "INVALID", "GOOGL"])
+
+            # Verify the exception details
+            assert exc_info.value.symbol == "INVALID"
 
 
 class TestDataFetcherCurrentPrices:
@@ -649,12 +653,12 @@ class TestDataFetcherCurrentPrices:
         mock_ticker.history.side_effect = Exception("API error")
 
         with patch("yfinance.Ticker", return_value=mock_ticker):
-            with patch("stockula.data.fetcher.console.print") as mock_console_print:
-                fetcher = DataFetcher(use_cache=False, logging_manager=mock_logging_manager)
-                prices = fetcher.get_current_prices(["TEST"], show_progress=False)
+            fetcher = DataFetcher(use_cache=False, logging_manager=mock_logging_manager)
+            prices = fetcher.get_current_prices(["TEST"], show_progress=False)
 
-                mock_console_print.assert_called_with("[red]Error fetching price for TEST: API error[/red]")
-                assert prices == {}
+            # The error is logged with logger.error, not console.print
+            mock_logging_manager.error.assert_called_with("Error fetching price for TEST: API error")
+            assert prices == {}
 
     def test_get_current_prices_single_string_input(self, mock_logging_manager):
         """Test single string input conversion - covers lines 138-139."""
@@ -1148,13 +1152,13 @@ class TestDataFetcherProgressBars:
         mock_ticker.history.side_effect = Exception("API error")
 
         with patch("yfinance.Ticker", return_value=mock_ticker):
-            with patch("stockula.data.fetcher.console.print") as mock_console_print:
-                fetcher = DataFetcher(use_cache=False, logging_manager=mock_logging_manager)
-                prices = fetcher.get_current_prices(["TEST1", "TEST2"], show_progress=True)
+            fetcher = DataFetcher(use_cache=False, logging_manager=mock_logging_manager)
+            prices = fetcher.get_current_prices(["TEST1", "TEST2"], show_progress=True)
 
-                mock_console_print.assert_any_call("[red]Error fetching price for TEST1: API error[/red]")
-                mock_console_print.assert_any_call("[red]Error fetching price for TEST2: API error[/red]")
-                assert prices == {}
+            # Errors are logged with logger.error, not console.print
+            mock_logging_manager.error.assert_any_call("Error fetching price for TEST1: API error")
+            mock_logging_manager.error.assert_any_call("Error fetching price for TEST2: API error")
+            assert prices == {}
 
 
 class TestDataFetcherBatchOperations:

@@ -556,9 +556,9 @@ class TestSettingsModule:
         # Change to temp directory
         monkeypatch.chdir(tmp_path)
 
-        # Create a .config.yaml file
+        # Create a .stockula.yaml file
         config_data = {"portfolio": {"name": "Default Config Portfolio"}}
-        config_file = tmp_path / ".config.yaml"
+        config_file = tmp_path / ".stockula.yaml"
         with open(config_file, "w") as f:
             yaml.dump(config_data, f)
 

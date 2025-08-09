@@ -572,7 +572,7 @@ def temp_config_file(tmp_path, sample_stockula_config):
     """Create a temporary config file."""
     import yaml
 
-    config_path = tmp_path / "test_config.yaml"
+    config_path = tmp_path / "test_.stockula.yaml"
 
     config_dict = sample_stockula_config.model_dump()
     # Convert dates to strings for YAML serialization
@@ -590,7 +590,7 @@ def temp_config_file(tmp_path, sample_stockula_config):
 @pytest.fixture(scope="function")
 def mock_env_variables(monkeypatch):
     """Set up mock environment variables."""
-    monkeypatch.setenv("STOCKULA_CONFIG_FILE", "test_config.yaml")
+    monkeypatch.setenv("STOCKULA_CONFIG_FILE", "test_.stockula.yaml")
     monkeypatch.setenv("STOCKULA_DEBUG", "true")
     monkeypatch.setenv("STOCKULA_LOG_LEVEL", "DEBUG")
 

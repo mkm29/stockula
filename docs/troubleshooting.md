@@ -86,7 +86,7 @@ python 3.13+ is required
 **Issue**:
 
 ```
-FileNotFoundError: .config.yaml not found
+FileNotFoundError: .stockula.yaml not found
 ```
 
 **Solutions**:
@@ -94,19 +94,19 @@ FileNotFoundError: .config.yaml not found
 1. Create a basic configuration file:
 
    ```bash
-   cp examples/config.simple.yaml .config.yaml
+   cp examples/config.simple.yaml .stockula.yaml
    ```
 
 1. Specify configuration explicitly:
 
    ```bash
-   uv run python -m stockula.main --config examples/config.full.yaml
+   uv run python -m stockula --config examples/config.full.yaml
    ```
 
 1. Use command line mode:
 
    ```bash
-   uv run python -m stockula.main --ticker AAPL
+   uv run python -m stockula --ticker AAPL
    ```
 
 ### Invalid Configuration Format
@@ -411,7 +411,7 @@ ModuleNotFoundError: No module named 'stockula'
 **Solution**: Ensure you're using `uv run` prefix:
 
 ```bash
-uv run python -m stockula.main --ticker AAPL
+uv run python -m stockula --ticker AAPL
 ```
 
 ### "Permission denied"
@@ -492,10 +492,10 @@ Try the provided examples to isolate issues:
 
 ```bash
 # Test with simple configuration
-uv run python -m stockula.main --config examples/config.simple.yaml
+uv run python -m stockula --config examples/config.simple.yaml
 
 # Test single ticker mode
-uv run python -m stockula.main --ticker AAPL --mode ta
+uv run python -m stockula --ticker AAPL --mode ta
 ```
 
 ### Database Diagnostics

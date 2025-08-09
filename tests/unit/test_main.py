@@ -539,7 +539,9 @@ class TestMainFunction:
             "initial_capital": 100000.0,
         }
 
-        main()
+        with pytest.raises(SystemExit) as exc_info:
+            main()
+        assert exc_info.value.code == 0
 
         mock_run_main.assert_called_once()
         mock_print.assert_called_once()
@@ -574,7 +576,9 @@ class TestMainFunction:
             "initial_capital": 100000.0,
         }
 
-        main()
+        with pytest.raises(SystemExit) as exc_info:
+            main()
+        assert exc_info.value.code == 0
 
         mock_run_main.assert_called_once()
         mock_print.assert_called_once()
@@ -589,7 +593,9 @@ class TestMainFunction:
         mock_container.return_value = container
 
         with patch("stockula.cli.save_config") as mock_save:
-            main()
+            with pytest.raises(SystemExit) as exc_info:
+                main()
+            assert exc_info.value.code == 0
             mock_save.assert_called_once()
 
     @patch("stockula.cli.create_container")
@@ -632,7 +638,9 @@ class TestMainFunction:
         # Mock datetime for consistent behavior
         with patch("stockula.cli.datetime") as mock_datetime:
             mock_datetime.now.return_value.strftime.return_value = "20240115_120000"
-            main()
+            with pytest.raises(SystemExit) as exc_info:
+                main()
+            assert exc_info.value.code == 0
 
         # Verify the main function ran successfully
         mock_ta.assert_called_once()
@@ -760,6 +768,9 @@ class TestMainEntryPoint:
     def test_main_entry_point_if_name_main(self):
         """Test the if __name__ == '__main__' entry point."""
         with patch("stockula.main.main") as mock_main:
+            # Configure mock to raise SystemExit(0) when called
+            mock_main.side_effect = SystemExit(0)
+
             import stockula.main as main_module
 
             # Save original __name__
@@ -771,7 +782,9 @@ class TestMainEntryPoint:
 
                 # Execute just the if condition block
                 if main_module.__name__ == "__main__":
-                    main_module.main()
+                    with pytest.raises(SystemExit) as exc_info:
+                        main_module.main()
+                    assert exc_info.value.code == 0
 
                 # Verify main was called
                 mock_main.assert_called_once()
@@ -1227,7 +1240,9 @@ class TestMainFunctionAdvanced:
         mock_container.return_value = container
 
         with patch("stockula.cli.print_results"):
-            main()
+            with pytest.raises(SystemExit) as exc_info:
+                main()
+            assert exc_info.value.code == 0
 
         # Check that dates were overridden
         assert config.forecast.train_start_date == date(2023, 1, 1)
@@ -1314,7 +1329,9 @@ class TestMainFunctionAdvanced:
         mock_strategy = Mock()
         mock_get_strategy.return_value = mock_strategy
 
-        main()
+        with pytest.raises(SystemExit) as exc_info:
+            main()
+        assert exc_info.value.code == 0
 
         # Should run TA on both assets
         assert mock_ta.call_count == 2
@@ -1400,7 +1417,9 @@ class TestMainFunctionAdvanced:
         }
 
         with patch("stockula.cli.console") as mock_console:
-            main()
+            with pytest.raises(SystemExit) as exc_info:
+                main()
+            assert exc_info.value.code == 0
 
             # Check that portfolio value table was printed
             # Look for Table objects in print calls
@@ -1461,7 +1480,9 @@ class TestMainFunctionAdvanced:
         with patch("stockula.manager.StockulaManager.run_backtest") as mock_backtest:
             mock_backtest.return_value = []
             with patch("stockula.cli.print_results"):
-                main()
+                with pytest.raises(SystemExit) as exc_info:
+                    main()
+            assert exc_info.value.code == 0
 
         # Check that fetcher was called to get start prices
         assert mock_fetcher.get_stock_data.call_count >= 1
@@ -1574,7 +1595,9 @@ class TestMainFunctionAdvanced:
         mock_save_report.return_value = "results/reports/strategy_report_SMACross_20240101_120000.json"
 
         with patch("stockula.cli.console") as mock_console:
-            main()
+            with pytest.raises(SystemExit) as exc_info:
+                main()
+            assert exc_info.value.code == 0
 
             # Check that strategy summary panel was printed
             panel_calls = [call for call in mock_console.print.call_args_list if "Panel" in str(call)]
@@ -1692,7 +1715,9 @@ class TestMainHoldingsDisplay:
             mock_ta.return_value = {"ticker": "AAPL", "indicators": {}}
             with patch("stockula.cli.print_results"):
                 with patch("stockula.cli.console") as mock_console:
-                    main()
+                    with pytest.raises(SystemExit) as exc_info:
+                        main()
+                    assert exc_info.value.code == 0
 
                     # Check that holdings table was printed with "N/A" for category
                     table_calls = [
@@ -1747,7 +1772,9 @@ class TestMainErrorHandling:
 
         mock_ta.return_value = {"ticker": "AAPL", "indicators": {"SMA_20": 150.0}}
 
-        main()
+        with pytest.raises(SystemExit) as exc_info:
+            main()
+        assert exc_info.value.code == 0
 
         # Should call TA without progress since it's the only operation
         mock_ta.assert_called_once()
@@ -1829,7 +1856,9 @@ class TestMainErrorHandling:
             "initial_capital": 100000.0,
         }
 
-        main()
+        with pytest.raises(SystemExit) as exc_info:
+            main()
+        assert exc_info.value.code == 0
 
         # Test that run_main_processing was called with correct arguments
         mock_run_main.assert_called_once()
@@ -1904,7 +1933,9 @@ class TestMainErrorHandling:
             "initial_capital": 100000.0,
         }
 
-        main()
+        with pytest.raises(SystemExit) as exc_info:
+            main()
+        assert exc_info.value.code == 0
 
         # Test that run_main_processing was called
         mock_run_main.assert_called_once()

@@ -1,28 +1,12 @@
-"""Stockula - Financial trading and analysis library"""
+"""Stockula - Financial trading and analysis library.
 
-# All module-level imports must be at the top
-import logging
-import os
-import warnings
-
-# Configure logging
-logging.getLogger("alembic.runtime.migration").setLevel(logging.WARNING)
-logging.getLogger("alembic").setLevel(logging.WARNING)
-
-# Configure warnings
-warnings.filterwarnings("ignore", category=UserWarning)
-
-# Configure environment
-os.environ["JOBLIB_TEMP_FOLDER"] = "/tmp"
+This package avoids global side effects on import (e.g., mutating logging,
+warnings, or environment variables). Runtime configuration is handled in
+`stockula.main.setup_logging` and the CLI entrypoint.
+"""
 
 # Package imports
-from .backtesting import (
-    BacktestRunner,
-    BaseStrategy,
-    MACDStrategy,
-    RSIStrategy,
-    SMACrossStrategy,
-)
+from .backtesting import BacktestRunner, BaseStrategy, MACDStrategy, RSIStrategy, SMACrossStrategy
 from .config import StockulaConfig, load_config
 from .data import DataFetcher
 from .display import ResultsDisplay

@@ -1,3 +1,4 @@
+---
 # Simple Stockula Configuration Example
 # All tickers must be defined as objects
 data:
