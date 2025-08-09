@@ -113,7 +113,11 @@ class Container(containers.DeclarativeContainer):
 
     # Domain factory - thread-safe singleton
     domain_factory = providers.ThreadSafeSingleton(
-        DomainFactory, config=stockula_config, fetcher=data_fetcher, allocator_manager=allocator_manager
+        DomainFactory,
+        config=stockula_config,
+        fetcher=data_fetcher,
+        allocator_manager=allocator_manager,
+        logging_manager=logging_manager,
     )
 
     # Stock forecaster

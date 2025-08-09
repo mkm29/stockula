@@ -33,14 +33,15 @@ jobs:
 
           case "$TARGET_BRANCH" in
             main)
-              # Only develop, hotfix/*, or release/* branches can merge to main
+              # Only develop, hotfix/*, fix/*, or release/* branches can merge to main
               if [[ "$SOURCE_BRANCH" == "develop" ]] || \
                  [[ "$SOURCE_BRANCH" == hotfix/* ]] || \
+                 [[ "$SOURCE_BRANCH" == fix/* ]] || \
                  [[ "$SOURCE_BRANCH" == release/* ]]; then
                 MESSAGE="✅ Valid: $SOURCE_BRANCH -> main"
               else
                 VALID=false
-                MESSAGE="❌ Invalid: Only 'develop', 'hotfix/*', or 'release/*' branches can merge to main"
+                MESSAGE="❌ Invalid: Only 'develop', 'hotfix/*', 'fix/*', or 'release/*' branches can merge to main"
               fi
               ;;
 
@@ -83,7 +84,8 @@ jobs:
 
             ### Git Flow Rules:
             - **Feature branches** (\`feature/*\`) → \`develop\`
-            - **Bugfix branches** (\`bugfix/*\`, \`fix/*\`) → \`develop\`
+            - **Bugfix branches** (\`bugfix/*\`) → \`develop\`
+            - **Fix branches** (\`fix/*\`) → \`main\` or \`develop\`
             - **Hotfix branches** (\`hotfix/*\`) → \`main\` (then backported to \`develop\`)
             - **Release branches** (\`release/*\`) → \`main\` and \`develop\`
             - **Develop branch** → \`main\` (for releases)

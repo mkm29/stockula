@@ -303,10 +303,7 @@
     "GluonTS",
     "RollingRegression",
     "VAR",
-    "TensorflowSTS",
-    "TFPRegression",
     "UnivariateRegression",
-    "Greykite",
     "UnivariateMotif",
     "MultivariateMotif",
     "NVAR",
@@ -345,10 +342,8 @@
     "FBProphet",
     "SeasonalNaive",
     "UnobservedComponents",
-    "TensorflowSTS",
     "GLS",
     "UnivariateRegression",
-    "Greykite",
     "UnivariateMotif",
     "Theta",
     "ARDL",
@@ -378,10 +373,7 @@
     "ARCH"
   ],
   "experimental": [
-    "MotifSimulation",
-    "TensorflowSTS",
-    "ComponentAnalysis",
-    "TFPRegression"
+    "MotifSimulation"
   ],
   "slow": [
     "PytorchForecasting",
