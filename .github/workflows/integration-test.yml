@@ -130,6 +130,7 @@ jobs:
 
           # Test portfolio with database
           uv run python -c "
+          from stockula.container import Container
           from stockula.domain.factory import DomainFactory
           from stockula.config.models import StockulaConfig, PortfolioConfig, DataConfig
           from datetime import date
@@ -152,8 +153,12 @@ jobs:
               )
           )
 
-          # Create portfolio
-          factory = DomainFactory(config)
+          # Initialize container for dependency injection
+          container = Container()
+          container.config.from_dict(config.model_dump())
+
+          # Create factory with proper dependencies
+          factory = container.domain_factory()
           portfolio = factory.create_portfolio(config)
           assert portfolio is not None, 'Failed to create portfolio'
           assert len(portfolio.assets) == 2, 'Portfolio should have 2 assets'
