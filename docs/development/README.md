@@ -24,6 +24,18 @@ Comprehensive guide for testing in Stockula, including testing strategy, best pr
 
 Detailed test coverage metrics, recent improvements, and important warnings about untested modules.
 
+### [YAML Formatting](yaml-formatting.md)
+
+Configuration and usage guide for YAML formatting with yamlfmt and yamllint validation.
+
+### [Docker Validation](docker-validation.md)
+
+Comprehensive Docker setup validation script for ensuring proper Docker configuration and functionality.
+
+### [Migration Guide: AutoTS Validator](migration-autots-validator.md)
+
+Guide for migrating from the old AutoTSModelValidator class to the new database-driven validation system.
+
 ## Quick Links
 
 - [Project README](../../README.md)

@@ -7,7 +7,7 @@ echo
 
 # Step 1: Run optimization to determine optimal quantities
 echo "Step 1: Running optimization to determine optimal quantities..."
-uv run python -m stockula.main \
+uv run python -m stockula \
     --config examples/config.backtest-optimized.yaml \
     --mode optimize-allocation \
     --save-optimized-config optimized-portfolio.yaml
@@ -21,7 +21,7 @@ fi
 echo
 echo "Step 2: Running backtest with optimized quantities..."
 # Step 2: Run backtest with the optimized configuration
-uv run python -m stockula.main \
+uv run python -m stockula \
     --config optimized-portfolio.yaml \
     --mode backtest
 

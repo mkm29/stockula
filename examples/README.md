@@ -74,11 +74,11 @@ Configuration for testing VIDYA strategy specifically.
 To use any of these example configurations:
 
 ```bash
-# Copy to root directory as .config.yaml
-cp examples/config.example.yaml .config.yaml
+# Copy to root directory as ..stockula.yaml
+cp examples/config.example.yaml ..stockula.yaml
 
 # Or run directly with --config flag
-uv run python -m stockula.main --config examples/config.full.yaml
+uv run python -m stockula --config examples/config.full.yaml
 ```
 
 ## Key Configuration Sections

@@ -158,7 +158,7 @@ class TestStockulaManager:
         mock_data_fetcher.get_current_prices.return_value = {"AAPL": 150.0}
         mock_container.data_fetcher.return_value = mock_data_fetcher
 
-        save_path = str(tmp_path / "optimized_config.yaml")
+        save_path = str(tmp_path / "optimized_.stockula.yaml")
 
         manager = StockulaManager(mock_config, mock_container)
         result = manager.run_optimize_allocation(save_path=save_path)
@@ -212,7 +212,7 @@ class TestStockulaManager:
 
         manager = StockulaManager(mock_config, mock_container)
         optimized_quantities = {"AAPL": 10.5}
-        save_path = str(tmp_path / "test_config.yaml")
+        save_path = str(tmp_path / "test_.stockula.yaml")
 
         manager._save_optimized_config(save_path, optimized_quantities)
 
@@ -236,7 +236,7 @@ class TestStockulaManager:
         numpy_quantity.item.return_value = 10.5
         optimized_quantities = {"AAPL": numpy_quantity}
 
-        save_path = str(tmp_path / "test_config.yaml")
+        save_path = str(tmp_path / "test_.stockula.yaml")
         manager._save_optimized_config(save_path, optimized_quantities)
 
         assert mock_config.portfolio.tickers[0].quantity == 10.5

@@ -123,7 +123,7 @@ docker run --rm \
   -v stockula-data:/app/data \
   -v stockula-results:/app/results \
   stockula:cli \
-  python -m stockula.main --config /app/config/config.example.yaml
+  python -m stockula --config /app/config/config.example.yaml
 ```
 
 ### 3. Jupyter Analysis Environment
@@ -491,7 +491,7 @@ For Docker-related issues:
 1. Check the troubleshooting section above
 1. Review Docker logs: `make logs`
 1. Verify image builds: `make build-test`
-1. Run validation script: `scripts/validate-docker.sh`
+1. Run validation script: `uv run validate-docker` (see [Docker Validation Guide](../development/docker-validation.md))
 1. Submit issues to the [Stockula GitHub repository](https://github.com/mkm29/stockula/issues)
 
 ## Summary

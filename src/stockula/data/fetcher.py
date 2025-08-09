@@ -7,14 +7,9 @@ import pandas as pd
 import yfinance as yf
 from dependency_injector.wiring import Provide, inject
 from rich.console import Console
-from rich.progress import (
-    BarColumn,
-    Progress,
-    SpinnerColumn,
-    TextColumn,
-    TimeRemainingColumn,
-)
+from rich.progress import BarColumn, Progress, SpinnerColumn, TextColumn, TimeRemainingColumn
 
+from ..config import APIException, DataFetchException, NetworkException
 from ..database import DatabaseManager
 from ..interfaces import ILoggingManager
 
@@ -27,8 +22,11 @@ class DataFetcher:
     # Treasury ETF tickers that track short-term rates
     TREASURY_TICKERS = {
         "3_month": "^IRX",  # 3-Month Treasury Bill
-        "13_week": "^IRX",  # Same as 3-month
-        "1_year": "^FVX",  # 5-Year Treasury (closest proxy)
+        "13_week": "^IRX",  # Alias for 3-month
+        # Note: ^FVX is the 5-Year Treasury yield. Historically used as a proxy in this project.
+        # We keep the legacy key for backward compatibility and add a correct alias.
+        "1_year": "^FVX",  # Legacy key (proxy)
+        "5_year": "^FVX",  # Correct key for this instrument
         "tbill_etf": "BIL",  # SPDR Bloomberg Barclays 1-3 Month T-Bill ETF
         "sgov": "SGOV",  # iShares 0-3 Month Treasury Bond ETF
     }
@@ -109,11 +107,18 @@ class DataFetcher:
                         return cached_data
             except Exception as e:
                 # If database fails, fall back to yfinance
-                print(f"Database error, falling back to yfinance: {e}")
+                self.logger.warning(f"Database error, falling back to yfinance: {e}")
 
         # Fetch from yfinance
-        ticker = yf.Ticker(symbol)
-        data = ticker.history(start=start, end=end, interval=interval)
+        try:
+            ticker = yf.Ticker(symbol)
+            data = ticker.history(start=start, end=end, interval=interval)
+        except Exception as e:
+            # Wrap network and API errors in appropriate custom exceptions
+            if "Connection" in str(e) or "Network" in str(e) or "Timeout" in str(e):
+                raise NetworkException(symbol=symbol, cause=e) from e
+            else:
+                raise APIException(symbol=symbol, cause=e) from e
 
         # Ensure consistent column naming for backtesting compatibility
         # The backtesting library expects capitalized column names
@@ -163,8 +168,12 @@ class DataFetcher:
         for symbol in symbols:
             try:
                 data[symbol] = self.get_stock_data(symbol, start, end, interval)
+            except (DataFetchException, NetworkException, APIException):
+                # Re-raise our custom exceptions
+                raise
             except Exception as e:
-                print(f"Error fetching data for {symbol}: {e}")
+                # Log error but continue with other symbols
+                self.logger.error(f"Error fetching data for {symbol}: {e}")
 
         return data
 
@@ -218,7 +227,7 @@ class DataFetcher:
                             else:
                                 console.print(f"[yellow]Warning: Could not get current price for {symbol}[/yellow]")
                     except Exception as e:
-                        console.print(f"[red]Error fetching price for {symbol}: {e}[/red]")
+                        self.logger.error(f"Error fetching price for {symbol}: {e}")
 
                     progress.advance(task)
         else:
@@ -240,7 +249,7 @@ class DataFetcher:
                         else:
                             console.print(f"[yellow]Warning: Could not get current price for {symbol}[/yellow]")
                 except Exception as e:
-                    console.print(f"[red]Error fetching price for {symbol}: {e}[/red]")
+                    self.logger.error(f"Error fetching price for {symbol}: {e}")
 
         return prices
 
@@ -261,8 +270,14 @@ class DataFetcher:
                 return cached_info
 
         # Fetch from yfinance
-        ticker = yf.Ticker(symbol)
-        info = ticker.info
+        try:
+            ticker = yf.Ticker(symbol)
+            info = ticker.info
+        except Exception as e:
+            if "Connection" in str(e) or "Network" in str(e) or "Timeout" in str(e):
+                raise NetworkException(symbol=symbol, cause=e) from e
+            else:
+                raise APIException(symbol=symbol, cause=e) from e
 
         # Store in database if caching is enabled
         if self.use_cache and info and self.db is not None:
@@ -279,9 +294,15 @@ class DataFetcher:
         Returns:
             Current price
         """
-        ticker = yf.Ticker(symbol)
-        data = ticker.history(period="1d", interval="1m")
-        return data["Close"].iloc[-1] if not data.empty else None
+        try:
+            ticker = yf.Ticker(symbol)
+            data = ticker.history(period="1d", interval="1m")
+            return data["Close"].iloc[-1] if not data.empty else None
+        except Exception as e:
+            if "Connection" in str(e) or "Network" in str(e) or "Timeout" in str(e):
+                raise NetworkException(symbol=symbol, cause=e) from e
+            else:
+                raise APIException(symbol=symbol, cause=e) from e
 
     def get_options_chain(
         self,
@@ -429,17 +450,21 @@ class DataFetcher:
         Returns:
             Dictionary mapping symbols to their DataFrames
         """
-        results = {}
+        results: dict[str, pd.DataFrame] = {}
 
-        # Check cache first for each symbol
-        symbols_to_fetch = []
+        # Check cache first for each symbol using the standard path, which
+        # will consult the database when caching is enabled.
+        symbols_to_fetch: list[str] = []
         for symbol in symbols:
-            if self.use_cache:
+            try:
                 cached_data = self.get_stock_data(symbol, start_date, end_date, interval)
                 if not cached_data.empty:
                     results[symbol] = cached_data
-                    continue
-            symbols_to_fetch.append(symbol)
+                else:
+                    symbols_to_fetch.append(symbol)
+            except Exception:
+                # On any error, mark for batch fetch
+                symbols_to_fetch.append(symbol)
 
         # Batch download remaining symbols
         if symbols_to_fetch:
@@ -485,9 +510,9 @@ class DataFetcher:
                 # Fall back to individual downloads
                 for symbol in symbols_to_fetch:
                     try:
-                        data = self.get_stock_data(symbol, start_date, end_date, interval)
-                        if not data.empty:
-                            results[symbol] = data
+                        df = self.get_stock_data(symbol, start_date, end_date, interval)
+                        if not df.empty:
+                            results[symbol] = df
                     except Exception as e:
                         self.logger.error(f"Error fetching {symbol}: {e}")
 

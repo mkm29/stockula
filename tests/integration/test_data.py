@@ -6,6 +6,7 @@ from unittest.mock import Mock, patch
 import pandas as pd
 import pytest
 
+from stockula.config import APIException, NetworkException
 from stockula.data.fetcher import DataFetcher
 from stockula.database.manager import DatabaseManager
 
@@ -13,15 +14,17 @@ from stockula.database.manager import DatabaseManager
 class TestDataFetcher:
     """Test DataFetcher class."""
 
-    def test_data_fetcher_initialization(self):
+    def test_data_fetcher_initialization(self, integration_container):
         """Test DataFetcher initialization."""
+        logging_manager = integration_container.logging_manager()
+
         # Without database
-        fetcher = DataFetcher(use_cache=False)
+        fetcher = DataFetcher(use_cache=False, logging_manager=logging_manager)
         assert fetcher.use_cache is False
         assert fetcher.db is None
 
         # With database
-        fetcher = DataFetcher(use_cache=True, db_path="test.db")
+        fetcher = DataFetcher(use_cache=True, db_path="test.db", logging_manager=logging_manager)
         assert fetcher.use_cache is True
         assert fetcher.db is not None
         assert isinstance(fetcher.db, DatabaseManager)
@@ -249,14 +252,14 @@ class TestDataFetcher:
 class TestDataFetcherErrorHandling:
     """Test error handling in DataFetcher."""
 
-    def test_invalid_symbol(self):
+    def test_invalid_symbol(self, integration_container):
         """Test handling invalid symbol."""
         mock_ticker = Mock()
         mock_ticker.history.return_value = pd.DataFrame()  # Empty DataFrame
         mock_ticker.info = {}
 
         with patch("yfinance.Ticker", return_value=mock_ticker):
-            fetcher = DataFetcher(use_cache=False)
+            fetcher = DataFetcher(use_cache=False, logging_manager=integration_container.logging_manager())
 
             data = fetcher.get_stock_data("INVALID_SYMBOL")
             assert data.empty
@@ -264,20 +267,27 @@ class TestDataFetcherErrorHandling:
             info = fetcher.get_info("INVALID_SYMBOL")
             assert info == {}
 
-    def test_network_error(self):
+    def test_network_error(self, integration_container):
         """Test handling network errors."""
         mock_ticker = Mock()
         mock_ticker.history.side_effect = Exception("Network error")
 
         with patch("yfinance.Ticker", return_value=mock_ticker):
-            fetcher = DataFetcher(use_cache=False)
+            fetcher = DataFetcher(use_cache=False, logging_manager=integration_container.logging_manager())
 
-            with pytest.raises(ValueError):
+            # The DataFetcher should wrap the error in appropriate exception
+            # Since "Network error" is in the exception message, it should be NetworkException
+            with pytest.raises((NetworkException, APIException)) as exc_info:
                 fetcher.get_stock_data("AAPL")
 
-    def test_database_error(self, temp_db_path):
+            # Verify the exception has the correct symbol
+            assert exc_info.value.symbol == "AAPL"
+
+    def test_database_error(self, temp_db_path, integration_container):
         """Test handling database errors."""
-        fetcher = DataFetcher(use_cache=True, db_path=temp_db_path)
+        fetcher = DataFetcher(
+            use_cache=True, db_path=temp_db_path, logging_manager=integration_container.logging_manager()
+        )
 
         # Mock database error
         with patch.object(fetcher.db, "get_price_history", side_effect=Exception("DB error")):

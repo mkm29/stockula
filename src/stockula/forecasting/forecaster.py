@@ -20,6 +20,7 @@ console = Console()
 
 if TYPE_CHECKING:
     from ..data import DataFetcher
+    from ..database.manager import DatabaseManager
 
 # Set up warning suppression for AutoTS
 warnings.filterwarnings("ignore", category=UserWarning, module="autots")
@@ -336,6 +337,7 @@ class StockForecaster:
         max_generations: int = 5,
         no_negatives: bool = True,
         data_fetcher: "DataFetcher | None" = None,
+        database_manager: "DatabaseManager | None" = Provide["database_manager"],
         logging_manager: ILoggingManager = Provide["logging_manager"],
     ):
         """Initialize the stock forecaster.
@@ -356,6 +358,7 @@ class StockForecaster:
             max_generations: Maximum generations for model evolution (1=basic, 2=balanced, 3+=thorough)
             no_negatives: Constraint predictions to be non-negative
             data_fetcher: Optional DataFetcher instance for retrieving stock data
+            database_manager: Injected database manager
             logging_manager: Injected logging manager
         """
         self.forecast_length = forecast_length
@@ -368,6 +371,7 @@ class StockForecaster:
         self.max_generations = max_generations
         self.no_negatives = no_negatives
         self.data_fetcher = data_fetcher
+        self.database_manager = database_manager
         self.logger = logging_manager
         self.model = None
         self.prediction = None
@@ -382,10 +386,81 @@ class StockForecaster:
         Returns:
             List of model names or string preset for AutoTS
         """
+        # Validate the model list if it's a list
         if isinstance(model_list, list):
+            # If we have a database manager, use it to validate models
+            if self.database_manager:
+                from ..data.autots_repository import AutoTSRepository
+
+                with self.database_manager.get_session() as session:
+                    repo = AutoTSRepository(session, self.logger)
+                    is_valid, invalid_models = repo.validate_model_list(model_list)
+
+                    if not is_valid and invalid_models:
+                        # Log warning about invalid models
+                        self.logger.warning(f"Invalid models found: {invalid_models}")
+                        # Use difflib to suggest alternatives
+                        from difflib import get_close_matches
+
+                        all_models = [m.name for m in repo.get_all_models()]
+                        for invalid_model in invalid_models:
+                            suggestions = get_close_matches(invalid_model, all_models, n=3, cutoff=0.6)
+                            if suggestions:
+                                self.logger.info(f"Did you mean one of these? {suggestions}")
+
+                    # Filter out invalid models
+                    valid_models = [m for m in model_list if repo.get_model(m) is not None]
+            else:
+                # Fallback to using the model class directly if no database
+                from ..database.models import AutoTSModel
+
+                is_valid, invalid_models = AutoTSModel.validate_model_list(model_list)
+
+                if not is_valid and invalid_models:
+                    # Log warning about invalid models
+                    self.logger.warning(f"Invalid models found: {invalid_models}")
+                    # Use difflib to suggest alternatives
+                    from difflib import get_close_matches
+
+                    valid_models_set = AutoTSModel.get_valid_models()
+                    for invalid_model in invalid_models:
+                        suggestions = get_close_matches(invalid_model, valid_models_set, n=3, cutoff=0.6)
+                        if suggestions:
+                            self.logger.info(f"Did you mean one of these? {suggestions}")
+
+                # Filter out invalid models
+                valid_models = [m for m in model_list if AutoTSModel.is_valid_model(m)]
+
+            if not valid_models:
+                self.logger.warning("No valid models in list, falling back to 'fast' preset")
+                return "fast"
+            return valid_models
+
+        # Check if it's an AutoTS built-in preset first
+        # These should be passed through as strings for AutoTS to handle
+        autots_builtins = [
+            "fast",
+            "superfast",
+            "default",
+            "parallel",
+            "fast_parallel",
+            "scalable",
+            "probabilistic",
+            "multivariate",
+            "univariate",
+            "all",
+            "no_shared",
+            "motifs",
+            "regressor",
+            "best",
+            "slow",
+            "gpu",
+        ]
+        if model_list in autots_builtins:
+            self.logger.info(f"Using AutoTS built-in preset '{model_list}'")
             return model_list
 
-        # Map our presets to model lists
+        # Map our custom presets to model lists
         if model_list == "ultra_fast":
             self.logger.info(
                 f"Using ultra-fast model list ({len(self.ULTRA_FAST_MODEL_LIST)} models) for {target_column}"
@@ -400,7 +475,8 @@ class StockForecaster:
             # Intersection of fast and financial models
             return [m for m in self.FAST_MODEL_LIST if m in self.FINANCIAL_MODEL_LIST]
         else:
-            # Use AutoTS built-in presets
+            # If we get here, it's not a recognized preset, pass it through
+            # AutoTS will handle the error if it's invalid
             return model_list
 
     def fit(
