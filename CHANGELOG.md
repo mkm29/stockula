@@ -1,7 +1,5 @@
 # Changelog
 
-## [Unreleased]
-
 ### Changed
 
 - **BREAKING**: Removed `AutoTSModelValidator` class - model validation is now database-driven
