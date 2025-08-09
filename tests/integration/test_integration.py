@@ -22,7 +22,7 @@ class TestEndToEndWorkflow:
         assert isinstance(config, StockulaConfig)
 
         # Increase max position size to avoid allocation constraint errors
-        config.portfolio.max_position_size = 50.0
+        config.portfolio.max_position_size = 75.0
 
         # Create portfolio with mock data fetcher
         factory = DomainFactory(fetcher=mock_data_fetcher, logging_manager=integration_container.logging_manager())
@@ -64,7 +64,7 @@ class TestEndToEndWorkflow:
         mock_data_fetcher.get_stock_data = lambda *args, **kwargs: backtest_data
 
         # Adjust max_position_size to accommodate SPY allocation
-        sample_stockula_config.portfolio.max_position_size = 50.0
+        sample_stockula_config.portfolio.max_position_size = 75.0
 
         factory = DomainFactory(fetcher=mock_data_fetcher, logging_manager=integration_container.logging_manager())
         portfolio = factory.create_portfolio(sample_stockula_config)

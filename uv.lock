@@ -1506,7 +1506,7 @@ requires-dist = [
     { name = "xgboost", marker = "extra == 'gpu'", specifier = ">=2.0.0" },
     { name = "yfinance", specifier = ">=0.2.65" },
 ]
-provides-extras = ["dev", "gpu"]
+provides-extras = ["dev", "gpu", "autogluon"]
 
 [package.metadata.requires-dev]
 dev = [

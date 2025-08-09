@@ -35,7 +35,7 @@ dev = [
     "pytest>=8.4.1",
 ]
 gpu = [
-    # GPU-accelerated machine learning packages for AutoTS
+    # GPU-accelerated machine learning packages for AutoTS and AutoGluon
     # Note: These require CUDA toolkit and drivers to be installed
     "torch>=2.0.0",  # PyTorch for neural network models
     "xgboost>=2.0.0",  # XGBoost with GPU support
@@ -46,6 +46,12 @@ gpu = [
     # "tensorflow-probability>=0.23.0; python_version<'3.13'",  # TensorFlow Probability
     # "mxnet-cu112>=1.9.0; python_version<'3.13'",  # MXNet with CUDA 11.2 support
     # "gluonts>=0.14.0; python_version<'3.13'",  # GluonTS for advanced time series models
+]
+autogluon = [
+    # AutoGluon TimeSeries for automated time series forecasting
+    # Note: AutoGluon requires pandas<2.3.0, which may conflict with our pandas>=2.3.1
+    # Users who want AutoGluon should install it separately with compatible pandas version
+    # "autogluon.timeseries>=1.0.0",  # Core AutoGluon TimeSeries functionality
 ]
 
 [build-system]

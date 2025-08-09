@@ -750,7 +750,8 @@ class TestStockForecasterForecastFromSymbol:
                         metrics = result["evaluation_metrics"]
                         assert "mae" in metrics
                         assert "rmse" in metrics
-                        assert "mape" in metrics
+                        assert "mase" in metrics  # Check for MASE
+                        assert "mape" in metrics  # MAPE still included for backward compatibility
                         assert metrics["mae"] == 1.5
                         assert metrics["rmse"] == 2.0
 

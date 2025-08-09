@@ -761,10 +761,19 @@ class StockulaManager:
 
             # Add additional info if evaluation was used
             if use_evaluation and "evaluation" in result:
-                self.log_manager.info(
-                    f"Evaluation metrics for {ticker}: RMSE={result['evaluation']['rmse']:.2f}, "
-                    f"MAPE={result['evaluation']['mape']:.2f}%"
-                )
+                # Log MASE if available, otherwise log MAPE
+                eval_metrics = result["evaluation"]
+                if "mase" in eval_metrics:
+                    self.log_manager.info(
+                        f"Evaluation metrics for {ticker}: RMSE={eval_metrics['rmse']:.2f}, "
+                        f"MASE={eval_metrics['mase']:.3f}"
+                    )
+                else:
+                    # Fallback to MAPE for backward compatibility
+                    self.log_manager.info(
+                        f"Evaluation metrics for {ticker}: RMSE={eval_metrics['rmse']:.2f}, "
+                        f"MAPE={eval_metrics.get('mape', 0):.2f}%"
+                    )
 
             return result
 

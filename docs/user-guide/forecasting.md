@@ -12,7 +12,7 @@ The forecasting module offers:
 - **Multiple Forecasters**: Standard, fast (ultra_fast), and financial-specific forecasters
 - **Confidence Intervals**: Statistical uncertainty quantification
 - **Model Validation**: Cross-validation and backtesting
-- **Train/Test Evaluation**: Historical accuracy assessment with RMSE, MAE, and MAPE metrics
+- **Train/Test Evaluation**: Historical accuracy assessment with RMSE, MAE, and MASE metrics
 - **Performance Optimization**: Configurable speed vs. accuracy trade-offs
 - **Rich Visualization**: Progress tracking and result display
 
@@ -474,7 +474,7 @@ The portfolio value table shows different information based on the forecast mode
 
 - **Observed Value**: The current portfolio value at the start date (today for future mode, test start for evaluation mode)
 - **Predicted Value**: The forecasted portfolio value at the end date based on individual stock predictions
-- **Accuracy**: (Evaluation mode only) The average forecast accuracy across all stocks, calculated as 100% - MAPE
+- **Accuracy**: (Evaluation mode only) The average forecast performance across all stocks, measured by MASE (< 1.0 is better than naive)
 
 ### Forecast Results Table
 
@@ -502,9 +502,9 @@ When train/test dates are configured, you'll also see accuracy metrics:
 ```
                          Model Performance on Test Data
 ┏━━━━━━━━┳━━━━━━━━┳━━━━━━━━┳━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━┓
-┃ Ticker ┃   RMSE ┃    MAE ┃ MAPE % ┃ Train Period       ┃ Test Period         ┃
+┃ Ticker ┃   RMSE ┃    MAE ┃  MASE ┃ Train Period       ┃ Test Period         ┃
 ┡━━━━━━━━╇━━━━━━━━╇━━━━━━━━╇━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━┩
-│ AAPL   │ $27.26 │ $24.12 │ 12.69% │ 2025-01-02 to      │ 2025-04-01 to       │
+│ AAPL   │ $27.26 │ $24.12 │ 0.85 ✓│ 2025-01-02 to      │ 2025-04-01 to       │
 │        │        │        │        │ 2025-03-31         │ 2025-06-30          │
 │ NVDA   │  $8.49 │  $6.75 │  6.68% │ 2025-01-02 to      │ 2025-04-01 to       │
 │        │        │        │        │ 2025-03-31         │ 2025-06-30          │
@@ -531,8 +531,8 @@ When using Historical Evaluation Mode (train/test dates configured without forec
 1. **Calculates accuracy metrics**:
    - **RMSE (Root Mean Square Error)**: Average prediction error in dollars
    - **MAE (Mean Absolute Error)**: Average absolute error in dollars
-   - **MAPE (Mean Absolute Percentage Error)**: Average percentage error
-   - **Accuracy**: Calculated as 100% - MAPE
+   - **MASE (Mean Absolute Scaled Error)**: Scale-independent error metric (< 1.0 = better than naive, marked with ✓)
+   - **Performance**: MASE < 1.0 indicates the model beats a simple naive forecast
 
 ### Example Configuration
 

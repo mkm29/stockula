@@ -94,8 +94,6 @@ jobs:
           tags: |
             # Use the exact Git tag as Docker tag
             type=raw,value=${{ steps.version.outputs.version }}
-            # For stable releases (v-prefixed), also tag as 'latest'
-            type=raw,value=latest,enable=${{ startsWith(steps.version.outputs.version, 'v') && matrix.suffix == '' }}
             # For RC releases, also tag as 'rc' for latest RC
             type=raw,value=rc,enable=${{ contains(steps.version.outputs.version, 'rc') && matrix.suffix == '' }}
             # For feature branches, also tag as 'feat' for latest feature build

@@ -377,7 +377,7 @@ class TestForecasting:
             "model_params": {},
             "train_period": {"start": "2023-01-01", "end": "2023-12-31", "days": 365},
             "test_period": {"start": "2024-01-01", "end": "2024-01-31", "days": 31},
-            "evaluation": {"rmse": 2.5, "mae": 2.0, "mape": 1.5},
+            "evaluation": {"rmse": 2.5, "mae": 2.0, "mase": 0.8, "mape": 1.5},
         }
 
         manager = create_mock_manager(config)
@@ -569,7 +569,7 @@ class TestMainFunction:
                     "ticker": "AAPL",
                     "current_price": 150.0,
                     "forecast_price": 160.0,
-                    "evaluation": {"rmse": 2.0, "mape": 1.5},
+                    "evaluation": {"rmse": 2.0, "mase": 0.9, "mape": 1.5},
                 }
             ],
             "initial_portfolio_value": 100000.0,
@@ -1073,7 +1073,7 @@ class TestPrintResultsEdgeCases:
                     "lower_bound": 155.0,
                     "upper_bound": 165.0,
                     "best_model": "ARIMA",
-                    "evaluation": {"rmse": 3.5, "mae": 2.8, "mape": 1.9},
+                    "evaluation": {"rmse": 3.5, "mae": 2.8, "mase": 0.85, "mape": 1.9},
                     "train_period": {"start": "2023-01-01", "end": "2023-06-30"},
                     "test_period": {"start": "2023-07-01", "end": "2023-07-31"},
                 },
@@ -1084,7 +1084,7 @@ class TestPrintResultsEdgeCases:
                     "lower_bound": 270.0,
                     "upper_bound": 290.0,
                     "best_model": "ETS",
-                    "evaluation": {"rmse": 5.2, "mae": 4.1, "mape": 2.1},
+                    "evaluation": {"rmse": 5.2, "mae": 4.1, "mase": 1.1, "mape": 2.1},
                     "train_period": {"start": "2023-01-01", "end": "2023-06-30"},
                     "test_period": {"start": "2023-07-01", "end": "2023-07-31"},
                 },
@@ -1097,8 +1097,8 @@ class TestPrintResultsEdgeCases:
         assert "Forecast Evaluation Metrics" in captured.out
         assert "RMSE" in captured.out
         assert "$3.50" in captured.out
-        assert "MAPE %" in captured.out
-        assert "1.90%" in captured.out
+        assert "MASE" in captured.out
+        assert "0.850" in captured.out  # MASE value for AAPL instead of MAPE percentage
 
 
 class TestPortfolioBacktestResultsComplex:
@@ -1408,7 +1408,7 @@ class TestMainFunctionAdvanced:
                     "lower_bound": 155.0,
                     "upper_bound": 165.0,
                     "best_model": "ARIMA",
-                    "evaluation": {"rmse": 2.0, "mae": 1.5, "mape": 1.0},
+                    "evaluation": {"rmse": 2.0, "mae": 1.5, "mase": 0.75, "mape": 1.0},
                     "end_date": "2024-01-31",
                 }
             ],
@@ -1416,7 +1416,10 @@ class TestMainFunctionAdvanced:
             "initial_capital": 100000.0,
         }
 
-        with patch("stockula.cli.console") as mock_console:
+        with patch("stockula.cli.cli_manager") as mock_cli_manager:
+            mock_console = Mock()
+            mock_cli_manager.get_console.return_value = mock_console
+
             with pytest.raises(SystemExit) as exc_info:
                 main()
             assert exc_info.value.code == 0
@@ -1491,6 +1494,7 @@ class TestMainFunctionAdvanced:
     @patch("stockula.main.setup_logging")
     @patch("stockula.main.log_manager")
     @patch("stockula.cli.print_results")
+    @patch("stockula.manager.StockulaManager.run_main_processing")
     @patch("stockula.manager.StockulaManager.create_portfolio_backtest_results")
     @patch("stockula.manager.StockulaManager.save_detailed_report")
     @patch("sys.argv", ["stockula", "--mode", "backtest"])
@@ -1498,6 +1502,7 @@ class TestMainFunctionAdvanced:
         self,
         mock_save_report,
         mock_create_results,
+        mock_run_main,
         mock_print,
         mock_log_manager,
         mock_logging,
@@ -1594,7 +1599,24 @@ class TestMainFunctionAdvanced:
         mock_create_results.return_value = mock_portfolio_results
         mock_save_report.return_value = "results/reports/strategy_report_SMACross_20240101_120000.json"
 
-        with patch("stockula.cli.console") as mock_console:
+        # Mock the main processing to return backtesting results
+        mock_run_main.return_value = {
+            "backtesting": [
+                {
+                    "strategy": "SMACross",
+                    "Return [%]": 15.0,
+                    "Sharpe Ratio": 1.5,
+                    "Max. Drawdown [%]": -8.0,
+                    "# Trades": 25,
+                    "Win Rate [%]": 60.0,
+                }
+            ]
+        }
+
+        with patch("stockula.cli.cli_manager") as mock_cli_manager:
+            mock_console = Mock()
+            mock_cli_manager.get_console.return_value = mock_console
+
             with pytest.raises(SystemExit) as exc_info:
                 main()
             assert exc_info.value.code == 0
@@ -1922,7 +1944,7 @@ class TestMainErrorHandling:
                     "lower_bound": 155.0,
                     "upper_bound": 165.0,
                     "best_model": "ARIMA",
-                    "evaluation": {"rmse": 2.0, "mae": 1.5, "mape": 1.0},
+                    "evaluation": {"rmse": 2.0, "mae": 1.5, "mase": 0.75, "mape": 1.0},
                 },
                 {
                     "ticker": "MSFT",

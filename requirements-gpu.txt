@@ -215,3 +215,7 @@ gluonts>=0.14.0
 # Additional GPU-optimized packages
 scikit-cuda>=0.5.3  # CUDA-accelerated scikit-learn algorithms
 nvidia-ml-py>=12.0.0  # NVIDIA Management Library bindings
+
+# AutoGluon TimeSeries with GPU support
+# AutoGluon automatically leverages GPU for models like DeepAR and TemporalFusionTransformer
+autogluon.timeseries>=1.0.0  # Core AutoGluon TimeSeries functionality

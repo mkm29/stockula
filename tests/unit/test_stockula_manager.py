@@ -760,7 +760,7 @@ class TestStockulaManager:
             "forecast_price": 155.0,
             "lower_bound": 148.0,
             "upper_bound": 162.0,
-            "evaluation": {"rmse": 2.5, "mae": 2.0, "mape": 1.5},
+            "evaluation": {"rmse": 2.5, "mae": 2.0, "mase": 0.8, "mape": 1.5},
         }
         mock_container.forecasting_manager.return_value = mock_forecasting_manager
 

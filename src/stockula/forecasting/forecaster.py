@@ -11,12 +11,10 @@ from typing import TYPE_CHECKING, Any
 import pandas as pd
 from autots import AutoTS
 from dependency_injector.wiring import Provide, inject
-from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, TextColumn
 
+from ..cli_manager import cli_manager
 from ..interfaces import ILoggingManager
-
-console = Console()
 
 if TYPE_CHECKING:
     from ..data import DataFetcher
@@ -541,7 +539,7 @@ class StockForecaster:
                 with Progress(
                     SpinnerColumn(),
                     TextColumn("[progress.description]{task.description}"),
-                    console=console,
+                    console=cli_manager.get_console(),
                     transient=True,
                 ) as progress:
                     task = progress.add_task("[cyan]Training models on historical data...", total=None)
@@ -833,13 +831,28 @@ class StockForecaster:
                 mae = mean_absolute_error(actual_values, forecast_values)
                 mse = mean_squared_error(actual_values, forecast_values)
                 rmse = np.sqrt(mse)
+
+                # Calculate MASE (Mean Absolute Scaled Error)
+                # Use training data for naive forecast baseline
+                train_naive = train_data[target_column].shift(1).dropna()
+                train_actual = train_data[target_column].iloc[1:]
+                mae_naive = mean_absolute_error(train_actual, train_naive)
+
+                # Avoid division by zero
+                if mae_naive == 0 or np.isclose(mae_naive, 0, atol=1e-10):
+                    mase = np.inf if mae > 0 else 0.0
+                else:
+                    mase = mae / mae_naive
+
+                # Keep MAPE for backward compatibility
                 mape = np.mean(np.abs((actual_values - forecast_values) / actual_values)) * 100
 
                 evaluation_metrics = {
                     "mae": mae,
                     "mse": mse,
                     "rmse": rmse,
-                    "mape": mape,
+                    "mase": mase,  # Added MASE
+                    "mape": mape,  # Kept for backward compatibility
                     "residuals": residuals.tolist(),
                     "actual_values": actual_values.tolist(),
                     "forecast_values": forecast_values.tolist(),
@@ -971,13 +984,27 @@ class StockForecaster:
         mae = mean_absolute_error(actual_values, forecast)
         mse = mean_squared_error(actual_values, forecast)
         rmse = np.sqrt(mse)
+
+        # Calculate MASE using naive forecast baseline
+        naive_forecast = actual_data[target_column].shift(1).dropna()
+        actual_for_naive = actual_data[target_column].iloc[1:]
+        mae_naive = mean_absolute_error(actual_for_naive, naive_forecast)
+
+        # Avoid division by zero
+        if mae_naive == 0 or np.isclose(mae_naive, 0, atol=1e-10):
+            mase = np.inf if mae > 0 else 0.0
+        else:
+            mase = mae / mae_naive
+
+        # Keep MAPE for backward compatibility
         mape = np.mean(np.abs((actual_values - forecast) / actual_values)) * 100
 
         return {
             "mae": mae,
             "mse": mse,
             "rmse": rmse,
-            "mape": mape,
+            "mase": mase,  # Added MASE
+            "mape": mape,  # Kept for backward compatibility
         }
 
     @classmethod

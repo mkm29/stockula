@@ -6,9 +6,9 @@ from typing import Annotated, Any
 
 import typer
 from pydantic import ValidationError
-from rich.console import Console
 from rich.panel import Panel
 
+from .cli_manager import cli_manager
 from .config import TickerConfig
 from .config.settings import save_config
 from .container import create_container
@@ -22,8 +22,8 @@ app = typer.Typer(
     add_completion=False,
 )
 
-# Global console instance
-console = Console()
+# Get console from CLI manager
+console = cli_manager.get_console()
 
 
 class Mode(str, Enum):
@@ -53,7 +53,7 @@ def print_results(results: dict[str, Any], output_format: str = "console", confi
         container: Optional DI container for fetching data
         portfolio: Optional portfolio instance for forecast display
     """
-    display = ResultsDisplay(console)
+    display = ResultsDisplay(cli_manager.get_console())
     display.print_results(results, output_format, config, container, portfolio)
 
 
@@ -159,7 +159,7 @@ def run_stockula(
 
     # Show current portfolio value for forecast mode
     if mode == "forecast":
-        display = ResultsDisplay(console)
+        display = ResultsDisplay(cli_manager.get_console())
         display.show_portfolio_forecast_value(stockula_config, portfolio, results)
 
     # Output results
@@ -168,7 +168,7 @@ def run_stockula(
 
     # Show strategy-specific summaries after backtesting
     if mode in ["all", "backtest"] and "backtesting" in results:
-        display = ResultsDisplay(console)
+        display = ResultsDisplay(cli_manager.get_console())
         display.show_strategy_summaries(manager, stockula_config, results)
 
 

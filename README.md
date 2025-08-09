@@ -41,10 +41,12 @@ Stockula is a comprehensive Python trading platform that provides tools for tech
 - **📊 Technical Analysis**: 40+ indicators (SMA, EMA, RSI, MACD, Bollinger Bands, etc.)
 - **🔄 Backtesting**: Test trading strategies with realistic broker costs and commission structures
 - **📈 Data Fetching**: Real-time and historical market data via yfinance with intelligent SQLite caching
-- **🔮 Price Forecasting**: Automated time series forecasting using AutoTS with two modes:
+- **🔮 Price Forecasting**: Automated time series forecasting with multiple backends:
+  - **AutoTS** (default): Feature-rich with 20+ statistical and ML models
+  - **AutoGluon**: Modern AutoML with deep learning models (DeepAR, Temporal Fusion Transformer)
   - Future prediction mode: Forecast N days from today
-  - Historical evaluation mode: Train/test split with accuracy metrics (RMSE, MAE, MAPE)
-  - **GPU Acceleration**: Optional NVIDIA CUDA support for faster model training
+  - Historical evaluation mode: Train/test split with accuracy metrics (RMSE, MAE, MASE)
+  - **GPU Acceleration**: Full GPU support for AutoGluon, optional for AutoTS
 - **🎨 Rich CLI Interface**: Beautiful progress bars, tables, and colored output
 - **🗄️ Database Caching**: Automatic SQLite caching for offline analysis and fast data access
 - **🚀 Modern Python**: Built with uv for fast package management and Pydantic for configuration
@@ -80,7 +82,8 @@ uv run python -m stockula
 # Run specific analysis modes
 uv run python -m stockula --ticker GOOGL --mode ta        # Technical analysis
 uv run python -m stockula --ticker MSFT --mode backtest  # Backtesting (results sorted by return, highest first)
-uv run python -m stockula --ticker NVDA --mode forecast  # Forecasting (results sorted by return, highest first)
+uv run python -m stockula --ticker NVDA --mode forecast  # Forecasting with AutoTS (default)
+uv run python -m stockula --ticker NVDA --mode forecast --backend autogluon  # Use AutoGluon backend
 
 # Show help
 uv run python -m stockula --help
@@ -176,12 +179,16 @@ When running forecasts in evaluation mode (with train/test split), Stockula prov
 
 **How Accuracy is Calculated:**
 
-Portfolio accuracy is calculated as: **Accuracy = 100% - MAPE**
+Portfolio accuracy uses **MASE (Mean Absolute Scaled Error)**, a scale-independent metric that compares model performance to a naive forecast:
 
-Where MAPE (Mean Absolute Percentage Error) measures the average percentage difference between predicted and actual prices. For example:
+- **MASE < 1.0**: Model beats naive forecast (good performance)
+- **MASE = 1.0**: Model equals naive forecast
+- **MASE > 1.0**: Model worse than naive forecast
 
-- If a stock's MAPE is 6.11%, its accuracy is 93.89%
-- The portfolio accuracy is the average of all individual stock accuracies
+For example:
+
+- If a stock's MASE is 0.8, the model is 20% better than a naive forecast
+- The portfolio MASE is the average of all individual stock MASE values
 
 This provides an intuitive measure where:
 
@@ -307,7 +314,8 @@ graph TB
 - **yfinance**: Yahoo Finance data fetching
 - **finta**: Financial technical analysis indicators
 - **backtesting**: Strategy backtesting framework
-- **autots**: Automated time series forecasting
+- **autots**: Automated time series forecasting (default backend)
+- **autogluon** (optional): Advanced AutoML forecasting with deep learning
 - **rich**: Enhanced CLI formatting with progress bars and tables
 - **pydantic**: Data validation and settings management
 
