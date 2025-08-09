@@ -22,6 +22,24 @@
 - Dependency injection for DatabaseManager in forecasting components
 - More flexible model management without code changes
 
+## [0.12.0](https://github.com/mkm29/stockula/compare/v0.11.0...v0.12.0) (2025-08-09)
+
+
+### Features
+
+* **docker:** Enhance Docker build process for feature branches and update documentation ([689d081](https://github.com/mkm29/stockula/commit/689d0814b681f933d58bce5284993111002f64a1))
+* **docker:** Remove data directory copy from GPU Dockerfile ([f85eb54](https://github.com/mkm29/stockula/commit/f85eb54009a1a62c3827efd3baa65b675d531269))
+* Enhance Docker build workflow to conditionally skip GPU builds for feature branches ([9322606](https://github.com/mkm29/stockula/commit/9322606814889ecb8c8ece9a923f062649e84230))
+* Integrate data fetcher into Portfolio and DomainFactory for improved data handling ([57cc2b1](https://github.com/mkm29/stockula/commit/57cc2b1ad9dbd4010f633638ea00fcec153e4f8e))
+* Refactor portfolio creation to use dependency injection and remove obsolete model ([7b588e5](https://github.com/mkm29/stockula/commit/7b588e5c61b1e539d69d6449e2a1399fde48f3a1))
+* update branch protection permissions and fix portfolio creation in integration tests ([5c44ad0](https://github.com/mkm29/stockula/commit/5c44ad047b39da05274d28a530fc9ff5dbebf288))
+* Update branch protection rules and enhance dependency injection in the container ([b335eb5](https://github.com/mkm29/stockula/commit/b335eb5f731c3b18dc922932a789b2635ef91705))
+
+
+### Bug Fixes
+
+* Use container's domain factory with proper dependency injection in end-to-end test ([d441136](https://github.com/mkm29/stockula/commit/d4411369b929462a39034e4fdf6fa6742d18a151))
+
 ## [0.10.0](https://github.com/mkm29/stockula/compare/v0.9.1...v0.10.0) (2025-08-05)
 
 ### Features
