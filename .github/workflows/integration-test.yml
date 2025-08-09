@@ -274,7 +274,7 @@ jobs:
 
           # Run complete workflow test
           uv run python -c "
-          from stockula.container import Container
+          from stockula.container import Container, create_container
           from stockula.config.settings import load_config
           from stockula.domain.factory import DomainFactory
           import warnings
@@ -284,13 +284,12 @@ jobs:
           config = load_config('e2e_.stockula.yaml')
           print('✓ Configuration loaded')
 
-          # Initialize container
-          container = Container()
-          container.config.from_dict(config.model_dump())
+          # Initialize container with proper wiring
+          container = create_container('e2e_.stockula.yaml')
           print('✓ Container initialized')
 
-          # Create portfolio
-          factory = DomainFactory(config)
+          # Create portfolio using the container's domain factory
+          factory = container.domain_factory()
           portfolio = factory.create_portfolio(config)
           assert len(portfolio.assets) == 2
           print('✓ Portfolio created')
@@ -313,7 +312,7 @@ jobs:
           assert db_manager is not None
           print('✓ Database Manager ready')
 
-          print('✅ End-to-end test completed successfully!')
+          print('✅ End-to-end test completed successfully')
           "
 
           # Cleanup
