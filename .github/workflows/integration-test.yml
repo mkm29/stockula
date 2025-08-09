@@ -154,7 +154,7 @@ jobs:
 
           # Create portfolio
           factory = DomainFactory(config)
-          portfolio = factory.create_portfolio()
+          portfolio = factory.create_portfolio(config)
           assert portfolio is not None, 'Failed to create portfolio'
           assert len(portfolio.assets) == 2, 'Portfolio should have 2 assets'
           print('✓ Portfolio creation working')
@@ -287,7 +287,7 @@ jobs:
 
           # Create portfolio
           factory = DomainFactory(config)
-          portfolio = factory.create_portfolio()
+          portfolio = factory.create_portfolio(config)
           assert len(portfolio.assets) == 2
           print('✓ Portfolio created')
 
