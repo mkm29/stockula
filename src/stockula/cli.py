@@ -6,9 +6,9 @@ from typing import Annotated, Any
 
 import typer
 from pydantic import ValidationError
-from rich.console import Console
 from rich.panel import Panel
 
+from .cli_manager import cli_manager
 from .config import TickerConfig
 from .config.settings import save_config
 from .container import create_container
@@ -22,8 +22,8 @@ app = typer.Typer(
     add_completion=False,
 )
 
-# Global console instance
-console = Console()
+# Get console from CLI manager
+console = cli_manager.get_console()
 
 
 class Mode(str, Enum):
@@ -53,7 +53,7 @@ def print_results(results: dict[str, Any], output_format: str = "console", confi
         container: Optional DI container for fetching data
         portfolio: Optional portfolio instance for forecast display
     """
-    display = ResultsDisplay(console)
+    display = ResultsDisplay(cli_manager.get_console())
     display.print_results(results, output_format, config, container, portfolio)
 
 
@@ -78,7 +78,7 @@ def run_stockula(
         stockula_config = container.stockula_config()
     except ValidationError as e:
         # Use the provided config path or default
-        config_path = config or ".config.yaml"
+        config_path = config or ".stockula.yaml"
         handle_validation_error(e, config_path)
 
     # Set up logging based on configuration
@@ -121,18 +121,45 @@ def run_stockula(
         return
 
     # Create portfolio
-    portfolio = manager.create_portfolio()
+    try:
+        portfolio = manager.create_portfolio()
+    except ValueError as e:
+        # Handle portfolio validation errors (e.g., insufficient capital)
+        error_msg = str(e)
+        if "insufficient" in error_msg.lower() and "capital" in error_msg.lower():
+            console.print("\n[bold red]❌ Portfolio Configuration Error[/bold red]\n")
+            console.print(f"[red]{error_msg}[/red]\n")
+            console.print("[dim]💡 Suggestions:[/dim]")
+            console.print("[dim]  • Increase the initial_capital in your configuration[/dim]")
+            console.print("[dim]  • Reduce the quantities of some assets[/dim]")
+            console.print("[dim]  • Enable fractional shares: allow_fractional_shares: true[/dim]")
+        else:
+            console.print(f"\n[bold red]❌ Portfolio Error:[/bold red] [red]{error_msg}[/red]\n")
+        raise typer.Exit(1) from None
 
     # Display portfolio summary
     manager.display_portfolio_summary(portfolio)
     manager.display_portfolio_holdings(portfolio, mode=mode)
 
     # Run main processing through StockulaManager
-    results = manager.run_main_processing(mode, portfolio)
+    try:
+        results = manager.run_main_processing(mode, portfolio)
+    except Exception as e:
+        # Handle processing errors with clean output
+        error_msg = str(e)
+        if "insufficient" in error_msg.lower() and "data" in error_msg.lower():
+            console.print(f"\n[bold red]❌ Data Error:[/bold red] [red]{error_msg}[/red]")
+            console.print("[dim]💡 Try adjusting the date range in your configuration[/dim]\n")
+        elif "network" in error_msg.lower() or "connection" in error_msg.lower():
+            console.print(f"\n[bold red]❌ Network Error:[/bold red] [red]{error_msg}[/red]")
+            console.print("[dim]💡 Check your internet connection and try again[/dim]\n")
+        else:
+            console.print(f"\n[bold red]❌ Processing Error:[/bold red] [red]{error_msg}[/red]\n")
+        raise typer.Exit(1) from None
 
     # Show current portfolio value for forecast mode
     if mode == "forecast":
-        display = ResultsDisplay(console)
+        display = ResultsDisplay(cli_manager.get_console())
         display.show_portfolio_forecast_value(stockula_config, portfolio, results)
 
     # Output results
@@ -141,7 +168,7 @@ def run_stockula(
 
     # Show strategy-specific summaries after backtesting
     if mode in ["all", "backtest"] and "backtesting" in results:
-        display = ResultsDisplay(console)
+        display = ResultsDisplay(cli_manager.get_console())
         display.show_strategy_summaries(manager, stockula_config, results)
 
 

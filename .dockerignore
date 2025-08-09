@@ -129,8 +129,8 @@ tests/
 test_*.py
 
 # Development configurations
-.config.yaml
-config.yaml
+.stockula.yaml
+stockula.yaml
 
 # Additional cache directories
 .uv/

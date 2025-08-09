@@ -122,7 +122,7 @@ def main():
     print("from stockula.container import create_container")
     print()
     print("# Create container with your config")
-    print("container = create_container('config.yaml')")
+    print("container = create_container('.stockula.yaml')")
     print()
     print("# Get the backtest allocator")
     print("allocator = container.backtest_allocator()")

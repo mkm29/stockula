@@ -1,0 +1,232 @@
+# syntax=docker/dockerfile:1
+# GPU-enabled Dockerfile for Stockula trading platform with NVIDIA CUDA support
+#
+# This Dockerfile provides GPU acceleration for time series forecasting using
+# PyTorch-based models in AutoTS, XGBoost, and LightGBM with GPU support.
+#
+# Requirements:
+#   - NVIDIA Container Runtime (nvidia-docker2)
+#   - NVIDIA GPU with CUDA capability >= 3.7
+#   - Host system with NVIDIA drivers >= 450.80.02
+#
+# Build stages:
+#   - nvidia-base: NVIDIA CUDA base with system dependencies
+#   - gpu-dependencies: Python packages with minimal GPU support
+#   - gpu-source: Application source code
+#   - gpu-production: Minimal runtime image with GPU support
+#   - gpu-cli: GPU production + minimal CLI tools
+#
+# Usage:
+#   docker buildx build -f Dockerfile.nvidia --target gpu-production -t stockula:gpu-prod .
+#   docker buildx build -f Dockerfile.nvidia --target gpu-cli -t stockula:gpu-cli .
+#   docker run --gpus all stockula:gpu-cli
+
+# Stage 1: NVIDIA CUDA base image with uv
+FROM nvidia/cuda:13.0.0-devel-ubuntu24.04 AS nvidia-base
+
+# Build arguments for labels
+ARG VERSION="0.0.0"
+ARG BUILD_DATE
+ARG GIT_COMMIT
+ARG GIT_URL
+
+# Use bash with pipefail option for better error handling
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+
+# Set environment variables for CUDA and Python
+ENV NVIDIA_VISIBLE_DEVICES=all \
+    NVIDIA_DRIVER_CAPABILITIES=compute,utility \
+    CUDA_VERSION=13.0 \
+    PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    UV_SYSTEM_PYTHON=1 \
+    UV_COMPILE_BYTECODE=1
+
+# Install Python 3.12, uv, and system dependencies
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    apt-get update && apt-get install -y --no-install-recommends \
+    # Python 3.12 (better ML library compatibility)
+    python3.12 \
+    python3.12-dev \
+    python3.12-venv \
+    # Build dependencies
+    build-essential \
+    curl \
+    git \
+    pkg-config \
+    # Additional dependencies for ML libraries
+    libhdf5-dev \
+    libffi-dev \
+    libssl-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install uv for Python 3.12
+RUN curl -LsSf https://astral.sh/uv/install.sh | sh
+ENV PATH="/root/.local/bin:$PATH"
+
+# Create Python 3.12 symlink for compatibility
+RUN ln -sf /usr/bin/python3.12 /usr/bin/python3 && \
+    ln -sf /usr/bin/python3.12 /usr/bin/python
+
+# Stage 2: GPU Dependencies builder (cache GPU-enabled Python packages)
+FROM nvidia-base AS gpu-dependencies
+
+WORKDIR /app
+
+# Copy ONLY dependency files needed for package installation
+# DO NOT copy source code here to maintain cache efficiency
+COPY pyproject.toml uv.lock README.md ./
+COPY requirements-gpu.txt ./
+
+# Create virtual environment and install base dependencies from pyproject.toml
+RUN --mount=type=cache,target=/root/.cache/uv,sharing=locked \
+    --mount=type=cache,target=/root/.cache/pip,sharing=locked \
+    uv venv /opt/venv --python 3.12 && \
+    # Install pip in the venv
+    /opt/venv/bin/python -m ensurepip --upgrade && \
+    /opt/venv/bin/python -m pip install --upgrade pip && \
+    # Install base Stockula package and dependencies
+    /opt/venv/bin/pip install -e .
+
+# Install GPU packages from requirements-gpu.txt with proper CUDA support
+# This file contains all GPU-accelerated packages optimized for Python 3.12
+RUN --mount=type=cache,target=/root/.cache/pip,sharing=locked \
+    /opt/venv/bin/pip install -r requirements-gpu.txt --extra-index-url https://download.pytorch.org/whl/cu118
+
+# Stage 3: GPU Source builder
+FROM gpu-dependencies AS gpu-source
+
+# Now copy source code and other application files
+COPY src/ src/
+COPY alembic.ini ./
+COPY alembic/ alembic/
+COPY examples/ examples/
+
+# Add stockula to Python path (to avoid Python version check)
+RUN echo "/app/src" > /opt/venv/lib/python3.12/site-packages/stockula.pth && \
+    # Verify the package can be imported
+    /opt/venv/bin/python -c "import stockula; print('Stockula package accessible')"
+
+# Stage 4: GPU Production runtime - optimized for GPU inference
+FROM nvidia/cuda:13.0.0-runtime-ubuntu24.04 AS gpu-production
+
+# Re-declare build arguments for this stage
+ARG VERSION=dev
+ARG BUILD_DATE
+ARG GIT_COMMIT
+ARG GIT_URL
+
+# Set GPU-specific environment variables
+ENV NVIDIA_VISIBLE_DEVICES=all \
+    NVIDIA_DRIVER_CAPABILITIES=compute,utility \
+    CUDA_VERSION=13.0 \
+    PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1
+
+# Install minimal runtime dependencies including Python 3.12
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    apt-get update && apt-get install -y --no-install-recommends \
+    python3.12 \
+    python3.12-venv \
+    ca-certificates \
+    libgomp1 \
+    && ln -sf /usr/bin/python3.12 /usr/bin/python3 \
+    && ln -sf /usr/bin/python3.12 /usr/bin/python \
+    && rm -rf /var/lib/apt/lists/*
+
+# Use existing ubuntu user (UID 1000) and rename to stockula for consistency
+RUN usermod -l stockula ubuntu && \
+    groupmod -n stockula ubuntu && \
+    usermod -d /home/stockula -m stockula
+
+WORKDIR /app
+
+# Copy virtual environment and source from builder
+COPY --from=gpu-source --chown=stockula:stockula /opt/venv /opt/venv
+COPY --from=gpu-source --chown=stockula:stockula /app /app
+
+# Set up environment
+ENV VIRTUAL_ENV=/opt/venv \
+    PATH="/opt/venv/bin:$PATH" \
+    STOCKULA_VERSION="${VERSION}" \
+    # AutoTS GPU-specific settings
+    AUTOTS_GPU_ENABLED=true \
+    # Reduce job count for stability as recommended by AutoTS
+    AUTOTS_N_JOBS=1 \
+    # PyTorch CUDA architecture support
+    TORCH_CUDA_ARCH_LIST="6.0 6.1 7.0 7.5 8.0 8.6 9.0+PTX"
+
+# Create data directories with proper permissions
+RUN mkdir -p /app/data /app/results /app/models && \
+    chown -R stockula:stockula /app
+
+USER stockula
+
+VOLUME ["/app/data", "/app/results", "/app/models"]
+
+# GPU-aware health check
+HEALTHCHECK --interval=30s --timeout=15s --start-period=120s --retries=3 \
+    CMD python -c "import stockula; import torch; print(f'Stockula GPU Health: CUDA Available={torch.cuda.is_available()}, Device Count={torch.cuda.device_count()}')" || exit 1
+
+# Default entrypoint and command
+ENTRYPOINT ["python", "-m"]
+CMD ["stockula", "--help"]
+
+# Stage 5: GPU CLI stage - minimal CLI for GPU-accelerated forecasting
+FROM gpu-production AS gpu-cli
+
+# Add stage-specific label
+LABEL com.stockula.build.stage="gpu-cli" \
+      org.opencontainers.image.description="Stockula GPU CLI - Minimal CLI for GPU-accelerated time series forecasting"
+
+USER root
+
+# Install minimal CLI tools
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    apt-get update && apt-get install -y --no-install-recommends \
+    # Basic text viewing
+    less \
+    && rm -rf /var/lib/apt/lists/*
+
+# GPU CLI doesn't need additional packages - core functionality is sufficient
+
+USER stockula
+
+
+# Create a GPU info script for easy checking
+RUN echo '#!/bin/bash' > /home/stockula/gpu_info.sh && \
+    echo 'echo "=== GPU Information ==="' >> /home/stockula/gpu_info.sh && \
+    echo 'python -c "import torch; print(f\"PyTorch CUDA: {torch.cuda.is_available()}, Devices: {torch.cuda.device_count()}\")"' >> /home/stockula/gpu_info.sh && \
+    echo 'nvidia-smi --query-gpu=name,memory.total,memory.used --format=csv 2>/dev/null || echo "nvidia-smi not available"' >> /home/stockula/gpu_info.sh && \
+    chmod +x /home/stockula/gpu_info.sh
+
+# OCI Standard Labels with GPU-specific metadata
+LABEL org.opencontainers.image.created="${BUILD_DATE}" \
+      org.opencontainers.image.authors="Stockula Contributors <https://github.com/mkm29/stockula>" \
+      org.opencontainers.image.url="https://github.com/mkm29/stockula" \
+      org.opencontainers.image.documentation="https://github.com/mkm29/stockula/tree/main/docs" \
+      org.opencontainers.image.source="${GIT_URL}" \
+      org.opencontainers.image.version="${VERSION}" \
+      org.opencontainers.image.revision="${GIT_COMMIT}" \
+      org.opencontainers.image.vendor="Stockula Project" \
+      org.opencontainers.image.licenses="MIT" \
+      org.opencontainers.image.ref.name="${VERSION}" \
+      org.opencontainers.image.title="Stockula GPU" \
+      org.opencontainers.image.description="GPU-accelerated Stockula trading platform with NVIDIA CUDA support for time series forecasting"
+
+# Custom Labels for GPU-specific metadata
+LABEL com.stockula.python.version="3.12" \
+      com.stockula.base.image="nvidia/cuda:13.0.0-runtime-ubuntu24.04" \
+      com.stockula.build.stage="gpu-production" \
+      com.stockula.gpu.support="true" \
+      com.stockula.cuda.version="13.0" \
+      com.stockula.maintainer="Mitch Murphy"
+
+
+ENV SHELL=/bin/bash
+CMD ["/bin/bash"]

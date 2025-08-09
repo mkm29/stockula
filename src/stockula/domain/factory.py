@@ -100,6 +100,19 @@ class DomainFactory:
 
         return Asset(ticker_init=ticker, quantity_init=quantity, category_init=category)
 
+    # Public wrapper to satisfy interface and allow DI users to construct assets
+    def create_asset(self, ticker_config: TickerConfig, calculated_quantity: float | None = None) -> Asset:
+        """Create asset from ticker configuration.
+
+        Args:
+            ticker_config: Ticker configuration with quantity or allocation info
+            calculated_quantity: Dynamically calculated quantity (optional)
+
+        Returns:
+            Asset instance
+        """
+        return self._create_asset(ticker_config, calculated_quantity)
+
     def create_portfolio(self, config: StockulaConfig) -> Portfolio:
         """Create complete portfolio from configuration.
 
@@ -113,6 +126,7 @@ class DomainFactory:
             name_init=config.portfolio.name,
             initial_capital_init=config.portfolio.initial_capital,
             allocation_method_init=config.portfolio.allocation_method,
+            data_fetcher_init=self.fetcher,
             logging_manager_init=self.logger,
             rebalance_frequency=config.portfolio.rebalance_frequency,
             max_position_size=config.portfolio.max_position_size,

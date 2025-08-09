@@ -621,7 +621,10 @@ class TestStockForecasterForecastFromSymbol:
     def test_forecast_from_symbol_with_all_parameters(self, mock_data_fetcher, mock_logging_manager):
         """Test forecast_from_symbol with all parameters."""
         forecaster = StockForecaster(
-            forecast_length=30, data_fetcher=mock_data_fetcher, logging_manager=mock_logging_manager
+            forecast_length=30,
+            data_fetcher=mock_data_fetcher,
+            database_manager=None,  # Explicitly pass None for database_manager
+            logging_manager=mock_logging_manager,
         )
 
         # Create sample data
@@ -747,7 +750,8 @@ class TestStockForecasterForecastFromSymbol:
                         metrics = result["evaluation_metrics"]
                         assert "mae" in metrics
                         assert "rmse" in metrics
-                        assert "mape" in metrics
+                        assert "mase" in metrics  # Check for MASE
+                        assert "mape" in metrics  # MAPE still included for backward compatibility
                         assert metrics["mae"] == 1.5
                         assert metrics["rmse"] == 2.0
 

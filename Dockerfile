@@ -139,7 +139,7 @@ EXPOSE 8888/tcp
 
 # Default entrypoint and command
 ENTRYPOINT ["python", "-m"]
-CMD ["stockula.main", "--help"]
+CMD ["stockula", "--help"]
 
 # Stage 5: CLI stage - optimized for command-line usage
 FROM production AS cli

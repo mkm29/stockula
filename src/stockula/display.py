@@ -579,7 +579,7 @@ class ResultsDisplay:
         eval_table.add_column("Ticker", style="cyan", no_wrap=True)
         eval_table.add_column("RMSE", style="yellow", justify="right")
         eval_table.add_column("MAE", style="yellow", justify="right")
-        eval_table.add_column("MAPE %", style="yellow", justify="right")
+        eval_table.add_column("MASE", style="green", justify="right")
         eval_table.add_column("Train Period", style="white")
         eval_table.add_column("Test Period", style="white")
 
@@ -593,16 +593,31 @@ class ResultsDisplay:
                 train_str = f"{train_period.get('start', 'N/A')} to {train_period.get('end', 'N/A')}"
                 test_str = f"{test_period.get('start', 'N/A')} to {test_period.get('end', 'N/A')}"
 
+                # Use MASE if available, otherwise fall back to MAPE
+                mase_value = eval_metrics.get("mase")
+                if mase_value is not None:
+                    mase_str = f"{mase_value:.3f}"
+                    # Add interpretation: < 1 is better than naive
+                    if mase_value < 1:
+                        mase_str += " ✓"  # Good performance
+                else:
+                    # Fall back to MAPE if MASE not available
+                    mape_value = eval_metrics.get("mape", 0)
+                    mase_str = f"({mape_value:.1f}%)"  # Show MAPE in parentheses
+
                 eval_table.add_row(
                     forecast["ticker"],
                     f"${eval_metrics['rmse']:.2f}",
                     f"${eval_metrics['mae']:.2f}",
-                    f"{eval_metrics['mape']:.2f}%",
+                    mase_str,
                     train_str,
                     test_str,
                 )
 
         self.console.print(eval_table)
+        self.console.print(
+            "\n[dim]MASE: Mean Absolute Scaled Error (< 1.0 = better than naive forecast, marked with ✓)[/dim]"
+        )
 
     def show_forecast_warning(self, config: StockulaConfig):
         """Show forecast mode warning.

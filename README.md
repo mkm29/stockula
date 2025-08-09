@@ -41,9 +41,12 @@ Stockula is a comprehensive Python trading platform that provides tools for tech
 - **📊 Technical Analysis**: 40+ indicators (SMA, EMA, RSI, MACD, Bollinger Bands, etc.)
 - **🔄 Backtesting**: Test trading strategies with realistic broker costs and commission structures
 - **📈 Data Fetching**: Real-time and historical market data via yfinance with intelligent SQLite caching
-- **🔮 Price Forecasting**: Automated time series forecasting using AutoTS with two modes:
+- **🔮 Price Forecasting**: Automated time series forecasting with multiple backends:
+  - **AutoTS** (default): Feature-rich with 20+ statistical and ML models
+  - **AutoGluon**: Modern AutoML with deep learning models (DeepAR, Temporal Fusion Transformer)
   - Future prediction mode: Forecast N days from today
-  - Historical evaluation mode: Train/test split with accuracy metrics (RMSE, MAE, MAPE)
+  - Historical evaluation mode: Train/test split with accuracy metrics (RMSE, MAE, MASE)
+  - **GPU Acceleration**: Full GPU support for AutoGluon, optional for AutoTS
 - **🎨 Rich CLI Interface**: Beautiful progress bars, tables, and colored output
 - **🗄️ Database Caching**: Automatic SQLite caching for offline analysis and fast data access
 - **🚀 Modern Python**: Built with uv for fast package management and Pydantic for configuration
@@ -73,13 +76,14 @@ Stockula is a comprehensive Python trading platform that provides tools for tech
 uv run python -m stockula --ticker AAPL
 
 # Run with configuration file
-cp examples/config.simple.yaml .config.yaml
+cp examples/config.simple.yaml .stockula.yaml
 uv run python -m stockula
 
 # Run specific analysis modes
 uv run python -m stockula --ticker GOOGL --mode ta        # Technical analysis
 uv run python -m stockula --ticker MSFT --mode backtest  # Backtesting (results sorted by return, highest first)
-uv run python -m stockula --ticker NVDA --mode forecast  # Forecasting (results sorted by return, highest first)
+uv run python -m stockula --ticker NVDA --mode forecast  # Forecasting with AutoTS (default)
+uv run python -m stockula --ticker NVDA --mode forecast --backend autogluon  # Use AutoGluon backend
 
 # Show help
 uv run python -m stockula --help
@@ -117,7 +121,7 @@ backtest:
 Stockula includes an advanced allocation strategy that uses historical backtesting to optimize portfolio allocation:
 
 ```yaml
-# config.yaml for backtest-optimized allocation
+# .stockula.yaml for backtest-optimized allocation
 portfolio:
   initial_capital: 100000
   allocation_method: backtest_optimized
@@ -175,12 +179,16 @@ When running forecasts in evaluation mode (with train/test split), Stockula prov
 
 **How Accuracy is Calculated:**
 
-Portfolio accuracy is calculated as: **Accuracy = 100% - MAPE**
+Portfolio accuracy uses **MASE (Mean Absolute Scaled Error)**, a scale-independent metric that compares model performance to a naive forecast:
 
-Where MAPE (Mean Absolute Percentage Error) measures the average percentage difference between predicted and actual prices. For example:
+- **MASE < 1.0**: Model beats naive forecast (good performance)
+- **MASE = 1.0**: Model equals naive forecast
+- **MASE > 1.0**: Model worse than naive forecast
 
-- If a stock's MAPE is 6.11%, its accuracy is 93.89%
-- The portfolio accuracy is the average of all individual stock accuracies
+For example:
+
+- If a stock's MASE is 0.8, the model is 20% better than a naive forecast
+- The portfolio MASE is the average of all individual stock MASE values
 
 This provides an intuitive measure where:
 
@@ -231,39 +239,39 @@ For comprehensive documentation, visit our [**MkDocs Documentation Site**](https
 ```mermaid
 graph TB
     subgraph "User Interface"
-        CLI[CLI (cli.py)]
-        Config[Configuration<br/>.config.yaml]
+        CLI["CLI<br/>cli.py"]
+        Config["Configuration<br/>.stockula.yaml"]
     end
 
     subgraph "Managers"
-        SM[Stockula Manager]
-        TAM[Technical Analysis<br/>Manager]
-        BTM[Backtesting<br/>Manager]
-        FCM[Forecasting<br/>Manager]
-        ALM[Allocator<br/>Manager]
+        SM["Stockula Manager"]
+        TAM["Technical Analysis<br/>Manager"]
+        BTM["Backtesting<br/>Manager"]
+        FCM["Forecasting<br/>Manager"]
+        ALM["Allocator<br/>Manager"]
     end
 
     subgraph "Core Domain"
-        Factory[Domain Factory]
-        Portfolio[Portfolio]
-        Asset[Asset]
+        Factory["Domain Factory"]
+        Portfolio["Portfolio"]
+        Asset["Asset"]
     end
 
     subgraph "Allocation Module"
-        Allocator[Base Allocator]
-        STD[Standard Allocator]
-        OPT[Backtest Optimized<br/>Allocator]
+        Allocator["Base Allocator"]
+        STD["Standard Allocator"]
+        OPT["Backtest Optimized<br/>Allocator"]
     end
 
     subgraph "Data Layer"
-        Fetcher[Data Fetcher<br/>yfinance wrapper]
-        DB[(SQLite Database<br/>stockula.db)]
+        Fetcher["Data Fetcher<br/>yfinance wrapper"]
+        DB[("SQLite Database<br/>stockula.db")]
     end
 
     subgraph "Analysis Modules"
-        TA[Technical Analysis<br/>finta]
-        BT[Backtesting<br/>strategies]
-        FC[Forecasting<br/>AutoTS]
+        TA["Technical Analysis<br/>finta"]
+        BT["Backtesting<br/>strategies"]
+        FC["Forecasting<br/>AutoTS"]
     end
 
     CLI --> Config
@@ -306,7 +314,8 @@ graph TB
 - **yfinance**: Yahoo Finance data fetching
 - **finta**: Financial technical analysis indicators
 - **backtesting**: Strategy backtesting framework
-- **autots**: Automated time series forecasting
+- **autots**: Automated time series forecasting (default backend)
+- **autogluon** (optional): Advanced AutoML forecasting with deep learning
 - **rich**: Enhanced CLI formatting with progress bars and tables
 - **pydantic**: Data validation and settings management
 
@@ -434,9 +443,78 @@ This project uses [Conventional Commits](https://www.conventionalcommits.org/):
 
 MIT License - see [LICENSE](LICENSE) file for details.
 
+## 🔄 Git Flow & Release Process
+
+We follow a Git Flow branching strategy with automated releases via [Release Please](https://github.com/googleapis/release-please).
+
+### Branching Strategy
+
+```mermaid
+graph LR
+    A[feature/*] -->|Push| K[Docker Build<br/>0.12.1-feat.branch.sha]
+    K -->|GHCR| L[ghcr.io/mkm29/stockula:feat]
+    A -->|PR| B[develop]
+    C[bugfix/*] -->|PR| B
+    B -->|Release Please| D[RC Release<br/>0.12.1-rc.1]
+    D -->|Docker Build| E[ghcr.io/mkm29/stockula:0.12.1-rc.1]
+    B -->|Promote PR| F[main]
+    F -->|Release Please| G[Stable Release<br/>v0.12.1]
+    G -->|Docker Build| H[ghcr.io/mkm29/stockula:v0.12.1]
+    G -->|Publish| I[PyPI]
+    J[hotfix/*] -->|PR| F
+    J -->|Auto-backport| B
+```
+
+- **`develop`** - Integration branch for active development
+- **`main`** - Production-ready releases only
+- **Feature branches** (`feature/*`) - New features
+- **Bugfix branches** (`bugfix/*`) - Bug fixes
+- **Hotfix branches** (`hotfix/*`) - Critical production fixes
+
+### Release Types
+
+| Type              | Branch     | Git Tag      | Docker Tag                  | Example                                              |
+| ----------------- | ---------- | ------------ | --------------------------- | ---------------------------------------------------- |
+| Feature Branch    | feature/\* | None         | `X.Y.Z-feat.<branch>.<sha>` | `ghcr.io/mkm29/stockula:0.12.1-feat.new-api.a1b2c3d` |
+| Release Candidate | develop    | `0.Y.Z-rc.N` | `0.Y.Z-rc.N`                | `ghcr.io/mkm29/stockula:0.12.1-rc.1`                 |
+| Stable Release    | main       | `vX.Y.Z`     | `vX.Y.Z`                    | `ghcr.io/mkm29/stockula:v0.12.1`                     |
+
+### Docker Images
+
+Automated builds are triggered on releases and feature branch pushes:
+
+| Image                        | Description                | Latest Feature | Latest RC | Latest Stable |
+| ---------------------------- | -------------------------- | -------------- | --------- | ------------- |
+| `ghcr.io/mkm29/stockula`     | CLI with development tools | `:feat`        | `:rc`     | `:latest`     |
+| `ghcr.io/mkm29/stockula-gpu` | GPU-accelerated CLI (CUDA) | N/A            | `:rc`     | `:latest`     |
+
+```bash
+# Pull latest stable
+docker pull ghcr.io/mkm29/stockula:latest
+
+# Pull latest RC for testing
+docker pull ghcr.io/mkm29/stockula:rc
+
+# Pull latest feature branch build
+docker pull ghcr.io/mkm29/stockula:feat
+
+# Pull specific versions (tags match Git tags for releases)
+docker pull ghcr.io/mkm29/stockula:v0.12.1      # Stable release
+docker pull ghcr.io/mkm29/stockula:0.12.1-rc.1  # Release candidate
+
+# Pull specific feature branch build
+docker pull ghcr.io/mkm29/stockula:0.12.1-feat.new-api.a1b2c3d
+
+# Run GPU-accelerated version (requires NVIDIA Docker runtime)
+docker run --gpus all ghcr.io/mkm29/stockula-gpu:latest
+
+# Check GPU availability
+docker run --gpus all ghcr.io/mkm29/stockula-gpu:latest bash -c "/home/stockula/gpu_info.sh"
+```
+
 ## 🤝 Contributing
 
-Contributions are welcome! Please see our [Contributing Guide](CONTRIBUTING.md) for development setup and guidelines.
+Contributions are welcome! Please see our [Contributing Guide](docs/CONTRIBUTING.md) for development setup and guidelines.
 
 ### Development Setup
 

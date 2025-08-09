@@ -7,19 +7,11 @@ SQLAlchemy ORM with Pydantic validation.
 import json
 from datetime import UTC, datetime
 from datetime import date as DateType
-from typing import Optional
+from typing import ClassVar, Optional
 
 from sqlalchemy import DateTime as SQLADateTime
 from sqlalchemy import func
-from sqlmodel import (
-    Column,
-    Field,
-    Index,
-    Relationship,
-    SQLModel,
-    Text,
-    UniqueConstraint,
-)
+from sqlmodel import Column, Field, Index, Relationship, SQLModel, Text, UniqueConstraint
 
 
 class Stock(SQLModel, table=True):  # type: ignore[call-arg]
@@ -336,3 +328,245 @@ class StrategyPreset(SQLModel, table=True):
     def set_parameters(self, params: dict) -> None:
         """Set parameters from dictionary."""
         self.parameters_json = json.dumps(params, default=str)
+
+
+class AutoTSModel(SQLModel, table=True):
+    """AutoTS model definitions and metadata.
+
+    This model stores valid AutoTS models and their properties.
+    Validation is performed before saving to ensure only valid models are stored.
+    """
+
+    __tablename__ = "autots_models"
+
+    # Class-level registry of valid models (loaded from models.json)
+    _valid_models: ClassVar[set[str] | None] = None
+    _models_data: ClassVar[dict[str, dict] | None] = None
+
+    id: int | None = Field(default=None, primary_key=True)
+    name: str = Field(index=True, unique=True, description="Model name (e.g., ARIMA, ETS)")
+    categories: str = Field(default="[]", description="JSON array of categories (univariate, multivariate, etc.)")
+    is_slow: bool = Field(default=False, description="Whether model is computationally expensive")
+    is_gpu_enabled: bool = Field(default=False, description="Whether model can utilize GPU")
+    requires_regressor: bool = Field(default=False, description="Whether model supports external regressors")
+    min_data_points: int = Field(default=10, description="Minimum data points required")
+    description: str | None = Field(default=None, description="Model description")
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+    @classmethod
+    def load_valid_models(cls, force_reload: bool = False) -> None:
+        """Load valid models from AutoTS library.
+
+        Args:
+            force_reload: Force reload even if already loaded
+        """
+        if cls._valid_models is not None and not force_reload:
+            return
+
+        try:
+            # Get the authoritative model list from AutoTS itself
+            from autots.models.model_list import model_lists
+
+            # The model_lists is a dictionary of presets
+            # The 'all' preset contains all available models
+            all_models = set(model_lists.get("all", []))
+
+            cls._valid_models = all_models
+            cls._models_data = model_lists  # Store the full model_lists for reference
+
+        except ImportError:
+            # Fallback if AutoTS is not available (shouldn't happen in normal operation)
+            # Use a minimal set of known models
+            cls._valid_models = {
+                "ARIMA",
+                "ETS",
+                "FBProphet",
+                "GluonTS",
+                "VAR",
+                "VECM",
+                "Theta",
+                "UnivariateMotif",
+                "MultivariateMotif",
+                "LastValueNaive",
+                "ConstantNaive",
+                "AverageValueNaive",
+                "SeasonalNaive",
+                "GLM",
+                "GLS",
+                "RollingRegression",
+                "UnobservedComponents",
+                "DynamicFactor",
+                "WindowRegression",
+                "DatepartRegression",
+                "UnivariateRegression",
+                "NVAR",
+                "MultivariateRegression",
+                "ARDL",
+                "NeuralProphet",
+            }
+            cls._models_data = {}
+
+    @classmethod
+    def is_valid_model(cls, name: str) -> bool:
+        """Check if a model name is valid.
+
+        Args:
+            name: Model name to validate
+
+        Returns:
+            True if model is valid, False otherwise
+        """
+        cls.load_valid_models()
+        return name in (cls._valid_models or set())
+
+    @classmethod
+    def get_valid_models(cls) -> set[str]:
+        """Get set of all valid model names.
+
+        Returns:
+            Set of valid model names
+        """
+        cls.load_valid_models()
+        return cls._valid_models.copy() if cls._valid_models else set()
+
+    @classmethod
+    def validate_model_list(cls, models: list[str]) -> tuple[bool, list[str]]:
+        """Validate a list of model names.
+
+        Args:
+            models: List of model names to validate
+
+        Returns:
+            Tuple of (all_valid, invalid_models)
+        """
+        cls.load_valid_models()
+        invalid = [m for m in models if not cls.is_valid_model(m)]
+        return len(invalid) == 0, invalid
+
+    def validate(self) -> None:
+        """Validate the model before saving.
+
+        Raises:
+            ValueError: If the model name is not a valid AutoTS model
+        """
+        if not self.is_valid_model(self.name):
+            valid_models = self.get_valid_models()
+            raise ValueError(
+                f"'{self.name}' is not a valid AutoTS model. "
+                f"Valid models include: {', '.join(sorted(list(valid_models)[:10]))}..."
+            )
+
+    @property
+    def category_list(self) -> list[str]:
+        """Parse JSON categories to list."""
+        return json.loads(self.categories)
+
+    def set_categories(self, categories: list[str]) -> None:
+        """Set categories from list."""
+        self.categories = json.dumps(categories)
+
+
+class AutoTSPreset(SQLModel, table=True):
+    """AutoTS model preset configurations.
+
+    This model stores preset configurations that group models together.
+    Validation ensures all models in a preset are valid AutoTS models.
+    """
+
+    __tablename__ = "autots_presets"
+
+    # Class-level registry of valid presets
+    _valid_presets: ClassVar[set[str] | None] = None
+
+    id: int | None = Field(default=None, primary_key=True)
+    name: str = Field(index=True, unique=True, description="Preset name (e.g., fast, superfast)")
+    models: str = Field(description="JSON array of model names or dict with weights")
+    description: str | None = Field(default=None, description="Preset description")
+    use_case: str | None = Field(default=None, description="Recommended use case")
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+    @classmethod
+    def load_valid_presets(cls, force_reload: bool = False) -> None:
+        """Load valid presets from AutoTS library.
+
+        Args:
+            force_reload: Force reload even if already loaded
+        """
+        if cls._valid_presets is not None and not force_reload:
+            return
+
+        try:
+            # Get presets directly from AutoTS
+            from autots.models.model_list import model_lists
+
+            # All keys in model_lists are valid presets
+            cls._valid_presets = set(model_lists.keys())
+        except ImportError:
+            # Fallback to known AutoTS presets
+            cls._valid_presets = {
+                "fast",
+                "superfast",
+                "default",
+                "parallel",
+                "fast_parallel",
+                "scalable",
+                "probabilistic",
+                "multivariate",
+                "univariate",
+                "best",
+                "slow",
+                "gpu",
+                "regressor",
+                "motifs",
+                "regressions",
+                "all",
+                "no_shared",
+                "experimental",
+            }
+
+    @classmethod
+    def is_valid_preset(cls, name: str) -> bool:
+        """Check if a preset name is valid.
+
+        Args:
+            name: Preset name to validate
+
+        Returns:
+            True if preset is valid, False otherwise
+        """
+        cls.load_valid_presets()
+        return name in (cls._valid_presets or set())
+
+    def validate(self) -> None:
+        """Validate the preset before saving.
+
+        Raises:
+            ValueError: If preset contains invalid models
+        """
+        # Parse the models
+        model_list = self.model_list
+
+        # Extract model names depending on format
+        if isinstance(model_list, list):
+            model_names = model_list
+        elif isinstance(model_list, dict):
+            model_names = list(model_list.keys())
+        else:
+            raise ValueError(f"Invalid models format: {type(model_list)}")
+
+        # Validate all models in the preset
+        is_valid, invalid_models = AutoTSModel.validate_model_list(model_names)
+        if not is_valid:
+            raise ValueError(f"Preset '{self.name}' contains invalid models: {', '.join(invalid_models)}")
+
+    @property
+    def model_list(self) -> list[str] | dict[str, float]:
+        """Parse JSON models to list or dict."""
+        data = json.loads(self.models)
+        return data
+
+    def set_models(self, models: list[str] | dict[str, float]) -> None:
+        """Set models from list or dict."""
+        self.models = json.dumps(models)

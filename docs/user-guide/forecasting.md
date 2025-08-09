@@ -12,7 +12,7 @@ The forecasting module offers:
 - **Multiple Forecasters**: Standard, fast (ultra_fast), and financial-specific forecasters
 - **Confidence Intervals**: Statistical uncertainty quantification
 - **Model Validation**: Cross-validation and backtesting
-- **Train/Test Evaluation**: Historical accuracy assessment with RMSE, MAE, and MAPE metrics
+- **Train/Test Evaluation**: Historical accuracy assessment with RMSE, MAE, and MASE metrics
 - **Performance Optimization**: Configurable speed vs. accuracy trade-offs
 - **Rich Visualization**: Progress tracking and result display
 
@@ -70,6 +70,16 @@ forecasting_manager.validate_forecast_config(config)
 ## AutoTS Models
 
 Stockula uses AutoTS for time series forecasting with carefully curated model lists optimized for financial data. The system automatically selects appropriate models based on the data type and configuration.
+
+### Database-Driven Model Management
+
+Model validation is now managed through the database:
+
+- **AutoTSModel**: Database table storing valid model definitions
+- **AutoTSPreset**: Database table storing model presets (fast, financial, etc.)
+- **Dynamic Loading**: Models are loaded from the database on first use
+- **Automatic Seeding**: If the database is empty, models are loaded directly from the AutoTS library
+- **Self-Validation**: Models validate themselves against AutoTS's authoritative model list
 
 ### Model Lists
 
@@ -246,13 +256,13 @@ forecast:
 
 ```bash
 # Using defaults optimized for speed
-uv run python -m stockula.main --config config.yaml --mode forecast
+uv run python -m stockula --config .stockula.yaml --mode forecast
 ```
 
 #### Thorough Forecast (2-5 minutes)
 
 ```yaml
-# config.yaml
+# .stockula.yaml
 forecast:
   model_list: "financial"
   max_generations: 5
@@ -261,7 +271,7 @@ forecast:
 ```
 
 ```bash
-uv run python -m stockula.main --config config.yaml --mode forecast
+uv run python -m stockula --config .stockula.yaml --mode forecast
 ```
 
 ### Understanding the Output
@@ -290,7 +300,7 @@ from stockula.container import Container
 from stockula.config.settings import load_config
 
 # Load configuration and get manager
-config = load_config("myconfig.yaml")
+config = load_config("my.stockula.yaml")
 container = Container()
 forecasting_manager = container.forecasting_manager()
 
@@ -322,7 +332,7 @@ fetcher = DataFetcher()
 data = fetcher.get_stock_data("AAPL", start_date="2023-01-01")
 
 # Create forecaster
-config = load_config("myconfig.yaml")
+config = load_config("my.stockula.yaml")
 forecaster = StockForecaster(
     forecast_length=30,
     model_list="fast",
@@ -347,7 +357,7 @@ from stockula.container import Container
 from stockula.domain.factory import DomainFactory
 
 # Load portfolio configuration
-config = load_config("myconfig.yaml")
+config = load_config("my.stockula.yaml")
 container = Container()
 forecasting_manager = container.forecasting_manager()
 
@@ -373,7 +383,7 @@ for ticker, forecast in portfolio_forecasts.items():
 from stockula.domain.factory import DomainFactory
 
 # Load portfolio configuration
-config = load_config("myconfig.yaml")
+config = load_config("my.stockula.yaml")
 factory = DomainFactory(config)
 portfolio = factory.create_portfolio()
 
@@ -464,7 +474,7 @@ The portfolio value table shows different information based on the forecast mode
 
 - **Observed Value**: The current portfolio value at the start date (today for future mode, test start for evaluation mode)
 - **Predicted Value**: The forecasted portfolio value at the end date based on individual stock predictions
-- **Accuracy**: (Evaluation mode only) The average forecast accuracy across all stocks, calculated as 100% - MAPE
+- **Accuracy**: (Evaluation mode only) The average forecast performance across all stocks, measured by MASE (< 1.0 is better than naive)
 
 ### Forecast Results Table
 
@@ -492,9 +502,9 @@ When train/test dates are configured, you'll also see accuracy metrics:
 ```
                          Model Performance on Test Data
 ┏━━━━━━━━┳━━━━━━━━┳━━━━━━━━┳━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━┓
-┃ Ticker ┃   RMSE ┃    MAE ┃ MAPE % ┃ Train Period       ┃ Test Period         ┃
+┃ Ticker ┃   RMSE ┃    MAE ┃  MASE ┃ Train Period       ┃ Test Period         ┃
 ┡━━━━━━━━╇━━━━━━━━╇━━━━━━━━╇━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━┩
-│ AAPL   │ $27.26 │ $24.12 │ 12.69% │ 2025-01-02 to      │ 2025-04-01 to       │
+│ AAPL   │ $27.26 │ $24.12 │ 0.85 ✓│ 2025-01-02 to      │ 2025-04-01 to       │
 │        │        │        │        │ 2025-03-31         │ 2025-06-30          │
 │ NVDA   │  $8.49 │  $6.75 │  6.68% │ 2025-01-02 to      │ 2025-04-01 to       │
 │        │        │        │        │ 2025-03-31         │ 2025-06-30          │
@@ -521,8 +531,8 @@ When using Historical Evaluation Mode (train/test dates configured without forec
 1. **Calculates accuracy metrics**:
    - **RMSE (Root Mean Square Error)**: Average prediction error in dollars
    - **MAE (Mean Absolute Error)**: Average absolute error in dollars
-   - **MAPE (Mean Absolute Percentage Error)**: Average percentage error
-   - **Accuracy**: Calculated as 100% - MAPE
+   - **MASE (Mean Absolute Scaled Error)**: Scale-independent error metric (< 1.0 = better than naive, marked with ✓)
+   - **Performance**: MASE < 1.0 indicates the model beats a simple naive forecast
 
 ### Example Configuration
 

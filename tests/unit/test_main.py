@@ -377,7 +377,7 @@ class TestForecasting:
             "model_params": {},
             "train_period": {"start": "2023-01-01", "end": "2023-12-31", "days": 365},
             "test_period": {"start": "2024-01-01", "end": "2024-01-31", "days": 31},
-            "evaluation": {"rmse": 2.5, "mae": 2.0, "mape": 1.5},
+            "evaluation": {"rmse": 2.5, "mae": 2.0, "mase": 0.8, "mape": 1.5},
         }
 
         manager = create_mock_manager(config)
@@ -539,7 +539,9 @@ class TestMainFunction:
             "initial_capital": 100000.0,
         }
 
-        main()
+        with pytest.raises(SystemExit) as exc_info:
+            main()
+        assert exc_info.value.code == 0
 
         mock_run_main.assert_called_once()
         mock_print.assert_called_once()
@@ -567,14 +569,16 @@ class TestMainFunction:
                     "ticker": "AAPL",
                     "current_price": 150.0,
                     "forecast_price": 160.0,
-                    "evaluation": {"rmse": 2.0, "mape": 1.5},
+                    "evaluation": {"rmse": 2.0, "mase": 0.9, "mape": 1.5},
                 }
             ],
             "initial_portfolio_value": 100000.0,
             "initial_capital": 100000.0,
         }
 
-        main()
+        with pytest.raises(SystemExit) as exc_info:
+            main()
+        assert exc_info.value.code == 0
 
         mock_run_main.assert_called_once()
         mock_print.assert_called_once()
@@ -589,7 +593,9 @@ class TestMainFunction:
         mock_container.return_value = container
 
         with patch("stockula.cli.save_config") as mock_save:
-            main()
+            with pytest.raises(SystemExit) as exc_info:
+                main()
+            assert exc_info.value.code == 0
             mock_save.assert_called_once()
 
     @patch("stockula.cli.create_container")
@@ -632,7 +638,9 @@ class TestMainFunction:
         # Mock datetime for consistent behavior
         with patch("stockula.cli.datetime") as mock_datetime:
             mock_datetime.now.return_value.strftime.return_value = "20240115_120000"
-            main()
+            with pytest.raises(SystemExit) as exc_info:
+                main()
+            assert exc_info.value.code == 0
 
         # Verify the main function ran successfully
         mock_ta.assert_called_once()
@@ -760,6 +768,9 @@ class TestMainEntryPoint:
     def test_main_entry_point_if_name_main(self):
         """Test the if __name__ == '__main__' entry point."""
         with patch("stockula.main.main") as mock_main:
+            # Configure mock to raise SystemExit(0) when called
+            mock_main.side_effect = SystemExit(0)
+
             import stockula.main as main_module
 
             # Save original __name__
@@ -771,7 +782,9 @@ class TestMainEntryPoint:
 
                 # Execute just the if condition block
                 if main_module.__name__ == "__main__":
-                    main_module.main()
+                    with pytest.raises(SystemExit) as exc_info:
+                        main_module.main()
+                    assert exc_info.value.code == 0
 
                 # Verify main was called
                 mock_main.assert_called_once()
@@ -1060,7 +1073,7 @@ class TestPrintResultsEdgeCases:
                     "lower_bound": 155.0,
                     "upper_bound": 165.0,
                     "best_model": "ARIMA",
-                    "evaluation": {"rmse": 3.5, "mae": 2.8, "mape": 1.9},
+                    "evaluation": {"rmse": 3.5, "mae": 2.8, "mase": 0.85, "mape": 1.9},
                     "train_period": {"start": "2023-01-01", "end": "2023-06-30"},
                     "test_period": {"start": "2023-07-01", "end": "2023-07-31"},
                 },
@@ -1071,7 +1084,7 @@ class TestPrintResultsEdgeCases:
                     "lower_bound": 270.0,
                     "upper_bound": 290.0,
                     "best_model": "ETS",
-                    "evaluation": {"rmse": 5.2, "mae": 4.1, "mape": 2.1},
+                    "evaluation": {"rmse": 5.2, "mae": 4.1, "mase": 1.1, "mape": 2.1},
                     "train_period": {"start": "2023-01-01", "end": "2023-06-30"},
                     "test_period": {"start": "2023-07-01", "end": "2023-07-31"},
                 },
@@ -1084,8 +1097,8 @@ class TestPrintResultsEdgeCases:
         assert "Forecast Evaluation Metrics" in captured.out
         assert "RMSE" in captured.out
         assert "$3.50" in captured.out
-        assert "MAPE %" in captured.out
-        assert "1.90%" in captured.out
+        assert "MASE" in captured.out
+        assert "0.850" in captured.out  # MASE value for AAPL instead of MAPE percentage
 
 
 class TestPortfolioBacktestResultsComplex:
@@ -1227,7 +1240,9 @@ class TestMainFunctionAdvanced:
         mock_container.return_value = container
 
         with patch("stockula.cli.print_results"):
-            main()
+            with pytest.raises(SystemExit) as exc_info:
+                main()
+            assert exc_info.value.code == 0
 
         # Check that dates were overridden
         assert config.forecast.train_start_date == date(2023, 1, 1)
@@ -1314,7 +1329,9 @@ class TestMainFunctionAdvanced:
         mock_strategy = Mock()
         mock_get_strategy.return_value = mock_strategy
 
-        main()
+        with pytest.raises(SystemExit) as exc_info:
+            main()
+        assert exc_info.value.code == 0
 
         # Should run TA on both assets
         assert mock_ta.call_count == 2
@@ -1391,7 +1408,7 @@ class TestMainFunctionAdvanced:
                     "lower_bound": 155.0,
                     "upper_bound": 165.0,
                     "best_model": "ARIMA",
-                    "evaluation": {"rmse": 2.0, "mae": 1.5, "mape": 1.0},
+                    "evaluation": {"rmse": 2.0, "mae": 1.5, "mase": 0.75, "mape": 1.0},
                     "end_date": "2024-01-31",
                 }
             ],
@@ -1399,8 +1416,13 @@ class TestMainFunctionAdvanced:
             "initial_capital": 100000.0,
         }
 
-        with patch("stockula.cli.console") as mock_console:
-            main()
+        with patch("stockula.cli.cli_manager") as mock_cli_manager:
+            mock_console = Mock()
+            mock_cli_manager.get_console.return_value = mock_console
+
+            with pytest.raises(SystemExit) as exc_info:
+                main()
+            assert exc_info.value.code == 0
 
             # Check that portfolio value table was printed
             # Look for Table objects in print calls
@@ -1461,7 +1483,9 @@ class TestMainFunctionAdvanced:
         with patch("stockula.manager.StockulaManager.run_backtest") as mock_backtest:
             mock_backtest.return_value = []
             with patch("stockula.cli.print_results"):
-                main()
+                with pytest.raises(SystemExit) as exc_info:
+                    main()
+            assert exc_info.value.code == 0
 
         # Check that fetcher was called to get start prices
         assert mock_fetcher.get_stock_data.call_count >= 1
@@ -1470,6 +1494,7 @@ class TestMainFunctionAdvanced:
     @patch("stockula.main.setup_logging")
     @patch("stockula.main.log_manager")
     @patch("stockula.cli.print_results")
+    @patch("stockula.manager.StockulaManager.run_main_processing")
     @patch("stockula.manager.StockulaManager.create_portfolio_backtest_results")
     @patch("stockula.manager.StockulaManager.save_detailed_report")
     @patch("sys.argv", ["stockula", "--mode", "backtest"])
@@ -1477,6 +1502,7 @@ class TestMainFunctionAdvanced:
         self,
         mock_save_report,
         mock_create_results,
+        mock_run_main,
         mock_print,
         mock_log_manager,
         mock_logging,
@@ -1573,8 +1599,27 @@ class TestMainFunctionAdvanced:
         mock_create_results.return_value = mock_portfolio_results
         mock_save_report.return_value = "results/reports/strategy_report_SMACross_20240101_120000.json"
 
-        with patch("stockula.cli.console") as mock_console:
-            main()
+        # Mock the main processing to return backtesting results
+        mock_run_main.return_value = {
+            "backtesting": [
+                {
+                    "strategy": "SMACross",
+                    "Return [%]": 15.0,
+                    "Sharpe Ratio": 1.5,
+                    "Max. Drawdown [%]": -8.0,
+                    "# Trades": 25,
+                    "Win Rate [%]": 60.0,
+                }
+            ]
+        }
+
+        with patch("stockula.cli.cli_manager") as mock_cli_manager:
+            mock_console = Mock()
+            mock_cli_manager.get_console.return_value = mock_console
+
+            with pytest.raises(SystemExit) as exc_info:
+                main()
+            assert exc_info.value.code == 0
 
             # Check that strategy summary panel was printed
             panel_calls = [call for call in mock_console.print.call_args_list if "Panel" in str(call)]
@@ -1692,7 +1737,9 @@ class TestMainHoldingsDisplay:
             mock_ta.return_value = {"ticker": "AAPL", "indicators": {}}
             with patch("stockula.cli.print_results"):
                 with patch("stockula.cli.console") as mock_console:
-                    main()
+                    with pytest.raises(SystemExit) as exc_info:
+                        main()
+                    assert exc_info.value.code == 0
 
                     # Check that holdings table was printed with "N/A" for category
                     table_calls = [
@@ -1747,7 +1794,9 @@ class TestMainErrorHandling:
 
         mock_ta.return_value = {"ticker": "AAPL", "indicators": {"SMA_20": 150.0}}
 
-        main()
+        with pytest.raises(SystemExit) as exc_info:
+            main()
+        assert exc_info.value.code == 0
 
         # Should call TA without progress since it's the only operation
         mock_ta.assert_called_once()
@@ -1829,7 +1878,9 @@ class TestMainErrorHandling:
             "initial_capital": 100000.0,
         }
 
-        main()
+        with pytest.raises(SystemExit) as exc_info:
+            main()
+        assert exc_info.value.code == 0
 
         # Test that run_main_processing was called with correct arguments
         mock_run_main.assert_called_once()
@@ -1893,7 +1944,7 @@ class TestMainErrorHandling:
                     "lower_bound": 155.0,
                     "upper_bound": 165.0,
                     "best_model": "ARIMA",
-                    "evaluation": {"rmse": 2.0, "mae": 1.5, "mape": 1.0},
+                    "evaluation": {"rmse": 2.0, "mae": 1.5, "mase": 0.75, "mape": 1.0},
                 },
                 {
                     "ticker": "MSFT",
@@ -1904,7 +1955,9 @@ class TestMainErrorHandling:
             "initial_capital": 100000.0,
         }
 
-        main()
+        with pytest.raises(SystemExit) as exc_info:
+            main()
+        assert exc_info.value.code == 0
 
         # Test that run_main_processing was called
         mock_run_main.assert_called_once()

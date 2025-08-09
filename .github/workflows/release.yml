@@ -1,8 +1,10 @@
+---
 name: Release Please
 on:
   push:
     branches:
       - main
+      - develop
 permissions:
   contents: write
   pull-requests: write
@@ -13,30 +15,44 @@ jobs:
       release_created: ${{ steps.release.outputs.release_created }}
       tag_name: ${{ steps.release.outputs.tag_name }}
     steps:
+      # For main branch: Create production releases
       - uses: googleapis/release-please-action@v4
+        if: github.ref == 'refs/heads/main'
         id: release
         with:
           token: ${{ secrets.RELEASE_PLEASE_TOKEN }}
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
-      # The logic below handles the npm publication:
+          target-branch: main
+
+      # For develop branch: Create release candidates
+      - uses: googleapis/release-please-action@v4
+        if: github.ref == 'refs/heads/develop'
+        id: release-dev
+        with:
+          token: ${{ secrets.RELEASE_PLEASE_TOKEN }}
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+          target-branch: develop
+          prerelease: true
+      # The logic below handles the PyPI publication (only for main branch releases):
       - name: Checkout Repository
-        if: ${{ steps.release.outputs.release_created }}
+        if: ${{ steps.release.outputs.release_created && github.ref == 'refs/heads/main' }}
         uses: actions/checkout@v4
       - name: Setup Python
-        if: ${{ steps.release.outputs.release_created }}
+        if: ${{ steps.release.outputs.release_created && github.ref == 'refs/heads/main' }}
         uses: actions/setup-python@v5
         with:
           python-version: '3.13'
       - name: Install uv
-        if: ${{ steps.release.outputs.release_created }}
+        if: ${{ steps.release.outputs.release_created && github.ref == 'refs/heads/main' }}
         uses: astral-sh/setup-uv@v5
       - name: Build Package
-        if: ${{ steps.release.outputs.release_created }}
+        if: ${{ steps.release.outputs.release_created && github.ref == 'refs/heads/main' }}
         run: |
           uv build
       - name: Publish to PyPI
-        if: ${{ steps.release.outputs.release_created }}
+        if: ${{ steps.release.outputs.release_created && github.ref == 'refs/heads/main' }}
         env:
           UV_PUBLISH_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
         run: |

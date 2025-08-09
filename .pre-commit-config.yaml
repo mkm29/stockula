@@ -1,3 +1,4 @@
+---
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v5.0.0
@@ -25,6 +26,15 @@ repos:
         additional_dependencies: [types-requests]
         args: [--ignore-missing-imports]
         exclude: ^tests/
+  - repo: https://github.com/google/yamlfmt
+    rev: v0.13.0
+    hooks:
+      - id: yamlfmt
+  - repo: https://github.com/adrienverge/yamllint
+    rev: v1.35.1
+    hooks:
+      - id: yamllint
+        args: [-c=.yamllint]
 exclude: |
   (?x)^(
     .*\.egg-info/.*|

@@ -11,15 +11,14 @@ from typing import TYPE_CHECKING, Any
 import pandas as pd
 from autots import AutoTS
 from dependency_injector.wiring import Provide, inject
-from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, TextColumn
 
+from ..cli_manager import cli_manager
 from ..interfaces import ILoggingManager
-
-console = Console()
 
 if TYPE_CHECKING:
     from ..data import DataFetcher
+    from ..database.manager import DatabaseManager
 
 # Set up warning suppression for AutoTS
 warnings.filterwarnings("ignore", category=UserWarning, module="autots")
@@ -336,6 +335,7 @@ class StockForecaster:
         max_generations: int = 5,
         no_negatives: bool = True,
         data_fetcher: "DataFetcher | None" = None,
+        database_manager: "DatabaseManager | None" = Provide["database_manager"],
         logging_manager: ILoggingManager = Provide["logging_manager"],
     ):
         """Initialize the stock forecaster.
@@ -356,6 +356,7 @@ class StockForecaster:
             max_generations: Maximum generations for model evolution (1=basic, 2=balanced, 3+=thorough)
             no_negatives: Constraint predictions to be non-negative
             data_fetcher: Optional DataFetcher instance for retrieving stock data
+            database_manager: Injected database manager
             logging_manager: Injected logging manager
         """
         self.forecast_length = forecast_length
@@ -368,6 +369,7 @@ class StockForecaster:
         self.max_generations = max_generations
         self.no_negatives = no_negatives
         self.data_fetcher = data_fetcher
+        self.database_manager = database_manager
         self.logger = logging_manager
         self.model = None
         self.prediction = None
@@ -382,10 +384,81 @@ class StockForecaster:
         Returns:
             List of model names or string preset for AutoTS
         """
+        # Validate the model list if it's a list
         if isinstance(model_list, list):
+            # If we have a database manager, use it to validate models
+            if self.database_manager:
+                from ..data.autots_repository import AutoTSRepository
+
+                with self.database_manager.get_session() as session:
+                    repo = AutoTSRepository(session, self.logger)
+                    is_valid, invalid_models = repo.validate_model_list(model_list)
+
+                    if not is_valid and invalid_models:
+                        # Log warning about invalid models
+                        self.logger.warning(f"Invalid models found: {invalid_models}")
+                        # Use difflib to suggest alternatives
+                        from difflib import get_close_matches
+
+                        all_models = [m.name for m in repo.get_all_models()]
+                        for invalid_model in invalid_models:
+                            suggestions = get_close_matches(invalid_model, all_models, n=3, cutoff=0.6)
+                            if suggestions:
+                                self.logger.info(f"Did you mean one of these? {suggestions}")
+
+                    # Filter out invalid models
+                    valid_models = [m for m in model_list if repo.get_model(m) is not None]
+            else:
+                # Fallback to using the model class directly if no database
+                from ..database.models import AutoTSModel
+
+                is_valid, invalid_models = AutoTSModel.validate_model_list(model_list)
+
+                if not is_valid and invalid_models:
+                    # Log warning about invalid models
+                    self.logger.warning(f"Invalid models found: {invalid_models}")
+                    # Use difflib to suggest alternatives
+                    from difflib import get_close_matches
+
+                    valid_models_set = AutoTSModel.get_valid_models()
+                    for invalid_model in invalid_models:
+                        suggestions = get_close_matches(invalid_model, valid_models_set, n=3, cutoff=0.6)
+                        if suggestions:
+                            self.logger.info(f"Did you mean one of these? {suggestions}")
+
+                # Filter out invalid models
+                valid_models = [m for m in model_list if AutoTSModel.is_valid_model(m)]
+
+            if not valid_models:
+                self.logger.warning("No valid models in list, falling back to 'fast' preset")
+                return "fast"
+            return valid_models
+
+        # Check if it's an AutoTS built-in preset first
+        # These should be passed through as strings for AutoTS to handle
+        autots_builtins = [
+            "fast",
+            "superfast",
+            "default",
+            "parallel",
+            "fast_parallel",
+            "scalable",
+            "probabilistic",
+            "multivariate",
+            "univariate",
+            "all",
+            "no_shared",
+            "motifs",
+            "regressor",
+            "best",
+            "slow",
+            "gpu",
+        ]
+        if model_list in autots_builtins:
+            self.logger.info(f"Using AutoTS built-in preset '{model_list}'")
             return model_list
 
-        # Map our presets to model lists
+        # Map our custom presets to model lists
         if model_list == "ultra_fast":
             self.logger.info(
                 f"Using ultra-fast model list ({len(self.ULTRA_FAST_MODEL_LIST)} models) for {target_column}"
@@ -400,7 +473,8 @@ class StockForecaster:
             # Intersection of fast and financial models
             return [m for m in self.FAST_MODEL_LIST if m in self.FINANCIAL_MODEL_LIST]
         else:
-            # Use AutoTS built-in presets
+            # If we get here, it's not a recognized preset, pass it through
+            # AutoTS will handle the error if it's invalid
             return model_list
 
     def fit(
@@ -465,7 +539,7 @@ class StockForecaster:
                 with Progress(
                     SpinnerColumn(),
                     TextColumn("[progress.description]{task.description}"),
-                    console=console,
+                    console=cli_manager.get_console(),
                     transient=True,
                 ) as progress:
                     task = progress.add_task("[cyan]Training models on historical data...", total=None)
@@ -757,13 +831,28 @@ class StockForecaster:
                 mae = mean_absolute_error(actual_values, forecast_values)
                 mse = mean_squared_error(actual_values, forecast_values)
                 rmse = np.sqrt(mse)
+
+                # Calculate MASE (Mean Absolute Scaled Error)
+                # Use training data for naive forecast baseline
+                train_naive = train_data[target_column].shift(1).dropna()
+                train_actual = train_data[target_column].iloc[1:]
+                mae_naive = mean_absolute_error(train_actual, train_naive)
+
+                # Avoid division by zero
+                if mae_naive == 0 or np.isclose(mae_naive, 0, atol=1e-10):
+                    mase = np.inf if mae > 0 else 0.0
+                else:
+                    mase = mae / mae_naive
+
+                # Keep MAPE for backward compatibility
                 mape = np.mean(np.abs((actual_values - forecast_values) / actual_values)) * 100
 
                 evaluation_metrics = {
                     "mae": mae,
                     "mse": mse,
                     "rmse": rmse,
-                    "mape": mape,
+                    "mase": mase,  # Added MASE
+                    "mape": mape,  # Kept for backward compatibility
                     "residuals": residuals.tolist(),
                     "actual_values": actual_values.tolist(),
                     "forecast_values": forecast_values.tolist(),
@@ -895,13 +984,27 @@ class StockForecaster:
         mae = mean_absolute_error(actual_values, forecast)
         mse = mean_squared_error(actual_values, forecast)
         rmse = np.sqrt(mse)
+
+        # Calculate MASE using naive forecast baseline
+        naive_forecast = actual_data[target_column].shift(1).dropna()
+        actual_for_naive = actual_data[target_column].iloc[1:]
+        mae_naive = mean_absolute_error(actual_for_naive, naive_forecast)
+
+        # Avoid division by zero
+        if mae_naive == 0 or np.isclose(mae_naive, 0, atol=1e-10):
+            mase = np.inf if mae > 0 else 0.0
+        else:
+            mase = mae / mae_naive
+
+        # Keep MAPE for backward compatibility
         mape = np.mean(np.abs((actual_values - forecast) / actual_values)) * 100
 
         return {
             "mae": mae,
             "mse": mse,
             "rmse": rmse,
-            "mape": mape,
+            "mase": mase,  # Added MASE
+            "mape": mape,  # Kept for backward compatibility
         }
 
     @classmethod

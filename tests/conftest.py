@@ -4,7 +4,7 @@ import glob
 import os
 from datetime import datetime
 from pathlib import Path
-from unittest.mock import Mock, patch
+from unittest.mock import Mock
 
 import numpy as np
 import pandas as pd
@@ -64,7 +64,6 @@ def worker_id(request):
 from stockula.backtesting import BacktestRunner
 from stockula.config import BacktestConfig, DataConfig, ForecastConfig, PortfolioConfig, StockulaConfig, TickerConfig
 from stockula.container import Container
-from stockula.data.fetcher import DataFetcher
 from stockula.database.manager import DatabaseManager
 from stockula.domain import Asset, Category, DomainFactory, Portfolio
 from stockula.forecasting import StockForecaster
@@ -198,12 +197,13 @@ def mock_logging_manager():
 
 
 @pytest.fixture(scope="function")
-def sample_portfolio(mock_logging_manager):
+def sample_portfolio(mock_logging_manager, mock_data_fetcher):
     """Create a sample portfolio."""
     return Portfolio(
         name_init="Test Portfolio",
         initial_capital_init=100000.0,
         allocation_method_init="equal_weight",
+        data_fetcher_init=mock_data_fetcher,
         logging_manager_init=mock_logging_manager,
     )
 
@@ -300,32 +300,75 @@ def mock_yfinance_ticker():
 @pytest.fixture(scope="function")
 def mock_data_fetcher(mock_yfinance_ticker, sample_prices):
     """Create a mock DataFetcher."""
-    with patch("stockula.data.fetcher.yf.Ticker") as mock_yf_ticker:
-        mock_yf_ticker.return_value = mock_yfinance_ticker
+    # Import DataFetcher here to use as spec
+    from stockula.data.fetcher import DataFetcher
 
-        fetcher = DataFetcher(use_cache=False)
+    # Create a fully mocked DataFetcher to avoid any database initialization
+    fetcher = Mock(spec=DataFetcher)
 
-        # Mock get_current_prices to return our sample prices
-        def mock_get_current_prices(symbols, _show_progress=True):
-            if isinstance(symbols, str):
-                symbols = [symbols]
-            return {s: sample_prices.get(s, 100.0) for s in symbols}
+    # Mock the database and related attributes
+    fetcher.db = None
+    fetcher.use_cache = False
+    fetcher._owns_db = False
 
-        fetcher.get_current_prices = mock_get_current_prices
+    # Mock logger
+    fetcher.logger = Mock()
 
-        # Mock get_treasury_rates to return sample rates
-        def mock_get_treasury_rates(start_date=None, end_date=None, duration="3_month"):
-            # Return a simple Series with sample treasury rates
-            dates = pd.date_range(start="2023-01-01", end="2023-12-31", freq="D")
-            rates = pd.Series([0.05] * len(dates), index=dates)  # 5% rate
-            return rates
+    # Mock get_current_prices to return our sample prices
+    def mock_get_current_prices(symbols, _show_progress=True):
+        if isinstance(symbols, str):
+            symbols = [symbols]
+        return {s: sample_prices.get(s, 100.0) for s in symbols}
 
-        fetcher.get_treasury_rates = mock_get_treasury_rates
+    fetcher.get_current_prices = mock_get_current_prices
 
-        yield fetcher
+    # Mock get_treasury_rates to return sample rates
+    def mock_get_treasury_rates(start_date=None, end_date=None, duration="3_month"):
+        # Return a simple Series with sample treasury rates
+        dates = pd.date_range(start="2023-01-01", end="2023-12-31", freq="D")
+        rates = pd.Series([0.05] * len(dates), index=dates)  # 5% rate
+        return rates
 
-        # Close the fetcher to clean up database connections
-        fetcher.close()
+    fetcher.get_treasury_rates = mock_get_treasury_rates
+
+    # Mock close method
+    fetcher.close = Mock()
+
+    # Mock get_stock_data method
+    def mock_get_stock_data(symbol, start=None, end=None, interval="1d", force_refresh=False):
+        # Return sample OHLCV data
+        dates = pd.date_range(start="2023-01-01", end="2023-12-31", freq="D")
+        return pd.DataFrame(
+            {
+                "Open": [150.0 + i * 0.5 for i in range(len(dates))],
+                "High": [152.0 + i * 0.5 for i in range(len(dates))],
+                "Low": [149.0 + i * 0.5 for i in range(len(dates))],
+                "Close": [151.0 + i * 0.5 for i in range(len(dates))],
+                "Volume": [1000000 + i * 10000 for i in range(len(dates))],
+            },
+            index=dates,
+        )
+
+    fetcher.get_stock_data = mock_get_stock_data
+
+    # Mock get_info method
+    def mock_get_info(symbol):
+        return {
+            "longName": f"{symbol} Inc.",
+            "sector": "Technology",
+            "marketCap": 1000000000000,
+            "currentPrice": sample_prices.get(symbol, 100.0),
+        }
+
+    fetcher.get_info = mock_get_info
+
+    # Mock other commonly used methods
+    fetcher.get_dividends = Mock(return_value=pd.DataFrame())
+    fetcher.get_splits = Mock(return_value=pd.DataFrame())
+    fetcher.get_options_chain = Mock(return_value=(pd.DataFrame(), pd.DataFrame()))
+    fetcher.fetch_and_store_all_data = Mock()
+
+    return fetcher
 
 
 # ===== Database Fixtures =====
@@ -572,7 +615,7 @@ def temp_config_file(tmp_path, sample_stockula_config):
     """Create a temporary config file."""
     import yaml
 
-    config_path = tmp_path / "test_config.yaml"
+    config_path = tmp_path / "test_.stockula.yaml"
 
     config_dict = sample_stockula_config.model_dump()
     # Convert dates to strings for YAML serialization
@@ -590,7 +633,7 @@ def temp_config_file(tmp_path, sample_stockula_config):
 @pytest.fixture(scope="function")
 def mock_env_variables(monkeypatch):
     """Set up mock environment variables."""
-    monkeypatch.setenv("STOCKULA_CONFIG_FILE", "test_config.yaml")
+    monkeypatch.setenv("STOCKULA_CONFIG_FILE", "test_.stockula.yaml")
     monkeypatch.setenv("STOCKULA_DEBUG", "true")
     monkeypatch.setenv("STOCKULA_LOG_LEVEL", "DEBUG")
 

@@ -1,0 +1,81 @@
+---
+# Example configuration for using AutoGluon backend for forecasting
+# AutoGluon provides modern AutoML with deep learning models
+
+data:
+  start_date: "2023-01-01"
+  end_date: null  # Use today's date
+
+portfolio:
+  initial_capital: 100000
+  allocation_method: equal_weight
+  tickers:
+    - symbol: AAPL
+    - symbol: GOOGL
+    - symbol: MSFT
+    - symbol: NVDA
+    - symbol: TSLA
+
+forecast:
+  # Use AutoGluon backend instead of AutoTS
+  backend: autogluon
+
+  # Number of days to forecast
+  forecast_length: 30
+
+  # Confidence interval (90% = 0.9, 95% = 0.95)
+  prediction_interval: 0.95
+
+  # AutoGluon-specific settings
+  # Presets control the trade-off between speed and accuracy:
+  # - fast_training: Quick results, fewer models
+  # - medium_quality: Balanced speed and accuracy (default)
+  # - high_quality: Better accuracy, more models
+  # - best_quality: Best accuracy, slowest
+  preset: high_quality
+
+  # Optional: Set a time limit in seconds
+  # time_limit: 600  # 10 minutes
+
+  # Constraint predictions to be non-negative (important for stock prices)
+  no_negatives: true
+
+# Backtesting configuration (optional)
+backtest:
+  initial_cash: 10000
+  start_date: "2023-01-01"
+  end_date: "2024-01-01"
+
+  # Use realistic broker fees
+  broker_config:
+    commission_type: per_share
+    commission_value: 0.005  # $0.005 per share
+    regulatory_fees: 0.0000229
+
+  strategies:
+    - name: SmaCross
+      parameters:
+        n1: 10
+        n2: 30
+
+# Technical analysis configuration (optional)
+technical_analysis:
+  indicators:
+    - SMA
+    - EMA
+    - RSI
+    - MACD
+    - BollingerBands
+  sma_periods: [20, 50, 200]
+  ema_periods: [12, 26]
+  rsi_period: 14
+  macd_fast: 12
+  macd_slow: 26
+  macd_signal: 9
+  bb_period: 20
+  bb_std: 2
+
+# CLI display settings
+output:
+  format: table  # table or json
+  verbose: false

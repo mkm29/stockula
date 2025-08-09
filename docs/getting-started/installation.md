@@ -43,7 +43,7 @@ powershell -c "irm https://astral.sh/uv/install.ps1 | iex"
 1. **Verify installation**:
 
    ```bash
-   uv run python -m stockula.main --help
+   uv run python -m stockula --help
    ```
 
 ## Development Installation
@@ -114,3 +114,21 @@ After installation, check out:
 - [Quick Start Guide](../getting-started/quick-start.md)
 - [Configuration Options](../getting-started/configuration.md)
 - [Architecture Overview](../user-guide/architecture.md)
+
+## Runtime Setup Note
+
+> Note: No import-time side effects
+>
+> Stockula avoids configuring logging, warnings, or environment variables during import. Runtime configuration is applied by the CLI (`python -m stockula`) via `stockula.main.setup_logging`. If you embed Stockula in your own application, call `setup_logging(config)` yourself (or provide your own logging setup) before invoking managers.
+
+Example:
+
+```python
+from stockula.main import setup_logging
+from stockula.config import load_config
+
+cfg = load_config(".stockula.yaml")
+setup_logging(cfg)  # configure logging/warnings/env at runtime
+
+# proceed to use Stockula components
+```
