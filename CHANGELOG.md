@@ -22,6 +22,19 @@
 - Dependency injection for DatabaseManager in forecasting components
 - More flexible model management without code changes
 
+## [0.13.0](https://github.com/mkm29/stockula/compare/v0.12.0...v0.13.0) (2025-08-09)
+
+
+### Features
+
+* Update branch protection rules to include Release Please branches for merging to develop ([5b2e3b0](https://github.com/mkm29/stockula/commit/5b2e3b0a070a2bfe344009e406daf03f741144a8))
+
+
+### Bug Fixes
+
+* Update Docker build tags to differentiate between release and no… ([7d293b2](https://github.com/mkm29/stockula/commit/7d293b22b2792c0a4eeeef262b34f50cb1792f4b))
+* Update Docker build tags to differentiate between release and non-release events ([f23163d](https://github.com/mkm29/stockula/commit/f23163dc1464785203cbc0bdee3b91cdd0168406))
+
 ## [0.12.0](https://github.com/mkm29/stockula/compare/v0.11.0...v0.12.0) (2025-08-09)
 
 
