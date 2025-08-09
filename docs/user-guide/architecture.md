@@ -11,7 +11,7 @@ graph TB
         Main[Legacy Entry Point<br/>main.py]
         Manager[Business Logic<br/>StockulaManager]
         Display[Results Display<br/>ResultsDisplay]
-        Config[Configuration<br/>.config.yaml]
+        Config[Configuration<br/>.stockula.yaml]
     end
 
     subgraph "Core Domain"
@@ -126,7 +126,7 @@ sequenceDiagram
     participant Analysis
 
     User->>CLI: Run command
-    CLI->>Config: Load .config.yaml
+    CLI->>Config: Load .stockula.yaml
     CLI->>Manager: Create manager instance
     Manager->>Factory: Create domain objects
     Factory->>Portfolio: Build portfolio
@@ -146,6 +146,19 @@ sequenceDiagram
     Display-->>CLI: Formatted output
     CLI-->>User: Display output
 ```
+
+## Module Structure
+
+### Database-Driven Model Validation
+
+The system now uses a database-driven approach for AutoTS model validation:
+
+- **AutoTSModel**: SQLModel-based model with self-validation capabilities
+- **AutoTSPreset**: Database-stored preset configurations
+- **AutoTSRepository**: Repository pattern for model and preset management
+- **Database Seeding**: Automatic population from `data/models.json` if database is empty
+
+This architecture eliminates hardcoded model lists and provides flexibility for adding new models without code changes.
 
 ## Module Structure
 

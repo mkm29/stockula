@@ -71,6 +71,16 @@ forecasting_manager.validate_forecast_config(config)
 
 Stockula uses AutoTS for time series forecasting with carefully curated model lists optimized for financial data. The system automatically selects appropriate models based on the data type and configuration.
 
+### Database-Driven Model Management
+
+Model validation is now managed through the database:
+
+- **AutoTSModel**: Database table storing valid model definitions
+- **AutoTSPreset**: Database table storing model presets (fast, financial, etc.)
+- **Dynamic Loading**: Models are loaded from the database on first use
+- **Automatic Seeding**: If the database is empty, models are loaded from `data/models.json`
+- **Self-Validation**: Models validate themselves when saved to the database
+
 ### Model Lists
 
 #### Fast Financial Models (Default)
@@ -246,13 +256,13 @@ forecast:
 
 ```bash
 # Using defaults optimized for speed
-uv run python -m stockula.main --config config.yaml --mode forecast
+uv run python -m stockula --config .stockula.yaml --mode forecast
 ```
 
 #### Thorough Forecast (2-5 minutes)
 
 ```yaml
-# config.yaml
+# .stockula.yaml
 forecast:
   model_list: "financial"
   max_generations: 5
@@ -261,7 +271,7 @@ forecast:
 ```
 
 ```bash
-uv run python -m stockula.main --config config.yaml --mode forecast
+uv run python -m stockula --config .stockula.yaml --mode forecast
 ```
 
 ### Understanding the Output
@@ -290,7 +300,7 @@ from stockula.container import Container
 from stockula.config.settings import load_config
 
 # Load configuration and get manager
-config = load_config("myconfig.yaml")
+config = load_config("my.stockula.yaml")
 container = Container()
 forecasting_manager = container.forecasting_manager()
 
@@ -322,7 +332,7 @@ fetcher = DataFetcher()
 data = fetcher.get_stock_data("AAPL", start_date="2023-01-01")
 
 # Create forecaster
-config = load_config("myconfig.yaml")
+config = load_config("my.stockula.yaml")
 forecaster = StockForecaster(
     forecast_length=30,
     model_list="fast",
@@ -347,7 +357,7 @@ from stockula.container import Container
 from stockula.domain.factory import DomainFactory
 
 # Load portfolio configuration
-config = load_config("myconfig.yaml")
+config = load_config("my.stockula.yaml")
 container = Container()
 forecasting_manager = container.forecasting_manager()
 
@@ -373,7 +383,7 @@ for ticker, forecast in portfolio_forecasts.items():
 from stockula.domain.factory import DomainFactory
 
 # Load portfolio configuration
-config = load_config("myconfig.yaml")
+config = load_config("my.stockula.yaml")
 factory = DomainFactory(config)
 portfolio = factory.create_portfolio()
 

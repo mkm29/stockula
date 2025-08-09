@@ -1,9 +1,10 @@
+---
 name: Docker Build and Publish
 on:
   push:
     tags:
       - 'v*'
-  workflow_dispatch: # Allow manual triggers for testing
+  workflow_dispatch:  # Allow manual triggers for testing
   workflow_run:
     workflows: ["Test"]
     types:

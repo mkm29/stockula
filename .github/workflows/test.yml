@@ -1,3 +1,4 @@
+---
 name: Test
 on:
   push:
@@ -38,8 +39,9 @@ jobs:
           uv run ruff format --check src tests
       - name: Minimize uv cache
         run: uv cache prune --ci
-  unit:
+  test:
     runs-on: ubuntu-latest
+    needs: [linting]  # Only run tests if linting passes
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -64,65 +66,99 @@ jobs:
         run: uv sync --all-extras --dev
       - name: Run unit tests
         run: |
-          uv run pytest tests/unit
+          echo "🧪 Running unit tests..."
+          uv run pytest tests/unit -v --cov=src/stockula --cov-report=xml --cov-report=term-missing
+      - name: Run integration tests
+        if: always()  # Run even if unit tests fail to get full picture
+        env:
+          DATABASE_URL: sqlite:///./test_stockula.db
+          STOCKULA_ENV: test
+          STOCKULA_LOG_LEVEL: WARNING
+          PYTHONWARNINGS: ignore
+        run: |
+          echo "🔗 Running integration tests..."
+          # Create test database
+          touch test_stockula.db
+          # Run integration tests if they exist
+          if [ -d "tests/integration" ]; then
+            uv run pytest tests/integration -v --cov=src/stockula --cov-append --cov-report=xml --cov-report=term-missing
+          else
+            echo "ℹ️ No integration tests directory found, skipping..."
+          fi
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5
-        # Token not required when using Codecov GitHub App
-        # with:
-        #   token: ${{ secrets.CODECOV_TOKEN }}
+        with:
+          file: ./coverage.xml
+          flags: unittests,integration
+          name: combined-coverage
+          fail_ci_if_error: false
+          # Token not required when using Codecov GitHub App
+          # with:
+          #   token: ${{ secrets.CODECOV_TOKEN }}
       - name: Upload test results to Codecov
         if: ${{ !cancelled() }}
         uses: codecov/test-results-action@v1
         # Token not required when using Codecov GitHub App
         # with:
         #   token: ${{ secrets.CODECOV_TOKEN }}
+      - name: Cleanup test artifacts
+        if: always()
+        run: |
+          rm -f test_stockula.db
+          rm -f coverage.xml
       - name: Minimize uv cache
         run: uv cache prune --ci
-
-# integration:
-#   runs-on: ubuntu-latest
-#   steps:
-#     - name: Checkout repository
-#       uses: actions/checkout@v4
-
-#     - name: Set up Python
-#       uses: actions/setup-python@v5
-#       with:
-#         python-version: '3.13'
-
-#     - name: Install uv
-#       uses: astral-sh/setup-uv@v5
-#       with:
-#         enable-cache: true
-#         cache-dependency-glob: "uv.lock"
-
-#     - name: Restore uv cache
-#       uses: actions/cache@v4
-#       with:
-#         path: /tmp/.uv-cache
-#         key: uv-${{ runner.os }}-${{ hashFiles('uv.lock') }}
-#         restore-keys: |
-#           uv-${{ runner.os }}-${{ hashFiles('uv.lock') }}
-#           uv-${{ runner.os }}
-
-#     - name: Install dependencies
-#       run: uv sync --all-extras --dev
-
-#     - name: Run integration tests
-#       env:
-#         DATABASE_URL: sqlite:///./test_stockula.db
-#         STOCKULA_ENV: test
-#       run: |
-#         uv run pytest tests/integration -v --cov=stockula --cov-report=xml --cov-report=term-missing
-
-#     - name: Upload coverage to Codecov
-#       uses: codecov/codecov-action@v5
-#       with:
-#         token: ${{ secrets.CODECOV_TOKEN }}
-#         file: ./coverage.xml
-#         flags: integration
-#         name: integration-tests
-#         fail_ci_if_error: false
-
-#     - name: Minimize uv cache
-#       run: uv cache prune --ci
+  database:
+    runs-on: ubuntu-latest
+    needs: [linting]  # Only needs linting to pass
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
+      - name: Restore uv cache
+        uses: actions/cache@v4
+        with:
+          path: /tmp/.uv-cache
+          key: uv-${{ runner.os }}-${{ hashFiles('uv.lock') }}
+          restore-keys: |
+            uv-${{ runner.os }}-${{ hashFiles('uv.lock') }}
+            uv-${{ runner.os }}
+      - name: Install dependencies
+        run: uv sync --all-extras --dev
+      - name: Test database migrations
+        run: |
+          # Test that database can be created from scratch
+          uv run python -c "
+          from sqlmodel import create_engine, SQLModel
+          from stockula.database.models import Stock, PriceHistory, AutoTSModel, AutoTSPreset
+          engine = create_engine('sqlite:///test_migration.db')
+          SQLModel.metadata.create_all(engine)
+          print('✓ Database schema created successfully')
+          "
+      - name: Test AutoTS model seeding
+        run: "# Test that models can be seeded from models.json\nuv run python -c \"\nfrom pathlib import Path\nfrom sqlmodel import Session, create_engine, SQLModel\nfrom stockula.data.autots_repository import AutoTSRepository\nfrom stockula.database.models import AutoTSModel\n\n# Create database\nengine = create_engine('sqlite:///test_seeding.db')\nSQLModel.metadata.create_all(engine)\n\n# Seed models\nwith Session(engine) as session:\n    repo = AutoTSRepository(session)\n    models_path = Path('data/models.json')\n    if models_path.exists():\n        models_count, presets_count = repo.seed_from_json(models_path)\n        print(f'✓ Seeded {models_count} models and {presets_count} presets')\n        \n        # Verify some models exist\n        assert repo.get_model('ARIMA') is not None\n        assert repo.get_model('ETS') is not None\n        assert repo.get_preset('fast') is not None\n        print('✓ Model validation working correctly')\n\"\n"
+      - name: Test repository patterns
+        run: "# Test the new repository pattern implementation\nuv run python -c \"\nfrom sqlmodel import Session, create_engine, SQLModel\nfrom stockula.data.autots_repository import AutoTSRepository\nfrom stockula.database.models import AutoTSModel, AutoTSPreset\n\nengine = create_engine('sqlite:///test_repository.db')\nSQLModel.metadata.create_all(engine)\n\nwith Session(engine) as session:\n    repo = AutoTSRepository(session)\n    \n    # Test model validation\n    assert AutoTSModel.is_valid_model('ARIMA') == True\n    assert AutoTSModel.is_valid_model('InvalidModel') == False\n    print('✓ Model validation working')\n    \n    # Test preset validation\n    assert AutoTSPreset.is_valid_preset('fast') == True\n    assert AutoTSPreset.is_valid_preset('invalid_preset') == False\n    print('✓ Preset validation working')\n    \n    # Test model list validation\n    is_valid, invalid = AutoTSModel.validate_model_list(['ARIMA', 'ETS', 'FakeModel'])\n    assert is_valid == False\n    assert 'FakeModel' in invalid\n    print('✓ Model list validation working')\n\"\n"
+      - name: Cleanup test databases
+        if: always()
+        run: |
+          rm -f test_migration.db
+          rm -f test_seeding.db
+          rm -f test_repository.db
+      - name: Minimize uv cache
+        run: uv cache prune --ci
+  all-tests-pass:
+    runs-on: ubuntu-latest
+    needs: [linting, test, database]
+    if: always()
+    steps:
+      - name: Check test results
+        run: "if [[ \"${{ needs.linting.result }}\" != \"success\" || \n      \"${{ needs.test.result }}\" != \"success\" || \n      \"${{ needs.database.result }}\" != \"success\" ]]; then\n  echo \"❌ One or more test jobs failed\"\n  exit 1\nelse\n  echo \"✅ All test jobs passed successfully\"\nfi\n"

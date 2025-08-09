@@ -30,7 +30,7 @@ Stockula uses GitHub Actions for automated testing, building, and deployment. Th
   - Import sorting
   - Format consistency
 - **Configuration**: Uses `pyproject.toml` for ruff settings
-- **Local Script**: `scripts/lint.py` runs the same commands as CI for consistency
+- **Local Script**: `utils/lint.py` runs the same commands as CI for consistency
 
 #### 2. Unit Tests
 

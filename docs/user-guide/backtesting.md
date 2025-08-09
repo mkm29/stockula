@@ -278,13 +278,13 @@ backtest:
 
 ```bash
 # Basic backtesting with default strategy
-uv run python -m stockula.main --ticker AAPL --mode backtest
+uv run python -m stockula --ticker AAPL --mode backtest
 
 # With custom configuration
-uv run python -m stockula.main --config examples/config.strategies.yaml --mode backtest
+uv run python -m stockula --config examples/config.strategies.yaml --mode backtest
 
 # Portfolio backtesting
-uv run python -m stockula.main --config myconfig.yaml --mode backtest
+uv run python -m stockula --config my.stockula.yaml --mode backtest
 ```
 
 ### Programmatic Usage
@@ -295,7 +295,7 @@ from stockula.config.settings import load_config
 from stockula.data.fetcher import DataFetcher
 
 # Load configuration
-config = load_config("myconfig.yaml")
+config = load_config("my.stockula.yaml")
 
 # Create backtest runner
 runner = BacktestRunner(config)

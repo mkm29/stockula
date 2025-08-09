@@ -195,13 +195,13 @@ technical_analysis:
 
 ```bash
 # Basic technical analysis
-uv run python -m stockula.main --ticker AAPL --mode ta
+uv run python -m stockula --ticker AAPL --mode ta
 
 # With custom configuration
-uv run python -m stockula.main --config examples/config.technical.yaml --mode ta
+uv run python -m stockula --config examples/config.technical.yaml --mode ta
 
 # Multiple tickers
-uv run python -m stockula.main --config myconfig.yaml --mode ta
+uv run python -m stockula --config my.stockula.yaml --mode ta
 ```
 
 ### Programmatic Usage
@@ -213,7 +213,7 @@ from stockula.container import Container
 from stockula.config.settings import load_config
 
 # Load configuration and get manager
-config = load_config("myconfig.yaml")
+config = load_config("my.stockula.yaml")
 container = Container()
 ta_manager = container.technical_analysis_manager()
 
@@ -263,7 +263,7 @@ from stockula.config.settings import load_config
 from stockula.domain.factory import DomainFactory
 
 # Load configuration
-config = load_config("myconfig.yaml")
+config = load_config("my.stockula.yaml")
 container = Container()
 ta_manager = container.technical_analysis_manager()
 
@@ -292,7 +292,7 @@ from stockula.domain.factory import DomainFactory
 from stockula.technical_analysis.indicators import TechnicalIndicators
 
 # Load configuration
-config = load_config("myconfig.yaml")
+config = load_config("my.stockula.yaml")
 
 # Create portfolio
 factory = DomainFactory(config)

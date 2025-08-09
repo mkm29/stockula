@@ -78,7 +78,7 @@ def run_stockula(
         stockula_config = container.stockula_config()
     except ValidationError as e:
         # Use the provided config path or default
-        config_path = config or ".config.yaml"
+        config_path = config or ".stockula.yaml"
         handle_validation_error(e, config_path)
 
     # Set up logging based on configuration

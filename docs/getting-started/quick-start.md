@@ -10,13 +10,13 @@ The simplest way to use Stockula is with single ticker analysis:
 
 ```bash
 # Analyze a single stock with default settings
-uv run python -m stockula.main --ticker AAPL
+uv run python -m stockula --ticker AAPL
 
 # Run specific analysis modes
-uv run python -m stockula.main --ticker GOOGL --mode ta        # Technical analysis only
-uv run python -m stockula.main --ticker MSFT --mode backtest  # Backtesting only
-uv run python -m stockula.main --ticker AMZN --mode forecast  # Forecasting only
-uv run python -m stockula.main --ticker NVDA --mode all       # All analyses
+uv run python -m stockula --ticker GOOGL --mode ta        # Technical analysis only
+uv run python -m stockula --ticker MSFT --mode backtest  # Backtesting only
+uv run python -m stockula --ticker AMZN --mode forecast  # Forecasting only
+uv run python -m stockula --ticker NVDA --mode all       # All analyses
 ```
 
 ### Configuration File Mode
@@ -24,32 +24,32 @@ uv run python -m stockula.main --ticker NVDA --mode all       # All analyses
 For more complex scenarios, use configuration files:
 
 ```bash
-# Use default configuration file (.config.yaml)
-uv run python -m stockula.main
+# Use default configuration file (.stockula.yaml)
+uv run python -m stockula
 
 # Use a specific configuration file
-uv run python -m stockula.main --config examples/config.full.yaml
+uv run python -m stockula --config examples/config.full.yaml
 
 # Copy an example to use as default
-cp examples/config.simple.yaml .config.yaml
-uv run python -m stockula.main
+cp examples/config.simple.yaml .stockula.yaml
+uv run python -m stockula
 ```
 
 ### Output Formats
 
 ```bash
 # Default console output with Rich formatting
-uv run python -m stockula.main --ticker AAPL
+uv run python -m stockula --ticker AAPL
 
 # JSON output for programmatic use
-uv run python -m stockula.main --ticker AAPL --output json
+uv run python -m stockula --ticker AAPL --output json
 ```
 
 ## Common Workflows
 
 ### Portfolio Analysis
 
-Create a `.config.yaml` file for portfolio analysis:
+Create a `.stockula.yaml` file for portfolio analysis:
 
 ```yaml
 data:
@@ -79,7 +79,7 @@ backtest:
 Run the analysis:
 
 ```bash
-uv run python -m stockula.main --mode all
+uv run python -m stockula --mode all
 ```
 
 ### Strategy Backtesting
@@ -88,10 +88,10 @@ Test different trading strategies:
 
 ```bash
 # Test with default SMA crossover strategy
-uv run python -m stockula.main --ticker AAPL --mode backtest
+uv run python -m stockula --ticker AAPL --mode backtest
 
 # Use custom configuration with multiple strategies
-uv run python -m stockula.main --config examples/config.strategies.yaml --mode backtest
+uv run python -m stockula --config examples/config.strategies.yaml --mode backtest
 ```
 
 ### Technical Analysis
@@ -100,10 +100,10 @@ Compute technical indicators:
 
 ```bash
 # Run technical analysis on a stock
-uv run python -m stockula.main --ticker TSLA --mode ta
+uv run python -m stockula --ticker TSLA --mode ta
 
 # With custom indicator settings
-uv run python -m stockula.main --config examples/config.technical.yaml --mode ta
+uv run python -m stockula --config examples/config.technical.yaml --mode ta
 ```
 
 ### Price Forecasting
@@ -112,10 +112,10 @@ Generate price predictions:
 
 ```bash
 # Basic forecasting
-uv run python -m stockula.main --ticker NVDA --mode forecast
+uv run python -m stockula --ticker NVDA --mode forecast
 
 # With custom forecast settings (faster execution)
-uv run python -m stockula.main --config examples/config.forecast.yaml --mode forecast
+uv run python -m stockula --config examples/config.forecast.yaml --mode forecast
 ```
 
 ## Understanding the Output
@@ -196,11 +196,11 @@ Stockula includes several example configurations in the `examples/` directory:
 - `config.technical.yaml` - Advanced technical analysis settings
 - `config.forecast.yaml` - Optimized forecasting configuration
 
-Copy any example to `.config.yaml` to use as your default:
+Copy any example to `.stockula.yaml` to use as your default:
 
 ```bash
-cp examples/config.simple.yaml .config.yaml
-uv run python -m stockula.main
+cp examples/config.simple.yaml .stockula.yaml
+uv run python -m stockula
 ```
 
 ## Database Caching

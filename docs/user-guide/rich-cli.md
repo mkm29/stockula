@@ -285,7 +285,7 @@ Graceful handling of Ctrl+C:
 Real-time status during operations:
 
 ```
-[blue]Loading configuration from .config.yaml...[/blue]
+[blue]Loading configuration from .stockula.yaml...[/blue]
 [green]✓ Configuration loaded successfully[/green]
 [blue]Initializing data fetcher...[/blue]
 [green]✓ Connected to database: stockula.db[/green]

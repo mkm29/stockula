@@ -135,17 +135,17 @@ class StockulaManager:
         results_table.add_column("Allocation %", style="yellow", justify="right")
 
         # Calculate total value for percentage
-        total_value = 0
-        ticker_values = {}
-        for ticker_config in self.config.portfolio.tickers:
-            symbol = ticker_config.symbol
-            if symbol in optimized_quantities:
-                # Get current price for value calculation
-                prices = self.container.data_fetcher().get_current_prices([symbol])
-                if symbol in prices:
-                    value = optimized_quantities[symbol] * prices[symbol]
-                    ticker_values[symbol] = value
-                    total_value += value
+        total_value = 0.0
+        ticker_values: dict[str, float] = {}
+        symbols_to_price = [t.symbol for t in self.config.portfolio.tickers if t.symbol in optimized_quantities]
+
+        # Fetch all prices in one call for efficiency
+        prices = self.container.data_fetcher().get_current_prices(symbols_to_price, show_progress=False)
+        for symbol in symbols_to_price:
+            if symbol in prices:
+                value = float(optimized_quantities[symbol]) * float(prices[symbol])
+                ticker_values[symbol] = value
+                total_value += value
 
         # Display results
         for ticker_config in self.config.portfolio.tickers:
@@ -224,8 +224,7 @@ class StockulaManager:
 
         self.console.print(f"\n[green]✓ Optimized configuration saved to: {save_path}[/green]")
         self.console.print(
-            "[dim]You can now run backtest with: "
-            f"uv run python -m stockula.main --config {save_path} --mode backtest[/dim]"
+            f"[dim]You can now run backtest with: uv run python -m stockula --config {save_path} --mode backtest[/dim]"
         )
 
     def _convert_dates(self, obj: Any) -> Any:

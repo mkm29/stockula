@@ -210,11 +210,11 @@ class IDomainFactory(ABC):
     """Interface for domain object creation."""
 
     @abstractmethod
-    def create_portfolio(self) -> Any:
+    def create_portfolio(self, config: Any) -> Any:
         """Create portfolio from configuration."""
         pass
 
     @abstractmethod
-    def create_asset(self, ticker_data: dict[str, Any]) -> Any:
-        """Create asset from ticker data."""
+    def create_asset(self, ticker_config: Any, calculated_quantity: float | None = None) -> Any:
+        """Create asset from ticker configuration."""
         pass

@@ -73,7 +73,7 @@ Stockula is a comprehensive Python trading platform that provides tools for tech
 uv run python -m stockula --ticker AAPL
 
 # Run with configuration file
-cp examples/config.simple.yaml .config.yaml
+cp examples/config.simple.yaml .stockula.yaml
 uv run python -m stockula
 
 # Run specific analysis modes
@@ -117,7 +117,7 @@ backtest:
 Stockula includes an advanced allocation strategy that uses historical backtesting to optimize portfolio allocation:
 
 ```yaml
-# config.yaml for backtest-optimized allocation
+# .stockula.yaml for backtest-optimized allocation
 portfolio:
   initial_capital: 100000
   allocation_method: backtest_optimized
@@ -232,7 +232,7 @@ For comprehensive documentation, visit our [**MkDocs Documentation Site**](https
 graph TB
     subgraph "User Interface"
         CLI[CLI (cli.py)]
-        Config[Configuration<br/>.config.yaml]
+        Config[Configuration<br/>.stockula.yaml]
     end
 
     subgraph "Managers"

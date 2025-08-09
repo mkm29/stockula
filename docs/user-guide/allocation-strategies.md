@@ -194,11 +194,11 @@ The `backtest_optimized` allocation method is fully integrated into the CLI and 
 
 ```bash
 # Step 1: Run optimization to determine optimal quantities
-uv run python -m stockula.main --config config.yaml --mode optimize-allocation \
+uv run python -m stockula --config .stockula.yaml --mode optimize-allocation \
     --save-optimized-config optimized-portfolio.yaml
 
 # Step 2: Run backtest with the optimized configuration
-uv run python -m stockula.main --config optimized-portfolio.yaml --mode backtest
+uv run python -m stockula --config optimized-portfolio.yaml --mode backtest
 ```
 
 #### Configuration Example
@@ -230,7 +230,7 @@ from stockula.config import load_config
 from stockula.data.fetcher import DataFetcher
 
 # Load configuration
-config = load_config("config.yaml")
+config = load_config(".stockula.yaml")
 
 # Create allocator
 allocator = BacktestOptimizedAllocator(
@@ -307,7 +307,7 @@ Stockula uses an `AllocatorManager` to coordinate between different allocation s
 from stockula.container import create_container
 
 # Create container with configuration
-container = create_container("config.yaml")
+container = create_container(".stockula.yaml")
 
 # Get the allocator manager (handles all allocation strategies)
 allocator_manager = container.allocator_manager()

@@ -621,7 +621,10 @@ class TestStockForecasterForecastFromSymbol:
     def test_forecast_from_symbol_with_all_parameters(self, mock_data_fetcher, mock_logging_manager):
         """Test forecast_from_symbol with all parameters."""
         forecaster = StockForecaster(
-            forecast_length=30, data_fetcher=mock_data_fetcher, logging_manager=mock_logging_manager
+            forecast_length=30,
+            data_fetcher=mock_data_fetcher,
+            database_manager=None,  # Explicitly pass None for database_manager
+            logging_manager=mock_logging_manager,
         )
 
         # Create sample data

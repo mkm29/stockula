@@ -1,3 +1,4 @@
+---
 # Basic Codecov configuration for Stockula project
 # This is a simpler alternative to codecov.yml - use one or the other
 coverage:
