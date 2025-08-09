@@ -79,28 +79,22 @@ WORKDIR /app
 # Copy ONLY dependency files needed for package installation
 # DO NOT copy source code here to maintain cache efficiency
 COPY pyproject.toml uv.lock README.md ./
+COPY requirements-gpu.txt ./
 
-# Generate requirements.txt from pyproject.toml using uv
-# This ensures consistency with the project dependencies
-RUN uv pip compile pyproject.toml -o requirements.txt
-
-# Create virtual environment and install base dependencies
+# Create virtual environment and install base dependencies from pyproject.toml
 RUN --mount=type=cache,target=/root/.cache/uv,sharing=locked \
     --mount=type=cache,target=/root/.cache/pip,sharing=locked \
     uv venv /opt/venv --python 3.12 && \
     # Install pip in the venv
     /opt/venv/bin/python -m ensurepip --upgrade && \
     /opt/venv/bin/python -m pip install --upgrade pip && \
-    # Install all dependencies from generated requirements
-    /opt/venv/bin/pip install -r requirements.txt
+    # Install base Stockula package and dependencies
+    /opt/venv/bin/pip install -e .
 
-# Install GPU packages in a separate RUN to maximize caching
-# These are the heaviest packages and should be cached separately
+# Install GPU packages from requirements-gpu.txt with proper CUDA support
+# This file contains all GPU-accelerated packages optimized for Python 3.12
 RUN --mount=type=cache,target=/root/.cache/pip,sharing=locked \
-    # PyTorch with CUDA 11.8 support (for neural network models in AutoTS)
-    /opt/venv/bin/pip install torch --index-url https://download.pytorch.org/whl/cu118 && \
-    # XGBoost and LightGBM (both have GPU support)
-    /opt/venv/bin/pip install xgboost lightgbm
+    /opt/venv/bin/pip install -r requirements-gpu.txt --extra-index-url https://download.pytorch.org/whl/cu118
 
 # Stage 3: GPU Source builder
 FROM gpu-dependencies AS gpu-source

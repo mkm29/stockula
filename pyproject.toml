@@ -34,6 +34,19 @@ dev = [
     "ruff>=0.12.5",
     "pytest>=8.4.1",
 ]
+gpu = [
+    # GPU-accelerated machine learning packages for AutoTS
+    # Note: These require CUDA toolkit and drivers to be installed
+    "torch>=2.0.0",  # PyTorch for neural network models
+    "xgboost>=2.0.0",  # XGBoost with GPU support
+    "lightgbm>=4.0.0",  # LightGBM with GPU support
+    # Note: TensorFlow and related packages currently don't support Python 3.13
+    # They are commented out but documented for Python 3.12 users
+    # "tensorflow>=2.15.0; python_version<'3.13'",  # TensorFlow for deep learning models
+    # "tensorflow-probability>=0.23.0; python_version<'3.13'",  # TensorFlow Probability
+    # "mxnet-cu112>=1.9.0; python_version<'3.13'",  # MXNet with CUDA 11.2 support
+    # "gluonts>=0.14.0; python_version<'3.13'",  # GluonTS for advanced time series models
+]
 
 [build-system]
 requires = ["hatchling"]

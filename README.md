@@ -44,6 +44,7 @@ Stockula is a comprehensive Python trading platform that provides tools for tech
 - **🔮 Price Forecasting**: Automated time series forecasting using AutoTS with two modes:
   - Future prediction mode: Forecast N days from today
   - Historical evaluation mode: Train/test split with accuracy metrics (RMSE, MAE, MAPE)
+  - **GPU Acceleration**: Optional NVIDIA CUDA support for faster model training
 - **🎨 Rich CLI Interface**: Beautiful progress bars, tables, and colored output
 - **🗄️ Database Caching**: Automatic SQLite caching for offline analysis and fast data access
 - **🚀 Modern Python**: Built with uv for fast package management and Pydantic for configuration
@@ -477,7 +478,7 @@ Automated builds are triggered on releases and feature branch pushes:
 | Image                        | Description                | Latest Feature | Latest RC | Latest Stable |
 | ---------------------------- | -------------------------- | -------------- | --------- | ------------- |
 | `ghcr.io/mkm29/stockula`     | CLI with development tools | `:feat`        | `:rc`     | `:latest`     |
-| `ghcr.io/mkm29/stockula-gpu` | GPU-accelerated CLI        | `:feat`        | `:rc`     | `:latest`     |
+| `ghcr.io/mkm29/stockula-gpu` | GPU-accelerated CLI (CUDA) | N/A            | `:rc`     | `:latest`     |
 
 ```bash
 # Pull latest stable
@@ -496,8 +497,11 @@ docker pull ghcr.io/mkm29/stockula:0.12.1-rc.1  # Release candidate
 # Pull specific feature branch build
 docker pull ghcr.io/mkm29/stockula:0.12.1-feat.new-api.a1b2c3d
 
-# Run GPU-accelerated version
+# Run GPU-accelerated version (requires NVIDIA Docker runtime)
 docker run --gpus all ghcr.io/mkm29/stockula-gpu:latest
+
+# Check GPU availability
+docker run --gpus all ghcr.io/mkm29/stockula-gpu:latest bash -c "/home/stockula/gpu_info.sh"
 ```
 
 ## 🤝 Contributing
