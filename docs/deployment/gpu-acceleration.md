@@ -24,12 +24,14 @@ GPU acceleration significantly improves performance for computationally expensiv
 ### Software Requirements
 
 1. **NVIDIA GPU Drivers** >= 450.80.02
+
    ```bash
    # Check driver version
    nvidia-smi
    ```
 
-2. **Docker with GPU support**:
+1. **Docker with GPU support**:
+
    ```bash
    # Install NVIDIA Container Runtime
    curl -s -L https://nvidia.github.io/nvidia-container-runtime/gpgkey | \
@@ -41,7 +43,7 @@ GPU acceleration significantly improves performance for computationally expensiv
    sudo apt-get install nvidia-container-runtime
    ```
 
-3. **Docker Compose** >= 1.28.0 (for GPU compose support)
+1. **Docker Compose** >= 1.28.0 (for GPU compose support)
 
 ## Quick Start
 
@@ -84,16 +86,19 @@ docker compose -f docker-compose.gpu.yml up stockula-jupyter-gpu
 AutoTS includes several models that benefit from GPU acceleration:
 
 ### Neural Network Models
+
 - **PytorchForecasting**: LSTM, GRU, TFT (Temporal Fusion Transformer)
 - **NeuralForecast**: NBEATS, NHITS, TiDE
 - **TiDE**: Time-series Dense Encoder for long-term forecasting
 - **GluonTS**: DeepAR, Transformer, MQ-CNN
 
-### Gradient Boosting Models  
+### Gradient Boosting Models
+
 - **XGBoost**: `tree_method='gpu_hist'`
 - **LightGBM**: `device_type='gpu'`
 
 ### TensorFlow Models
+
 - **TensorFlow Regressions**: Dense neural networks for feature-based forecasting
 
 ## Configuration for GPU
@@ -206,6 +211,7 @@ docker compose -f docker-compose.gpu.yml up stockula-jupyter-gpu
 ```
 
 Example notebook cell:
+
 ```python
 # Check GPU in Jupyter
 import torch
@@ -293,26 +299,30 @@ print(prof.key_averages().table(sort_by="cuda_memory_usage", row_limit=10))
 ### Common Issues
 
 1. **CUDA Out of Memory**
+
    ```python
    # Solution: Reduce batch size or use gradient accumulation
    torch.cuda.empty_cache()  # Clear cache
    # Restart with smaller batch_size or fewer parallel jobs
    ```
 
-2. **Driver Version Mismatch**
+1. **Driver Version Mismatch**
+
    ```bash
    # Check compatibility
    nvidia-smi
    nvidia-container-cli --version
    ```
 
-3. **Container Can't See GPU**
+1. **Container Can't See GPU**
+
    ```bash
    # Test GPU access
    docker run --rm --gpus all nvidia/cuda:12.1-runtime-ubuntu22.04 nvidia-smi
    ```
 
-4. **Model Crashes (AutoTS GPU Instability)**
+1. **Model Crashes (AutoTS GPU Instability)**
+
    ```yaml
    # In .stockula.yaml, reduce parallel processing
    forecast:
@@ -323,25 +333,28 @@ print(prof.key_averages().table(sort_by="cuda_memory_usage", row_limit=10))
 ### Performance Tips
 
 1. **Use Mixed Precision Training**
+
    ```python
    # Enable automatic mixed precision
    from torch.cuda.amp import autocast, GradScaler
-   
+
    scaler = GradScaler()
    with autocast():
        # Your forecasting code here
    ```
 
-2. **Optimize Data Pipeline**
+1. **Optimize Data Pipeline**
+
    ```python
    # Use GPU-accelerated data loading
    import cudf
-   
+
    # Load data directly to GPU
    data = cudf.read_csv('data.csv')
    ```
 
-3. **Model Caching**
+1. **Model Caching**
+
    ```python
    # Cache trained models on GPU
    torch.save(model.state_dict(), 'model_gpu.pth')
@@ -352,13 +365,13 @@ print(prof.key_averages().table(sort_by="cuda_memory_usage", row_limit=10))
 
 Expected performance improvements with GPU acceleration:
 
-| Model Type | CPU Time | GPU Time | Speedup |
-|------------|----------|----------|---------|
-| TiDE | 45 min | 8 min | 5.6x |
-| NBEATS | 30 min | 5 min | 6x |
-| DeepAR | 60 min | 12 min | 5x |
-| TensorFlow Regression | 20 min | 4 min | 5x |
-| XGBoost | 15 min | 3 min | 5x |
+| Model Type            | CPU Time | GPU Time | Speedup |
+| --------------------- | -------- | -------- | ------- |
+| TiDE                  | 45 min   | 8 min    | 5.6x    |
+| NBEATS                | 30 min   | 5 min    | 6x      |
+| DeepAR                | 60 min   | 12 min   | 5x      |
+| TensorFlow Regression | 20 min   | 4 min    | 5x      |
+| XGBoost               | 15 min   | 3 min    | 5x      |
 
 *Benchmarks based on 10,000 time series with 1000 observations each*
 

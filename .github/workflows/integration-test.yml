@@ -5,12 +5,19 @@ on:
   schedule:
     - cron: '0 0 * * 0'  # Run weekly on Sunday at midnight
   pull_request:
+    branches:
+      - main
+      - develop
     paths:
       - 'src/stockula/database/**'
       - 'src/stockula/data/**'
       - 'src/stockula/forecasting/**'
+      - 'src/stockula/backtesting/**'
+      - 'src/stockula/domain/**'
+      - 'src/stockula/config/**'
       - 'tests/integration/**'
-      - 'models.json'
+      - 'data/models.json'
+      - 'pyproject.toml'  # Dependency changes could break integration
 env:
   UV_CACHE_DIR: /tmp/.uv-cache
   PYTHONWARNINGS: ignore
@@ -124,13 +131,13 @@ jobs:
           # Test portfolio with database
           uv run python -c "
           from stockula.domain.factory import DomainFactory
-          from stockula.config.models import Config, PortfolioConfig, DataConfig
+          from stockula.config.models import StockulaConfig, PortfolioConfig, DataConfig
           from datetime import date
           import warnings
           warnings.filterwarnings('ignore')
 
           # Create test configuration
-          config = Config(
+          config = StockulaConfig(
               portfolio=PortfolioConfig(
                   initial_capital=100000,
                   allocation_method='equal_weight',

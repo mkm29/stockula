@@ -1,98 +1,183 @@
 ---
-name: Docker Build and Publish
+name: Docker Build and Push
+
 on:
-  push:
-    tags:
-      - 'v*'
-  workflow_dispatch:  # Allow manual triggers for testing
-  workflow_run:
-    workflows: ["Test"]
-    types:
-      - completed
-    branches:
-      - main
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to tag (leave empty to use latest git tag)'
+        required: false
+        type: string
+      push:
+        description: 'Push images to registry'
+        required: false
+        default: true
+        type: boolean
+
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
+
 jobs:
-  build:
+  build-and-push:
     runs-on: ubuntu-latest
-    # Only run if the test workflow succeeded or if manually triggered/tag pushed
-    if: "github.event_name == 'workflow_dispatch' || \ngithub.event_name == 'push' || \n(github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')\n"
     permissions:
       contents: read
       packages: write
-      id-token: write
+    strategy:
+      matrix:
+        include:
+          - dockerfile: Dockerfile
+            target: cli
+            suffix: ""
+            platforms: linux/amd64,linux/arm64
+          - dockerfile: Dockerfile.nvidia
+            target: gpu-cli
+            suffix: "-gpu"
+            platforms: linux/amd64
     steps:
-      - name: Free Disk Space (Ubuntu)
-        uses: jlumbroso/free-disk-space@main
-        with:
-          # this might remove tools that are actually needed,
-          # if set to "true" but frees about 6 GB
-          tool-cache: false
-          # all of these default to true, but feel free to set to
-          # "false" if necessary for your workflow
-          android: true
-          dotnet: true
-          haskell: true
-          large-packages: true
-          docker-images: true
-          swap-storage: true
       - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          lfs: true
-      - name: Check disk space
-        run: df -h
+
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
-        with:
-          driver-opts: |
-            image=moby/buildkit:master
-            network=host
-          buildkitd-flags: '--allow-insecure-entitlement network.host'
-      - name: Log in to the Container registry
-        if: github.event_name != 'pull_request'
+
+      - name: Log in to GitHub Container Registry
         uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Determine version
+        id: version
+        run: |
+          # Use input version if provided, otherwise use release tag
+          if [[ -n "${{ inputs.version }}" ]]; then
+            VERSION="${{ inputs.version }}"
+          elif [[ "${{ github.event_name }}" == "release" ]]; then
+            VERSION="${{ github.event.release.tag_name }}"
+          else
+            # Get the latest tag
+            VERSION=$(git describe --tags --abbrev=0 2>/dev/null || echo "dev")
+          fi
+
+          # Docker tags should match Git tags exactly
+          # - RC versions: 0.12.1-rc.1
+          # - Stable versions: v0.12.1
+
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Using version: $VERSION"
+
       - name: Extract metadata
         id: meta
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          flavor: |
+            suffix=${{ matrix.suffix }},onlatest=true
           tags: |
-            type=ref,event=branch
-            type=ref,event=pr
-            type=ref,event=tag
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=raw,value=latest,enable={{is_default_branch}}
+            # Use the exact Git tag as Docker tag
+            type=raw,value=${{ steps.version.outputs.version }}
+            # For stable releases (v-prefixed), also tag as 'latest'
+            type=raw,value=latest,enable=${{ startsWith(steps.version.outputs.version, 'v') && matrix.suffix == '' }}
+            # For RC releases, also tag as 'rc' for latest RC
+            type=raw,value=rc,enable=${{ contains(steps.version.outputs.version, 'rc') && matrix.suffix == '' }}
+            # For development builds
+            type=raw,value=dev,enable=${{ steps.version.outputs.version == 'dev' }}
+            # SHA-based tag for traceability
+            type=sha,prefix={{branch}}-,format=short
+
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
         with:
           context: .
-          target: cli
-          platforms: linux/amd64,linux/arm64/v8
-          push: ${{ github.event_name != 'pull_request' }}
+          file: ${{ matrix.dockerfile }}
+          target: ${{ matrix.target }}
+          platforms: ${{ matrix.platforms }}
+          push: ${{ github.event_name == 'release' || inputs.push }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: |
-            type=gha
-            type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache
-            type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
-          cache-to: |
-            type=gha,mode=max
-            type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache,mode=max
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
           build-args: |
-            VERSION=${{ github.ref_type == 'tag' && github.ref_name || 'dev' }}
-            BUILD_DATE=${{ fromJSON(steps.meta.outputs.json).labels['org.opencontainers.image.created'] }}
+            VERSION=${{ steps.version.outputs.version }}
+            BUILD_DATE=${{ github.event.release.created_at || github.event.head_commit.timestamp }}
             GIT_COMMIT=${{ github.sha }}
-            GIT_URL=${{ github.event.repository.html_url }}
-          provenance: false
-          sbom: false
+            GIT_URL=${{ github.server_url }}/${{ github.repository }}
+
+      - name: Generate image summary
+        if: success()
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          SUFFIX="${{ matrix.suffix }}"
+          TARGET="${{ matrix.target }}"
+
+          echo "## 🐳 Docker Image Built" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Image Details" >> $GITHUB_STEP_SUMMARY
+          echo "- **Target**: \`$TARGET\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Version**: \`$VERSION\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Registry**: \`${{ env.REGISTRY }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Repository**: \`${{ env.IMAGE_NAME }}$SUFFIX\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Pull Command" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
+          echo "docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}$SUFFIX:$VERSION" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+
+          if [[ "$VERSION" == *"rc"* ]]; then
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "ℹ️ **Note**: This is a release candidate image." >> $GITHUB_STEP_SUMMARY
+          fi
+
+  publish-manifest:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    if: success()
+    permissions:
+      packages: write
+    steps:
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create multi-arch manifest for RC
+        if: contains(github.event.release.tag_name, 'rc')
+        run: |
+          VERSION="${{ github.event.release.tag_name }}"
+          VERSION="${VERSION#v}"
+
+          # Create manifest for standard image
+          docker manifest create \
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:$VERSION \
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:$VERSION-amd64 \
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:$VERSION-arm64
+
+          docker manifest push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:$VERSION
+
+          # Also tag as 'rc' for latest RC
+          docker manifest create \
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:rc \
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:$VERSION-amd64 \
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:$VERSION-arm64
+
+          docker manifest push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:rc
+
+      - name: Summary
+        run: |
+          echo "## ✅ Docker Images Published" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "All images have been successfully built and pushed to GitHub Container Registry." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Available Images" >> $GITHUB_STEP_SUMMARY
+          echo "- \`ghcr.io/${{ github.repository }}\` - Standard CLI image" >> $GITHUB_STEP_SUMMARY
+          echo "- \`ghcr.io/${{ github.repository }}-gpu\` - GPU-accelerated CLI image" >> $GITHUB_STEP_SUMMARY

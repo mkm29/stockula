@@ -4,6 +4,7 @@
       "release-type": "python",
       "package-name": "stockula",
       "include-component-in-tag": false,
+      "prerelease-type": "rc",
       "changelog-sections": [
         {"type": "feat", "section": "Features", "hidden": false},
         {"type": "fix", "section": "Bug Fixes", "hidden": false},

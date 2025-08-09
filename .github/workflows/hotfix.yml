@@ -1,0 +1,116 @@
+---
+name: Hotfix Workflow
+
+on:
+  pull_request:
+    branches:
+      - main
+    types: [opened, synchronize, reopened]
+    paths-ignore:
+      - 'docs/**'
+      - '*.md'
+      - '.gitignore'
+
+jobs:
+  validate-hotfix:
+    # Only run if PR is from a hotfix branch
+    if: startsWith(github.head_ref, 'hotfix/')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Validate hotfix branch
+        run: |
+          echo "🚑 Validating hotfix PR..."
+
+          # Check that hotfix branch is based on main
+          git fetch origin main
+          MERGE_BASE=$(git merge-base HEAD origin/main)
+          MAIN_HEAD=$(git rev-parse origin/main)
+
+          if [[ "$MERGE_BASE" != "$MAIN_HEAD" ]]; then
+            echo "❌ Error: Hotfix branch must be based on 'main' branch"
+            echo "   Current base: $(git rev-parse --abbrev-ref HEAD)"
+            echo "   Expected base: main"
+            exit 1
+          fi
+
+          echo "✅ Hotfix branch is correctly based on main"
+
+      - name: Add hotfix label
+        uses: actions/github-script@v7
+        with:
+          script: |
+            // Add hotfix label to PR
+            await github.rest.issues.addLabels({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              labels: ['hotfix', 'urgent']
+            });
+
+      - name: Run expedited tests
+        run: |
+          echo "🏃 Running expedited test suite for hotfix..."
+          # Hotfixes should still pass critical tests
+          # but we can skip some time-consuming integration tests
+
+  backport-to-develop:
+    # After hotfix is merged to main, automatically backport to develop
+    if: github.event.pull_request.merged == true && startsWith(github.head_ref, 'hotfix/')
+    runs-on: ubuntu-latest
+    needs: validate-hotfix
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Create backport PR
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Fetch all branches
+          git fetch --all
+
+          # Create backport branch
+          BACKPORT_BRANCH="backport/hotfix-to-develop-$(date +%s)"
+          git checkout -b "$BACKPORT_BRANCH" origin/develop
+
+          # Cherry-pick the merge commit
+          MERGE_COMMIT="${{ github.event.pull_request.merge_commit_sha }}"
+          git cherry-pick -m 1 "$MERGE_COMMIT" || {
+            echo "⚠️  Conflicts detected. Manual backport required."
+            exit 0
+          }
+
+          # Push backport branch
+          git push origin "$BACKPORT_BRANCH"
+
+          # Create PR from backport branch to develop
+          gh pr create \
+            --base develop \
+            --head "$BACKPORT_BRANCH" \
+            --title "🔄 Backport: ${{ github.event.pull_request.title }}" \
+            --body "## Automated Backport
+
+            This PR backports the following hotfix to the develop branch:
+            - Original PR: #${{ github.event.pull_request.number }}
+            - Title: ${{ github.event.pull_request.title }}
+            - Author: @${{ github.event.pull_request.user.login }}
+
+            ### Original Description
+            ${{ github.event.pull_request.body }}
+
+            ---
+            *This is an automated backport. Please review and merge to keep develop in sync with main.*" \
+            --label "backport,automated"

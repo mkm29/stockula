@@ -434,9 +434,66 @@ This project uses [Conventional Commits](https://www.conventionalcommits.org/):
 
 MIT License - see [LICENSE](LICENSE) file for details.
 
+## 🔄 Git Flow & Release Process
+
+We follow a Git Flow branching strategy with automated releases via [Release Please](https://github.com/googleapis/release-please).
+
+### Branching Strategy
+
+```mermaid
+graph LR
+    A[feature/*] -->|PR| B[develop]
+    C[bugfix/*] -->|PR| B
+    B -->|Release Please| D[RC Release<br/>0.12.1-rc.1]
+    D -->|Docker Build| E[ghcr.io/mkm29/stockula:0.12.1-rc.1]
+    B -->|Promote PR| F[main]
+    F -->|Release Please| G[Stable Release<br/>v0.12.1]
+    G -->|Docker Build| H[ghcr.io/mkm29/stockula:v0.12.1]
+    G -->|Publish| I[PyPI]
+    J[hotfix/*] -->|PR| F
+    J -->|Auto-backport| B
+```
+
+- **`develop`** - Integration branch for active development
+- **`main`** - Production-ready releases only
+- **Feature branches** (`feature/*`) - New features
+- **Bugfix branches** (`bugfix/*`) - Bug fixes
+- **Hotfix branches** (`hotfix/*`) - Critical production fixes
+
+### Release Types
+
+| Type              | Branch  | Git Tag      | Docker Tag   | Example                              |
+| ----------------- | ------- | ------------ | ------------ | ------------------------------------ |
+| Release Candidate | develop | `0.Y.Z-rc.N` | `0.Y.Z-rc.N` | `ghcr.io/mkm29/stockula:0.12.1-rc.1` |
+| Stable Release    | main    | `vX.Y.Z`     | `vX.Y.Z`     | `ghcr.io/mkm29/stockula:v0.12.1`     |
+
+### Docker Images
+
+Automated builds are triggered on every release:
+
+| Image                        | Description                | Latest RC | Latest Stable |
+| ---------------------------- | -------------------------- | --------- | ------------- |
+| `ghcr.io/mkm29/stockula`     | CLI with development tools | `:rc`     | `:latest`     |
+| `ghcr.io/mkm29/stockula-gpu` | GPU-accelerated CLI        | `:rc`     | `:latest`     |
+
+```bash
+# Pull latest stable
+docker pull ghcr.io/mkm29/stockula:latest
+
+# Pull latest RC for testing
+docker pull ghcr.io/mkm29/stockula:rc
+
+# Pull specific versions (tags match Git tags)
+docker pull ghcr.io/mkm29/stockula:v0.12.1      # Stable release
+docker pull ghcr.io/mkm29/stockula:0.12.1-rc.1  # Release candidate
+
+# Run GPU-accelerated version
+docker run --gpus all ghcr.io/mkm29/stockula-gpu:latest
+```
+
 ## 🤝 Contributing
 
-Contributions are welcome! Please see our [Contributing Guide](CONTRIBUTING.md) for development setup and guidelines.
+Contributions are welcome! Please see our [Contributing Guide](docs/CONTRIBUTING.md) for development setup and guidelines.
 
 ### Development Setup
 

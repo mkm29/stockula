@@ -34,22 +34,22 @@ python utils/validate_docker.py --check-only
 ### Basic Checks (Always Run)
 
 1. **Docker Installation**: Verifies Docker is installed and daemon is running
-2. **Docker Compose**: Checks for Docker Compose availability (optional)
-3. **Required Files**: Ensures `Dockerfile`, `pyproject.toml`, `uv.lock`, and `.dockerignore` exist
+1. **Docker Compose**: Checks for Docker Compose availability (optional)
+1. **Required Files**: Ensures `Dockerfile`, `pyproject.toml`, `uv.lock`, and `.dockerignore` exist
 
 ### Full Validation (Default Mode)
 
 In addition to basic checks, full validation includes:
 
 4. **Production Image Build**: Tests building the production target
-5. **Test Image Build**: Tests building the test target
-6. **Basic Functionality**: Verifies Stockula package imports correctly
-7. **UV Functionality**: Ensures UV package manager works
-8. **Python Version**: Confirms Python 3.13 is being used
-9. **Security Check**: Verifies containers run as non-root user
-10. **Volume Operations**: Tests Docker volume creation and removal
-11. **Docker Compose**: Validates `docker-compose.yml` syntax (if present)
-12. **Examples Directory**: Checks for examples directory
+1. **Test Image Build**: Tests building the test target
+1. **Basic Functionality**: Verifies Stockula package imports correctly
+1. **UV Functionality**: Ensures UV package manager works
+1. **Python Version**: Confirms Python 3.13 is being used
+1. **Security Check**: Verifies containers run as non-root user
+1. **Volume Operations**: Tests Docker volume creation and removal
+1. **Docker Compose**: Validates `docker-compose.yml` syntax (if present)
+1. **Examples Directory**: Checks for examples directory
 
 ### Quick Mode
 
@@ -64,8 +64,8 @@ Use `--quick` or `--check-only` to skip image builds and functionality tests. Th
 The script provides clear status indicators:
 
 - ✅ Success indicators for passing checks
-- ❌ Error indicators for failing checks  
-- ⚠️  Warning indicators for optional issues
+- ❌ Error indicators for failing checks
+- ⚠️ Warning indicators for optional issues
 
 Example output:
 
