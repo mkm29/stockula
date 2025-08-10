@@ -1,5 +1,7 @@
 """Custom exceptions for Stockula."""
 
+from typing import Any
+
 
 class StockulaException(Exception):
     """Base exception for all Stockula-specific errors."""
@@ -120,7 +122,7 @@ class ConfigurationException(StockulaException):
 class ValidationException(StockulaException):
     """Exception raised when data validation fails."""
 
-    def __init__(self, field: str | None = None, value: any = None, message: str | None = None):
+    def __init__(self, field: str | None = None, value: Any = None, message: str | None = None):
         """Initialize ValidationException.
 
         Args:

@@ -1,7 +1,7 @@
 """Display and output handling for Stockula results."""
 
 import json
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any
 
 import pandas as pd
@@ -175,7 +175,7 @@ class ResultsDisplay:
 
                 table.add_row(
                     asset.symbol,
-                    asset.category.name if hasattr(asset.category, "name") else str(asset.category),
+                    asset.category.name if asset.category and hasattr(asset.category, "name") else str(asset.category),
                     f"{asset.quantity:.2f}",
                     f"{allocation_pct:.1f}%",
                     f"${asset_value:,.2f}",
@@ -189,7 +189,7 @@ class ResultsDisplay:
 
                 table.add_row(
                     asset.symbol,
-                    asset.category.name if hasattr(asset.category, "name") else str(asset.category),
+                    asset.category.name if asset.category and hasattr(asset.category, "name") else str(asset.category),
                     f"{asset.quantity:.2f}",
                     "N/A",
                     "N/A",
@@ -432,19 +432,19 @@ class ResultsDisplay:
         # Check if we have actual prices (evaluation mode)
         has_actual_prices = any("actual_price" in f for f in forecast_results if "error" not in f)
 
-        table = Table(title=f"Price Forecasts{date_info}")
+        table = Table(title=f"Price Forecasts{date_info}", show_header=True, header_style="bold")
         table.add_column("Ticker", style="cyan", no_wrap=True)
-        table.add_column("Quantity", style="green", justify="right")
-        table.add_column("Current Price", style="white", justify="right")
-        table.add_column("Current Value", style="blue", justify="right")
+        table.add_column("Qty", style="green", justify="right", no_wrap=True)
+        table.add_column("Current\nPrice", style="white", justify="right")
+        table.add_column("Current\nValue", style="blue", justify="right")
         if has_actual_prices:
-            table.add_column("Actual Price", style="yellow", justify="right")
-            table.add_column("Actual Value", style="yellow", justify="right")
-        table.add_column("Forecast Price", style="green", justify="right")
-        table.add_column("Forecast Value", style="blue", justify="right")
-        table.add_column("Return %", style="magenta", justify="right")
+            table.add_column("Actual\nPrice", style="yellow", justify="right")
+            table.add_column("Actual\nValue", style="yellow", justify="right")
+        table.add_column("Forecast\nPrice", style="green", justify="right")
+        table.add_column("Forecast\nValue", style="blue", justify="right")
+        table.add_column("Return", style="magenta", justify="right")
         table.add_column("Confidence Range", style="yellow", justify="center")
-        table.add_column("Best Model", style="blue")
+        table.add_column("Model", style="blue")
 
         # Sort forecasts by return percentage (highest to lowest)
         # Separate error results from valid forecasts
@@ -638,11 +638,11 @@ class ResultsDisplay:
 
         self.console.print(
             Panel.fit(
-                f"[bold yellow]FORECAST MODE - IMPORTANT NOTES:[/bold yellow]\n"
-                f"{forecast_msg}\n"
-                f"• AutoGluon will automatically select the best model\n"
-                f"• This process may take several minutes per ticker\n"
-                f"• Press Ctrl+C at any time to cancel\n"
+                f"[bold yellow]FORECAST MODE - IMPORTANT NOTES:[/bold yellow]\\n"
+                f"{forecast_msg}\\n"
+                f"• The selected backend determines the approach (Chronos/AutoGluon/Simple)\\n"
+                f"• This process may take several minutes per ticker\\n"
+                f"• Press Ctrl+C at any time to cancel\\n"
                 f"• Enable logging for more detailed progress information",
                 border_style="yellow",
             )
@@ -669,14 +669,18 @@ class ResultsDisplay:
         """
         # Show portfolio value in a nice table
         portfolio_value_table = Table(title="Portfolio Value")
-        portfolio_value_table.add_column("Metric", style="cyan", no_wrap=True)
-        portfolio_value_table.add_column("Date", style="white")
-        portfolio_value_table.add_column("Value", style="green")
+        portfolio_value_table.add_column("Metric", style="cyan", no_wrap=True, width=18)
+        portfolio_value_table.add_column("Date", style="white", no_wrap=True, width=25)
+        portfolio_value_table.add_column("Value", style="green", no_wrap=True, width=12)
 
         # Add initial capital row with appropriate date
         if config.forecast.test_start_date:
             # Historical evaluation mode - use test start date
-            test_start = config.forecast.test_start_date.strftime("%Y-%m-%d")
+            test_start = (
+                config.forecast.test_start_date.strftime("%Y-%m-%d")
+                if isinstance(config.forecast.test_start_date, date)
+                else str(config.forecast.test_start_date)
+            )
         else:
             # Future prediction mode - use today's date
             test_start = datetime.now().strftime("%Y-%m-%d")
@@ -742,13 +746,17 @@ class ResultsDisplay:
             # Add forecasted value row with appropriate end date
             test_end = None
             if config.forecast.test_end_date:
-                test_end = config.forecast.test_end_date.strftime("%Y-%m-%d")
+                test_end = (
+                    config.forecast.test_end_date.strftime("%Y-%m-%d")
+                    if isinstance(config.forecast.test_end_date, date)
+                    else str(config.forecast.test_end_date)
+                )
             elif config.forecast.forecast_length:
                 # Calculate future date based on forecast length
                 from datetime import timedelta
 
                 future_date = datetime.now() + timedelta(days=config.forecast.forecast_length)
-                test_end = future_date.strftime("%Y-%m-%d")
+                test_end = future_date.strftime("%Y-%m-%d") if isinstance(future_date, date) else str(future_date)
             else:
                 # Try to get end date from any forecast result
                 for forecast in results["forecasting"]:
@@ -761,7 +769,7 @@ class ResultsDisplay:
                 from datetime import timedelta
 
                 future_date = datetime.now() + timedelta(days=14)
-                test_end = future_date.strftime("%Y-%m-%d")
+                test_end = future_date.strftime("%Y-%m-%d") if isinstance(future_date, date) else str(future_date)
 
             portfolio_value_table.add_row("Forecast Value", test_end, f"${forecasted_value:,.2f}")
 
@@ -877,7 +885,11 @@ Detailed report saved to: {
             ]:
                 broker_info = f"Broker: {broker_config.name} (zero-commission)"
             elif broker_config.commission_type == "percentage":
-                broker_info = f"Broker: {broker_config.name} ({broker_config.commission_value * 100:.1f}% commission"
+                commission_val = broker_config.commission_value
+                if isinstance(commission_val, dict):
+                    # If it's a dict, use the first value or default
+                    commission_val = next(iter(commission_val.values())) if commission_val else 0.0
+                broker_info = f"Broker: {broker_config.name} ({commission_val * 100:.1f}% commission"
                 if broker_config.min_commission:
                     broker_info += f", ${broker_config.min_commission:.2f} min"
                 broker_info += ")"
@@ -916,16 +928,32 @@ Detailed report saved to: {
 
         # First try backtest dates, then data dates, then results
         if config.backtest.start_date:
-            start_date = config.backtest.start_date.strftime("%Y-%m-%d")
+            start_date = (
+                config.backtest.start_date.strftime("%Y-%m-%d")
+                if isinstance(config.backtest.start_date, date)
+                else str(config.backtest.start_date)
+            )
         elif config.data.start_date:
-            start_date = config.data.start_date.strftime("%Y-%m-%d")
+            start_date = (
+                config.data.start_date.strftime("%Y-%m-%d")
+                if isinstance(config.data.start_date, date)
+                else str(config.data.start_date)
+            )
         elif portfolio_backtest_results.date_range and portfolio_backtest_results.date_range.get("start"):
             start_date = portfolio_backtest_results.date_range["start"]
 
         if config.backtest.end_date:
-            end_date = config.backtest.end_date.strftime("%Y-%m-%d")
+            end_date = (
+                config.backtest.end_date.strftime("%Y-%m-%d")
+                if isinstance(config.backtest.end_date, date)
+                else str(config.backtest.end_date)
+            )
         elif config.data.end_date:
-            end_date = config.data.end_date.strftime("%Y-%m-%d")
+            end_date = (
+                config.data.end_date.strftime("%Y-%m-%d")
+                if isinstance(config.data.end_date, date)
+                else str(config.data.end_date)
+            )
         elif portfolio_backtest_results.date_range and portfolio_backtest_results.date_range.get("end"):
             end_date = portfolio_backtest_results.date_range["end"]
 

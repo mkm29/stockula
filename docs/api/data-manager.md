@@ -1,6 +1,8 @@
 # DataManager API Reference
 
-The `DataManager` is a centralized class that manages instances of DataFetcher, Registry, and Repository components to ensure consistency across the application. It provides a single point of access for all data-related operations in Stockula.
+The `DataManager` is a centralized class that manages instances of DataFetcher, Registry, and Repository components to
+ensure consistency across the application. It provides a single point of access for all data-related operations in
+Stockula.
 
 ## Overview
 
@@ -205,7 +207,7 @@ class Container(containers.DeclarativeContainer):
         use_cache=providers.Callable(lambda config: config.data.use_cache, stockula_config),
         db_path=providers.Callable(lambda config: config.data.db_path, stockula_config),
     )
-    
+
     # Data fetcher extracted from data manager
     data_fetcher = providers.ThreadSafeSingleton(
         lambda data_mgr: data_mgr.fetcher,
@@ -247,13 +249,13 @@ from typing import Dict
 
 class IndicatorRepository(Repository[Dict[str, float]]):
     """Custom repository for technical indicators."""
-    
+
     def add(self, key: str, item: Dict[str, float]) -> None:
         self._items[key] = item
-    
+
     def get(self, key: str, default=None) -> Dict[str, float] | None:
         return self._items.get(key, default)
-    
+
     def remove(self, key: str) -> None:
         if key not in self._items:
             raise KeyError(f"Indicator '{key}' not found")
@@ -314,4 +316,5 @@ fetcher = manager.fetcher
 strategy_repo = manager.strategies
 ```
 
-The DataManager provides a cleaner, more maintainable approach to managing data components through a centralized interface.
+The DataManager provides a cleaner, more maintainable approach to managing data components through a centralized
+interface.

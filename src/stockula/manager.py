@@ -3,7 +3,7 @@
 import json
 from datetime import date, datetime, timedelta
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import pandas as pd
 import yaml
@@ -251,7 +251,10 @@ class StockulaManager:
             Portfolio instance
         """
         factory = self.container.domain_factory()
-        return factory.create_portfolio(self.config)
+        portfolio = factory.create_portfolio(self.config)
+        from .domain import Portfolio
+
+        return cast(Portfolio, portfolio)
 
     def display_portfolio_summary(self, portfolio: Portfolio) -> None:
         """Display portfolio summary table.
@@ -460,7 +463,7 @@ class StockulaManager:
                 if "adx" in ta_config.indicators and "adx" in result["indicators"]:
                     result["indicators"]["ADX"] = result["indicators"]["adx"]["current"]
 
-        return result
+        return cast(dict[str, Any], result)
 
     def _compute_indicators(
         self,
@@ -588,7 +591,9 @@ class StockulaManager:
                     )
 
                     # Create result entry with train/test results
-                    result_entry = self._create_train_test_result(ticker, strategy_config, backtest_result)
+                    result_entry: dict[str, Any] | None = self._create_train_test_result(
+                        ticker, strategy_config, backtest_result
+                    )
 
                 else:
                     # Run traditional backtest without train/test split
@@ -604,7 +609,7 @@ class StockulaManager:
                         end_date=backtest_end,
                     )
 
-                    result_entry = self._create_standard_result(ticker, strategy_config, backtest_result)
+                    result_entry = self._create_standard_result(ticker, strategy_config, backtest_result)  # type: ignore[no-redef]
 
                 # Only append if result_entry is not None (i.e., backtest succeeded)
                 if result_entry is not None:
@@ -775,7 +780,7 @@ class StockulaManager:
                         f"MAPE={eval_metrics.get('mape', 0):.2f}%"
                     )
 
-            return result
+            return cast(dict[str, Any], result)
 
         except KeyboardInterrupt:
             self.log_manager.warning(f"Forecast for {ticker} interrupted by user")
@@ -804,7 +809,7 @@ class StockulaManager:
                 use_evaluation=False,  # Explicit no evaluation for standard forecast
             )
 
-            return result
+            return cast(dict[str, Any], result)
         except KeyboardInterrupt:
             self.log_manager.warning(f"Forecast for {ticker} interrupted by user")
             return {"ticker": ticker, "error": "Interrupted by user"}

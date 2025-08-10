@@ -1,10 +1,12 @@
 # Test Coverage Status and Improvements
 
-This document details the current test coverage status, recent improvements, and important warnings about untested modules in the Stockula project.
+This document details the current test coverage status, recent improvements, and important warnings about untested
+modules in the Stockula project.
 
 ## ⚠️ Critical Testing Warning
 
-**The `src/stockula/backtesting/strategies.py` module (567 lines) has NOT been thoroughly tested** due to complex dependencies on the `backtesting.py` library.
+**The `src/stockula/backtesting/strategies.py` module (567 lines) has NOT been thoroughly tested** due to complex
+dependencies on the `backtesting.py` library.
 
 ### Why Testing is Blocked
 
@@ -165,4 +167,6 @@ Key settings:
 
 ## Conclusion
 
-Significant progress has been made in test coverage, with most modules now exceeding 80% coverage. The exclusion of `strategies.py` is a deliberate decision due to framework limitations, not neglect. The focus on edge cases and error scenarios ensures robust behavior across the testable codebase.
+Significant progress has been made in test coverage, with most modules now exceeding 80% coverage. The exclusion of
+`strategies.py` is a deliberate decision due to framework limitations, not neglect. The focus on edge cases and error
+scenarios ensures robust behavior across the testable codebase.

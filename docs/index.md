@@ -1,10 +1,13 @@
 # Stockula
 
-A comprehensive Python trading platform that provides tools for technical analysis, backtesting, data fetching, and price forecasting. Built with modern Python practices, it integrates popular financial libraries to offer a complete solution for quantitative trading strategy development.
+A comprehensive Python trading platform that provides tools for technical analysis, backtesting, data fetching, and
+price forecasting. Built with modern Python practices, it integrates popular financial libraries to offer a complete
+solution for quantitative trading strategy development.
 
 ## Features
 
-- **📊 Technical Analysis**: Calculate popular indicators (SMA, EMA, RSI, MACD, Bollinger Bands, etc.) using the finta library
+- **📊 Technical Analysis**: Calculate popular indicators (SMA, EMA, RSI, MACD, Bollinger Bands, etc.) using the finta
+  library
 - **🔄 Backtesting**: Test trading strategies on historical data with detailed performance metrics
 - **📈 Data Fetching**: Retrieve real-time and historical market data via yfinance
 - **🗄️ SQLite Database**: Automatic caching of all yfinance data with robust lookup capabilities

@@ -1,6 +1,14 @@
-"""Forecasting module with AutoGluon backend (falls back to simple if unavailable)."""
+"""Forecasting module with AutoGluon and Chronos backends (falls back to simple)."""
 
-from .backends import AUTOGLUON_AVAILABLE, AutoGluonBackend, ForecastBackend, ForecastResult, SimpleForecastBackend
+from .backends import (
+    AUTOGLUON_AVAILABLE,
+    CHRONOS_AVAILABLE,
+    AutoGluonBackend,
+    ChronosBackend,
+    ForecastBackend,
+    ForecastResult,
+    SimpleForecastBackend,
+)
 from .factory import create_forecast_backend
 from .manager import ForecastingManager
 
@@ -12,6 +20,8 @@ __all__ = [
     "ForecastResult",
     "AutoGluonBackend",
     "SimpleForecastBackend",
+    "ChronosBackend",
     "create_forecast_backend",
     "AUTOGLUON_AVAILABLE",
+    "CHRONOS_AVAILABLE",
 ]

@@ -1,12 +1,12 @@
 """Base repository pattern for managing collections of items."""
 
 from abc import ABC, abstractmethod
-from typing import TypeVar
+from typing import Generic, TypeVar
 
 T = TypeVar("T")
 
 
-class Repository[T](ABC):
+class Repository(Generic[T], ABC):
     """Abstract base class for repositories."""
 
     def __init__(self):

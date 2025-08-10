@@ -1,7 +1,7 @@
 """Data fetching utilities using yfinance."""
 
 from datetime import datetime, timedelta
-from typing import Any
+from typing import Any, cast
 
 import pandas as pd
 import yfinance as yf
@@ -283,7 +283,7 @@ class DataFetcher:
         if self.use_cache and info and self.db is not None:
             self.db.store_stock_info(symbol, info)
 
-        return info
+        return dict(info) if info else {}  # type: ignore[no-any-return]
 
     def get_realtime_price(self, symbol: str) -> float | None:
         """Get current price for a stock.
@@ -739,7 +739,7 @@ class DataFetcher:
         if rates.empty:
             return None
 
-        return rates.mean()
+        return cast(float | None, rates.mean())
 
     def get_treasury_rates(
         self,
@@ -810,7 +810,7 @@ class DataFetcher:
                 rate = data.iloc[closest_idx]["Close"]
                 if ticker == "^IRX":  # Treasury bill indices are in percentage
                     rate = rate / 100.0
-                return rate
+                return cast(float | None, rate)
 
         except Exception as e:
             print(f"Error fetching Treasury rate for {ticker} on {date}: {e}")
@@ -877,7 +877,7 @@ class DataFetcher:
         data = self.db.get_price_history(ticker, start_date=date_str, end_date=date_str)
 
         if not data.empty:
-            return data.iloc[0]["Close"]
+            return cast(float | None, data.iloc[0]["Close"])
 
         return None
 

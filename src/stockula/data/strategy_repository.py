@@ -1,7 +1,7 @@
 """Strategy Repository - Repository for managing trading strategies with database support."""
 
 from copy import deepcopy
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from sqlalchemy.orm import Session
 
@@ -124,7 +124,8 @@ class StrategyRepository(Repository[type[BaseStrategy]]):
 
         with self.db_manager.get_session() as session:
             # Load active strategies
-            strategies = session.query(Strategy).filter(Strategy.is_active).all()
+            # Use type: ignore for SQLAlchemy filter
+            strategies = session.query(Strategy).filter(Strategy.is_active == True).all()  # type: ignore[arg-type] # noqa: E712
             for strategy in strategies:
                 # For now, we only load presets - actual strategy classes
                 # would need to be dynamically imported from module_path
@@ -132,11 +133,11 @@ class StrategyRepository(Repository[type[BaseStrategy]]):
 
     def _load_strategy_presets(self, session: Session, strategy: Strategy) -> None:
         """Load presets for a specific strategy from the database."""
-        presets = session.query(StrategyPreset).filter(StrategyPreset.strategy_id == strategy.id).all()
+        presets = session.query(StrategyPreset).filter(StrategyPreset.strategy_id == strategy.id).all()  # type: ignore[arg-type]
 
         for preset in presets:
             if preset.is_default:
-                self._preset_values[strategy.name] = preset.parameters
+                self._preset_values[strategy.name] = cast(dict[str, Any], preset.parameters)
 
     def sync_to_database(self) -> None:
         """Sync current strategies and presets to the database."""
@@ -149,7 +150,7 @@ class StrategyRepository(Repository[type[BaseStrategy]]):
             with self.db_manager.get_session() as session:
                 # Sync strategies
                 for name, strategy_class in self._items.items():
-                    existing = session.query(Strategy).filter(Strategy.name == name).first()
+                    existing = session.query(Strategy).filter(Strategy.name == name).first()  # type: ignore[arg-type]
                     if not existing:
                         strategy = Strategy(
                             name=name,
@@ -168,7 +169,7 @@ class StrategyRepository(Repository[type[BaseStrategy]]):
                                 name="default",
                                 is_default=True,
                             )
-                            preset.set_parameters(self._preset_values[name])
+                            preset.set_parameters(cast(dict[Any, Any], self._preset_values[name]))
                             session.add(preset)
 
                 session.commit()
@@ -193,16 +194,16 @@ class StrategyRepository(Repository[type[BaseStrategy]]):
         Returns:
             Dictionary of default presets (read-only deep copy)
         """
-        return deepcopy(self.DEFAULT_PRESETS)
+        return cast(dict[str, dict[str, Any]], deepcopy(self.DEFAULT_PRESETS))
 
     @property
-    def values(self) -> dict[str, dict[str, Any]]:
+    def values(self) -> dict[str, dict[str, Any]]:  # type: ignore[override]
         """Get mutable preset values.
 
         Returns:
             Dictionary of current preset values (can be modified)
         """
-        return self._preset_values
+        return cast(dict[str, dict[str, Any]], self._preset_values)
 
     def add(self, name: str, strategy_class: type[BaseStrategy]) -> None:
         """Add a strategy to the repository.
@@ -263,7 +264,7 @@ class StrategyRepository(Repository[type[BaseStrategy]]):
         Returns:
             Strategy class or None if not found
         """
-        return self.get(strategy_name)
+        return cast(type[BaseStrategy] | None, self.get(strategy_name))
 
     def normalize_strategy_name(self, strategy_name: str) -> str:
         """Normalize strategy name to lowercase format.
@@ -338,7 +339,7 @@ class StrategyRepository(Repository[type[BaseStrategy]]):
         Returns:
             Dictionary of strategy names to parameter presets
         """
-        return self._preset_values.copy()
+        return cast(dict[str, dict[str, Any]], self._preset_values.copy())
 
     def get_strategy_preset(self, strategy_name: str) -> dict[str, Any]:
         """Get parameter preset for a specific strategy.
@@ -350,7 +351,8 @@ class StrategyRepository(Repository[type[BaseStrategy]]):
             Dictionary of default parameters
         """
         normalized_name = self.normalize_strategy_name(strategy_name)
-        return self._preset_values.get(normalized_name, {}).copy()
+        preset = self._preset_values.get(normalized_name, {})
+        return cast(dict[str, Any], preset.copy() if isinstance(preset, dict) else {})
 
     def validate_strategies(self, strategy_names: list[str]) -> tuple[list[str], list[str]]:
         """Validate a list of strategy names.
@@ -406,11 +408,13 @@ class StrategyRepository(Repository[type[BaseStrategy]]):
         if lowercase_name not in self._preset_values:
             self._preset_values[lowercase_name] = {}
 
-        self._preset_values[lowercase_name].update(parameters)
+        # Cast to dict for type safety
+        preset = cast(dict[str, Any], self._preset_values[lowercase_name])
+        preset.update(parameters)
 
         # Sync to database if available
         if self.db_manager:
-            self._save_preset_to_database(lowercase_name, self._preset_values[lowercase_name])
+            self._save_preset_to_database(lowercase_name, cast(dict[str, Any], self._preset_values[lowercase_name]))
 
     def _save_preset_to_database(self, strategy_name: str, parameters: dict[str, Any]) -> None:
         """Save a preset to the database."""
@@ -418,11 +422,11 @@ class StrategyRepository(Repository[type[BaseStrategy]]):
             return
 
         with self.db_manager.get_session() as session:
-            strategy = session.query(Strategy).filter(Strategy.name == strategy_name).first()
+            strategy = session.query(Strategy).filter(Strategy.name == strategy_name).first()  # type: ignore[arg-type]
             if strategy:
                 preset = (
                     session.query(StrategyPreset)
-                    .filter(StrategyPreset.strategy_id == strategy.id, StrategyPreset.name == "default")
+                    .filter(StrategyPreset.strategy_id == strategy.id, StrategyPreset.name == "default")  # type: ignore[arg-type]
                     .first()
                 )
 

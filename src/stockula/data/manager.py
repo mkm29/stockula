@@ -4,7 +4,7 @@ This module provides a DataManager class that manages instances of DataFetcher,
 Registry, and Repository components to ensure consistency across the application.
 """
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from .fetcher import DataFetcher
 from .registry import Registry, registry
@@ -50,9 +50,9 @@ class DataManager:
         # Initialize DataFetcher
         self._fetcher = DataFetcher(
             use_cache=use_cache,
-            db_path=db_path,
+            db_path=db_path or "stockula.db",
             database_manager=db_manager,
-            logging_manager=logging_manager,
+            logging_manager=cast(Any, logging_manager),
         )
 
         # Use the global registry instance
@@ -73,7 +73,7 @@ class DataManager:
             if hasattr(existing_repo, "db_manager") and existing_repo.db_manager != self._db_manager:
                 existing_repo.db_manager = self._db_manager
                 if self._db_manager is not None:
-                    existing_repo.sync_to_database()
+                    existing_repo.sync_to_database()  # type: ignore[attr-defined]
 
     @property
     def fetcher(self) -> DataFetcher:
@@ -82,7 +82,7 @@ class DataManager:
         Returns:
             The DataFetcher instance
         """
-        return self._fetcher
+        return cast(DataFetcher, self._fetcher)
 
     @property
     def registry(self) -> Registry:

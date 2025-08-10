@@ -4,7 +4,8 @@ This document describes the continuous integration and deployment setup for Stoc
 
 ## Overview
 
-Stockula uses GitHub Actions for automated testing, building, and deployment. The CI/CD pipeline consists of three main workflows:
+Stockula uses GitHub Actions for automated testing, building, and deployment. The CI/CD pipeline consists of three main
+workflows:
 
 1. **Testing** - Automated code quality and test execution
 1. **Release Management** - Automated versioning and PyPI publishing
@@ -331,7 +332,8 @@ chore: bump pandas to 2.2.0
 
 ## Local CI Testing with Act
 
-[Act](https://github.com/nektos/act) allows you to run GitHub Actions workflows locally using Docker. This is invaluable for debugging CI failures without pushing commits to GitHub.
+[Act](https://github.com/nektos/act) allows you to run GitHub Actions workflows locally using Docker. This is invaluable
+for debugging CI failures without pushing commits to GitHub.
 
 ### Installation
 
@@ -360,7 +362,7 @@ act -W .github/workflows/test.yml -j unit-tests
 
 # Simulate different events
 act pull_request          # PR events
-act push                 # Push events  
+act push                 # Push events
 act workflow_dispatch    # Manual triggers
 ```
 
@@ -501,7 +503,8 @@ act -W .github/workflows/test.yml -j unit-tests \
 act -W .github/workflows/release-please.yml --dry-run
 ```
 
-Act has been instrumental in identifying and fixing the database isolation issues we encountered, allowing us to reproduce the exact conditions that caused parallel test failures in GitHub Actions.
+Act has been instrumental in identifying and fixing the database isolation issues we encountered, allowing us to
+reproduce the exact conditions that caused parallel test failures in GitHub Actions.
 
 ## Future Improvements
 

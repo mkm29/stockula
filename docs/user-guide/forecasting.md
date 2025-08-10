@@ -1,12 +1,14 @@
 # Forecasting
 
-Stockula provides time series forecasting capabilities using AutoGluon TimeSeries or a simple fallback implementation, enabling you to predict future stock prices with confidence intervals.
+Stockula provides time series forecasting with multiple backends: Chronos (zero‑shot), AutoGluon TimeSeries, and a
+simple fallback, enabling you to predict future stock prices with confidence intervals.
 
 ## Overview
 
 The forecasting module offers:
 
 - **ForecastingManager**: Centralized coordinator for all forecasting operations
+- **Chronos (Zero‑Shot)**: Pretrained transformer models that forecast without task‑specific training (GPU‑friendly)
 - **AutoGluon Integration**: Advanced automated machine learning for time series (Python < 3.13)
 - **Simple Fallback**: Linear regression-based forecasting for environments without AutoGluon
 - **Confidence Intervals**: Statistical uncertainty quantification
@@ -15,9 +17,47 @@ The forecasting module offers:
 
 ## Backend Support
 
-### AutoGluon TimeSeries (Recommended)
+### Chronos (Zero‑Shot, Recommended with GPU)
 
-When available (requires Python < 3.13), Stockula uses AutoGluon TimeSeries, which provides:
+Chronos is a suite of pretrained models for zero‑shot time series forecasting. When AutoGluon is available (Python
+3.11/3.12), Stockula uses Chronos via AutoGluon to enable covariates and ensembling automatically. When AutoGluon is not
+available (e.g., Python 3.13), Stockula falls back to the standalone Chronos pipeline.
+
+Key features:
+
+- No training required; forecasts from pretrained models (zero‑shot)
+- AutoGluon integration adds covariate regressors and ensembling
+- Probabilistic predictions with configurable quantiles
+- GPU acceleration via PyTorch; works on CPU with reduced speed
+
+Configuration:
+
+```yaml
+forecast:
+  forecast_length: 7
+  prediction_interval: 0.9
+  models: "zero_shot"               # or ["Chronos"]
+  # Optional (standalone Chronos only): pick a specific model repo
+  # models: ["Chronos", "amazon/chronos-bolt-small"]
+  # Covariates (AutoGluon integration):
+  # use_calendar_covariates: true
+  # past_covariate_columns: ["Open", "High", "Low", "Volume"]
+```
+
+Usage:
+
+```bash
+uv run python -m stockula --config examples/config/forecast_chronos.yaml --ticker AAPL --mode forecast
+```
+
+Notes:
+
+- With AutoGluon available, Stockula selects AutoGluon+Chronos to leverage covariates/ensembling.
+- Without AutoGluon, Stockula uses standalone Chronos (default model `amazon/chronos-bolt-small`).
+
+### AutoGluon TimeSeries
+
+When available (requires Python < 3.13), Stockula can use AutoGluon TimeSeries, which provides:
 
 - **Automated Model Selection**: Automatically selects the best model from multiple candidates
 - **Deep Learning Models**: Access to state-of-the-art neural network architectures
@@ -35,7 +75,8 @@ pip install autogluon-timeseries>=1.2.0
 
 ### Simple Fallback (Python 3.13+)
 
-For Python 3.13+ or environments without AutoGluon, Stockula provides a simple linear regression-based forecasting backend that:
+For Python 3.13+ or environments without AutoGluon, Stockula provides a simple linear regression-based forecasting
+backend that:
 
 - **Linear Trend Projection**: Uses linear regression to identify and project trends
 - **Confidence Intervals**: Calculates statistical bounds based on historical variance
@@ -59,7 +100,7 @@ result = forecasting_manager.forecast_symbol('AAPL', config)
 
 # Forecast multiple symbols with progress tracking
 results = forecasting_manager.forecast_multiple_symbols_with_progress(
-    ['AAPL', 'GOOGL', 'MSFT'], 
+    ['AAPL', 'GOOGL', 'MSFT'],
     config
 )
 
@@ -138,7 +179,7 @@ forecasting_manager = container.forecasting_manager()
 # Forecast multiple symbols
 symbols = ["AAPL", "GOOGL", "MSFT", "AMZN"]
 results = forecasting_manager.forecast_multiple_symbols_with_progress(
-    symbols, 
+    symbols,
     config
 )
 
@@ -158,7 +199,7 @@ for symbol, result in results.items():
 
 Forecast using the command line:
 
-```bash
+````bash
 # Single ticker forecast
 uv run python -m stockula --ticker AAPL --mode forecast
 
@@ -169,6 +210,15 @@ uv run python -m stockula --config portfolio.yaml --mode forecast
 uv run python -m stockula --ticker AAPL --mode forecast \
     --train-start 2024-01-01 --train-end 2024-12-31 \
     --test-start 2025-01-01 --test-end 2025-01-31
+
+### CLI With Chronos
+
+Use a config that sets `forecast.models` to `zero_shot` or `Chronos`:
+
+```bash
+uv run python -m stockula --config examples/config/forecast_chronos.yaml --ticker AAPL --mode forecast
+````
+
 ```
 
 ## Understanding Forecast Results
@@ -233,3 +283,4 @@ Stockula has migrated from AutoTS to AutoGluon TimeSeries for improved performan
 - **Python 3.13 Support**: Works with latest Python via fallback implementation
 
 All existing configurations will work with minimal changes. The system automatically handles the backend selection based on availability.
+```

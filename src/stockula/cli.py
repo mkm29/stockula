@@ -2,7 +2,7 @@
 
 from datetime import datetime
 from enum import Enum
-from typing import Annotated, Any
+from typing import Annotated, Any, cast
 
 import typer
 from pydantic import ValidationError
@@ -82,9 +82,10 @@ def run_stockula(
         handle_validation_error(e, config_path)
 
     # Set up logging based on configuration
+    from .interfaces import ILoggingManager
     from .main import setup_logging
 
-    setup_logging(stockula_config, logging_manager=container.logging_manager())
+    setup_logging(stockula_config, logging_manager=cast(ILoggingManager, container.logging_manager()))
 
     # Override ticker if provided
     if ticker:

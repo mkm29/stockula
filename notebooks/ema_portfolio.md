@@ -7,7 +7,9 @@ ______________________________________________________________________
 
 ## 1. Overview
 
-This document outlines a 20‑ticker universe and capital allocation plan designed for a 34/55‑period Double Exponential Moving Average (EMA) crossover strategy. The approach balances broad‑market coverage with momentum leaders and a speculative sleeve to capture high‑beta moves.
+This document outlines a 20‑ticker universe and capital allocation plan designed for a 34/55‑period Double Exponential
+Moving Average (EMA) crossover strategy. The approach balances broad‑market coverage with momentum leaders and a
+speculative sleeve to capture high‑beta moves.
 
 ## 2. Trend‑Tracking Sources Consulted
 
@@ -46,7 +48,8 @@ This document outlines a 20‑ticker universe and capital allocation plan design
 
 ## 6. Broad‑Market Core 3‑Month Return
 
-Using closing prices from April 25, 2025 through July 25, 2025, the six core index vehicles (SPY, VOO, DFUSX, FSKAX, FSMDX, FXAIX) produced the following simple 3‑month gains:
+Using closing prices from April 25, 2025 through July 25, 2025, the six core index vehicles (SPY, VOO, DFUSX, FSKAX,
+FSMDX, FXAIX) produced the following simple 3‑month gains:
 
 | Ticker | 3‑Month Return | Source        |
 | ------ | -------------- | ------------- |
@@ -63,7 +66,10 @@ ______________________________________________________________________
 
 ## 7. Monthly and Annualized Sharpe Ratio
 
-For the remaining 14 tickers (momentum and speculative sleeves), the annualized Sharpe ratio requires daily returns. These values were calculated using the `yfinance` Python library (see the `get_data` Jupyter notebook). Below are the results for the April 25 → July 25 2025 price window. Each daily % return was computed, the daily risk‑free rate (based on a 3‑month T‑Bill yield of 4.42%) was subtracted, and the result was annualized using √252.
+For the remaining 14 tickers (momentum and speculative sleeves), the annualized Sharpe ratio requires daily returns.
+These values were calculated using the `yfinance` Python library (see the `get_data` Jupyter notebook). Below are the
+results for the April 25 → July 25 2025 price window. Each daily % return was computed, the daily risk‑free rate (based
+on a 3‑month T‑Bill yield of 4.42%) was subtracted, and the result was annualized using √252.
 
 | Ticker | Annualized Sharpe Ratio | Monthly Sharpe Ratio | Source        |
 | ------ | ----------------------- | -------------------- | ------------- |
@@ -88,4 +94,5 @@ ______________________________________________________________________
 
 - Verify that your data vendor matches the same adjusted‑close series used here.
 - Consider extending the window to 6 or 12 months for a smoother Sharpe signal.
-- After computing Sharpe ratios, you may wish to tilt position sizes toward names with the highest risk‑adjusted returns.
+- After computing Sharpe ratios, you may wish to tilt position sizes toward names with the highest risk‑adjusted
+  returns.

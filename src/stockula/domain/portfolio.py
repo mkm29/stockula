@@ -2,7 +2,7 @@
 
 from dataclasses import InitVar, dataclass, field
 from functools import lru_cache
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from dependency_injector.wiring import Provide, inject
 
@@ -281,13 +281,13 @@ class Portfolio:
             Current total portfolio value
         """
         # Use provided fetcher, then injected fetcher, then create new one
-        data_fetcher = fetcher or self._data_fetcher
+        data_fetcher: IDataFetcher | None = fetcher or self._data_fetcher
         if data_fetcher is None:
             from ..data.fetcher import DataFetcher
 
-            data_fetcher = DataFetcher()
+            data_fetcher = DataFetcher()  # type: ignore[assignment]
 
-        prices = data_fetcher.get_current_prices(self.symbols)
+        prices = data_fetcher.get_current_prices(self.symbols)  # type: ignore[union-attr]
         return self.get_portfolio_value(prices)
 
     def validate_capital_sufficiency(
@@ -315,9 +315,9 @@ class Portfolio:
             if data_fetcher is None:
                 from ..data.fetcher import DataFetcher
 
-                data_fetcher = DataFetcher()
+                data_fetcher = cast(IDataFetcher, DataFetcher())
 
-            validation_prices = data_fetcher.get_current_prices(self.symbols)
+            validation_prices = data_fetcher.get_current_prices(self.symbols) if data_fetcher else {}
 
         # Calculate required capital based on asset quantities
         required_capital = self.get_portfolio_value(validation_prices)
@@ -365,9 +365,9 @@ class Portfolio:
             if data_fetcher is None:
                 from ..data.fetcher import DataFetcher
 
-                data_fetcher = DataFetcher()
+                data_fetcher = cast(IDataFetcher, DataFetcher())
 
-            prices = data_fetcher.get_current_prices(self.symbols)
+            prices = data_fetcher.get_current_prices(self.symbols) if data_fetcher else {}
 
         if not prices:
             self._logger.warning("Could not fetch prices for allocation validation")

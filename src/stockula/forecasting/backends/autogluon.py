@@ -1,7 +1,7 @@
 """AutoGluon backend for time series forecasting."""
 
 import warnings
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import pandas as pd
 from dependency_injector.wiring import Provide, inject
@@ -15,9 +15,14 @@ from .base import ForecastBackend, ForecastResult
 warnings.filterwarnings("ignore", category=UserWarning, module="autogluon")
 warnings.filterwarnings("ignore", category=FutureWarning, module="autogluon")
 
+if TYPE_CHECKING:
+    pass
+
 
 class AutoGluonBackend(ForecastBackend):
     """AutoGluon backend implementation for time series forecasting."""
+
+    predictor: Any  # TimeSeriesPredictor when available
 
     # Available presets in AutoGluon
     PRESETS = {
@@ -49,6 +54,8 @@ class AutoGluonBackend(ForecastBackend):
         no_negatives: bool = True,
         eval_metric: str = "MASE",
         logging_manager: ILoggingManager = Provide["logging_manager"],
+        use_calendar_covariates: bool = True,
+        past_covariate_columns: list[str] | None = None,
         **kwargs,
     ):
         """Initialize the AutoGluon backend.
@@ -85,6 +92,8 @@ class AutoGluonBackend(ForecastBackend):
         self.eval_metric = eval_metric
         self.predictor = None
         self._best_model_name = None
+        self.use_calendar_covariates = use_calendar_covariates
+        self.past_covariate_columns = past_covariate_columns
 
     def _get_models(self, models: str | list[str] | None) -> list[str] | None:
         """Get the appropriate model list based on input.
@@ -143,6 +152,69 @@ class AutoGluonBackend(ForecastBackend):
 
         return ts_df
 
+    def _prepare_past_covariates(self, data: pd.DataFrame, feature_cols: list[str]) -> Any | None:
+        """Prepare past covariates (observed in history, not known in future).
+
+        Args:
+            data: Input DataFrame with DatetimeIndex
+            feature_cols: Columns to use as past covariates
+
+        Returns:
+            TimeSeriesDataFrame with past covariates or None
+        """
+        if not feature_cols:
+            return None
+
+        try:
+            from autogluon.timeseries import TimeSeriesDataFrame
+        except ImportError:
+            return None
+
+        cov = data[feature_cols].copy()
+        cov = cov.reset_index()
+        cov.rename(columns={cov.columns[0]: "timestamp"}, inplace=True)
+        cov["item_id"] = "stock"
+
+        return TimeSeriesDataFrame.from_data_frame(
+            cov,
+            id_column="item_id",
+            timestamp_column="timestamp",
+        )
+
+    def _build_calendar_features(self, index: pd.DatetimeIndex) -> pd.DataFrame:
+        """Create simple calendar known covariates from timestamps.
+
+        Features:
+            - day_of_week (0-6)
+            - month (1-12)
+            - is_month_start (0/1)
+            - is_month_end (0/1)
+        """
+        df = pd.DataFrame({"timestamp": index})
+        df["day_of_week"] = df["timestamp"].dt.dayofweek.astype(int)
+        df["month"] = df["timestamp"].dt.month.astype(int)
+        df["is_month_start"] = df["timestamp"].dt.is_month_start.astype(int)
+        df["is_month_end"] = df["timestamp"].dt.is_month_end.astype(int)
+        return df
+
+    def _prepare_known_covariates(self, index: pd.DatetimeIndex) -> Any | None:
+        """Prepare known covariates using calendar features for given timestamps.
+
+        Returns TimeSeriesDataFrame or None.
+        """
+        try:
+            from autogluon.timeseries import TimeSeriesDataFrame
+        except ImportError:
+            return None
+
+        cal = self._build_calendar_features(index)
+        cal["item_id"] = "stock"
+        return TimeSeriesDataFrame.from_data_frame(
+            cal,
+            id_column="item_id",
+            timestamp_column="timestamp",
+        )
+
     def fit(
         self,
         data: pd.DataFrame,
@@ -180,6 +252,17 @@ class AutoGluonBackend(ForecastBackend):
 
         # Prepare data
         ts_data = self._prepare_data(data, target_column)
+
+        # Build covariates
+        # Past covariates from observed series (if available)
+        if self.past_covariate_columns is None:
+            candidate_past_cols = [
+                c for c in ["Open", "High", "Low", "Adj Close", "Volume"] if c in data.columns and c != target_column
+            ]
+        else:
+            candidate_past_cols = [c for c in self.past_covariate_columns if c in data.columns and c != target_column]
+
+        past_cov_ts = self._prepare_past_covariates(data, candidate_past_cols) if candidate_past_cols else None
 
         self.logger.debug(f"Fitting AutoGluon model on {len(data)} data points")
         self.logger.debug(f"Date range: {data.index.min()} to {data.index.max()}")
@@ -237,6 +320,7 @@ class AutoGluonBackend(ForecastBackend):
                 )
 
                 # Fit the model
+                assert self.predictor is not None
                 self.predictor.fit(
                     train_data=ts_data,
                     presets=preset,
@@ -259,14 +343,25 @@ class AutoGluonBackend(ForecastBackend):
             )
 
             # Fit the model
+            # Known covariates for training portion: generate calendar features for training index
+            known_cov_train_ts = (
+                self._prepare_known_covariates(ts_data.index.get_level_values("timestamp").unique())
+                if self.use_calendar_covariates
+                else None
+            )
+
+            assert self.predictor is not None
             self.predictor.fit(
                 train_data=ts_data,
                 presets=preset,
                 hyperparameters={"model": model_list} if model_list else None,
                 time_limit=time_limit,
+                known_covariates=known_cov_train_ts,
+                past_covariates=past_cov_ts,
             )
 
         self.is_fitted = True
+        assert self.predictor is not None
         self._best_model_name = self.predictor.get_model_best()
         self.logger.debug(f"AutoGluon model fitting completed. Best model: {self._best_model_name}")
 
@@ -283,27 +378,69 @@ class AutoGluonBackend(ForecastBackend):
 
         self.logger.debug("Generating AutoGluon predictions...")
 
-        # Generate predictions
-        predictions = self.predictor.predict()
+        # Generate predictions with known covariates for the forecast horizon
+        known_cov_future_ts = None
+        if self.use_calendar_covariates:
+            # Let the predictor infer future timestamps; provide calendar features if possible
+            try:
+                # Best effort to derive future timestamps: use training freq and last timestamp
+                freq = getattr(getattr(self.predictor, "_learner", object()), "freq", "D")
+                train_data = getattr(getattr(self.predictor, "_learner", object()), "train_data", None)
+                import pandas as pd
 
-        # Extract forecast values
-        forecast_df = predictions.reset_index()
+                if train_data is not None:
+                    last_timestamp = train_data.index.get_level_values("timestamp").max()
+                else:
+                    last_timestamp = pd.Timestamp.now().normalize()
 
-        # Get the mean prediction and quantiles
-        if "mean" in forecast_df.columns:
-            forecast_values = forecast_df["mean"].values
+                future_index = pd.date_range(
+                    start=last_timestamp + pd.tseries.frequencies.to_offset(freq),
+                    periods=self.forecast_length,
+                    freq=freq,
+                )
+                known_cov_future_ts = self._prepare_known_covariates(future_index)
+            except Exception:
+                known_cov_future_ts = None
+
+        predictions = self.predictor.predict(known_covariates=known_cov_future_ts)
+
+        # Normalize predictions to a DataFrame with timestamp index for item_id 'stock'
+        pred_df = predictions.reset_index()
+        if "item_id" in pred_df.columns:
+            pred_df = pred_df[pred_df["item_id"] == "stock"]
+        if "timestamp" in pred_df.columns:
+            pred_df = pred_df.set_index("timestamp")
+
+        # Choose central tendency column
+        median_col = "mean" if "mean" in pred_df.columns else ("0.5" if "0.5" in pred_df.columns else None)
+        if median_col is None:
+            # Fallback: last numeric column
+            numeric_cols = [c for c in pred_df.columns if pd.api.types.is_numeric_dtype(pred_df[c])]
+            median_col = numeric_cols[-1] if numeric_cols else pred_df.columns[-1]
+
+        # Determine interval columns closest to requested interval
+        alpha = (1.0 - float(self.prediction_interval)) / 2.0
+        low_target, high_target = alpha, 1.0 - alpha
+        # Available quantile columns look like '0.05', '0.5', '0.95'
+        qcols = [c for c in pred_df.columns if isinstance(c, str) and c.replace(".", "", 1).isdigit()]
+
+        def _closest(col_target: float) -> str | None:
+            if not qcols:
+                return None
+            import numpy as np
+
+            arr = np.array([float(c) for c in qcols])
+            idx = int(np.argmin(np.abs(arr - col_target)))
+            return qcols[idx]
+
+        low_col = _closest(low_target)
+        high_col = _closest(high_target)
+
+        forecast_values = pred_df[median_col].to_numpy()
+        if low_col and high_col and low_col in pred_df.columns and high_col in pred_df.columns:
+            lower_bound = pred_df[low_col].to_numpy()
+            upper_bound = pred_df[high_col].to_numpy()
         else:
-            # Use the 0.5 quantile as the forecast
-            forecast_values = (
-                forecast_df["0.5"].values if "0.5" in forecast_df.columns else forecast_df.iloc[:, -1].values
-            )
-
-        # Get prediction intervals
-        if "0.05" in forecast_df.columns and "0.95" in forecast_df.columns:
-            lower_bound = forecast_df["0.05"].values
-            upper_bound = forecast_df["0.95"].values
-        else:
-            # Use mean +/- 10% as a fallback
             lower_bound = forecast_values * 0.9
             upper_bound = forecast_values * 1.1
 
@@ -344,10 +481,10 @@ class AutoGluonBackend(ForecastBackend):
             model_name=model_info["model_name"],
             model_params=model_info.get("model_params", {}),
             metrics={
-                "score": best_model_metrics.get("score", None),
-                "eval_metric": self.eval_metric,
-                "pred_time": best_model_metrics.get("pred_time", None),
-                "fit_time": best_model_metrics.get("fit_time", None),
+                "score": float(best_model_metrics.get("score", 0.0)),
+                "eval_metric": self.eval_metric,  # type: ignore[dict-item]
+                "pred_time": float(best_model_metrics.get("pred_time", 0.0)),
+                "fit_time": float(best_model_metrics.get("fit_time", 0.0)),
             },
             metadata={
                 "preset": self.preset,

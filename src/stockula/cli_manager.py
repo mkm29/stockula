@@ -1,5 +1,7 @@
 """CLI Manager for centralized CLI resources and utilities."""
 
+from typing import cast
+
 from rich.console import Console
 from rich.progress import BarColumn, Progress, SpinnerColumn, TextColumn, TimeRemainingColumn
 
@@ -35,7 +37,7 @@ class CLIManager:
         Returns:
             Rich Console instance
         """
-        return self.console
+        return cast(Console, self.console)
 
     def create_progress(self, *columns, transient: bool = True, **kwargs) -> Progress:
         """Create a Progress display with standard configuration.

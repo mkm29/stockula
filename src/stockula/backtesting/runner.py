@@ -1,7 +1,7 @@
 """Backtesting runner and utilities."""
 
 from collections.abc import Callable
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any, Optional, cast
 
 import numpy as np
 import pandas as pd
@@ -223,7 +223,9 @@ class BacktestRunner:
         if isinstance(self.risk_free_rate, pd.Series) and self._equity_curve is not None:
             self._enhance_results_with_dynamic_metrics()
 
-        return self.results
+        # Return the results as-is (pd.Series from backtesting library)
+        # The type annotation says dict but backtesting returns pd.Series which is dict-like
+        return cast(dict[str, Any], self.results)  # type: ignore[arg-type]
 
     def optimize(self, data: pd.DataFrame, strategy: type, **param_ranges) -> dict[str, Any]:
         """Optimize strategy parameters.
@@ -261,7 +263,7 @@ class BacktestRunner:
             sys.stderr.close()
             sys.stderr = old_stderr
 
-        return result
+        return cast(dict[str, Any], result)
 
     def run_with_train_test_split(
         self,

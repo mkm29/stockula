@@ -1,10 +1,11 @@
 """Database manager using SQLModel for type-safe database operations."""
 
 import os
+from collections.abc import Iterator
 from contextlib import contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import pandas as pd
 import sqlalchemy as sa
@@ -135,7 +136,7 @@ class DatabaseManager:
             pass
 
     @contextmanager
-    def get_session(self) -> Session:
+    def get_session(self) -> Iterator[Session]:
         """Get a database session as context manager."""
         with Session(self.engine) as session:
             yield session
@@ -331,32 +332,32 @@ class DatabaseManager:
             if not puts.empty:
                 for _, row in puts.iterrows():
                     # Check if record exists
-                    stmt = select(OptionsPut).where(
+                    stmt_put = select(OptionsPut).where(
                         OptionsPut.symbol == symbol,
                         OptionsPut.expiration_date == expiry_date,
                         OptionsPut.strike == row.get("strike"),
                         OptionsPut.contract_symbol == row.get("contractSymbol"),
                     )
-                    option = session.exec(stmt).first()
+                    option_put = session.exec(stmt_put).first()
 
-                    if not option:
-                        option = OptionsPut(
+                    if not option_put:
+                        option_put = OptionsPut(
                             symbol=symbol,
                             expiration_date=expiry_date,
                             strike=row.get("strike"),
                         )
 
                     # Update values
-                    option.last_price = row.get("lastPrice")
-                    option.bid = row.get("bid")
-                    option.ask = row.get("ask")
-                    option.volume = row.get("volume")
-                    option.open_interest = row.get("openInterest")
-                    option.implied_volatility = row.get("impliedVolatility")
-                    option.in_the_money = row.get("inTheMoney")
-                    option.contract_symbol = row.get("contractSymbol")
+                    option_put.last_price = row.get("lastPrice")
+                    option_put.bid = row.get("bid")
+                    option_put.ask = row.get("ask")
+                    option_put.volume = row.get("volume")
+                    option_put.open_interest = row.get("openInterest")
+                    option_put.implied_volatility = row.get("impliedVolatility")
+                    option_put.in_the_money = row.get("inTheMoney")
+                    option_put.contract_symbol = row.get("contractSymbol")
 
-                    session.add(option)
+                    session.add(option_put)
 
             session.commit()
 
@@ -388,7 +389,7 @@ class DatabaseManager:
                 end = datetime.strptime(end_date, "%Y-%m-%d").date()
                 stmt = stmt.where(PriceHistory.date <= end)
 
-            stmt = stmt.order_by(PriceHistory.date)
+            stmt = stmt.order_by(PriceHistory.date)  # type: ignore[arg-type]
 
             results = session.exec(stmt).all()
 
@@ -426,7 +427,7 @@ class DatabaseManager:
         with self.get_session() as session:
             stock_info = session.get(StockInfo, symbol)
             if stock_info:
-                return stock_info.info_dict
+                return cast(dict[str, Any] | None, stock_info.info_dict)
             return None
 
     def get_dividends(
@@ -455,7 +456,7 @@ class DatabaseManager:
                 end = datetime.strptime(end_date, "%Y-%m-%d").date()
                 stmt = stmt.where(Dividend.date <= end)
 
-            stmt = stmt.order_by(Dividend.date)
+            stmt = stmt.order_by(Dividend.date)  # type: ignore[arg-type]
 
             results = session.exec(stmt).all()
 
@@ -492,7 +493,7 @@ class DatabaseManager:
                 end = datetime.strptime(end_date, "%Y-%m-%d").date()
                 stmt = stmt.where(Split.date <= end)
 
-            stmt = stmt.order_by(Split.date)
+            stmt = stmt.order_by(Split.date)  # type: ignore[arg-type]
 
             results = session.exec(stmt).all()
 
@@ -523,22 +524,22 @@ class DatabaseManager:
                     OptionsCall.symbol == symbol,
                     OptionsCall.expiration_date == expiry_date,
                 )
-                .order_by(OptionsCall.strike)
+                .order_by(OptionsCall.strike)  # type: ignore[arg-type]
             )
 
             calls = session.exec(stmt).all()
 
             # Get puts
-            stmt = (
+            stmt_puts = (
                 select(OptionsPut)
                 .where(
                     OptionsPut.symbol == symbol,
                     OptionsPut.expiration_date == expiry_date,
                 )
-                .order_by(OptionsPut.strike)
+                .order_by(OptionsPut.strike)  # type: ignore[arg-type]
             )
 
-            puts = session.exec(stmt).all()
+            puts = session.exec(stmt_puts).all()
 
             # Convert to DataFrames
             calls_data = []
@@ -558,18 +559,18 @@ class DatabaseManager:
                 )
 
             puts_data = []
-            for row in puts:
+            for put_row in puts:
                 puts_data.append(
                     {
-                        "strike": row.strike,
-                        "lastPrice": row.last_price,
-                        "bid": row.bid,
-                        "ask": row.ask,
-                        "volume": row.volume,
-                        "openInterest": row.open_interest,
-                        "impliedVolatility": row.implied_volatility,
-                        "inTheMoney": row.in_the_money,
-                        "contractSymbol": row.contract_symbol,
+                        "strike": put_row.strike,
+                        "lastPrice": put_row.last_price,
+                        "bid": put_row.bid,
+                        "ask": put_row.ask,
+                        "volume": put_row.volume,
+                        "openInterest": put_row.open_interest,
+                        "impliedVolatility": put_row.implied_volatility,
+                        "inTheMoney": put_row.in_the_money,
+                        "contractSymbol": put_row.contract_symbol,
                     }
                 )
 
@@ -598,11 +599,11 @@ class DatabaseManager:
         with self.get_session() as session:
             from sqlalchemy import desc
 
-            stmt = select(PriceHistory).where(PriceHistory.symbol == symbol).order_by(desc(PriceHistory.date)).limit(1)
+            stmt = select(PriceHistory).where(PriceHistory.symbol == symbol).order_by(desc(PriceHistory.date)).limit(1)  # type: ignore[arg-type]
 
             result = session.exec(stmt).first()
             if result:
-                return result.close_price
+                return cast(float | None, result.close_price)
             return None
 
     def has_data(self, symbol: str, start_date: str, end_date: str) -> bool:
@@ -657,9 +658,9 @@ class DatabaseManager:
             from sqlalchemy import desc
 
             stmt = (
-                select(PriceHistory.date)
+                select(PriceHistory.date)  # type: ignore[call-overload]
                 .where(PriceHistory.symbol == symbol)
-                .order_by(desc(PriceHistory.date))
+                .order_by(desc(PriceHistory.date))  # type: ignore[arg-type]
                 .limit(1)
             )
 
@@ -684,14 +685,14 @@ class DatabaseManager:
                 session.delete(price)
 
             # Delete old options calls
-            stmt = select(OptionsCall).where(OptionsCall.expiration_date < cutoff_date)
-            old_calls = session.exec(stmt).all()
+            stmt_calls = select(OptionsCall).where(OptionsCall.expiration_date < cutoff_date)
+            old_calls = session.exec(stmt_calls).all()
             for call in old_calls:
                 session.delete(call)
 
             # Delete old options puts
-            stmt = select(OptionsPut).where(OptionsPut.expiration_date < cutoff_date)
-            old_puts = session.exec(stmt).all()
+            stmt_puts = select(OptionsPut).where(OptionsPut.expiration_date < cutoff_date)
+            old_puts = session.exec(stmt_puts).all()
             for put in old_puts:
                 session.delete(put)
 

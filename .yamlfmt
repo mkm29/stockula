@@ -23,15 +23,15 @@ formatter:
   drop_merge_tag: false
 
 # Include/exclude patterns
-include_paths: 
+include:
   - "*.yml"
   - "*.yaml"
-  - ".github/workflows/*.yml" 
+  - ".github/workflows/*.yml"
   - "examples/*.yaml"
   - "config/**/*.yaml"
 
-exclude_paths:
+exclude:
   - ".venv/**"
-  - "node_modules/**" 
+  - "node_modules/**"
   - "**/.git/**"
   - ".pytest_cache/**"

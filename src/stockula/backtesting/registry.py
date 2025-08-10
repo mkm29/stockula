@@ -1,6 +1,6 @@
 """Strategy Registry - Centralized strategy management and mapping."""
 
-from typing import Any
+from typing import Any, cast
 
 from .strategies import (
     BaseStrategy,
@@ -174,7 +174,7 @@ class StrategyRegistry:
         Returns:
             Dictionary of strategy names and their default parameters
         """
-        return cls.STRATEGY_PRESETS.copy()
+        return cast(dict[str, dict[str, Any]], cls.STRATEGY_PRESETS.copy())
 
     @classmethod
     def get_strategy_preset(cls, strategy_name: str) -> dict[str, Any]:
@@ -187,7 +187,7 @@ class StrategyRegistry:
             Dictionary of default parameters for the strategy
         """
         normalized_name = cls.normalize_strategy_name(strategy_name)
-        return cls.STRATEGY_PRESETS.get(normalized_name, {})
+        return cast(dict[str, Any], cls.STRATEGY_PRESETS.get(normalized_name, {}))
 
     @classmethod
     def is_valid_strategy(cls, strategy_name: str) -> bool:

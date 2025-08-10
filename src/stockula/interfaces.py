@@ -1,9 +1,12 @@
 """Interfaces/protocols for dependency injection."""
 
 from abc import ABC, abstractmethod
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import pandas as pd
+
+if TYPE_CHECKING:
+    from stockula.domain.models import Asset, Portfolio
 
 
 class IDataFetcher(ABC):
@@ -90,6 +93,11 @@ class ILoggingManager(ABC):
     @abstractmethod
     def warning(self, message: str) -> None:
         """Log warning message."""
+        pass
+
+    @abstractmethod
+    def isEnabledFor(self, level: int) -> bool:
+        """Check if logging is enabled for given level."""
         pass
 
     @abstractmethod
@@ -210,11 +218,11 @@ class IDomainFactory(ABC):
     """Interface for domain object creation."""
 
     @abstractmethod
-    def create_portfolio(self, config: Any) -> Any:
+    def create_portfolio(self, config: Any) -> "Portfolio":
         """Create portfolio from configuration."""
         pass
 
     @abstractmethod
-    def create_asset(self, ticker_config: Any, calculated_quantity: float | None = None) -> Any:
+    def create_asset(self, ticker_config: Any, calculated_quantity: float | None = None) -> "Asset":
         """Create asset from ticker configuration."""
         pass

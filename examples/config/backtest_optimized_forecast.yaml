@@ -1,0 +1,94 @@
+---
+# Example configuration for forecast-aware backtest-optimized allocation
+# This combines historical backtesting with future price predictions
+
+portfolio:
+  name: "Forecast-Aware Optimized Portfolio"
+  initial_capital: 100000
+  allocation_method: backtest_optimized  # Required for optimization
+  tickers:
+    - symbol: AAPL
+      category: TECH
+      quantity: 0  # Will be calculated by optimizer
+    - symbol: MSFT
+      category: TECH
+      quantity: 0
+    - symbol: GOOGL
+      category: TECH
+      quantity: 0
+    - symbol: NVDA
+      category: MOMENTUM
+      quantity: 0
+    - symbol: AMZN
+      category: TECH
+      quantity: 0
+    - symbol: META
+      category: TECH
+      quantity: 0
+    - symbol: SPY
+      category: INDEX
+      quantity: 0
+    - symbol: QQQ
+      category: INDEX
+      quantity: 0
+
+data:
+  # Data range for fetching historical prices
+  start_date: "2022-01-01"
+  end_date: null  # Use current date
+
+backtest_optimization:
+  # Training period for finding best strategies
+  train_start_date: "2023-01-01"
+  train_end_date: "2023-12-31"
+
+  # Testing period for evaluating strategies
+  test_start_date: "2024-01-01"
+  test_end_date: "2024-06-30"
+
+  # Performance metric for ranking
+  ranking_metric: "Return [%]"  # Options: "Return [%]", "Sharpe Ratio", "Sortino Ratio"
+
+  # Allocation constraints
+  min_allocation_pct: 5.0  # Minimum 5% per asset
+  max_allocation_pct: 25.0  # Maximum 25% per asset
+
+  # Forecast integration settings (NEW!)
+  use_forecast: true  # Enable forecast-aware optimization
+  forecast_weight: 0.3  # 30% weight to forecast, 70% to historical
+  forecast_length: 30  # Predict 30 days ahead
+  forecast_backend: null  # Auto-select best available backend (chronos/autogluon/simple)
+
+# Optional: Configure specific forecast settings
+forecast:
+  frequency: "D"  # Daily predictions
+  prediction_interval: 0.9  # 90% confidence interval
+  no_negatives: true  # Prevent negative price predictions
+
+  # Optional: Specify which models to use
+  # models: "chronos"        # Use Chronos for zero-shot forecasting
+  # models: ["AutoGluon"]    # Use AutoGluon ensemble
+  # models: null             # Auto-select based on availability
+
+# Backtesting configuration
+backtest:
+  broker_config:
+    name: "robinhood"  # Zero-commission broker
+
+  # Optional: Exclude certain strategies from testing
+  # excluded_strategies:
+  #   - "TRIPLEEMACROSS"  # Too complex
+  #   - "KAUFMANEFFICIENCY"  # Too slow
+
+# Logging configuration
+logging:
+  enabled: true
+  level: "INFO"
+  show_allocation_details: true
+  show_price_fetching: false
+
+# Output settings
+output:
+  format: "console"  # or "json"
+  save_results: true
+  results_dir: "results/optimized_portfolios"

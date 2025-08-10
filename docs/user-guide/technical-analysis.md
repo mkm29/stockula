@@ -1,6 +1,7 @@
 # Technical Analysis
 
-Stockula provides comprehensive technical analysis capabilities through the finta library wrapper, offering over 40 technical indicators with clean, consistent interfaces.
+Stockula provides comprehensive technical analysis capabilities through the finta library wrapper, offering over 40
+technical indicators with clean, consistent interfaces.
 
 ## Overview
 
@@ -17,7 +18,8 @@ The technical analysis module offers:
 
 ## TechnicalAnalysisManager
 
-The TechnicalAnalysisManager coordinates different technical analysis strategies and provides a unified interface for all indicator calculations.
+The TechnicalAnalysisManager coordinates different technical analysis strategies and provides a unified interface for
+all indicator calculations.
 
 ### Available Analysis Types
 
@@ -578,4 +580,5 @@ def calculate_indicators_chunked(data, chunk_size=1000):
 1. **Filter false signals**: Use additional criteria to reduce noise
 1. **Monitor performance**: Track indicator effectiveness over time
 
-The technical analysis module provides a comprehensive toolkit for market analysis while maintaining simplicity and performance through its clean interface and Rich integration.
+The technical analysis module provides a comprehensive toolkit for market analysis while maintaining simplicity and
+performance through its clean interface and Rich integration.
