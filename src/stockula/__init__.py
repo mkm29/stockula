@@ -15,7 +15,7 @@ from .manager import StockulaManager
 from .technical_analysis import TechnicalIndicators
 
 # x-release-please-start-version
-__version__ = "0.14.0"
+__version__ = "0.15.0"
 # x-release-please-end
 
 __all__ = [
