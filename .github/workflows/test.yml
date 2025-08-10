@@ -123,32 +123,6 @@ jobs:
           SQLModel.metadata.create_all(engine)
           print('✓ Database schema created successfully')
           "
-      - name: Test AutoTS model seeding
-        run: |
-          # Test that models can be seeded from AutoTS
-          uv run python -c "
-          from sqlmodel import Session, create_engine, SQLModel
-          from stockula.data.autots_repository import AutoTSRepository
-          from stockula.database.models import AutoTSModel
-
-          # Create database
-          engine = create_engine('sqlite:///test_seeding.db')
-          SQLModel.metadata.create_all(engine)
-
-          # Seed models
-          with Session(engine) as session:
-              repo = AutoTSRepository(session)
-              models_count, presets_count = repo.seed_from_autots()
-              print(f'✓ Seeded {models_count} models and {presets_count} presets')
-
-              # Verify some models exist
-              assert repo.get_model('ARIMA') is not None
-              assert repo.get_model('ETS') is not None
-              assert repo.get_preset('fast') is not None
-              print('✓ Model validation working correctly')
-          "
-      - name: Test repository patterns
-        run: "# Test the new repository pattern implementation\nuv run python -c \"\nfrom sqlmodel import Session, create_engine, SQLModel\nfrom stockula.data.autots_repository import AutoTSRepository\nfrom stockula.database.models import AutoTSModel, AutoTSPreset\n\nengine = create_engine('sqlite:///test_repository.db')\nSQLModel.metadata.create_all(engine)\n\nwith Session(engine) as session:\n    repo = AutoTSRepository(session)\n    \n    # Test model validation\n    assert AutoTSModel.is_valid_model('ARIMA') == True\n    assert AutoTSModel.is_valid_model('InvalidModel') == False\n    print('✓ Model validation working')\n    \n    # Test preset validation\n    assert AutoTSPreset.is_valid_preset('fast') == True\n    assert AutoTSPreset.is_valid_preset('invalid_preset') == False\n    print('✓ Preset validation working')\n    \n    # Test model list validation\n    is_valid, invalid = AutoTSModel.validate_model_list(['ARIMA', 'ETS', 'FakeModel'])\n    assert is_valid == False\n    assert 'FakeModel' in invalid\n    print('✓ Model list validation working')\n\"\n"
       - name: Cleanup test databases
         if: always()
         run: |

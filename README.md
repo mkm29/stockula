@@ -42,11 +42,11 @@ Stockula is a comprehensive Python trading platform that provides tools for tech
 - **🔄 Backtesting**: Test trading strategies with realistic broker costs and commission structures
 - **📈 Data Fetching**: Real-time and historical market data via yfinance with intelligent SQLite caching
 - **🔮 Price Forecasting**: Automated time series forecasting with multiple backends:
-  - **AutoTS** (default): Feature-rich with 20+ statistical and ML models
+  - **AutoGluon TimeSeries**: Automated ML for accurate predictions (Python < 3.13)
   - **AutoGluon**: Modern AutoML with deep learning models (DeepAR, Temporal Fusion Transformer)
   - Future prediction mode: Forecast N days from today
   - Historical evaluation mode: Train/test split with accuracy metrics (RMSE, MAE, MASE)
-  - **GPU Acceleration**: Full GPU support for AutoGluon, optional for AutoTS
+  - **GPU Acceleration**: Full GPU support for AutoGluon when available
 - **🎨 Rich CLI Interface**: Beautiful progress bars, tables, and colored output
 - **🗄️ Database Caching**: Automatic SQLite caching for offline analysis and fast data access
 - **🚀 Modern Python**: Built with uv for fast package management and Pydantic for configuration
@@ -82,8 +82,7 @@ uv run python -m stockula
 # Run specific analysis modes
 uv run python -m stockula --ticker GOOGL --mode ta        # Technical analysis
 uv run python -m stockula --ticker MSFT --mode backtest  # Backtesting (results sorted by return, highest first)
-uv run python -m stockula --ticker NVDA --mode forecast  # Forecasting with AutoTS (default)
-uv run python -m stockula --ticker NVDA --mode forecast --backend autogluon  # Use AutoGluon backend
+uv run python -m stockula --ticker NVDA --mode forecast  # Forecasting with AutoGluon or fallback
 
 # Show help
 uv run python -m stockula --help
@@ -214,7 +213,7 @@ For comprehensive documentation, visit our [**MkDocs Documentation Site**](https
 - [**Technical Analysis**](https://github.com/mkm29/stockula/blob/main/docs/user-guide/technical-analysis.md) - 40+ indicators and usage
 - [**Backtesting**](https://github.com/mkm29/stockula/blob/main/docs/user-guide/backtesting.md) - Strategy testing with realistic costs
 - [**Allocation Strategies**](https://github.com/mkm29/stockula/blob/main/docs/user-guide/allocation-strategies.md) - Portfolio allocation methods including backtest optimization
-- [**Forecasting**](https://github.com/mkm29/stockula/blob/main/docs/user-guide/forecasting.md) - AutoTS time series prediction
+- [**Forecasting**](https://github.com/mkm29/stockula/blob/main/docs/user-guide/forecasting.md) - Time series prediction with AutoGluon
 - [**Forecasting Models**](https://github.com/mkm29/stockula/blob/main/docs/FORECASTING_MODELS.md) - Fast & full financial model details
 - [**Rich CLI Features**](https://github.com/mkm29/stockula/blob/main/docs/user-guide/rich-cli.md) - Enhanced command-line interface
 
@@ -271,7 +270,7 @@ graph TB
     subgraph "Analysis Modules"
         TA["Technical Analysis<br/>finta"]
         BT["Backtesting<br/>strategies"]
-        FC["Forecasting<br/>AutoTS"]
+        FC["Forecasting<br/>AutoGluon/Simple"]
     end
 
     CLI --> Config
@@ -314,7 +313,8 @@ graph TB
 - **yfinance**: Yahoo Finance data fetching
 - **finta**: Financial technical analysis indicators
 - **backtesting**: Strategy backtesting framework
-- **autots**: Automated time series forecasting (default backend)
+- **autogluon-timeseries**: Advanced time series forecasting (optional, Python < 3.13)
+- **scikit-learn**: Simple fallback forecasting for Python 3.13+
 - **autogluon** (optional): Advanced AutoML forecasting with deep learning
 - **rich**: Enhanced CLI formatting with progress bars and tables
 - **pydantic**: Data validation and settings management

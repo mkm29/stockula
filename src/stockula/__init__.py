@@ -10,7 +10,7 @@ from .backtesting import BacktestRunner, BaseStrategy, MACDStrategy, RSIStrategy
 from .config import StockulaConfig, load_config
 from .data import DataFetcher
 from .display import ResultsDisplay
-from .forecasting import StockForecaster
+from .forecasting import ForecastingManager
 from .manager import StockulaManager
 from .technical_analysis import TechnicalIndicators
 
@@ -24,7 +24,7 @@ __all__ = [
     "RSIStrategy",
     "MACDStrategy",
     "BacktestRunner",
-    "StockForecaster",
+    "ForecastingManager",
     "StockulaConfig",
     "load_config",
     "StockulaManager",

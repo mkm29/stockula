@@ -1,6 +1,30 @@
 # Changelog
 
+## [Unreleased]
+
 ### Changed
+
+- **BREAKING**: Completely removed AutoTS dependency in favor of AutoGluon TimeSeries
+- **BREAKING**: Removed `StockForecaster` class - use `ForecastingManager` instead
+- **BREAKING**: Removed AutoTS-specific configuration options (model_list, ensemble, max_generations, etc.)
+- Migrated forecasting to AutoGluon TimeSeries with automatic fallback to simple LinearRegression for Python 3.13+
+- Simplified ForecastConfig to only include AutoGluon-specific settings
+- Updated all documentation to reflect AutoGluon-only forecasting
+
+### Added
+
+- `SimpleForecastBackend` using LinearRegression for environments without AutoGluon
+- Automatic backend selection based on Python version and package availability
+- Support for Python 3.13+ through fallback forecasting implementation
+
+### Removed
+
+- AutoTS dependency and all related code
+- `StockForecaster` class and tests
+- AutoTS model validation and repository classes
+- AutoTS-specific documentation and examples
+
+### Previous Changes
 
 - **BREAKING**: Removed `AutoTSModelValidator` class - model validation is now database-driven
 - Refactored AutoTS model validation to use database instead of hardcoded lists

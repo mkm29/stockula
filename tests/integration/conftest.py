@@ -9,7 +9,7 @@ from stockula.container import Container
 from stockula.data.fetcher import DataFetcher
 from stockula.database.manager import DatabaseManager
 from stockula.domain import DomainFactory
-from stockula.forecasting import StockForecaster
+from stockula.forecasting import ForecastingManager
 from stockula.utils import LoggingManager
 
 
@@ -43,7 +43,7 @@ def integration_container():
         modules=[
             "stockula.main",
             "stockula.data.fetcher",
-            "stockula.forecasting.forecaster",
+            "stockula.forecasting.manager",
             "stockula.domain.factory",
             "stockula.backtesting.runner",
             "stockula.manager",
@@ -87,15 +87,13 @@ def integration_data_fetcher(integration_container, mock_yfinance_ticker):
 
 
 @pytest.fixture(scope="function")
-def integration_stock_forecaster(integration_container, integration_data_fetcher):
-    """Create a StockForecaster with proper dependency injection for integration tests."""
-    forecaster = StockForecaster(
-        forecast_length=7,
-        frequency="D",
+def integration_forecasting_manager(integration_container, integration_data_fetcher):
+    """Create a ForecastingManager with proper dependency injection for integration tests."""
+    manager = ForecastingManager(
         data_fetcher=integration_data_fetcher,
         logging_manager=integration_container.logging_manager(),
     )
-    return forecaster
+    return manager
 
 
 @pytest.fixture(scope="function")

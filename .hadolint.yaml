@@ -23,10 +23,3 @@ override:
     - DL3019  # Use --no-cache in apk add
   info:
     - DL3059  # Ensure consecutive RUN instructions are consolidated
-# Label schema validation
-label-schema:
-  author: info
-  version: info
-  description: info
-  maintainer: warning
-  name: info
