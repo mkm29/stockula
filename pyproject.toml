@@ -1,13 +1,15 @@
 [project]
 name = "stockula"
-version = "0.13.1"
+# x-release-please-start-version
+version = "0.14.0"
+# x-release-please-end
 description = ""
 authors = [
     {name = "Mitchell Murphy", email = "mitch.murphy@gmail.com"}
 ]
 license = {text = "MIT"}
 readme = "README.md"
-requires-python = ">=3.12"
+requires-python = ">=3.11"
 # Note: Removed unused packages (August 2025):
 # - alpaca-py, httpx (no broker integration implemented)
 # - prophet, pyql (not used in forecasting)
@@ -124,8 +126,8 @@ exclude = [
 line-length = 120
 indent-width = 4
 
-# Assume Python 3.12
-target-version = "py312"
+# Assume Python 3.11 (minimum supported version)
+target-version = "py311"
 
 [tool.ruff.lint]
 # Enable pyflakes, pycodestyle, and isort
@@ -179,14 +181,19 @@ minversion = "8.0"
 testpaths = ["tests"]
 
 [tool.mypy]
-python_version = "3.12"
+python_version = "3.11"
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = false
 ignore_missing_imports = true
-exclude = ["tests/"]
+exclude = ["tests/", "alembic/", "migrations/"]
 
 [project.scripts]
 lint = "utils.lint:main"
 format-yaml = "utils.format_yaml:main"
+format-md = "utils.format_markdown:main"
 validate-docker = "utils.validate_docker:main"
+verify-gpu = "utils.verify_gpu:main"
+check-python = "utils.check_python:main"
+docker-verify = "utils.verify_docker:main"
+verify-build = "utils.verify_build:main"

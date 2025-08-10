@@ -574,19 +574,20 @@ assert stock is not None
 
 ## FAQ
 
-**Q: Why is forecasting so slow?**
-A: Forecasting uses machine learning models that can be computationally intensive. Use the "fast" model list and reduce forecast length for better performance.
+**Q: Why is forecasting so slow?** A: Forecasting uses machine learning models that can be computationally intensive.
+Use the "fast" model list and reduce forecast length for better performance.
 
-**Q: Can I use data from sources other than Yahoo Finance?**
-A: Currently, Stockula uses yfinance as the primary data source. Custom data sources can be implemented by extending the DataFetcher class.
+**Q: Can I use data from sources other than Yahoo Finance?** A: Currently, Stockula uses yfinance as the primary data
+source. Custom data sources can be implemented by extending the DataFetcher class.
 
-**Q: Why do I get different results between runs?**
-A: Some forecasting models include randomness. For reproducible results, set random seeds or use deterministic models only.
+**Q: Why do I get different results between runs?** A: Some forecasting models include randomness. For reproducible
+results, set random seeds or use deterministic models only.
 
-**Q: How much historical data do I need?**
-A: Minimum 100 data points for most analysis. Recommended: 2-3 years for backtesting, 1+ years for forecasting.
+**Q: How much historical data do I need?** A: Minimum 100 data points for most analysis. Recommended: 2-3 years for
+backtesting, 1+ years for forecasting.
 
-**Q: Can I run Stockula on a server without a display?**
-A: Yes, set `NO_COLOR=1` environment variable or use JSON output format for headless operation.
+**Q: Can I run Stockula on a server without a display?** A: Yes, set `NO_COLOR=1` environment variable or use JSON
+output format for headless operation.
 
-For additional help, check the [GitHub Issues](https://github.com/mkm29/stockula/issues) page or create a new issue with your specific problem.
+For additional help, check the [GitHub Issues](https://github.com/mkm29/stockula/issues) page or create a new issue with
+your specific problem.

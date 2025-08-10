@@ -4,7 +4,8 @@ This guide explains how to set up and use GPU acceleration for time series forec
 
 ## Overview
 
-GPU acceleration significantly improves performance for computationally expensive time series forecasting tasks. Stockula's GPU support includes:
+GPU acceleration significantly improves performance for computationally expensive time series forecasting tasks.
+Stockula's GPU support includes:
 
 - **NVIDIA CUDA 12.1** with cuDNN for optimal GPU compute performance
 - **PyTorch with CUDA support** for neural network models (PytorchForecasting, TiDE, NeuralForecast)
@@ -129,16 +130,16 @@ Update your `.stockula.yaml` to use GPU-optimized models:
 forecast:
   # Use models with GPU support
   model_list: "gpu_optimized"  # Custom preset for GPU models
-  
+
   # Enable GPU-accelerated models
   use_gpu: true
-  
+
   # Reduce parallel workers for GPU stability
   max_workers: 1
-  
+
   # Longer timeout for GPU model initialization
   model_timeout: 300
-  
+
   # Enable advanced models
   enable_deep_learning: true
 
@@ -149,13 +150,13 @@ gpu_models:
     - TemporalFusionTransformer
     - DeepAR
     - LSTM
-  
-  # NeuralForecast models  
+
+  # NeuralForecast models
   neural_forecast:
     - NBEATS
     - NHITS
     - TiDE
-  
+
   # GluonTS models
   gluonts:
     - DeepAR
@@ -385,7 +386,7 @@ gpu_model_list = {
     "name": "gpu_optimized",
     "models": [
         "TiDE",
-        "NBEATS", 
+        "NBEATS",
         "NHITS",
         "TemporalFusionTransformer",
         "DeepAR",
@@ -405,4 +406,5 @@ if torch.cuda.device_count() > 1:
     print(f"Using {torch.cuda.device_count()} GPUs")
 ```
 
-For additional help and GPU-specific issues, see the [troubleshooting guide](../troubleshooting.md#gpu-acceleration) or check the AutoTS documentation on GPU support.
+For additional help and GPU-specific issues, see the [troubleshooting guide](../troubleshooting.md#gpu-acceleration) or
+check the AutoTS documentation on GPU support.

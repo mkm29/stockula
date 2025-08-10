@@ -1,6 +1,7 @@
 # SQLModel Migration Guide
 
-This document outlines the migration from raw SQL queries to SQLModel, a modern ORM that combines SQLAlchemy with Pydantic.
+This document outlines the migration from raw SQL queries to SQLModel, a modern ORM that combines SQLAlchemy with
+Pydantic.
 
 ## Why SQLModel?
 

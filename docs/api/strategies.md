@@ -11,11 +11,13 @@ All strategies in Stockula are managed through the centralized `StrategyRegistry
 - **Parameter Management**: Provides default parameters for each strategy
 - **Group Organization**: Organizes strategies into logical groups for different trading approaches
 
-The registry ensures consistency across the application and handles configuration compatibility between different naming formats.
+The registry ensures consistency across the application and handles configuration compatibility between different naming
+formats.
 
 ## Available Strategies
 
-Stockula provides 11 built-in trading strategies that can be used for backtesting. All strategies are internally normalized to lowercase, snake_case names, but configuration files can use either PascalCase or snake_case formats.
+Stockula provides 11 built-in trading strategies that can be used for backtesting. All strategies are internally
+normalized to lowercase, snake_case names, but configuration files can use either PascalCase or snake_case formats.
 
 ### Simple Moving Average Crossover (`smacross`)
 
@@ -427,7 +429,7 @@ result = manager.run_single_strategy(
 )
 
 result2 = manager.run_single_strategy(
-    ticker="AAPL", 
+    ticker="AAPL",
     strategy_name="double_ema_cross"  # snake_case works too
 )
 ```
@@ -481,4 +483,5 @@ Strategies ranked by computational complexity (fastest to slowest):
 - Use appropriate stop loss multipliers for different asset classes
 - Monitor maximum drawdown across strategies
 
-The strategies in Stockula are designed to be robust, well-tested, and suitable for both research and practical trading applications.
+The strategies in Stockula are designed to be robust, well-tested, and suitable for both research and practical trading
+applications.

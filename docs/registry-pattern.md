@@ -2,7 +2,8 @@
 
 ## Overview
 
-The Stockula application uses a Registry pattern to manage various repositories of domain objects. This pattern provides a centralized location for accessing different types of repositories while maintaining loose coupling and testability.
+The Stockula application uses a Registry pattern to manage various repositories of domain objects. This pattern provides
+a centralized location for accessing different types of repositories while maintaining loose coupling and testability.
 
 ## Architecture
 
@@ -118,7 +119,7 @@ T = TypeVar('T')
 
 class CustomRepository(Repository[T]):
     """Custom repository implementation."""
-    
+
     def add(self, key: str, item: T) -> None:
         """Add item with validation."""
         # Custom validation logic
@@ -126,19 +127,19 @@ class CustomRepository(Repository[T]):
             self._items[key] = item
         else:
             raise ValueError("Invalid item")
-    
+
     def get(self, key: str, default: T | None = None) -> T | None:
         """Get item with custom logic."""
         # Custom retrieval logic
         return self._items.get(key, default)
-    
+
     def remove(self, key: str) -> None:
         """Remove item with cleanup."""
         if key not in self._items:
             raise KeyError(f"Item {key} not found")
         # Cleanup logic
         del self._items[key]
-    
+
     def validate_item(self, item: T) -> bool:
         """Validate item before adding."""
         # Implementation specific validation
@@ -182,14 +183,14 @@ def test_registry_operations():
     """Test basic registry operations."""
     registry = Registry()
     repo = DataRepository[str]()
-    
+
     # Register repository
     registry.register_repository("test", repo)
-    
+
     # Verify registration
     assert "test" in registry
     assert registry.get_repository("test") is repo
-    
+
     # Remove repository
     registry.remove_repository("test")
     assert "test" not in registry

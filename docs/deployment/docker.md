@@ -1,19 +1,31 @@
 # Docker Deployment Guide
 
-This guide explains how to build and run Stockula using Docker for different use cases. The Stockula project uses a comprehensive multi-stage Docker setup following industry best practices.
+This guide explains how to build and run Stockula using Docker for different use cases. The Stockula project uses a
+comprehensive multi-stage Docker setup following industry best practices.
 
 ## Overview
 
-The Docker implementation provides optimized containers for different scenarios using a multi-stage Dockerfile with 8 specialized stages:
+The Docker implementation provides optimized containers for different scenarios:
 
-- **base**: Common foundation with Python 3.13 and uv package manager
-- **builder**: Dependencies installation with virtual environment
-- **development**: Full development environment with all dependencies
-- **test**: Testing environment with coverage and linting tools
+### Standard Images (CPU)
+
+Multi-stage Dockerfile with specialized stages:
+
+- **base**: Common foundation with Python 3.11 and uv package manager
+- **dependencies**: Virtual environment with production packages
+- **source**: Application source code
 - **production**: Minimal production runtime (~500MB)
 - **cli**: Command-line interface optimized image (~550MB)
-- **api**: API server (placeholder for future implementation)
-- **jupyter**: Interactive analysis with Jupyter Lab (~1.5GB)
+
+### GPU-Accelerated Images
+
+Based on PyTorch official images for optimal compatibility:
+
+- **Base Image**: `pytorch/pytorch:2.8.0-cuda12.9-cudnn9` series
+- **Python Version**: 3.11 (pre-installed)
+- **Platform**: linux/amd64 only
+- **GPU Support**: CUDA 12.6/12.9 with cuDNN 9
+- **Time Series Models**: Chronos, GluonTS, AutoGluon TimeSeries
 
 ## Quick Start
 
@@ -139,7 +151,41 @@ docker-compose up stockula-jupyter
 # Access at http://localhost:8889
 ```
 
-### 4. Running Tests
+### 4. GPU-Accelerated Forecasting
+
+For high-performance time series forecasting with GPU acceleration:
+
+```bash
+# Pull GPU-enabled image
+docker pull ghcr.io/mkm29/stockula-gpu:latest
+
+# Run with GPU support
+docker run --gpus all --rm \
+  -v $(pwd)/data:/home/stockula/data \
+  -v $(pwd)/results:/home/stockula/results \
+  ghcr.io/mkm29/stockula-gpu:latest \
+  -m stockula --ticker AAPL --mode forecast --days 30
+
+# Check GPU availability
+docker run --gpus all --rm ghcr.io/mkm29/stockula-gpu:latest \
+  bash -c "/home/stockula/gpu_info.sh"
+
+# Interactive GPU session
+docker run --gpus all -it --rm \
+  -v $(pwd):/home/stockula/workspace \
+  ghcr.io/mkm29/stockula-gpu:latest \
+  /bin/bash
+```
+
+**GPU Features:**
+
+- **Chronos**: Zero-shot forecasting with pretrained transformers
+- **GluonTS**: Advanced probabilistic models (DeepAR, TFT)
+- **AutoGluon**: Full AutoML with GPU acceleration
+- **XGBoost/LightGBM**: GPU-accelerated gradient boosting
+- **User**: Non-root `stockula` user (UID 1000) for security
+
+### 5. Running Tests
 
 ```bash
 # Run all tests
@@ -353,10 +399,10 @@ Docker images are automatically built in the following scenarios:
 
 #### Available Images
 
-| Image                        | Description                | Tags                                                           |
-| ---------------------------- | -------------------------- | -------------------------------------------------------------- |
-| `ghcr.io/mkm29/stockula`     | CLI with development tools | `latest`, `vX.Y.Z`, `0.Y.Z-rc.N`, `X.Y.Z-feat.*`, `rc`, `feat` |
-| `ghcr.io/mkm29/stockula-gpu` | GPU-accelerated CLI        | `latest`, `vX.Y.Z`, `0.Y.Z-rc.N`, `X.Y.Z-feat.*`, `rc`, `feat` |
+| Image                        | Description                                      | Platform       | Tags                                                           |
+| ---------------------------- | ------------------------------------------------ | -------------- | -------------------------------------------------------------- |
+| `ghcr.io/mkm29/stockula`     | CLI with development tools (Python 3.11)         | Multi-platform | `latest`, `vX.Y.Z`, `0.Y.Z-rc.N`, `X.Y.Z-feat.*`, `rc`, `feat` |
+| `ghcr.io/mkm29/stockula-gpu` | GPU-accelerated CLI (PyTorch 2.8.0, Python 3.11) | linux/amd64    | `latest`, `vX.Y.Z`, `0.Y.Z-rc.N`, `rc`                         |
 
 Docker tag formats:
 
@@ -519,4 +565,6 @@ For Docker-related issues:
 
 ## Summary
 
-This Docker implementation provides a production-ready, secure, and developer-friendly containerization solution for the Stockula trading library. It follows industry best practices while being tailored specifically for the project's needs, including comprehensive tooling for development, testing, and deployment scenarios.
+This Docker implementation provides a production-ready, secure, and developer-friendly containerization solution for the
+Stockula trading library. It follows industry best practices while being tailored specifically for the project's needs,
+including comprehensive tooling for development, testing, and deployment scenarios.

@@ -25,7 +25,7 @@ repos:
       - id: mypy
         additional_dependencies: [types-requests]
         args: [--ignore-missing-imports]
-        exclude: ^tests/
+        exclude: ^(tests/|alembic/|migrations/)
   - repo: https://github.com/google/yamlfmt
     rev: v0.13.0
     hooks:
@@ -35,6 +35,15 @@ repos:
     hooks:
       - id: yamllint
         args: [-c=.yamllint]
+  - repo: https://github.com/executablebooks/mdformat
+    rev: 0.7.22
+    hooks:
+      - id: mdformat
+        args: ["--wrap", "120"]
+        additional_dependencies:
+          - mdformat-gfm
+          - mdformat-frontmatter
+          - mdformat-tables
 exclude: |
   (?x)^(
     .*\.egg-info/.*|

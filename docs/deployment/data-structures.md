@@ -1,6 +1,7 @@
 # Stockula Data Structures and Implementation Guide
 
-This document provides comprehensive examples and implementation details for using Stockula's domain model structure, showcasing private methods, read-only properties, and best practices.
+This document provides comprehensive examples and implementation details for using Stockula's domain model structure,
+showcasing private methods, read-only properties, and best practices.
 
 ## Table of Contents
 
@@ -143,7 +144,8 @@ ______________________________________________________________________
 
 ### Overview
 
-Methods starting with `_` are considered internal/private by Python convention. This analysis identifies methods that should be private to improve encapsulation and API clarity.
+Methods starting with `_` are considered internal/private by Python convention. This analysis identifies methods that
+should be private to improve encapsulation and API clarity.
 
 ### Private Methods Demo
 
@@ -257,7 +259,8 @@ ______________________________________________________________________
 
 ### Overview
 
-Converted allocation attributes in domain models to read-only properties using Python's `@property` decorator. This ensures that allocation values can only be set during object initialization and cannot be modified afterwards.
+Converted allocation attributes in domain models to read-only properties using Python's `@property` decorator. This
+ensures that allocation values can only be set during object initialization and cannot be modified afterwards.
 
 ### Implementation Details
 
@@ -337,11 +340,13 @@ Expected output:
 
 ### Configuration vs Domain Models
 
-- **Configuration models** (in `config/models.py`) retain regular attributes for flexibility during configuration parsing
+- **Configuration models** (in `config/models.py`) retain regular attributes for flexibility during configuration
+  parsing
 - **Domain models** (in `domain/`) use read-only properties to ensure immutability after creation
 - The `DomainFactory` bridges between mutable configs and immutable domain objects
 
-This separation allows configuration to be easily modified before creating domain objects, while domain objects remain immutable during use.
+This separation allows configuration to be easily modified before creating domain objects, while domain objects remain
+immutable during use.
 
 ______________________________________________________________________
 
@@ -378,11 +383,14 @@ ______________________________________________________________________
 
 ### Python Private Method Convention
 
-In Python, methods starting with a single underscore (`_`) are considered internal/private by convention. While Python doesn't enforce true privacy (the methods are still accessible), this convention signals to other developers that these methods:
+In Python, methods starting with a single underscore (`_`) are considered internal/private by convention. While Python
+doesn't enforce true privacy (the methods are still accessible), this convention signals to other developers that these
+methods:
 
 - Are implementation details
 - May change without notice
 - Should not be used directly by external code
 - Are not part of the public API
 
-Double underscore methods (`__method`) trigger name mangling and provide stronger privacy, but single underscore is sufficient for most cases and is the preferred convention in the Python community.
+Double underscore methods (`__method`) trigger name mangling and provide stronger privacy, but single underscore is
+sufficient for most cases and is the preferred convention in the Python community.

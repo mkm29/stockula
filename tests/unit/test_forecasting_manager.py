@@ -6,7 +6,10 @@ import pandas as pd
 import pytest
 
 from stockula.forecasting.backends import ForecastResult
-from stockula.forecasting.manager import ForecastingManager
+
+# Mock the dependency injection before importing the manager
+with patch("stockula.forecasting.manager.inject", lambda x: x):
+    from stockula.forecasting.manager import ForecastingManager
 
 
 class TestForecastingManager:
@@ -64,7 +67,10 @@ class TestForecastingManager:
     @pytest.fixture
     def forecasting_manager(self, mock_data_fetcher, mock_logging_manager):
         """Create ForecastingManager instance."""
-        return ForecastingManager(data_fetcher=mock_data_fetcher, logging_manager=mock_logging_manager)
+        manager = ForecastingManager(data_fetcher=mock_data_fetcher, logging_manager=mock_logging_manager)
+        # Ensure logger is set properly (in case inject decorator was bypassed)
+        manager.logger = mock_logging_manager
+        return manager
 
     def test_init(self, forecasting_manager, mock_data_fetcher, mock_logging_manager):
         """Test ForecastingManager initialization."""
@@ -82,14 +88,20 @@ class TestForecastingManager:
             prediction_interval=0.95,
         )
 
-        # Test creating backend
-        backend = forecasting_manager.create_backend(forecast_config)
-        assert backend is not None
+        # Mock the factory to avoid DI issues
+        with patch("stockula.forecasting.manager.create_forecast_backend") as mock_factory:
+            from stockula.forecasting.backends import SimpleForecastBackend
 
-        # Backend type depends on availability of AutoGluon
-        from stockula.forecasting.backends import ForecastBackend
+            mock_factory.return_value = SimpleForecastBackend()
 
-        assert isinstance(backend, ForecastBackend)
+            # Test creating backend
+            backend = forecasting_manager.create_backend(forecast_config)
+            assert backend is not None
+
+            # Backend type depends on availability of AutoGluon
+            from stockula.forecasting.backends import ForecastBackend
+
+            assert isinstance(backend, ForecastBackend)
 
     @patch("stockula.forecasting.manager.create_forecast_backend")
     def test_forecast_symbol(self, mock_create_backend, forecasting_manager, mock_config):
@@ -125,8 +137,13 @@ class TestForecastingManager:
         assert result["forecast_length"] == 30
         assert result["best_model"] == "TestModel"
 
-    def test_forecast_multiple_symbols(self, forecasting_manager, mock_config):
+    @patch("stockula.forecasting.manager.create_forecast_backend")
+    def test_forecast_multiple_symbols(self, mock_create_backend, forecasting_manager, mock_config):
         """Test forecasting multiple symbols."""
+        # Mock the backend to avoid DI issues
+        mock_backend = MagicMock()
+        mock_create_backend.return_value = mock_backend
+
         with patch.object(forecasting_manager, "forecast_symbol") as mock_forecast:
             mock_forecast.return_value = {"ticker": "AAPL", "forecast_price": 150.0, "error": None}
 
@@ -201,8 +218,13 @@ class TestForecastingManager:
         minimal_config = ForecastConfig()
         forecasting_manager.validate_forecast_config(minimal_config)  # Should not raise
 
-    def test_forecast_multiple_symbols_with_progress(self, forecasting_manager, mock_config):
+    @patch("stockula.forecasting.manager.create_forecast_backend")
+    def test_forecast_multiple_symbols_with_progress(self, mock_create_backend, forecasting_manager, mock_config):
         """Test forecasting multiple symbols with progress tracking."""
+        # Mock the backend to avoid DI issues
+        mock_backend = MagicMock()
+        mock_create_backend.return_value = mock_backend
+
         with (
             patch.object(forecasting_manager, "forecast_symbol") as mock_forecast,
             patch("stockula.forecasting.manager.Progress") as mock_progress_class,

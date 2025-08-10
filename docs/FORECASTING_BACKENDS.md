@@ -1,6 +1,7 @@
 # Forecasting Backends
 
-Stockula now supports multiple time series forecasting backends, allowing you to choose the best tool for your needs. Currently supported backends:
+Stockula now supports multiple time series forecasting backends, allowing you to choose the best tool for your needs.
+Currently supported backends:
 
 - **AutoTS** (default): Feature-rich with many statistical and ML models
 - **AutoGluon**: Modern AutoML with deep learning models and GPU acceleration
@@ -28,17 +29,17 @@ Select the backend in your configuration file (`.stockula.yaml`):
 forecast:
   # Choose backend: 'autots' or 'autogluon'
   backend: autogluon
-  
+
   forecast_length: 30
   prediction_interval: 0.95
-  
+
   # AutoTS-specific settings (used when backend: autots)
   model_list: clean  # Options: ultra_fast, fast, clean, financial
   ensemble: auto
   max_generations: 2
   num_validations: 2
   validation_method: backwards
-  
+
   # AutoGluon-specific settings (used when backend: autogluon)
   preset: medium_quality  # Options: fast_training, medium_quality, high_quality, best_quality
   time_limit: 300  # Optional: time limit in seconds
@@ -143,7 +144,7 @@ manager = ForecastingManager(data_fetcher=DataFetcher())
 
 # Ultra-fast AutoTS forecast
 quick_result = manager.quick_forecast(
-    "AAPL", 
+    "AAPL",
     forecast_days=7,
     backend="autots"
 )
@@ -151,7 +152,7 @@ quick_result = manager.quick_forecast(
 # Fast AutoGluon forecast
 quick_result = manager.quick_forecast(
     "AAPL",
-    forecast_days=7, 
+    forecast_days=7,
     backend="autogluon"
 )
 ```
@@ -209,7 +210,8 @@ AutoGluon automatically selects from:
 
 ## Evaluation Metrics (AutoGluon)
 
-AutoGluon uses evaluation metrics to select the best model during training. For stock price forecasting, the choice of metric is important:
+AutoGluon uses evaluation metrics to select the best model during training. For stock price forecasting, the choice of
+metric is important:
 
 ### Recommended: MASE (Mean Absolute Scaled Error)
 
@@ -268,7 +270,9 @@ Based on internal benchmarks on stock price data:
 - **AutoGluon medium**: MASE ~0.6-0.9
 - **AutoGluon high**: MASE ~0.5-0.8
 
-*Note: MASE (Mean Absolute Scaled Error) is scale-independent and more appropriate for comparing performance across different stocks. Values < 1.0 indicate the model beats a naive forecast. Actual performance varies significantly based on the specific stock and market conditions.*
+*Note: MASE (Mean Absolute Scaled Error) is scale-independent and more appropriate for comparing performance across
+different stocks. Values < 1.0 indicate the model beats a naive forecast. Actual performance varies significantly based
+on the specific stock and market conditions.*
 
 ## Troubleshooting
 
@@ -339,11 +343,11 @@ class MyCustomBackend(ForecastBackend):
     def fit(self, data, target_column="Close", **kwargs):
         # Implement fitting logic
         pass
-    
+
     def predict(self, **kwargs):
         # Implement prediction logic
         return ForecastResult(...)
-    
+
     def get_model_info(self):
         # Return model information
         pass

@@ -194,4 +194,5 @@ The validation script:
 - **Resource Usage**: Minimal - only creates temporary test images
 - **Cleanup**: Automatically removes test images and temporary files
 
-This validation script ensures your Docker setup is properly configured for the Stockula development and deployment workflow.
+This validation script ensures your Docker setup is properly configured for the Stockula development and deployment
+workflow.

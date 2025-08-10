@@ -6,7 +6,8 @@ This directory contains technical documentation for developers working on Stocku
 
 ### [CI/CD](ci-cd.md)
 
-Complete guide to the continuous integration and deployment setup, including GitHub Actions workflows, release automation, and Docker builds.
+Complete guide to the continuous integration and deployment setup, including GitHub Actions workflows, release
+automation, and Docker builds.
 
 ### [AutoTS Threading Considerations](autots-threading-considerations.md)
 
@@ -18,7 +19,8 @@ Documentation about the migration from SQLAlchemy to SQLModel for improved type 
 
 ### [Testing](testing.md)
 
-Comprehensive guide for testing in Stockula, including testing strategy, best practices, coverage improvements, and common patterns.
+Comprehensive guide for testing in Stockula, including testing strategy, best practices, coverage improvements, and
+common patterns.
 
 ### [Test Coverage Status](test-coverage-status.md)
 

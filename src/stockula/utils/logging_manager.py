@@ -173,6 +173,17 @@ class LoggingManager:
         """
         self.logger.exception(message)
 
+    def isEnabledFor(self, level: int) -> bool:
+        """Check if logging is enabled for given level.
+
+        Args:
+            level: The logging level to check
+
+        Returns:
+            True if logging is enabled for the level
+        """
+        return self.logger.isEnabledFor(level)
+
     def get_logger(self) -> logging.Logger:
         """Get the underlying logger instance.
 

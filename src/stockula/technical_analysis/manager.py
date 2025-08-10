@@ -87,9 +87,14 @@ class TechnicalAnalysisManager:
         """
         try:
             # Fetch data
-            data = self.data_fetcher.get_stock_data(
-                symbol, start_date=start_date or config.data.start_date, end_date=end_date or config.data.end_date
-            )
+            # Convert date to string if needed
+            start = start_date or config.data.start_date
+            end = end_date or config.data.end_date
+            if hasattr(start, "strftime"):
+                start = start.strftime("%Y-%m-%d")  # type: ignore[union-attr]
+            if hasattr(end, "strftime"):
+                end = end.strftime("%Y-%m-%d")  # type: ignore[union-attr]
+            data = self.data_fetcher.get_stock_data(symbol, start=start, end=end)
 
             if data.empty:
                 return {"ticker": symbol, "error": "No data available"}
@@ -187,7 +192,7 @@ class TechnicalAnalysisManager:
             Dictionary with basic analysis results
         """
         try:
-            data = self.data_fetcher.get_stock_data(symbol, start_date=start_date, end_date=end_date)
+            data = self.data_fetcher.get_stock_data(symbol, start=start_date, end=end_date)
             if data.empty:
                 return {"ticker": symbol, "error": "No data available"}
 
@@ -292,7 +297,7 @@ class TechnicalAnalysisManager:
             Dictionary with calculated indicators
         """
         try:
-            data = self.data_fetcher.get_stock_data(symbol, start_date=start_date, end_date=end_date)
+            data = self.data_fetcher.get_stock_data(symbol, start=start_date, end=end_date)
             if data.empty:
                 return {"ticker": symbol, "error": "No data available"}
 
@@ -355,7 +360,7 @@ class TechnicalAnalysisManager:
         Returns:
             Dictionary with analysis summary
         """
-        summary = {"signals": [], "strength": "neutral"}
+        summary: dict[str, Any] = {"signals": [], "strength": "neutral"}
 
         # Check RSI for overbought/oversold
         if "rsi" in indicators and indicators["rsi"].get("current"):

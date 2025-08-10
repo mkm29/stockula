@@ -1,6 +1,7 @@
 # Data Fetching
 
-Stockula uses an intelligent data fetching system that combines yfinance for market data with SQLite caching for optimal performance.
+Stockula uses an intelligent data fetching system that combines yfinance for market data with SQLite caching for optimal
+performance.
 
 ## Overview
 
@@ -359,4 +360,5 @@ Multi-symbol progress tracking:
 1. **Use offline mode**: Develop with cached data when possible
 1. **Monitor API usage**: Track requests to avoid limits
 
-The data fetching system provides a robust foundation for all Stockula analysis modules while maintaining high performance through intelligent caching.
+The data fetching system provides a robust foundation for all Stockula analysis modules while maintaining high
+performance through intelligent caching.

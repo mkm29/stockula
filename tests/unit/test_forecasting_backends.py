@@ -686,3 +686,415 @@ class TestForecastBackendEvaluateMethod:
             # Should handle division by zero gracefully
             assert "mase" in metrics
             assert not np.isnan(metrics["mase"])
+
+
+# Check if chronos is available
+try:
+    import chronos  # noqa: F401
+
+    CHRONOS_AVAILABLE = True
+except ImportError:
+    CHRONOS_AVAILABLE = False
+
+
+@pytest.mark.skipif(not CHRONOS_AVAILABLE, reason="chronos not installed")
+class TestChronosBackend:
+    """Test the ChronosBackend implementation."""
+
+    @pytest.fixture
+    def mock_logging_manager(self):
+        """Create a mock logging manager."""
+        logger = Mock()
+        logger.debug = Mock()
+        logger.info = Mock()
+        logger.warning = Mock()
+        logger.error = Mock()
+        return logger
+
+    @pytest.fixture
+    def backend_class(self):
+        """Return the backend class for parameterized tests."""
+        # Import with mocked chronos
+        with patch("chronos.BaseChronosPipeline"):
+            from stockula.forecasting.backends.chronos import ChronosBackend
+
+            return ChronosBackend
+
+    @pytest.fixture
+    def mock_chronos_pipeline(self):
+        """Create a mock Chronos pipeline."""
+        mock_pipeline = MagicMock()
+        # Mock predict to return samples shape (num_samples, prediction_length)
+        mock_pipeline.predict = MagicMock(
+            return_value=np.random.randn(256, 7) * 5 + 100  # Random samples around 100
+        )
+        return mock_pipeline
+
+    @pytest.fixture
+    def backend_instance(self, mock_logging_manager, mock_chronos_pipeline):
+        """Create a ChronosBackend instance with mocked dependencies."""
+        with patch("chronos.BaseChronosPipeline") as mock_base:
+            mock_base.from_pretrained.return_value = mock_chronos_pipeline
+
+            from stockula.forecasting.backends.chronos import ChronosBackend
+
+            backend = ChronosBackend(forecast_length=7, logging_manager=mock_logging_manager)
+            # Pre-load the pipeline to avoid import issues in tests
+            backend._pipeline = mock_chronos_pipeline
+            return backend
+
+    @pytest.fixture
+    def sample_data(self):
+        """Create sample time series data for testing."""
+        dates = pd.date_range(start="2023-01-01", end="2023-03-31", freq="D")
+        np.random.seed(42)
+        values = np.linspace(100, 110, len(dates)) + np.random.normal(0, 2, len(dates))
+        return pd.DataFrame({"Close": values}, index=dates)
+
+    def test_chronos_specific_initialization(self):
+        """Test ChronosBackend specific initialization parameters."""
+        with patch("chronos.BaseChronosPipeline"):
+            from stockula.forecasting.backends.chronos import ChronosBackend
+
+            backend = ChronosBackend(
+                forecast_length=14,
+                model_name="amazon/chronos-t5-large",
+                num_samples=512,
+                quantile_levels=[0.1, 0.5, 0.9],
+                device_map="cuda",
+                torch_dtype="float16",
+            )
+
+            assert backend.model_name == "amazon/chronos-t5-large"
+            assert backend.num_samples == 512
+            assert backend.quantile_levels == [0.1, 0.5, 0.9]
+            assert backend.device_map == "cuda"
+            assert backend.torch_dtype == "float16"
+            assert backend._pipeline is None
+            assert backend._context_series is None
+            assert backend.is_fitted is False
+
+    def test_default_model_is_bolt_small(self):
+        """Test that default model is chronos-bolt-small."""
+        with patch("chronos.BaseChronosPipeline"):
+            from stockula.forecasting.backends.chronos import ChronosBackend
+
+            backend = ChronosBackend()
+            assert backend.model_name == "amazon/chronos-bolt-small"
+            assert backend.DEFAULT_MODEL == "amazon/chronos-bolt-small"
+
+    def test_quantile_levels_from_prediction_interval(self):
+        """Test that quantile levels are computed from prediction interval."""
+        with patch("chronos.BaseChronosPipeline"):
+            from stockula.forecasting.backends.chronos import ChronosBackend
+
+            # Test 95% prediction interval
+            backend = ChronosBackend(prediction_interval=0.95)
+            expected = [0.025, 0.5, 0.975]  # alpha = 0.025 for 95% interval
+            np.testing.assert_array_almost_equal(backend.quantile_levels, expected, decimal=3)
+
+            # Test 90% prediction interval
+            backend = ChronosBackend(prediction_interval=0.90)
+            expected = [0.05, 0.5, 0.95]  # alpha = 0.05 for 90% interval
+            np.testing.assert_array_almost_equal(backend.quantile_levels, expected, decimal=3)
+
+    def test_load_pipeline_with_torch_available(self):
+        """Test pipeline loading when torch is available."""
+        mock_pipeline = MagicMock()
+
+        # Mock the chronos module and BaseChronosPipeline
+        mock_chronos_module = MagicMock()
+        mock_base_chronos = MagicMock()
+        mock_base_chronos.from_pretrained.return_value = mock_pipeline
+        mock_chronos_module.BaseChronosPipeline = mock_base_chronos
+
+        with patch.dict("sys.modules", {"chronos": mock_chronos_module}):
+            # Mock torch being available with CUDA
+            mock_torch = MagicMock()
+            mock_torch.cuda.is_available.return_value = True
+            mock_torch.bfloat16 = "bfloat16"
+
+            with patch.dict("sys.modules", {"torch": mock_torch}):
+                from stockula.forecasting.backends.chronos import ChronosBackend
+
+                backend = ChronosBackend()
+                backend._load_pipeline()
+
+                # Should use CUDA and bfloat16
+                mock_base_chronos.from_pretrained.assert_called_once_with(
+                    "amazon/chronos-bolt-small", device_map="cuda", torch_dtype="bfloat16"
+                )
+                assert backend._pipeline == mock_pipeline
+
+    def test_load_pipeline_without_torch(self):
+        """Test pipeline loading when torch is not available."""
+        import builtins
+
+        from stockula.forecasting.backends.chronos import ChronosBackend
+
+        mock_pipeline = MagicMock()
+
+        with patch("chronos.BaseChronosPipeline") as mock_base:
+            mock_base.from_pretrained.return_value = mock_pipeline
+
+            # Mock torch import to fail
+            original_import = builtins.__import__
+
+            def mock_import(name, *args, **kwargs):
+                if name == "torch":
+                    raise ImportError("No module named 'torch'")
+                return original_import(name, *args, **kwargs)
+
+            with patch("builtins.__import__", side_effect=mock_import):
+                backend = ChronosBackend()
+                backend._load_pipeline()
+
+                # Should fallback to CPU and default dtype
+                mock_base.from_pretrained.assert_called_once_with(
+                    "amazon/chronos-bolt-small", device_map="cpu", torch_dtype=None
+                )
+
+    def test_load_pipeline_import_error(self):
+        """Test error handling when chronos package is not available."""
+        import builtins
+
+        from stockula.forecasting.backends.chronos import ChronosBackend
+
+        backend = ChronosBackend()
+
+        # Mock the import to fail by making the chronos module unavailable
+        original_import = builtins.__import__
+
+        def mock_import(name, *args, **kwargs):
+            if name == "chronos":
+                raise ImportError("No module named 'chronos'")
+            return original_import(name, *args, **kwargs)
+
+        with patch("builtins.__import__", side_effect=mock_import):
+            with pytest.raises(ImportError, match="chronos-forecasting not installed"):
+                backend._load_pipeline()
+
+    def test_load_pipeline_runtime_error(self):
+        """Test error handling when model loading fails."""
+        with patch("chronos.BaseChronosPipeline") as mock_base:
+            mock_base.from_pretrained.side_effect = RuntimeError("Model not found")
+
+            from stockula.forecasting.backends.chronos import ChronosBackend
+
+            backend = ChronosBackend(model_name="invalid/model")
+
+            with pytest.raises(RuntimeError, match="Failed to load Chronos model"):
+                backend._load_pipeline()
+
+    def test_prepare_context(self, backend_instance, sample_data):
+        """Test context preparation for Chronos."""
+        context = backend_instance._prepare_context(sample_data, "Close")
+
+        assert isinstance(context, np.ndarray)
+        assert context.dtype == np.float32
+        assert len(context) == len(sample_data)
+        assert not np.isnan(context).any()
+        assert not np.isinf(context).any()
+
+    def test_prepare_context_with_nan(self, backend_instance):
+        """Test that prepare_context raises error for NaN values."""
+        dates = pd.date_range("2023-01-01", periods=10)
+        data = pd.DataFrame({"Close": [100, 101, np.nan, 103, 104, 105, 106, 107, 108, 109]}, index=dates)
+
+        with pytest.raises(ValueError, match="NaN or infinite values"):
+            backend_instance._prepare_context(data, "Close")
+
+    def test_prepare_context_with_inf(self, backend_instance):
+        """Test that prepare_context raises error for infinite values."""
+        dates = pd.date_range("2023-01-01", periods=10)
+        data = pd.DataFrame({"Close": [100, 101, np.inf, 103, 104, 105, 106, 107, 108, 109]}, index=dates)
+
+        with pytest.raises(ValueError, match="NaN or infinite values"):
+            backend_instance._prepare_context(data, "Close")
+
+    def test_fit_stores_context(self, backend_instance, sample_data):
+        """Test that fit properly stores context and metadata."""
+        result = backend_instance.fit(sample_data, target_column="Close")
+
+        assert result is backend_instance  # Should return self
+        assert backend_instance._context_series is not None
+        assert isinstance(backend_instance._context_series, np.ndarray)
+        assert backend_instance._context_series.dtype == np.float32
+        assert backend_instance._last_timestamp == sample_data.index.max()
+        assert backend_instance.is_fitted is True
+
+    def test_fit_sets_default_forecast_length(self, backend_instance, sample_data):
+        """Test that fit sets default forecast length if not provided."""
+        backend_instance.forecast_length = None
+        backend_instance.fit(sample_data)
+
+        assert backend_instance.forecast_length == 14
+
+    def test_predict_generates_forecast(self, backend_instance, sample_data, mock_chronos_pipeline):
+        """Test that predict generates proper forecast structure."""
+        # Fit first
+        backend_instance.fit(sample_data)
+
+        # Mock pipeline predict to return known samples
+        np.random.seed(42)
+        num_samples = 256
+        forecast_length = 7
+        samples = np.random.randn(num_samples, forecast_length) * 5 + 100
+        mock_chronos_pipeline.predict.return_value = samples
+
+        result = backend_instance.predict()
+
+        # Check result structure
+        assert isinstance(result, ForecastResult)
+        assert isinstance(result.forecast, pd.DataFrame)
+        assert len(result.forecast) == forecast_length
+        assert "forecast" in result.forecast.columns
+        assert "lower_bound" in result.forecast.columns
+        assert "upper_bound" in result.forecast.columns
+
+        # Check that bounds make sense
+        assert (result.forecast["lower_bound"] <= result.forecast["forecast"]).all()
+        assert (result.forecast["forecast"] <= result.forecast["upper_bound"]).all()
+
+        # Check metadata
+        assert result.model_name == "amazon/chronos-bolt-small"
+        assert result.metadata["backend"] == "chronos"
+
+    def test_predict_with_no_negatives(self, backend_instance, sample_data, mock_chronos_pipeline):
+        """Test that no_negatives constraint is applied."""
+        backend_instance.no_negatives = True
+        backend_instance.fit(sample_data)
+
+        # Mock samples that would produce negative values
+        samples = np.random.randn(256, 7) * 50 - 20  # Some negative values
+        mock_chronos_pipeline.predict.return_value = samples
+
+        result = backend_instance.predict()
+
+        # All values should be non-negative
+        assert (result.forecast["forecast"] >= 0).all()
+        assert (result.forecast["lower_bound"] >= 0).all()
+        assert (result.forecast["upper_bound"] >= 0).all()
+
+    def test_predict_handles_1d_samples(self, backend_instance, sample_data, mock_chronos_pipeline):
+        """Test that predict handles 1D sample arrays correctly."""
+        backend_instance.fit(sample_data)
+
+        # Mock 1D array (edge case for num_samples=1)
+        samples = np.array([100, 101, 102, 103, 104, 105, 106])
+        mock_chronos_pipeline.predict.return_value = samples
+
+        result = backend_instance.predict()
+
+        # Should still work and produce correct shape
+        assert len(result.forecast) == 7
+        assert isinstance(result.forecast, pd.DataFrame)
+
+    def test_predict_frequency_inference(self, backend_instance, sample_data, mock_chronos_pipeline):
+        """Test frequency inference for future dates."""
+        backend_instance.frequency = "infer"
+        backend_instance.fit(sample_data)
+
+        # Mock samples
+        samples = np.random.randn(256, 7) * 5 + 100
+        mock_chronos_pipeline.predict.return_value = samples
+
+        result = backend_instance.predict()
+
+        # Check that dates are properly spaced
+        dates = result.forecast.index
+        assert len(dates) == 7
+        # Should be daily frequency
+        assert (dates[1] - dates[0]).days == 1
+
+    def test_predict_custom_frequency(self, backend_instance, sample_data, mock_chronos_pipeline):
+        """Test custom frequency for future dates."""
+        backend_instance.frequency = "W"  # Weekly
+        backend_instance.fit(sample_data)
+
+        # Mock samples
+        samples = np.random.randn(256, 7) * 5 + 100
+        mock_chronos_pipeline.predict.return_value = samples
+
+        result = backend_instance.predict()
+
+        # Check weekly spacing
+        dates = result.forecast.index
+        assert (dates[1] - dates[0]).days == 7
+
+    def test_quantile_selection(self, backend_instance, sample_data, mock_chronos_pipeline):
+        """Test proper quantile selection from samples."""
+        backend_instance.quantile_levels = [0.1, 0.5, 0.9]
+        backend_instance.fit(sample_data)
+
+        # Create known samples for testing quantiles
+        num_samples = 1000
+        forecast_length = 7
+        # Create samples with known distribution (normal with mean=100, std=10)
+        np.random.seed(42)
+        samples = np.random.normal(100, 10, (num_samples, forecast_length))
+        mock_chronos_pipeline.predict.return_value = samples
+
+        result = backend_instance.predict()
+
+        # Check that median is approximately 100
+        median_forecast = result.forecast["forecast"].mean()
+        assert abs(median_forecast - 100) < 2  # Within 2 units of expected
+
+        # Check that bounds are reasonable (roughly ±16 for 80% interval)
+        interval_width = (result.forecast["upper_bound"] - result.forecast["lower_bound"]).mean()
+        assert 25 < interval_width < 35  # Reasonable interval width for std=10
+
+    def test_get_model_info(self, backend_instance):
+        """Test get_model_info returns proper information."""
+        info = backend_instance.get_model_info()
+
+        assert isinstance(info, dict)
+        assert info["model_name"] == "amazon/chronos-bolt-small"
+        assert "model_params" in info
+        assert info["model_params"]["num_samples"] == 256
+        assert info["model_params"]["device_map"] == "auto"
+
+    def test_get_available_models(self, backend_instance):
+        """Test that all expected Chronos models are listed."""
+        models = backend_instance.get_available_models()
+
+        expected_models = [
+            "amazon/chronos-t5-tiny",
+            "amazon/chronos-t5-mini",
+            "amazon/chronos-t5-small",
+            "amazon/chronos-t5-base",
+            "amazon/chronos-t5-large",
+            "amazon/chronos-bolt-tiny",
+            "amazon/chronos-bolt-mini",
+            "amazon/chronos-bolt-small",
+            "amazon/chronos-bolt-base",
+        ]
+
+        for model in expected_models:
+            assert model in models
+
+    def test_chronos_with_custom_device_and_dtype(self):
+        """Test initialization with custom device and dtype settings."""
+        with patch("chronos.BaseChronosPipeline") as mock_base:
+            mock_pipeline = MagicMock()
+            mock_base.from_pretrained.return_value = mock_pipeline
+
+            from stockula.forecasting.backends.chronos import ChronosBackend
+
+            backend = ChronosBackend(device_map="mps", torch_dtype="float32")
+            backend._load_pipeline()
+
+            mock_base.from_pretrained.assert_called_with(
+                "amazon/chronos-bolt-small", device_map="mps", torch_dtype="float32"
+            )
+
+    def test_chronos_pipeline_call_params(self, backend_instance, sample_data, mock_chronos_pipeline):
+        """Test that pipeline.predict is called with correct parameters."""
+        backend_instance.fit(sample_data)
+        backend_instance.predict()
+
+        # Verify pipeline was called with correct params
+        mock_chronos_pipeline.predict.assert_called_once_with(
+            context=backend_instance._context_series, prediction_length=7, num_samples=256
+        )

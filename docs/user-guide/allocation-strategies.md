@@ -1,6 +1,7 @@
 # Allocation Strategies
 
-Stockula provides various allocation strategies to help you determine how much capital to allocate to each asset in your portfolio. These strategies range from simple equal-weight approaches to sophisticated backtest-optimized methods.
+Stockula provides various allocation strategies to help you determine how much capital to allocate to each asset in your
+portfolio. These strategies range from simple equal-weight approaches to sophisticated backtest-optimized methods.
 
 ## Overview
 
@@ -108,7 +109,8 @@ portfolio:
 
 ## Backtest-Optimized Allocation
 
-The `BacktestOptimizedAllocator` is an advanced allocation strategy that uses historical backtesting to determine optimal capital allocation. This strategy:
+The `BacktestOptimizedAllocator` is an advanced allocation strategy that uses historical backtesting to determine
+optimal capital allocation. This strategy:
 
 1. Tests multiple trading strategies on each asset using training data
 1. Selects the best-performing strategy for each asset
@@ -152,7 +154,7 @@ backtest_optimization:
   train_end_date: "2023-12-31"
   test_start_date: "2024-01-01"
   test_end_date: "2024-06-30"
-  
+
   # Optimization parameters
   ranking_metric: "Return [%]"    # Metric to optimize (default)
   min_allocation_pct: 2.0         # Minimum 2% allocation
@@ -211,7 +213,7 @@ portfolio:
   initial_capital: 100000
   allocation_method: backtest_optimized
   allow_fractional_shares: true
-  
+
   tickers:
     # No quantity or allocation fields needed - they will be calculated
     - symbol: AAPL
@@ -299,7 +301,9 @@ GLD      | Strategy: VIDYAStrategy            | Return [%]:  6.5000 | Allocation
 
 ### AllocatorManager Overview
 
-Stockula uses an `AllocatorManager` to coordinate between different allocation strategies. This manager provides a unified interface for all allocation methods and automatically selects the appropriate allocator based on the configured allocation method.
+Stockula uses an `AllocatorManager` to coordinate between different allocation strategies. This manager provides a
+unified interface for all allocation methods and automatically selects the appropriate allocator based on the configured
+allocation method.
 
 ### Using AllocatorManager in Practice
 
@@ -321,7 +325,8 @@ quantities = allocator_manager.calculate_quantities(
 
 ### Direct Access to Specific Allocators
 
-While the AllocatorManager handles allocation method selection automatically, you can also access specific allocators directly when needed:
+While the AllocatorManager handles allocation method selection automatically, you can also access specific allocators
+directly when needed:
 
 ```python
 # Get specific allocation methods
@@ -367,7 +372,7 @@ from stockula.allocation import BaseAllocator
 
 class MomentumAllocator(BaseAllocator):
     """Allocate based on momentum metrics."""
-    
+
     def calculate_quantities(
         self,
         config: StockulaConfig,
@@ -384,14 +389,14 @@ class MomentumAllocator(BaseAllocator):
             # Simple momentum: 3-month return
             momentum = (data['Close'][-1] / data['Close'][-63] - 1) * 100
             momentum_scores[ticker.symbol] = max(0, momentum)
-        
+
         # Convert to allocations
         total_score = sum(momentum_scores.values())
         allocations = {
             symbol: score / total_score * 100
             for symbol, score in momentum_scores.items()
         }
-        
+
         # Apply constraints and calculate quantities
         return self._convert_to_quantities(config, allocations)
 ```
@@ -442,7 +447,7 @@ portfolio:
   # Global limits
   max_position_size: 25.0      # Max 25% in any position
   min_position_size: 1.0       # Min 1% position
-  
+
   # Sector limits
   sector_limits:
     TECH: 40.0                 # Max 40% in tech
@@ -461,4 +466,7 @@ def volatility_adjusted_allocation(returns, target_vol=0.15):
 
 ## Conclusion
 
-Stockula's allocation strategies provide flexibility from simple equal-weight approaches to sophisticated backtest-optimized methods. The BacktestOptimizedAllocator represents the most advanced approach, using historical performance data to inform forward-looking allocation decisions. Choose the strategy that best fits your investment goals and risk tolerance.
+Stockula's allocation strategies provide flexibility from simple equal-weight approaches to sophisticated
+backtest-optimized methods. The BacktestOptimizedAllocator represents the most advanced approach, using historical
+performance data to inform forward-looking allocation decisions. Choose the strategy that best fits your investment
+goals and risk tolerance.

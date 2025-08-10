@@ -1,4 +1,4 @@
-"""Simple fallback forecasting backend for environments without AutoGluon."""
+"""Simple fallback forecasting backend for environments without AutoGluon/Chronos."""
 
 from typing import Any
 
@@ -11,6 +11,11 @@ from .base import ForecastBackend, ForecastResult
 
 class SimpleForecastBackend(ForecastBackend):
     """Simple forecasting backend using linear regression as fallback."""
+
+    model: LinearRegression
+    last_values: np.ndarray | None
+    trend: float | None
+    std_dev: float | None
 
     def __init__(
         self,
@@ -93,6 +98,11 @@ class SimpleForecastBackend(ForecastBackend):
         if not self.is_fitted:
             raise ValueError("Model must be fitted before prediction")
 
+        # Ensure required attributes are set (for type checking)
+        assert self.last_values is not None
+        assert self.std_dev is not None
+        assert self.forecast_length is not None
+
         # Generate forecast points
         n_historical = len(self.last_values)
         future_X = np.arange(n_historical, n_historical + self.forecast_length).reshape(-1, 1)
@@ -122,6 +132,11 @@ class SimpleForecastBackend(ForecastBackend):
                 "upper_bound": upper_bound,
             }
         )
+
+        # Ensure attributes are not None for type checking
+        assert self.trend is not None
+        assert self.std_dev is not None
+        assert self.last_values is not None
 
         return ForecastResult(
             forecast=forecast_df,

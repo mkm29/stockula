@@ -2,7 +2,8 @@
 
 ## Overview
 
-This guide documents the GPU-accelerated Docker build for Stockula, including configuration, best practices, and troubleshooting.
+This guide documents the GPU-accelerated Docker build for Stockula, including configuration, best practices, and
+troubleshooting.
 
 ## Build Architecture
 
@@ -156,7 +157,7 @@ Multi-stage Dockerfile optimized for GPU builds with:
 
 ### Scripts
 
-- `scripts/verify_docker_build.sh` - Validates Docker configuration
+- `uv run verify-build` - Validates Docker configuration
 - `/usr/local/bin/gpu-check` - Runtime GPU diagnostics (in container)
 
 ## GPU Package Support
@@ -281,7 +282,7 @@ docker run test:gpu python -c "import sys; print(sys.path)"
 Run the included validation script to check configuration:
 
 ```bash
-./scripts/verify_docker_build.sh
+uv run verify-build --gpu
 ```
 
 This verifies:

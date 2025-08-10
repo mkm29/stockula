@@ -1,6 +1,7 @@
 # GPU Support for Stockula
 
-Stockula supports GPU acceleration for enhanced time series forecasting performance using NVIDIA CUDA. This can significantly speed up model training and prediction, especially for neural network-based models in AutoTS.
+Stockula supports GPU acceleration for enhanced time series forecasting performance using NVIDIA CUDA. This can
+significantly speed up model training and prediction, especially for neural network-based models in AutoTS.
 
 ## Prerequisites
 
@@ -14,24 +15,54 @@ Stockula supports GPU acceleration for enhanced time series forecasting performa
 
 - NVIDIA drivers >= 450.80.02
 - CUDA Toolkit 11.8 or 12.x
-- cuDNN 8.x
-- Python 3.12 (recommended) or 3.13 (limited GPU package support)
+- cuDNN 8.x or 9.x
+- Python 3.11+ (3.11 used in Docker images)
 
-## Python Version Compatibility
+## Docker Architecture
 
-⚠️ **Important**: Not all GPU packages support Python 3.13 yet:
+Our GPU-enabled Docker images are based on official PyTorch images for optimal compatibility:
 
-| Package                | Python 3.12     | Python 3.13      |
-| ---------------------- | --------------- | ---------------- |
-| PyTorch                | ✅ Full support | ✅ Full support  |
-| XGBoost                | ✅ Full support | ✅ Full support  |
-| LightGBM               | ✅ Full support | ✅ Full support  |
-| TensorFlow             | ✅ Full support | ❌ Not available |
-| TensorFlow Probability | ✅ Full support | ❌ Not available |
-| MXNet                  | ✅ Full support | ❌ Not available |
-| GluonTS                | ✅ Full support | ❌ Not available |
+- **Base Image**: `pytorch/pytorch:2.8.0-cuda12.6-cudnn9-devel` (builder)
+- **Runtime Image**: `pytorch/pytorch:2.8.0-cuda12.9-cudnn9-runtime`
+- **Python Version**: 3.11 (pre-installed in PyTorch images)
+- **Platform**: linux/amd64 only (PyTorch images are not available for ARM)
+- **User**: `stockula` (UID 1000) with home directory `/home/stockula`
 
-For the best GPU experience with all available models, we recommend using Python 3.12 (which is what our Docker images use).
+## Time Series Forecasting Models
+
+Stockula includes state-of-the-art GPU-accelerated time series forecasting:
+
+| Package              | Description                        | GPU Support |
+| -------------------- | ---------------------------------- | ----------- |
+| PyTorch              | Pre-installed in base image        | ✅ Native   |
+| AutoGluon TimeSeries | AutoML for time series             | ✅ Full     |
+| GluonTS              | Probabilistic time series modeling | ✅ Full     |
+| Chronos              | Zero-shot time series forecasting  | ✅ Full     |
+| XGBoost              | Gradient boosting                  | ✅ Full     |
+| LightGBM             | Gradient boosting                  | ✅ Full     |
+
+### Note: AutoGluon and Python 3.13+
+
+AutoGluon 1.4 depends on Ray (< 2.45), and as of now Ray does not publish wheels for CPython 3.13. To keep GPU
+installations reliable on Python 3.13, our GPU requirements file conditionally installs AutoGluon only on Python < 3.13:
+
+```
+autogluon-timeseries==1.4.0; python_version < "3.13"
+```
+
+Recommendations:
+
+- Use Python 3.11 (recommended) or 3.12 when you need AutoGluon.
+
+- On Python 3.13, use the Chronos and GluonTS backends (both GPU-friendly) — these are installed by default.
+
+- If you must try AutoGluon on 3.13, allow pre-releases when installing (not recommended for production):
+
+  ```bash
+  uv pip install --prerelease=allow autogluon-timeseries
+  ```
+
+Our Docker GPU images are based on PyTorch 2.8 and Python 3.11, so AutoGluon works out-of-the-box there.
 
 ## Installation Methods
 
@@ -129,11 +160,13 @@ AutoTS and other ML libraries can be memory-intensive. To optimize GPU memory us
 
 ### Model Selection for GPU
 
-Not all AutoTS models benefit equally from GPU acceleration. Best GPU-accelerated models:
+Best GPU-accelerated models in Stockula:
 
-- **Neural Networks**: LSTM, GRU, Transformer models (via PyTorch/TensorFlow)
-- **Gradient Boosting**: XGBoost, LightGBM with GPU support
-- **Deep Learning**: GluonTS models with MXNet
+- **Chronos**: Zero-shot time series forecasting with pretrained transformer models
+- **GluonTS**: Advanced probabilistic models (DeepAR, SimpleFeedForward, Transformer)
+- **AutoGluon**: AutoML with neural networks and gradient boosting
+- **XGBoost/LightGBM**: GPU-accelerated gradient boosting
+- **Neural Networks**: LSTM, GRU, Transformer models via PyTorch
 
 Models that don't benefit from GPU:
 

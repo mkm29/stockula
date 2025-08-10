@@ -2,7 +2,8 @@
 
 ## Commit Message Format
 
-This project uses [Conventional Commits](https://www.conventionalcommits.org/) for automated releases with Release Please.
+This project uses [Conventional Commits](https://www.conventionalcommits.org/) for automated releases with Release
+Please.
 
 ### Commit Message Structure
 

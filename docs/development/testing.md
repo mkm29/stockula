@@ -1,6 +1,7 @@
 # Testing Guide for Stockula
 
-This document provides comprehensive guidance for testing the Stockula project, including testing strategy, best practices, and recent improvements.
+This document provides comprehensive guidance for testing the Stockula project, including testing strategy, best
+practices, and recent improvements.
 
 ## Quick Start
 

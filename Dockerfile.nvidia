@@ -1,14 +1,11 @@
 # syntax=docker/dockerfile:1
 # GPU-enabled Dockerfile for Stockula trading platform
-
-ARG PYTHON_VERSION=3.12
-ARG CUDA_VERSION=13.0.0
-ARG UBUNTU_VERSION=24.04
+# Platform: linux/amd64 only (PyTorch images are not available for ARM)
 
 # ============================================
 # Stage 1: Builder
 # ============================================
-FROM nvidia/cuda:${CUDA_VERSION}-runtime-ubuntu${UBUNTU_VERSION} AS builder
+FROM --platform=linux/amd64 pytorch/pytorch:2.8.0-cuda12.9-cudnn9-devel@sha256:cf5aa3f7045a68c10d80f546746591c5ccae6a33729e5e32625ff76bd2c036fe AS builder
 
 # Set environment for non-interactive installation
 ENV DEBIAN_FRONTEND=noninteractive \
@@ -17,56 +14,36 @@ ENV DEBIAN_FRONTEND=noninteractive \
     PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1
 
-# Install Python and essential build dependencies
-# hadolint ignore=DL3008
-RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
-    --mount=type=cache,target=/var/lib/apt,sharing=locked \
-    apt-get update && \
-    apt-get install -y --no-install-recommends \
-        python3 \
-        python3-pip \
-        python3-venv \
-        curl && \
-    apt-get clean && \
-    rm -rf /var/lib/apt/lists/*
+# Create stockula user with uid 1000 and home directory
+RUN useradd -m -u 1000 -s /bin/bash stockula
 
-WORKDIR /build
+# Switch to stockula user
+USER stockula
+WORKDIR /home/stockula
 
-# Copy requirements first for better caching
-COPY requirements-gpu.txt ./
+# Copy requirements as stockula user
+COPY --chown=stockula:stockula requirements-gpu.txt /home/stockula/requirements-gpu.txt
 
-# Create virtual environment and install core dependencies
-# Skip heavy GPU packages during build for faster iteration
-# hadolint ignore=DL3013,SC1091
-RUN python3 -m venv /opt/venv && \
-    . /opt/venv/bin/activate && \
+# Create virtual environment and install dependencies
+# PyTorch is already installed in the base image, but we'll use a venv for isolation
+RUN python -m venv /home/stockula/.venv && \
+    . /home/stockula/.venv/bin/activate && \
     pip install --upgrade pip setuptools wheel && \
-    pip install --no-cache-dir \
-        numpy==2.3.2 \
-        pandas==2.3.1 \
-        scikit-learn==1.7.1 \
-        yfinance==0.2.65 \
-        sqlalchemy==2.0.42 \
-        sqlmodel==0.0.24 \
-        pydantic==2.11.7 \
-        pydantic-settings==2.10.1 \
-        rich==14.1.0 \
-        typer==0.16.0 \
-        autogluon-timeseries==1.2.0 \
-        backtesting==0.6.5 \
-        finta==1.3
+    pip install --no-cache-dir -r requirements-gpu.txt
 
-# Copy source code (changes more frequently than requirements)
-COPY src/stockula /build/stockula
-COPY scripts/ /build/scripts/
+# Copy source code
+COPY --chown=stockula:stockula src/stockula ./stockula
+COPY --chown=stockula:stockula scripts/ ./scripts/
 
-# Make stockula importable
-RUN echo "/build" > /opt/venv/lib/python3.12/site-packages/stockula.pth
+# Set environment for venv
+ENV PATH="/home/stockula/.venv/bin:$PATH" \
+    VIRTUAL_ENV="/home/stockula/.venv" \
+    PYTHONPATH="/home/stockula"
 
 # ============================================
 # Stage 2: Runtime
 # ============================================
-FROM nvidia/cuda:${CUDA_VERSION}-runtime-ubuntu${UBUNTU_VERSION} AS runtime
+FROM --platform=linux/amd64 pytorch/pytorch:2.8.0-cuda12.9-cudnn9-runtime@sha256:e05438443ae3c407e8d04447091a959dbb6757b6290b128770c3c787d4bd442b AS runtime
 
 # Labels for image metadata
 LABEL org.opencontainers.image.title="Stockula GPU" \
@@ -78,43 +55,32 @@ LABEL org.opencontainers.image.title="Stockula GPU" \
 ENV DEBIAN_FRONTEND=noninteractive \
     PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
-    PATH="/opt/venv/bin:$PATH" \
-    VIRTUAL_ENV="/opt/venv" \
     NVIDIA_VISIBLE_DEVICES=all \
     NVIDIA_DRIVER_CAPABILITIES=compute,utility
 
-# Install minimal runtime dependencies
-# hadolint ignore=DL3008
-RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
-    --mount=type=cache,target=/var/lib/apt,sharing=locked \
-    apt-get update && \
-    apt-get install -y --no-install-recommends \
-        python3 \
-        ca-certificates && \
-    apt-get clean && \
-    rm -rf /var/lib/apt/lists/*
-
-WORKDIR /app
+# Create stockula user with uid 1000
+RUN useradd -m -u 1000 -s /bin/bash stockula
 
 # Copy virtual environment and application from builder
-COPY --from=builder --chown=ubuntu:ubuntu /opt/venv /opt/venv
-COPY --from=builder --chown=ubuntu:ubuntu /build/stockula /app/stockula
-COPY --from=builder --chown=ubuntu:ubuntu /build/scripts /app/scripts
+COPY --from=builder --chown=stockula:stockula /home/stockula/.venv /home/stockula/.venv
+COPY --from=builder --chown=stockula:stockula /home/stockula/stockula /home/stockula/stockula
+COPY --from=builder --chown=stockula:stockula /home/stockula/scripts /home/stockula/scripts
 
-# Update Python path
-RUN rm -f /opt/venv/lib/python3.12/site-packages/stockula.pth && \
-    echo "/app" > /opt/venv/lib/python3.12/site-packages/stockula.pth
+# Switch to stockula user
+USER stockula
+WORKDIR /home/stockula
+
+# Set environment for venv
+ENV PATH="/home/stockula/.venv/bin:$PATH" \
+    VIRTUAL_ENV="/home/stockula/.venv" \
+    PYTHONPATH="/home/stockula"
 
 # Create directories with proper permissions
-RUN mkdir -p /app/data /app/results /app/logs && \
-    chown -R ubuntu:ubuntu /app
+RUN mkdir -p /home/stockula/data /home/stockula/results /home/stockula/logs
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD python3 -c "import stockula; print('Stockula is healthy')" || exit 1
-
-# Switch to non-root user
-USER ubuntu
+    CMD python -c "import stockula; print('Stockula is healthy')" || exit 1
 
 # Default command
 ENTRYPOINT ["python", "-m"]
@@ -127,15 +93,19 @@ FROM runtime AS gpu-cli
 
 USER root
 
-# Install additional tools for development
-# hadolint ignore=DL3008
-RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
-    --mount=type=cache,target=/var/lib/apt,sharing=locked \
-    apt-get update && \
+# Package versions (captured on 2025-08-10)
+ARG LESS_VERSION=590-1ubuntu0.22.04.3
+ARG VIM_VERSION=2:8.2.3995-1ubuntu2.24
+ARG CURL_VERSION=7.81.0-1ubuntu1.20
+ARG GIT_VERSION=1:2.34.1-1ubuntu1.15
+
+# Then in your RUN command:
+RUN apt-get update && \
     apt-get install -y --no-install-recommends \
-        less \
-        vim-tiny \
-        curl && \
+        less=${LESS_VERSION} \
+        vim-tiny=${VIM_VERSION} \
+        curl=${CURL_VERSION} \
+        git=${GIT_VERSION} && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
@@ -145,13 +115,16 @@ echo "=== GPU Information ==="\n\
 nvidia-smi 2>/dev/null || echo "nvidia-smi not available"\n\
 echo ""\n\
 echo "=== Python GPU Check ==="\n\
-python3 -c "import sys; print(f\"Python: {sys.version}\"); print(\"GPU packages can be installed at runtime\")" 2>/dev/null\n' \
+/home/stockula/.venv/bin/python -c "import sys; print(f\"Python: {sys.version}\"); import torch; print(f\"PyTorch: {torch.__version__}\"); print(f\"CUDA available: {torch.cuda.is_available()}\"); if torch.cuda.is_available(): print(f\"CUDA devices: {torch.cuda.device_count()}\")" 2>/dev/null\n\
+echo ""\n\
+echo "=== Stockula Check ==="\n\
+/home/stockula/.venv/bin/python -c "import stockula; print(\"Stockula module loaded successfully\")" 2>/dev/null || echo "Failed to import stockula"\n' \
     > /usr/local/bin/gpu-check && \
     chmod +x /usr/local/bin/gpu-check
 
-# Switch back to non-root user
-USER ubuntu
-WORKDIR /app
+# Switch back to stockula user
+USER stockula
+WORKDIR /home/stockula
 
 # Interactive shell
 CMD ["/bin/bash"]

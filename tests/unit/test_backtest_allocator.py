@@ -400,3 +400,235 @@ class TestBacktestOptimizedAllocator:
         # Verify we got quantities
         assert len(quantities) == 2
         assert all(qty >= 0 for qty in quantities.values())
+
+    def test_combine_scores(self, allocator):
+        """Test combining historical and forecast scores."""
+        historical_scores = {
+            "AAPL": 10.0,
+            "GOOGL": 8.0,
+            "MSFT": 12.0,
+        }
+
+        forecast_scores = {
+            "AAPL": 15.0,
+            "GOOGL": 5.0,
+            "MSFT": 10.0,
+            "TSLA": 20.0,  # Only in forecast
+        }
+
+        # Test with 30% forecast weight
+        combined = allocator._combine_scores(historical_scores, forecast_scores, 0.3)
+
+        # Verify combined scores
+        assert abs(combined["AAPL"] - (0.7 * 10.0 + 0.3 * 15.0)) < 0.01  # 7 + 4.5 = 11.5
+        assert abs(combined["GOOGL"] - (0.7 * 8.0 + 0.3 * 5.0)) < 0.01  # 5.6 + 1.5 = 7.1
+        assert abs(combined["MSFT"] - (0.7 * 12.0 + 0.3 * 10.0)) < 0.01  # 8.4 + 3.0 = 11.4
+        assert abs(combined["TSLA"] - (0.7 * 0.0 + 0.3 * 20.0)) < 0.01  # 0 + 6.0 = 6.0
+
+    def test_combine_scores_extreme_weights(self, allocator):
+        """Test combining scores with extreme weights."""
+        historical_scores = {"AAPL": 10.0, "GOOGL": 8.0}
+        forecast_scores = {"AAPL": 20.0, "GOOGL": 15.0}
+
+        # Test with 0% forecast weight (only historical)
+        combined = allocator._combine_scores(historical_scores, forecast_scores, 0.0)
+        assert combined["AAPL"] == 10.0
+        assert combined["GOOGL"] == 8.0
+
+        # Test with 100% forecast weight (only forecast)
+        combined = allocator._combine_scores(historical_scores, forecast_scores, 1.0)
+        assert combined["AAPL"] == 20.0
+        assert combined["GOOGL"] == 15.0
+
+    def test_run_forecasts_with_mock_manager(self, allocator):
+        """Test running forecasts with a mock forecast manager."""
+        from stockula.config import BacktestOptimizationConfig
+
+        # Create mock forecast manager
+        mock_forecast_manager = Mock()
+        allocator.forecast_manager = mock_forecast_manager
+
+        # Setup mock return value
+        mock_forecast_manager.run_forecast.return_value = {
+            "current_price": 100.0,
+            "forecast_price": 110.0,
+            "symbol": "AAPL",
+        }
+
+        # Create config
+        config = StockulaConfig(
+            portfolio=PortfolioConfig(initial_capital=100000.0),
+        )
+
+        opt_config = BacktestOptimizationConfig(
+            forecast_length=30,
+            forecast_backend="chronos",
+            use_forecast=True,
+            forecast_weight=0.3,
+        )
+
+        # Run forecasts
+        scores = allocator._run_forecasts(config, ["AAPL", "GOOGL"], opt_config)
+
+        # Verify forecast was called
+        assert mock_forecast_manager.run_forecast.call_count == 2
+
+        # Verify scores
+        assert "AAPL" in scores
+        assert abs(scores["AAPL"] - 10.0) < 0.01  # (110 - 100) / 100 * 100 = 10%
+
+    def test_run_forecasts_no_manager(self, allocator):
+        """Test running forecasts when no forecast manager is available."""
+        from stockula.config import BacktestOptimizationConfig
+
+        # Ensure no forecast manager
+        allocator.forecast_manager = None
+
+        config = StockulaConfig(
+            portfolio=PortfolioConfig(initial_capital=100000.0),
+        )
+
+        opt_config = BacktestOptimizationConfig(
+            forecast_length=30,
+            use_forecast=True,
+            forecast_weight=0.3,
+        )
+
+        # Should return empty scores
+        scores = allocator._run_forecasts(config, ["AAPL", "GOOGL"], opt_config)
+        assert scores == {}
+
+    def test_run_forecasts_error_handling(self, allocator):
+        """Test forecast error handling."""
+        from stockula.config import BacktestOptimizationConfig
+
+        # Create mock forecast manager that fails
+        mock_forecast_manager = Mock()
+        allocator.forecast_manager = mock_forecast_manager
+        mock_forecast_manager.run_forecast.side_effect = Exception("Forecast failed")
+
+        config = StockulaConfig(
+            portfolio=PortfolioConfig(initial_capital=100000.0),
+        )
+
+        opt_config = BacktestOptimizationConfig(
+            forecast_length=30,
+            use_forecast=True,
+        )
+
+        # Should handle errors gracefully
+        scores = allocator._run_forecasts(config, ["AAPL"], opt_config)
+        assert scores["AAPL"] == 0.0
+
+    def test_forecast_aware_allocation_integration(self, allocator, mock_fetcher, mock_backtest_runner):
+        """Test full forecast-aware allocation process."""
+        from stockula.config import BacktestOptimizationConfig
+
+        # Create mock forecast manager
+        mock_forecast_manager = Mock()
+        allocator.forecast_manager = mock_forecast_manager
+
+        # Setup mock forecast results
+        def mock_forecast(symbol, config):
+            prices = {"AAPL": 110.0, "GOOGL": 105.0, "MSFT": 115.0}
+            return {
+                "current_price": 100.0,
+                "forecast_price": prices.get(symbol, 100.0),
+                "symbol": symbol,
+            }
+
+        mock_forecast_manager.run_forecast.side_effect = mock_forecast
+
+        # Setup mock data
+        sample_data = pd.DataFrame({"Close": [100, 101, 102]}, index=pd.date_range("2023-01-01", periods=3))
+        mock_fetcher.get_stock_data.return_value = sample_data
+
+        # Setup mock backtest results
+        def mock_run(data, strategy):
+            # Return different performance for each call
+            returns = [8.0, 10.0, 12.0]
+            call_count = mock_backtest_runner.run.call_count - 1
+            return pd.Series({"Return [%]": returns[call_count % len(returns)], "Sharpe Ratio": 1.0})
+
+        mock_backtest_runner.run.side_effect = mock_run
+
+        # Create config with forecast enabled
+        config = StockulaConfig(
+            portfolio=PortfolioConfig(
+                initial_capital=100000.0,
+                allocation_method="backtest_optimized",
+            ),
+            backtest_optimization=BacktestOptimizationConfig(
+                train_start_date="2023-01-01",
+                train_end_date="2023-06-30",
+                test_start_date="2023-07-01",
+                test_end_date="2023-12-31",
+                ranking_metric="Return [%]",
+                use_forecast=True,
+                forecast_weight=0.3,
+                forecast_length=30,
+                forecast_backend="chronos",
+            ),
+        )
+
+        tickers = [
+            TickerConfig(symbol="AAPL", category="TECH"),
+            TickerConfig(symbol="GOOGL", category="TECH"),
+            TickerConfig(symbol="MSFT", category="TECH"),
+        ]
+
+        # Run the allocation
+        quantities = allocator.calculate_backtest_optimized_quantities(
+            config=config,
+            tickers_to_add=tickers,
+        )
+
+        # Verify forecast manager was called
+        assert mock_forecast_manager.run_forecast.called
+
+        # Verify we got quantities
+        assert len(quantities) == 3
+        assert all(qty >= 0 for qty in quantities.values())
+
+    def test_forecast_aware_disabled(self, allocator, mock_fetcher, mock_backtest_runner):
+        """Test that forecasts are not run when disabled."""
+        from stockula.config import BacktestOptimizationConfig
+
+        # Create mock forecast manager
+        mock_forecast_manager = Mock()
+        allocator.forecast_manager = mock_forecast_manager
+
+        # Setup mock data
+        sample_data = pd.DataFrame({"Close": [100, 101, 102]}, index=pd.date_range("2023-01-01", periods=3))
+        mock_fetcher.get_stock_data.return_value = sample_data
+        mock_backtest_runner.run.return_value = pd.Series({"Return [%]": 10.0, "Sharpe Ratio": 1.0})
+
+        # Create config with forecast disabled
+        config = StockulaConfig(
+            portfolio=PortfolioConfig(
+                initial_capital=100000.0,
+                allocation_method="backtest_optimized",
+            ),
+            backtest_optimization=BacktestOptimizationConfig(
+                train_start_date="2023-01-01",
+                train_end_date="2023-06-30",
+                test_start_date="2023-07-01",
+                test_end_date="2023-12-31",
+                use_forecast=False,  # Disabled
+            ),
+        )
+
+        tickers = [TickerConfig(symbol="AAPL", category="TECH")]
+
+        # Run the allocation
+        quantities = allocator.calculate_backtest_optimized_quantities(
+            config=config,
+            tickers_to_add=tickers,
+        )
+
+        # Verify forecast manager was NOT called
+        mock_forecast_manager.run_forecast.assert_not_called()
+
+        # Verify we still got quantities
+        assert len(quantities) == 1
+        assert quantities["AAPL"] >= 0

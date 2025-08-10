@@ -1,6 +1,7 @@
 # Contributing to Stockula
 
-Thank you for your interest in contributing to Stockula! This document outlines our development workflow and contribution guidelines.
+Thank you for your interest in contributing to Stockula! This document outlines our development workflow and
+contribution guidelines.
 
 ## 🌳 Branching Strategy (Git Flow)
 
@@ -186,7 +187,8 @@ Version bumps are determined by conventional commit messages:
 - **Minor** (`0.12.0` → `0.13.0`): Commits with `feat:` type
 - **Patch** (`0.12.1` → `0.12.2`): Commits with `fix:` type
 
-Other commit types (`chore:`, `docs:`, `style:`, `refactor:`, `test:`) don't trigger version bumps but are included in the changelog.
+Other commit types (`chore:`, `docs:`, `style:`, `refactor:`, `test:`) don't trigger version bumps but are included in
+the changelog.
 
 ## 🏷️ PR Labels
 
@@ -264,15 +266,20 @@ All PRs require review before merging:
 ## 💡 Tips
 
 - Keep PRs focused and reasonable in size
+
 - Update your branch with the latest changes before creating PR:
+
   ```bash
   git checkout develop
   git pull origin develop
   git checkout feature/your-feature
   git rebase develop
   ```
+
 - Use draft PRs for work in progress
+
 - Link related issues in PR description
+
 - Be responsive to review feedback
 
 ## 🐳 Docker Images

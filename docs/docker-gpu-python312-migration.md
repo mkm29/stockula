@@ -2,7 +2,8 @@
 
 ## Summary
 
-Successfully migrated the Docker GPU build from Python 3.13 (which required problematic deadsnakes PPA) to Python 3.12 (which is included in Ubuntu 24.04 by default).
+Successfully migrated the Docker GPU build from Python 3.13 (which required problematic deadsnakes PPA) to Python 3.12
+(which is included in Ubuntu 24.04 by default).
 
 ## Changes Made
 
@@ -88,7 +89,11 @@ docker buildx build \
 Use the test script to verify build stages:
 
 ```bash
-./scripts/test_docker_build.sh
+# Verify build configuration
+uv run verify-build --gpu
+
+# Or test the actual Docker build
+docker buildx build -f Dockerfile.nvidia --target gpu-cli -t stockula:gpu-test .
 ```
 
 ## Files Modified

@@ -1,6 +1,7 @@
 # Rich CLI Features
 
-Stockula uses the Rich library to provide an enhanced command-line experience with beautiful formatting, progress bars, and interactive elements.
+Stockula uses the Rich library to provide an enhanced command-line experience with beautiful formatting, progress bars,
+and interactive elements.
 
 ## Overview
 
@@ -372,4 +373,5 @@ Rich formatting is optimized for performance:
 - **Memory Management**: Large datasets paginated automatically
 - **Terminal Detection**: Skips formatting in non-interactive mode
 
-The Rich CLI integration makes Stockula pleasant to use while maintaining high performance and broad terminal compatibility.
+The Rich CLI integration makes Stockula pleasant to use while maintaining high performance and broad terminal
+compatibility.

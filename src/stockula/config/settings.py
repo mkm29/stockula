@@ -1,7 +1,7 @@
 """Settings management using pydantic-settings."""
 
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import yaml  # type: ignore[import-untyped]
 from pydantic import Field
@@ -39,7 +39,7 @@ def load_yaml_config(config_path: str | Path) -> dict[str, Any]:
         raise FileNotFoundError(f"Configuration file not found: {config_path}")
 
     with open(config_path) as f:
-        return yaml.safe_load(f)
+        return cast(dict[str, Any], yaml.safe_load(f))
 
 
 def parse_strategy_config(strategy_dict: dict[str, Any]) -> StrategyConfig:
@@ -56,7 +56,7 @@ def parse_strategy_config(strategy_dict: dict[str, Any]) -> StrategyConfig:
 
     # Map strategy names to specific config classes
     if strategy_name == "smacross":
-        params_model = SMACrossConfig(**params)
+        params_model: SMACrossConfig | RSIConfig | MACDConfig = SMACrossConfig(**params)
         params = params_model.model_dump()
     elif strategy_name == "rsi":
         params_model = RSIConfig(**params)

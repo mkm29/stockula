@@ -30,7 +30,7 @@ class Container(containers.DeclarativeContainer):
     config = providers.Configuration()
 
     # Config file path
-    config_path = providers.Object(None)
+    config_path: providers.Object[str | None] = providers.Object(None)
 
     # Logger - thread-safe singleton
     logging_manager = providers.ThreadSafeSingleton(LoggingManager, name="stockula")
@@ -82,19 +82,20 @@ class Container(containers.DeclarativeContainer):
         backtest_runner=backtest_runner,
     )
 
-    # Allocator manager - thread-safe singleton
+    # Forecasting manager - thread-safe singleton (defined before allocator_manager)
+    forecasting_manager = providers.ThreadSafeSingleton(
+        ForecastingManager,
+        data_fetcher=data_fetcher,
+        logging_manager=logging_manager,
+    )
+
+    # Allocator manager - thread-safe singleton (now with forecasting_manager)
     allocator_manager = providers.ThreadSafeSingleton(
         AllocatorManager,
         data_fetcher=data_fetcher,
         backtest_runner=backtest_runner,
         logging_manager=logging_manager,
-    )
-
-    # Forecasting manager - thread-safe singleton
-    forecasting_manager = providers.ThreadSafeSingleton(
-        ForecastingManager,
-        data_fetcher=data_fetcher,
-        logging_manager=logging_manager,
+        forecast_manager=forecasting_manager,
     )
 
     # Technical analysis manager - thread-safe singleton

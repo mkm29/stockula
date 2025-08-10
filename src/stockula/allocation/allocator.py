@@ -126,6 +126,8 @@ class Allocator(BaseAllocator):
 
         # First pass: Calculate basic allocations per category
         category_allocations = {}
+        if config.portfolio.category_ratios is None:
+            raise ValueError("Category ratios must be specified for auto-allocation")
         for category, ratio in config.portfolio.category_ratios.items():
             category_upper = category.upper()
             if category_upper not in tickers_by_category:
@@ -151,7 +153,7 @@ class Allocator(BaseAllocator):
             )
 
         # Aggressive allocation algorithm to maximize capital utilization
-        total_allocated = 0
+        total_allocated = 0.0
         category_unused: dict[str, float] = {}
 
         # First pass: Allocate within each category
@@ -362,7 +364,7 @@ class Allocator(BaseAllocator):
 
         for symbol in symbols:
             try:
-                info = self.fetcher.get_stock_info(symbol)
+                info = self.fetcher.get_info(symbol)
                 if info and "marketCap" in info and info["marketCap"]:
                     market_caps[symbol] = info["marketCap"]
                     total_market_cap += info["marketCap"]

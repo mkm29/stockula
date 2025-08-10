@@ -1,25 +1,25 @@
 #!/usr/bin/env python
 """Linting utilities for the project.
 
-This script provides automated linting and formatting using ruff, with the ability
-to automatically apply fixes when issues are found.
+This script provides automated linting and formatting using ruff for Python files
+and markdownlint for Markdown files, with the ability to automatically apply fixes
+when issues are found. It checks the src, tests, and utils directories for code
+quality issues, as well as all Markdown documentation.
 
 Usage:
-    python scripts/lint.py           # Check for issues only (default)
-    python scripts/lint.py --fix     # Check and automatically apply fixes
-    python scripts/lint.py --check-only  # Explicitly check only, no fixes
-
-    # Or using uv:
     uv run lint                      # Check for issues only
     uv run lint --fix                # Check and automatically apply fixes
+    uv run lint --check-only         # Explicitly check only, no fixes
 
 The script runs the same checks as the CI pipeline and provides consistent
 formatting and linting across the codebase.
 """
 
 import argparse
+import shutil
 import subprocess
 import sys
+from pathlib import Path
 
 
 def run_command(cmd: str, check: bool = True) -> subprocess.CompletedProcess:
@@ -36,19 +36,62 @@ def run_command(cmd: str, check: bool = True) -> subprocess.CompletedProcess:
     return result
 
 
+def check_markdown() -> subprocess.CompletedProcess | None:
+    """Check Markdown files with markdownlint if available."""
+    if not shutil.which("markdownlint"):
+        print("⚠️  markdownlint not installed, skipping Markdown checks")
+        print("   To install: npm install -g markdownlint-cli")
+        return None
+
+    print("\n🔍 Checking Markdown files...")
+
+    # Build command with config if available
+    cmd = "markdownlint"
+    config_file = Path(".markdownlint.json")
+    if config_file.exists():
+        cmd += f" --config {config_file}"
+    cmd += " **/*.md"
+
+    return run_command(cmd, check=False)
+
+
+def fix_markdown() -> subprocess.CompletedProcess | None:
+    """Fix Markdown files with markdownlint if available."""
+    if not shutil.which("markdownlint"):
+        return None
+
+    print("Applying Markdown fixes...")
+
+    # Build command with config if available
+    cmd = "markdownlint --fix"
+    config_file = Path(".markdownlint.json")
+    if config_file.exists():
+        cmd += f" --config {config_file}"
+    cmd += " **/*.md"
+
+    return run_command(cmd, check=False)
+
+
 def apply_fixes() -> bool:
     """Apply automatic linting fixes and return True if successful."""
     print("\n🔧 Applying automatic fixes...")
 
     # Apply ruff fixes
     print("Applying ruff check fixes...")
-    fix_result = run_command("uv run ruff check src tests --fix", check=False)
+    fix_result = run_command("uv run ruff check src tests utils --fix", check=False)
 
     # Apply formatting
     print("Applying code formatting...")
-    format_result = run_command("uv run ruff format src tests", check=False)
+    format_result = run_command("uv run ruff format src tests utils", check=False)
 
-    if fix_result.returncode != 0 or format_result.returncode != 0:
+    # Apply Markdown fixes if markdownlint is available
+    md_result = fix_markdown()
+
+    all_successful = fix_result.returncode == 0 and format_result.returncode == 0
+    if md_result is not None:
+        all_successful = all_successful and md_result.returncode == 0
+
+    if not all_successful:
         print("❌ Some fixes could not be applied automatically")
         if fix_result.returncode != 0:
             print("Ruff fix output:", fix_result.stdout)
@@ -58,6 +101,10 @@ def apply_fixes() -> bool:
             print("Format output:", format_result.stdout)
             if format_result.stderr:
                 print("Format errors:", format_result.stderr)
+        if md_result and md_result.returncode != 0:
+            print("Markdown fix output:", md_result.stdout)
+            if md_result.stderr:
+                print("Markdown fix errors:", md_result.stderr)
         return False
 
     print("✅ Automatic fixes applied successfully!")
@@ -80,14 +127,19 @@ def main() -> None:
     print("🔍 Checking code with ruff (consistent with CI)...")
 
     # Run the same commands as CI
-    print("Running: uv run ruff check src tests")
-    check_result = run_command("uv run ruff check src tests", check=False)
+    print("Running: uv run ruff check src tests utils")
+    check_result = run_command("uv run ruff check src tests utils", check=False)
 
-    print("\nRunning: uv run ruff format --check src tests")
-    format_result = run_command("uv run ruff format --check src tests", check=False)
+    print("\nRunning: uv run ruff format --check src tests utils")
+    format_result = run_command("uv run ruff format --check src tests utils", check=False)
+
+    # Check Markdown files
+    md_result = check_markdown()
 
     # Check if there are any issues
     has_issues = check_result.returncode != 0 or format_result.returncode != 0
+    if md_result is not None:
+        has_issues = has_issues or md_result.returncode != 0
 
     if not has_issues:
         print("\n✅ All linting checks passed!")
@@ -108,15 +160,26 @@ def main() -> None:
         if format_result.stderr:
             print(format_result.stderr)
 
+    if md_result is not None and md_result.returncode != 0:
+        print("\n📋 Markdown linting issues:")
+        print(md_result.stdout)
+        if md_result.stderr:
+            print(md_result.stderr)
+
     # Apply fixes if requested
     if should_fix:
         if apply_fixes():
             # Re-run checks to verify fixes worked
             print("\n🔍 Re-checking after applying fixes...")
-            final_check = run_command("uv run ruff check src tests", check=False)
-            final_format = run_command("uv run ruff format --check src tests", check=False)
+            final_check = run_command("uv run ruff check src tests utils", check=False)
+            final_format = run_command("uv run ruff format --check src tests utils", check=False)
+            final_md = check_markdown() if shutil.which("markdownlint") else None
 
-            if final_check.returncode == 0 and final_format.returncode == 0:
+            all_fixed = final_check.returncode == 0 and final_format.returncode == 0
+            if final_md is not None:
+                all_fixed = all_fixed and final_md.returncode == 0
+
+            if all_fixed:
                 print("\n✅ All issues fixed successfully!")
                 return
             else:
@@ -125,16 +188,20 @@ def main() -> None:
                     print("Remaining check issues:", final_check.stdout)
                 if final_format.returncode != 0:
                     print("Remaining format issues:", final_format.stdout)
+                if final_md is not None and final_md.returncode != 0:
+                    print("Remaining Markdown issues:", final_md.stdout)
                 sys.exit(1)
         else:
             sys.exit(1)
     else:
         # Show manual fix commands
         print("\n🔧 To fix these issues, run:")
-        print("  uv run ruff check src tests --fix")
-        print("  uv run ruff format src tests")
+        print("  uv run ruff check src tests utils --fix")
+        print("  uv run ruff format src tests utils")
+        if md_result is not None and md_result.returncode != 0:
+            print("  uv run format-md")
         print("\nOr run this script with --fix to apply fixes automatically:")
-        print("  python scripts/lint.py --fix")
+        print("  uv run lint --fix")
 
         sys.exit(1)
 

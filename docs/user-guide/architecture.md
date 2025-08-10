@@ -1,6 +1,7 @@
 # Architecture Overview
 
-Stockula is built with a modular, domain-driven architecture that separates concerns and provides clean interfaces between components.
+Stockula is built with a modular, domain-driven architecture that separates concerns and provides clean interfaces
+between components.
 
 ## High-Level Architecture
 
@@ -76,7 +77,7 @@ graph TB
     DataMgr --> Fetcher
     DataMgr --> Registry
     Registry --> StrategyRepo
-    
+
     TA --> Fetcher
     BT --> Fetcher
     FC --> Fetcher
@@ -247,7 +248,8 @@ src/stockula/
 - **AllocatorManager**: Coordinates all allocation strategies and provides unified interface
 - **Allocator**: Standard allocator for basic strategies (equal weight, market cap, custom, dynamic, auto)
 - **BacktestOptimizedAllocator**: Advanced allocation using backtest performance data
-- **ForecastingManager**: Coordinates forecasting strategies and provides unified interface for different forecasting models
+- **ForecastingManager**: Coordinates forecasting strategies and provides unified interface for different forecasting
+  models
 
 **Patterns**:
 
@@ -282,7 +284,8 @@ src/stockula/
 
 ### Strategy Registry
 
-The `StrategyRegistry` is a centralized static class that manages all trading strategies, their mappings, parameters, and groups. It provides a single source of truth for strategy-related operations across the entire application.
+The `StrategyRegistry` is a centralized static class that manages all trading strategies, their mappings, parameters,
+and groups. It provides a single source of truth for strategy-related operations across the entire application.
 
 #### Key Features
 
@@ -567,11 +570,11 @@ tests/
 # 1. Create the strategy class
 class MyCustomStrategy(BaseStrategy):
     period = 20  # Required class variable
-    
+
     def init(self):
         # Strategy initialization
         pass
-    
+
     def next(self):
         # Strategy logic
         pass

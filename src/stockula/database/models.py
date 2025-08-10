@@ -7,7 +7,7 @@ SQLAlchemy ORM with Pydantic validation.
 import json
 from datetime import UTC, datetime
 from datetime import date as DateType
-from typing import ClassVar, Optional
+from typing import Any, ClassVar, Optional, cast
 
 from sqlalchemy import DateTime as SQLADateTime
 from sqlalchemy import func
@@ -272,16 +272,16 @@ class StockInfo(SQLModel, table=True):  # type: ignore[call-arg]
     stock: Stock = Relationship(back_populates="stock_info")
 
     @property
-    def info_dict(self) -> dict:
+    def info_dict(self) -> dict[str, Any]:
         """Parse JSON info to dictionary."""
-        return json.loads(self.info_json)
+        return cast(dict[str, Any], json.loads(self.info_json))
 
     def set_info(self, info: dict) -> None:
         """Set info from dictionary."""
         self.info_json = json.dumps(info, default=str)
 
 
-class Strategy(SQLModel, table=True):
+class Strategy(SQLModel, table=True):  # type: ignore[call-arg]
     """Model for trading strategies."""
 
     __tablename__ = "strategies"
@@ -300,7 +300,7 @@ class Strategy(SQLModel, table=True):
     presets: list["StrategyPreset"] = Relationship(back_populates="strategy")
 
 
-class StrategyPreset(SQLModel, table=True):
+class StrategyPreset(SQLModel, table=True):  # type: ignore[call-arg]
     """Model for strategy parameter presets."""
 
     __tablename__ = "strategy_presets"
@@ -321,16 +321,16 @@ class StrategyPreset(SQLModel, table=True):
     __table_args__ = (UniqueConstraint("strategy_id", "name", name="unique_strategy_preset"),)
 
     @property
-    def parameters(self) -> dict:
+    def parameters(self) -> dict[str, Any]:
         """Parse JSON parameters to dictionary."""
-        return json.loads(self.parameters_json)
+        return cast(dict[str, Any], json.loads(self.parameters_json))
 
     def set_parameters(self, params: dict) -> None:
         """Set parameters from dictionary."""
         self.parameters_json = json.dumps(params, default=str)
 
 
-class AutoTSModel(SQLModel, table=True):
+class AutoTSModel(SQLModel, table=True):  # type: ignore[call-arg]
     """AutoTS model definitions and metadata.
 
     This model stores valid AutoTS models and their properties.
@@ -444,7 +444,7 @@ class AutoTSModel(SQLModel, table=True):
         invalid = [m for m in models if not cls.is_valid_model(m)]
         return len(invalid) == 0, invalid
 
-    def validate(self) -> None:
+    def validate_model(self) -> None:
         """Validate the model before saving.
 
         Raises:
@@ -460,14 +460,14 @@ class AutoTSModel(SQLModel, table=True):
     @property
     def category_list(self) -> list[str]:
         """Parse JSON categories to list."""
-        return json.loads(self.categories)
+        return cast(list[str], json.loads(self.categories))
 
     def set_categories(self, categories: list[str]) -> None:
         """Set categories from list."""
         self.categories = json.dumps(categories)
 
 
-class AutoTSPreset(SQLModel, table=True):
+class AutoTSPreset(SQLModel, table=True):  # type: ignore[call-arg]
     """AutoTS model preset configurations.
 
     This model stores preset configurations that group models together.
@@ -539,7 +539,7 @@ class AutoTSPreset(SQLModel, table=True):
         cls.load_valid_presets()
         return name in (cls._valid_presets or set())
 
-    def validate(self) -> None:
+    def validate_model(self) -> None:
         """Validate the preset before saving.
 
         Raises:
@@ -565,7 +565,7 @@ class AutoTSPreset(SQLModel, table=True):
     def model_list(self) -> list[str] | dict[str, float]:
         """Parse JSON models to list or dict."""
         data = json.loads(self.models)
-        return data
+        return cast("list[str] | dict[str, float]", data)
 
     def set_models(self, models: list[str] | dict[str, float]) -> None:
         """Set models from list or dict."""

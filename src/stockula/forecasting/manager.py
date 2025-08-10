@@ -1,6 +1,6 @@
 """Modernized Forecasting Manager that uses the backend abstraction."""
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 import pandas as pd
 from dependency_injector.wiring import Provide, inject
@@ -52,7 +52,7 @@ class ForecastingManager:
         Returns:
             Configured forecasting backend
         """
-        return create_forecast_backend(config)
+        return cast(ForecastBackend, create_forecast_backend(config))
 
     def forecast_symbol(
         self,
@@ -77,7 +77,11 @@ class ForecastingManager:
         start_date = self._date_to_string(config.data.start_date)
         end_date = self._date_to_string(config.data.end_date)
 
-        self.logger.info(f"Forecasting {symbol} using AutoGluon backend...")
+        backend_cls = backend.__class__.__name__.lower()
+        backend_label = (
+            "chronos" if "chronos" in backend_cls else ("autogluon" if "autogluon" in backend_cls else "autogluon")
+        )
+        self.logger.info(f"Forecasting {symbol} using {backend_label} backend...")
 
         # Fetch data
         data = self.data_fetcher.get_stock_data(symbol, start_date, end_date)
@@ -85,11 +89,45 @@ class ForecastingManager:
         if data.empty:
             raise ValueError(f"No data available for symbol {symbol}")
 
-        # Fit and predict
-        result = backend.fit_predict(data, target_column="Close", show_progress=True)
+        # Fit and predict with graceful fallback if the selected backend fails
+        try:
+            result = backend.fit_predict(data, target_column="Close", show_progress=True)
+            model_info = backend.get_model_info()
+        except Exception as e:
+            err_msg = str(e) or e.__class__.__name__
+            self.logger.warning(
+                f"{backend_label.capitalize()} backend failed for {symbol} ({err_msg}). Attempting fallback."
+            )
+            try:
+                # Remove specific model request to allow factory to choose next available backend
+                fallback_cfg = config.forecast.model_copy(update={"models": None})
+                fallback_backend = create_forecast_backend(fallback_cfg)
+                fallback_label = (
+                    "chronos"
+                    if "chronos" in fallback_backend.__class__.__name__.lower()
+                    else ("autogluon" if "autogluon" in fallback_backend.__class__.__name__.lower() else "simple")
+                )
+                # Avoid looping back into the same failing backend
+                if fallback_label == backend_label:
+                    from .backends import SimpleForecastBackend
 
-        # Get model information
-        model_info = backend.get_model_info()
+                    fallback_backend = SimpleForecastBackend(
+                        forecast_length=(
+                            config.forecast.forecast_length if config.forecast.forecast_length is not None else 7
+                        ),
+                        frequency=config.forecast.frequency,
+                        prediction_interval=config.forecast.prediction_interval,
+                        no_negatives=config.forecast.no_negatives,
+                    )
+                    fallback_label = "simple"
+
+                result = fallback_backend.fit_predict(data, target_column="Close", show_progress=True)
+                model_info = fallback_backend.get_model_info()
+                backend_label = fallback_label
+            except Exception as e2:
+                raise RuntimeError(
+                    f"Forecasting and fallback failed for {symbol}: {err_msg} / {e2.__class__.__name__}"
+                ) from e2
 
         self.logger.info(f"Forecast completed for {symbol} using {model_info['model_name']}")
 
@@ -104,7 +142,7 @@ class ForecastingManager:
 
         return {
             "ticker": symbol,
-            "backend": "autogluon",
+            "backend": backend_label,
             "current_price": float(result.forecast["forecast"].iloc[0]),
             "forecast_price": float(result.forecast["forecast"].iloc[-1]),
             "lower_bound": float(result.forecast["lower_bound"].iloc[-1]),
@@ -132,9 +170,16 @@ class ForecastingManager:
             Dictionary mapping symbols to their forecast results
         """
         results = {}
-        backend_name = "autogluon"
-
-        self.logger.info(f"Starting forecast for {len(symbols)} symbols using AutoGluon backend")
+        # Determine actual backend selected by factory
+        selected_backend = self.create_backend(config.forecast)
+        backend_cls = selected_backend.__class__.__name__.lower()
+        backend_name = (
+            "chronos" if "chronos" in backend_cls else ("autogluon" if "autogluon" in backend_cls else "autogluon")
+        )
+        pretty_backend = (
+            "Chronos" if backend_name == "chronos" else ("AutoGluon" if backend_name == "autogluon" else "Simple")
+        )
+        self.logger.info(f"Starting forecast for {len(symbols)} symbols using {pretty_backend} backend")
 
         for idx, symbol in enumerate(symbols, 1):
             try:
@@ -172,8 +217,16 @@ class ForecastingManager:
         if console is None:
             console = cli_manager.get_console()
 
-        backend_name = "autogluon"
-        console.print("\n[bold blue]Starting forecasting with AutoGluon backend...[/bold blue]")
+        # Determine display label from actual backend selected by factory
+        selected_backend = self.create_backend(config.forecast)
+        backend_cls = selected_backend.__class__.__name__.lower()
+        backend_name = (
+            "chronos" if "chronos" in backend_cls else ("autogluon" if "autogluon" in backend_cls else "autogluon")
+        )
+        pretty_backend = (
+            "Chronos" if backend_name == "chronos" else ("AutoGluon" if backend_name == "autogluon" else "Simple")
+        )
+        console.print(f"\n[bold blue]Starting forecasting with {pretty_backend} backend...[/bold blue]")
 
         console.print(
             f"[dim]Configuration: preset={config.forecast.preset}, time_limit={config.forecast.time_limit}s[/dim]"
@@ -191,14 +244,14 @@ class ForecastingManager:
             transient=True,
         ) as forecast_progress:
             forecast_task = forecast_progress.add_task(
-                f"[blue]Forecasting {len(symbols)} tickers with AutoGluon...",
+                f"[blue]Forecasting {len(symbols)} tickers with {pretty_backend}...",
                 total=len(symbols),
             )
 
             for idx, symbol in enumerate(symbols, 1):
                 forecast_progress.update(
                     forecast_task,
-                    description=f"[blue]Forecasting {symbol} ({idx}/{len(symbols)}) with AutoGluon...",
+                    description=f"[blue]Forecasting {symbol} ({idx}/{len(symbols)}) with {pretty_backend}...",
                 )
 
                 try:
@@ -227,7 +280,7 @@ class ForecastingManager:
 
             forecast_progress.update(
                 forecast_task,
-                description="[green]Forecasting complete with AutoGluon!",
+                description=f"[green]Forecasting complete with {pretty_backend}!",
             )
 
         return results
@@ -328,4 +381,6 @@ class ForecastingManager:
             return None
         if isinstance(date_value, str):
             return date_value
-        return date_value.strftime("%Y-%m-%d")
+        from typing import cast
+
+        return cast(str, date_value.strftime("%Y-%m-%d"))

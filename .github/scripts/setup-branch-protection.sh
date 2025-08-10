@@ -25,9 +25,9 @@ set_branch_protection() {
     local BRANCH=$1
     local ALLOW_FORCE_PUSH=$2
     local REQUIRED_CHECKS=$3
-    
+
     echo "Setting protection for branch: $BRANCH"
-    
+
     # Create the branch protection rule
     gh api \
         --method PUT \
