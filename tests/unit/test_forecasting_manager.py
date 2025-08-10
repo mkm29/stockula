@@ -6,7 +6,10 @@ import pandas as pd
 import pytest
 
 from stockula.forecasting.backends import ForecastResult
-from stockula.forecasting.manager import ForecastingManager
+
+# Mock the dependency injection before importing the manager
+with patch("stockula.forecasting.manager.inject", lambda x: x):
+    from stockula.forecasting.manager import ForecastingManager
 
 
 class TestForecastingManager:
@@ -64,7 +67,10 @@ class TestForecastingManager:
     @pytest.fixture
     def forecasting_manager(self, mock_data_fetcher, mock_logging_manager):
         """Create ForecastingManager instance."""
-        return ForecastingManager(data_fetcher=mock_data_fetcher, logging_manager=mock_logging_manager)
+        manager = ForecastingManager(data_fetcher=mock_data_fetcher, logging_manager=mock_logging_manager)
+        # Ensure logger is set properly (in case inject decorator was bypassed)
+        manager.logger = mock_logging_manager
+        return manager
 
     def test_init(self, forecasting_manager, mock_data_fetcher, mock_logging_manager):
         """Test ForecastingManager initialization."""

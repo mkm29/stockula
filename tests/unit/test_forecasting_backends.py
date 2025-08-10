@@ -688,6 +688,16 @@ class TestForecastBackendEvaluateMethod:
             assert not np.isnan(metrics["mase"])
 
 
+# Check if chronos is available
+try:
+    import chronos  # noqa: F401
+
+    CHRONOS_AVAILABLE = True
+except ImportError:
+    CHRONOS_AVAILABLE = False
+
+
+@pytest.mark.skipif(not CHRONOS_AVAILABLE, reason="chronos not installed")
 class TestChronosBackend:
     """Test the ChronosBackend implementation."""
 
