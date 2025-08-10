@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.15.1](https://github.com/mkm29/stockula/compare/v0.15.0...v0.15.1) (2025-08-10)
+
+
+### Bug Fixes
+
+* update Dockerfile to use runtime image for reduced size and inst… ([9418932](https://github.com/mkm29/stockula/commit/9418932510b6b8713a9202d5bd9ca96bc236cc82))
+* update Dockerfile to use runtime image for reduced size and install necessary build dependencies ([eac93cf](https://github.com/mkm29/stockula/commit/eac93cf8b62eab5e636eaa6cb1ea4f02edc0c57b))
+
 ## [0.15.0](https://github.com/mkm29/stockula/compare/v0.14.0...v0.15.0) (2025-08-10)
 
 
