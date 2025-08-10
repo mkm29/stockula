@@ -34,7 +34,6 @@ jobs:
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
           target-branch: develop
-          prerelease: true
       # The logic below handles the PyPI publication (only for main branch releases):
       - name: Checkout Repository
         if: ${{ steps.release.outputs.release_created && github.ref == 'refs/heads/main' }}
@@ -43,7 +42,7 @@ jobs:
         if: ${{ steps.release.outputs.release_created && github.ref == 'refs/heads/main' }}
         uses: actions/setup-python@v5
         with:
-          python-version: '3.13'
+          python-version: '3.11'
       - name: Install uv
         if: ${{ steps.release.outputs.release_created && github.ref == 'refs/heads/main' }}
         uses: astral-sh/setup-uv@v5
