@@ -269,10 +269,9 @@ class TestForecastConfig:
     def test_forecast_config_defaults(self):
         """Test default forecast configuration."""
         config = ForecastConfig()
-        assert config.forecast_length is None  # Changed to None for mutual exclusivity
+        assert config.forecast_length == 7  # Default forecast length
         assert config.frequency == "infer"
         assert config.prediction_interval == 0.9
-        assert config.model_list == "clean"
 
     def test_forecast_config_custom(self):
         """Test custom forecast configuration."""
@@ -280,28 +279,28 @@ class TestForecastConfig:
             forecast_length=30,
             frequency="D",
             prediction_interval=0.95,
-            model_list="default",
-            ensemble="simple",
-            max_generations=10,
+            preset="high_quality",
+            time_limit=300,
         )
         assert config.forecast_length == 30
         assert config.frequency == "D"
         assert config.prediction_interval == 0.95
-        assert config.model_list == "default"
-        assert config.ensemble == "simple"
-        assert config.max_generations == 10
+        assert config.preset == "high_quality"
+        assert config.time_limit == 300
 
     def test_forecast_length_and_test_dates_mutual_exclusivity(self):
-        """Test that forecast_length and test dates are mutually exclusive."""
-        # Should raise error when both forecast_length and test dates are provided
-        with pytest.raises(ValueError, match="Cannot specify both forecast_length and test dates"):
-            ForecastConfig(
-                forecast_length=14,
-                train_start_date="2025-01-01",
-                train_end_date="2025-03-31",
-                test_start_date="2025-04-01",
-                test_end_date="2025-04-30",
-            )
+        """Test that forecast_length and test dates are handled properly."""
+        # When both forecast_length and test dates are provided, test dates take precedence
+        config = ForecastConfig(
+            forecast_length=14,
+            train_start_date="2025-01-01",
+            train_end_date="2025-03-31",
+            test_start_date="2025-04-01",
+            test_end_date="2025-04-30",
+        )
+        # forecast_length should be cleared when test dates are provided
+        assert config.forecast_length is None
+        assert config.test_start_date is not None
 
     def test_forecast_with_test_dates_requires_train_dates(self):
         """Test that test dates require train dates."""
@@ -556,9 +555,9 @@ class TestSettingsModule:
         # Change to temp directory
         monkeypatch.chdir(tmp_path)
 
-        # Create a .config.yaml file
+        # Create a .stockula.yaml file
         config_data = {"portfolio": {"name": "Default Config Portfolio"}}
-        config_file = tmp_path / ".config.yaml"
+        config_file = tmp_path / ".stockula.yaml"
         with open(config_file, "w") as f:
             yaml.dump(config_data, f)
 

@@ -1,0 +1,144 @@
+---
+name: Branch Protection
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+jobs:
+  validate-branch-flow:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Validate Git Flow conventions
+        id: validate
+        run: |
+          SOURCE_BRANCH="${{ github.head_ref }}"
+          TARGET_BRANCH="${{ github.base_ref }}"
+
+          echo "🔍 Validating Git Flow..."
+          echo "Source branch: $SOURCE_BRANCH"
+          echo "Target branch: $TARGET_BRANCH"
+
+          # Define valid branch patterns
+          VALID=true
+          MESSAGE=""
+
+          case "$TARGET_BRANCH" in
+            main)
+              # Only develop, hotfix/*, fix/*, or release/* branches can merge to main
+              if [[ "$SOURCE_BRANCH" == "develop" ]] || \
+                 [[ "$SOURCE_BRANCH" == hotfix/* ]] || \
+                 [[ "$SOURCE_BRANCH" == fix/* ]] || \
+                 [[ "$SOURCE_BRANCH" == release/* ]]; then
+                MESSAGE="✅ Valid: $SOURCE_BRANCH -> main"
+              else
+                VALID=false
+                MESSAGE="❌ Invalid: Only 'develop', 'hotfix/*', 'fix/*', or 'release/*' branches can merge to main"
+              fi
+              ;;
+
+            develop)
+              # Feature branches, bugfix branches, hotfix backports, and Release Please branches can merge to develop
+              if [[ "$SOURCE_BRANCH" == feature/* ]] || \
+                 [[ "$SOURCE_BRANCH" == bugfix/* ]] || \
+                 [[ "$SOURCE_BRANCH" == fix/* ]] || \
+                 [[ "$SOURCE_BRANCH" == backport/* ]] || \
+                 [[ "$SOURCE_BRANCH" == chore/* ]] || \
+                 [[ "$SOURCE_BRANCH" == docs/* ]] || \
+                 [[ "$SOURCE_BRANCH" == test/* ]] || \
+                 [[ "$SOURCE_BRANCH" == refactor/* ]] || \
+                 [[ "$SOURCE_BRANCH" == release-please--* ]]; then
+                MESSAGE="✅ Valid: $SOURCE_BRANCH -> develop"
+              else
+                VALID=false
+                MESSAGE="❌ Invalid: Feature/bugfix/chore branches should follow naming convention (feature/*, bugfix/*, fix/*, chore/*, docs/*, test/*, refactor/*)"
+              fi
+              ;;
+
+            *)
+              # PRs should only target main or develop
+              VALID=false
+              MESSAGE="❌ Invalid: PRs should target either 'main' or 'develop' branch"
+              ;;
+          esac
+
+          echo "$MESSAGE"
+          echo "valid=$VALID" >> $GITHUB_OUTPUT
+          echo "message=$MESSAGE" >> $GITHUB_OUTPUT
+
+      - name: Comment on PR
+        if: steps.validate.outputs.valid == 'false'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const message = `## ⚠️ Git Flow Validation Failed
+
+            ${{ steps.validate.outputs.message }}
+
+            ### Git Flow Rules:
+            - **Feature branches** (\`feature/*\`) → \`develop\`
+            - **Bugfix branches** (\`bugfix/*\`) → \`develop\`
+            - **Fix branches** (\`fix/*\`) → \`main\` or \`develop\`
+            - **Hotfix branches** (\`hotfix/*\`) → \`main\` (then backported to \`develop\`)
+            - **Release branches** (\`release/*\`) → \`main\` and \`develop\`
+            - **Develop branch** → \`main\` (for releases)
+
+            Please rename your branch or change the target branch to comply with Git Flow.`;
+
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: message
+            });
+
+      - name: Fail if invalid
+        if: steps.validate.outputs.valid == 'false'
+        run: exit 1
+
+  add-labels:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Add branch type labels
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const branch = '${{ github.head_ref }}';
+            const labels = [];
+
+            if (branch.startsWith('feature/')) {
+              labels.push('feature');
+            } else if (branch.startsWith('bugfix/') || branch.startsWith('fix/')) {
+              labels.push('bugfix');
+            } else if (branch.startsWith('hotfix/')) {
+              labels.push('hotfix', 'urgent');
+            } else if (branch.startsWith('release/')) {
+              labels.push('release');
+            } else if (branch.startsWith('release-please--')) {
+              labels.push('release', 'automated');
+            } else if (branch.startsWith('chore/')) {
+              labels.push('chore');
+            } else if (branch.startsWith('docs/')) {
+              labels.push('documentation');
+            } else if (branch.startsWith('test/')) {
+              labels.push('test');
+            } else if (branch.startsWith('refactor/')) {
+              labels.push('refactor');
+            }
+
+            if (labels.length > 0) {
+              await github.rest.issues.addLabels({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                labels: labels
+              });
+            }

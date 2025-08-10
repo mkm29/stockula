@@ -1,0 +1,29 @@
+---
+data:
+  # Optional: set a historical range for fetching data
+  start_date: "2023-01-01"
+  end_date: null
+
+portfolio:
+  name: "Chronos Forecast Example"
+  initial_capital: 10000
+  allocation_method: "equal_weight"
+  tickers:
+    - symbol: "AAPL"
+      quantity: 1
+
+forecast:
+  # Forecast 7 future periods (inferred as daily)
+  forecast_length: 14
+  frequency: "infer"
+  prediction_interval: 0.88
+  # Enable zero-shot Chronos via model selection (defaults to amazon/chronos-bolt-small)
+  models: "zero_shot"  # equivalent to ["Chronos"]
+  # Override covariates (optional)
+  # use_calendar_covariates: true  # Generate calendar known covariates
+  # past_covariate_columns: ["Open", "High", "Low", "Volume"]  # Use specific observed columns as past covariates
+  eval_metric: "MASE"
+  no_negatives: true
+
+output:
+  format: "console"

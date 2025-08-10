@@ -1,0 +1,37 @@
+---
+# yamlfmt configuration file
+# yaml-language-server: $schema=https://raw.githubusercontent.com/google/yamlfmt/main/schema.json
+
+# Formatter settings
+formatter:
+  type: basic
+
+  # Document start marker - ensure all documents start with ---
+  include_document_start: true
+
+  # Indentation
+  indent: 2
+
+  # Comments - ensure proper spacing (yamllint expects at least 2 spaces)
+  pad_line_comments: 2
+
+  # Line settings
+  line_ending: lf
+  retain_line_breaks_single: true
+
+  # Preserve meaningful formatting
+  drop_merge_tag: false
+
+# Include/exclude patterns
+include:
+  - "*.yml"
+  - "*.yaml"
+  - ".github/workflows/*.yml"
+  - "examples/*.yaml"
+  - "config/**/*.yaml"
+
+exclude:
+  - ".venv/**"
+  - "node_modules/**"
+  - "**/.git/**"
+  - ".pytest_cache/**"

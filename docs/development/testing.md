@@ -1,6 +1,7 @@
 # Testing Guide for Stockula
 
-This document provides comprehensive guidance for testing the Stockula project, including testing strategy, best practices, and recent improvements.
+This document provides comprehensive guidance for testing the Stockula project, including testing strategy, best
+practices, and recent improvements.
 
 ## Quick Start
 
@@ -23,15 +24,18 @@ open htmlcov/index.html
 
 ### Coverage Status
 
-| Module          | Coverage | Notes                     |
-| --------------- | -------- | ------------------------- |
-| Overall Project | 83%      | Excluding strategies.py   |
-| main.py         | 83%      | Refactored to entry point |
-| forecaster.py   | 83%      | +33% improvement          |
-| factory.py      | 88%      | +9% improvement           |
-| runner.py       | 89%      | +19% improvement          |
-| indicators.py   | 98%      | Comprehensive coverage    |
-| strategies.py   | Excluded | Framework constraints     |
+| Module                    | Coverage | Notes                                     |
+| ------------------------- | -------- | ----------------------------------------- |
+| Overall Project           | 86%      | Significant improvement from 21%          |
+| main.py                   | 92%      | Refactored to entry point                 |
+| forecaster.py             | 81%      | Database-driven model validation          |
+| factory.py                | 99%      | Near complete coverage                    |
+| runner.py                 | 90%      | +19% improvement                          |
+| indicators.py             | 98%      | Comprehensive coverage                    |
+| exceptions.py             | 100%     | Complete coverage (improved from 29%)     |
+| registry.py (backtesting) | 100%     | Complete coverage (improved from 0%)      |
+| autots_repository.py      | 95%      | New repository pattern (improved from 0%) |
+| strategies.py             | Excluded | Framework constraints                     |
 
 ## Testing Strategy
 

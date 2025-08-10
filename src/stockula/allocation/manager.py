@@ -1,6 +1,6 @@
 """Allocator Manager - Manages and coordinates different allocation strategies."""
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from dependency_injector.wiring import Provide, inject
 
@@ -29,6 +29,7 @@ class AllocatorManager:
         data_fetcher: "DataFetcher" = Provide["data_fetcher"],
         backtest_runner: "BacktestRunner" = Provide["backtest_runner"],
         logging_manager: ILoggingManager = Provide["logging_manager"],
+        forecast_manager=None,  # Optional ForecastingManager
     ):
         """Initialize the allocator manager.
 
@@ -36,10 +37,12 @@ class AllocatorManager:
             data_fetcher: Data fetcher for price lookups
             backtest_runner: Backtest runner for optimization
             logging_manager: Logging manager for structured logging
+            forecast_manager: Optional ForecastingManager for forecast-aware allocation
         """
         self.data_fetcher = data_fetcher
         self.backtest_runner = backtest_runner
         self.logger = logging_manager
+        self.forecast_manager = forecast_manager
 
         # Initialize allocators
         self.standard_allocator = Allocator(
@@ -51,6 +54,7 @@ class AllocatorManager:
             fetcher=data_fetcher,
             logging_manager=logging_manager,
             backtest_runner=backtest_runner,
+            forecast_manager=forecast_manager,
         )
 
         # Map allocation methods to allocators
@@ -78,7 +82,7 @@ class AllocatorManager:
         allocator = self.allocator_map.get(allocation_method)
         if allocator is None:
             raise ValueError(f"Unknown allocation method: {allocation_method}")
-        return allocator
+        return allocator  # type: ignore[no-any-return]
 
     def calculate_quantities(
         self,
@@ -119,7 +123,7 @@ class AllocatorManager:
         Returns:
             Dictionary mapping ticker symbols to calculated quantities
         """
-        return self.standard_allocator.calculate_equal_weight_quantities(config, tickers)
+        return cast(dict[str, float], self.standard_allocator.calculate_equal_weight_quantities(config, tickers))
 
     def calculate_market_cap_quantities(
         self,
@@ -135,7 +139,7 @@ class AllocatorManager:
         Returns:
             Dictionary mapping ticker symbols to calculated quantities
         """
-        return self.standard_allocator.calculate_market_cap_quantities(config, tickers)
+        return cast(dict[str, float], self.standard_allocator.calculate_market_cap_quantities(config, tickers))
 
     def calculate_dynamic_quantities(
         self,
@@ -151,7 +155,7 @@ class AllocatorManager:
         Returns:
             Dictionary mapping ticker symbols to calculated quantities
         """
-        return self.standard_allocator.calculate_dynamic_quantities(config, tickers)
+        return cast(dict[str, float], self.standard_allocator.calculate_dynamic_quantities(config, tickers))
 
     def calculate_auto_allocation_quantities(
         self,
@@ -167,7 +171,7 @@ class AllocatorManager:
         Returns:
             Dictionary mapping ticker symbols to calculated quantities
         """
-        return self.standard_allocator.calculate_auto_allocation_quantities(config, tickers)
+        return cast(dict[str, float], self.standard_allocator.calculate_auto_allocation_quantities(config, tickers))
 
     def calculate_backtest_optimized_quantities(
         self,
@@ -205,7 +209,10 @@ class AllocatorManager:
             Dictionary mapping symbols to prices
         """
         # Use any allocator to get prices (they all have the same logic)
-        return self.standard_allocator._get_calculation_prices(config, symbols, use_start_date)
+        return cast(
+            dict[str, float],
+            self.standard_allocator._get_calculation_prices(config, symbols, use_start_date),
+        )
 
     def validate_allocation_config(self, config: StockulaConfig) -> None:
         """Validate allocation configuration.

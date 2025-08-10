@@ -1,5 +1,8 @@
 """Backtest-optimized asset allocation strategy."""
 
+from datetime import date
+from typing import Any, cast
+
 import pandas as pd
 
 from ..backtesting.runner import BacktestRunner
@@ -17,7 +20,7 @@ from ..backtesting.strategies import (
     VAMAStrategy,
     VIDYAStrategy,
 )
-from ..config import StockulaConfig, TickerConfig
+from ..config import BacktestOptimizationConfig, StockulaConfig, TickerConfig
 from ..data.fetcher import DataFetcher
 from ..interfaces import ILoggingManager
 from .base_allocator import BaseAllocator
@@ -60,6 +63,7 @@ class BacktestOptimizedAllocator(BaseAllocator):
         fetcher: DataFetcher,
         logging_manager: ILoggingManager,
         backtest_runner: BacktestRunner | None = None,
+        forecast_manager=None,  # Optional ForecastingManager for forecast integration
     ):
         """Initialize allocator with data fetcher, logging manager, and backtest runner.
 
@@ -67,11 +71,14 @@ class BacktestOptimizedAllocator(BaseAllocator):
             fetcher: Data fetcher instance for price lookups
             logging_manager: Logging manager
             backtest_runner: Optional backtest runner (will create if not provided)
+            forecast_manager: Optional ForecastingManager for forecast-aware allocation
         """
         super().__init__(fetcher, logging_manager)
-        self.backtest_runner = backtest_runner or BacktestRunner(data_fetcher=fetcher)
+        self.backtest_runner = backtest_runner or BacktestRunner(data_fetcher=cast(Any, fetcher))
+        self.forecast_manager = forecast_manager
         self._strategy_cache: dict[str, type[BaseStrategy]] = {}
         self._performance_cache: dict[str, float] = {}
+        self._forecast_cache: dict[str, float] = {}
 
     def calculate_backtest_optimized_quantities(
         self,
@@ -104,16 +111,32 @@ class BacktestOptimizedAllocator(BaseAllocator):
         if opt_config:
             # Use config values if not overridden by parameters
             train_start = train_start_date or (
-                opt_config.train_start_date.strftime("%Y-%m-%d") if opt_config.train_start_date else None
+                opt_config.train_start_date.strftime("%Y-%m-%d")
+                if isinstance(opt_config.train_start_date, date)
+                else str(opt_config.train_start_date)
+                if opt_config.train_start_date
+                else None
             )
             train_end = train_end_date or (
-                opt_config.train_end_date.strftime("%Y-%m-%d") if opt_config.train_end_date else None
+                opt_config.train_end_date.strftime("%Y-%m-%d")
+                if isinstance(opt_config.train_end_date, date)
+                else str(opt_config.train_end_date)
+                if opt_config.train_end_date
+                else None
             )
             test_start = test_start_date or (
-                opt_config.test_start_date.strftime("%Y-%m-%d") if opt_config.test_start_date else None
+                opt_config.test_start_date.strftime("%Y-%m-%d")
+                if isinstance(opt_config.test_start_date, date)
+                else str(opt_config.test_start_date)
+                if opt_config.test_start_date
+                else None
             )
             test_end = test_end_date or (
-                opt_config.test_end_date.strftime("%Y-%m-%d") if opt_config.test_end_date else None
+                opt_config.test_end_date.strftime("%Y-%m-%d")
+                if isinstance(opt_config.test_end_date, date)
+                else str(opt_config.test_end_date)
+                if opt_config.test_end_date
+                else None
             )
             # Note: initial_allocation_pct is stored in config but not used in current implementation
             # It could be used for setting initial cash per asset in backtesting
@@ -140,22 +163,33 @@ class BacktestOptimizedAllocator(BaseAllocator):
         # Step 1: Find best strategy for each asset using training data
         self.logger.info("Step 1: Finding optimal strategy for each asset on training data...")
         self.logger.info(f"Using ranking metric: {self.ranking_metric}")
-        best_strategies = self._find_best_strategies(symbols, train_start, train_end)
+        best_strategies = self._find_best_strategies(
+            symbols, str(train_start) if train_start else "", str(train_end) if train_end else ""
+        )  # type: ignore[arg-type]
 
         # Step 2: Run backtests on test data with best strategies
         self.logger.info("Step 2: Evaluating performance on test data with optimal strategies...")
-        test_performances = self._evaluate_test_performance(symbols, best_strategies, test_start, test_end)
+        test_performances = self._evaluate_test_performance(
+            symbols, best_strategies, str(test_start) if test_start else "", str(test_end) if test_end else ""
+        )  # type: ignore[arg-type]
+
+        # Step 2.5 (Optional): Run forecasts if enabled
+        combined_scores = test_performances.copy()
+        if opt_config and opt_config.use_forecast and self.forecast_manager:
+            self.logger.info("Step 2.5: Running forecasts for forward-looking optimization...")
+            forecast_scores = self._run_forecasts(config, symbols, opt_config)
+            combined_scores = self._combine_scores(test_performances, forecast_scores, opt_config.forecast_weight)
 
         # Step 3: Calculate allocations based on performance
-        self.logger.info("Step 3: Calculating allocations based on test performance...")
+        self.logger.info("Step 3: Calculating allocations based on combined performance scores...")
         allocation_percentages = self._calculate_performance_based_allocations(
-            symbols, test_performances, config.portfolio.initial_capital
+            symbols, combined_scores, config.portfolio.initial_capital
         )
 
         # Step 4: Convert allocations to quantities
         self.logger.info("Step 4: Converting allocations to quantities...")
         calculated_quantities = self._convert_allocations_to_quantities(
-            config, symbols, allocation_percentages, test_end_date
+            config, symbols, allocation_percentages, test_end_date or "1900-01-01"
         )
 
         # Log summary
@@ -278,6 +312,101 @@ class BacktestOptimizedAllocator(BaseAllocator):
                 test_performances[symbol] = 0.0
 
         return test_performances
+
+    def _run_forecasts(
+        self, config: StockulaConfig, symbols: list[str], opt_config: BacktestOptimizationConfig
+    ) -> dict[str, float]:
+        """Run forecasts for each symbol and calculate forecast scores.
+
+        Args:
+            config: Stockula configuration
+            symbols: List of ticker symbols
+            opt_config: Backtest optimization configuration
+
+        Returns:
+            Dictionary mapping symbols to forecast scores (predicted returns)
+        """
+        forecast_scores: dict[str, float] = {}
+
+        if not self.forecast_manager:
+            self.logger.warning("Forecast manager not available, skipping forecast integration")
+            return forecast_scores
+
+        # Create forecast config for the forecasting manager
+        from ..config.models import ForecastConfig
+
+        forecast_config = ForecastConfig(
+            forecast_length=opt_config.forecast_length,
+            models=opt_config.forecast_backend,
+            frequency="D",  # Daily frequency
+            prediction_interval=0.9,
+            no_negatives=True,
+        )
+
+        for symbol in symbols:
+            try:
+                # Run forecast for this symbol
+                self.logger.debug(f"Running forecast for {symbol}...")
+                results = self.forecast_manager.run_forecast(symbol=symbol, config=forecast_config)
+
+                # Extract predicted return from forecast results
+                if results and "forecast_price" in results and "current_price" in results:
+                    current_price = results["current_price"]
+                    forecast_price = results["forecast_price"]
+
+                    # Calculate predicted return percentage
+                    if current_price > 0:
+                        predicted_return = ((forecast_price - current_price) / current_price) * 100
+                        forecast_scores[symbol] = predicted_return
+                        self.logger.info(
+                            f"{symbol}: Predicted {opt_config.forecast_length}-day return = {predicted_return:.2f}%"
+                        )
+                    else:
+                        forecast_scores[symbol] = 0.0
+                        self.logger.warning(f"{symbol}: Invalid current price, using 0% forecast return")
+                else:
+                    forecast_scores[symbol] = 0.0
+                    self.logger.warning(f"{symbol}: Forecast failed, using 0% return")
+
+            except Exception as e:
+                self.logger.error(f"Error forecasting {symbol}: {e}")
+                forecast_scores[symbol] = 0.0
+
+        return forecast_scores
+
+    def _combine_scores(
+        self, historical_scores: dict[str, float], forecast_scores: dict[str, float], forecast_weight: float
+    ) -> dict[str, float]:
+        """Combine historical and forecast scores using weighted average.
+
+        Args:
+            historical_scores: Dictionary of historical performance scores
+            forecast_scores: Dictionary of forecast-based scores
+            forecast_weight: Weight for forecast scores (0-1)
+
+        Returns:
+            Dictionary of combined scores
+        """
+        combined_scores = {}
+        historical_weight = 1.0 - forecast_weight
+
+        all_symbols = set(historical_scores.keys()) | set(forecast_scores.keys())
+
+        for symbol in all_symbols:
+            hist_score = historical_scores.get(symbol, 0.0)
+            fore_score = forecast_scores.get(symbol, 0.0)
+
+            # Combine using weighted average
+            combined = (historical_weight * hist_score) + (forecast_weight * fore_score)
+            combined_scores[symbol] = combined
+
+            self.logger.debug(
+                f"{symbol}: Combined score = {combined:.2f} "
+                f"(Historical: {hist_score:.2f} × {historical_weight:.2f} + "
+                f"Forecast: {fore_score:.2f} × {forecast_weight:.2f})"
+            )
+
+        return combined_scores
 
     def _calculate_performance_based_allocations(
         self, symbols: list[str], performances: dict[str, float], total_capital: float

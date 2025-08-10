@@ -1,3 +1,4 @@
+---
 # Hadolint configuration for Dockerfile linting
 # https://github.com/hadolint/hadolint
 # Ignore specific rules
@@ -15,17 +16,10 @@ trustedRegistries:
 # Override severity levels for specific rules
 override:
   error:
-    - DL3001 # Ensure commands are not run with sudo
-    - DL3002 # Ensure user is switched before running commands
+    - DL3001  # Ensure commands are not run with sudo
+    - DL3002  # Ensure user is switched before running commands
   warning:
-    - DL3018 # Pin versions in apk add
-    - DL3019 # Use --no-cache in apk add
+    - DL3018  # Pin versions in apk add
+    - DL3019  # Use --no-cache in apk add
   info:
-    - DL3059 # Ensure consecutive RUN instructions are consolidated
-# Label schema validation
-label-schema:
-  author: info
-  version: info
-  description: info
-  maintainer: warning
-  name: info
+    - DL3059  # Ensure consecutive RUN instructions are consolidated

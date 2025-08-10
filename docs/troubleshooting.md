@@ -86,7 +86,7 @@ python 3.13+ is required
 **Issue**:
 
 ```
-FileNotFoundError: .config.yaml not found
+FileNotFoundError: .stockula.yaml not found
 ```
 
 **Solutions**:
@@ -94,19 +94,19 @@ FileNotFoundError: .config.yaml not found
 1. Create a basic configuration file:
 
    ```bash
-   cp examples/config.simple.yaml .config.yaml
+   cp examples/config.simple.yaml .stockula.yaml
    ```
 
 1. Specify configuration explicitly:
 
    ```bash
-   uv run python -m stockula.main --config examples/config.full.yaml
+   uv run python -m stockula --config examples/config.full.yaml
    ```
 
 1. Use command line mode:
 
    ```bash
-   uv run python -m stockula.main --ticker AAPL
+   uv run python -m stockula --ticker AAPL
    ```
 
 ### Invalid Configuration Format
@@ -411,7 +411,7 @@ ModuleNotFoundError: No module named 'stockula'
 **Solution**: Ensure you're using `uv run` prefix:
 
 ```bash
-uv run python -m stockula.main --ticker AAPL
+uv run python -m stockula --ticker AAPL
 ```
 
 ### "Permission denied"
@@ -492,10 +492,10 @@ Try the provided examples to isolate issues:
 
 ```bash
 # Test with simple configuration
-uv run python -m stockula.main --config examples/config.simple.yaml
+uv run python -m stockula --config examples/config.simple.yaml
 
 # Test single ticker mode
-uv run python -m stockula.main --ticker AAPL --mode ta
+uv run python -m stockula --ticker AAPL --mode ta
 ```
 
 ### Database Diagnostics
@@ -574,19 +574,20 @@ assert stock is not None
 
 ## FAQ
 
-**Q: Why is forecasting so slow?**
-A: Forecasting uses machine learning models that can be computationally intensive. Use the "fast" model list and reduce forecast length for better performance.
+**Q: Why is forecasting so slow?** A: Forecasting uses machine learning models that can be computationally intensive.
+Use the "fast" model list and reduce forecast length for better performance.
 
-**Q: Can I use data from sources other than Yahoo Finance?**
-A: Currently, Stockula uses yfinance as the primary data source. Custom data sources can be implemented by extending the DataFetcher class.
+**Q: Can I use data from sources other than Yahoo Finance?** A: Currently, Stockula uses yfinance as the primary data
+source. Custom data sources can be implemented by extending the DataFetcher class.
 
-**Q: Why do I get different results between runs?**
-A: Some forecasting models include randomness. For reproducible results, set random seeds or use deterministic models only.
+**Q: Why do I get different results between runs?** A: Some forecasting models include randomness. For reproducible
+results, set random seeds or use deterministic models only.
 
-**Q: How much historical data do I need?**
-A: Minimum 100 data points for most analysis. Recommended: 2-3 years for backtesting, 1+ years for forecasting.
+**Q: How much historical data do I need?** A: Minimum 100 data points for most analysis. Recommended: 2-3 years for
+backtesting, 1+ years for forecasting.
 
-**Q: Can I run Stockula on a server without a display?**
-A: Yes, set `NO_COLOR=1` environment variable or use JSON output format for headless operation.
+**Q: Can I run Stockula on a server without a display?** A: Yes, set `NO_COLOR=1` environment variable or use JSON
+output format for headless operation.
 
-For additional help, check the [GitHub Issues](https://github.com/mkm29/stockula/issues) page or create a new issue with your specific problem.
+For additional help, check the [GitHub Issues](https://github.com/mkm29/stockula/issues) page or create a new issue with
+your specific problem.

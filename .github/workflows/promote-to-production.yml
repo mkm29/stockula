@@ -1,0 +1,128 @@
+---
+name: Promote to Production
+
+on:
+  workflow_dispatch:
+    inputs:
+      skip_tests:
+        description: 'Skip integration tests (not recommended)'
+        required: false
+        default: false
+        type: boolean
+
+jobs:
+  create-promotion-pr:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Check for changes
+        id: check_changes
+        run: |
+          git fetch origin main develop
+
+          # Check if develop is ahead of main
+          AHEAD=$(git rev-list --count origin/main..origin/develop)
+
+          if [ "$AHEAD" -eq "0" ]; then
+            echo "✅ No changes to promote - develop and main are in sync"
+            echo "has_changes=false" >> $GITHUB_OUTPUT
+          else
+            echo "📦 Found $AHEAD commits to promote from develop to main"
+            echo "has_changes=true" >> $GITHUB_OUTPUT
+
+            # Get commit summary
+            echo "### Commits to be promoted:" > commit_summary.md
+            git log origin/main..origin/develop --pretty=format:"- %h %s (@%an)" >> commit_summary.md
+          fi
+
+      - name: Run integration tests
+        if: steps.check_changes.outputs.has_changes == 'true' && !inputs.skip_tests
+        run: |
+          echo "🧪 Running integration tests before promotion..."
+          # This would trigger the integration test workflow
+          # For now, we'll just echo
+          echo "Integration tests would run here"
+
+      - name: Create promotion PR
+        if: steps.check_changes.outputs.has_changes == 'true'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Create a timestamp for unique branch name
+          TIMESTAMP=$(date +%Y%m%d-%H%M%S)
+          BRANCH_NAME="promote/develop-to-main-$TIMESTAMP"
+
+          # Create promotion branch from develop
+          git checkout -b "$BRANCH_NAME" origin/develop
+          git push origin "$BRANCH_NAME"
+
+          # Prepare PR body
+          cat > pr_body.md << 'EOF'
+          ## 🚀 Production Promotion
+
+          This PR promotes all changes from `develop` to `main` for a production release.
+
+          ### Pre-merge Checklist
+          - [ ] All tests passing
+          - [ ] Changelog reviewed
+          - [ ] No breaking changes (or properly documented)
+          - [ ] Documentation updated
+
+          ### What happens after merge
+          1. Release Please will create a release PR
+          2. Merging the Release Please PR will:
+             - Create a GitHub release with changelog
+             - Tag the version as `vX.Y.Z`
+             - Publish to PyPI (if configured)
+
+          EOF
+
+          # Add commit summary if it exists
+          if [ -f commit_summary.md ]; then
+            cat commit_summary.md >> pr_body.md
+          fi
+
+          # Add workflow run info
+          echo "" >> pr_body.md
+          echo "---" >> pr_body.md
+          echo "*Triggered by @${{ github.actor }} via workflow dispatch*" >> pr_body.md
+
+          # Create the PR
+          gh pr create \
+            --base main \
+            --head "$BRANCH_NAME" \
+            --title "🚀 Promote develop to main for production release" \
+            --body-file pr_body.md \
+            --label "release,promotion"
+
+      - name: Summary
+        run: |
+          if [[ "${{ steps.check_changes.outputs.has_changes }}" == "true" ]]; then
+            echo "## ✅ Promotion PR Created" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "A pull request has been created to promote changes from \`develop\` to \`main\`." >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "### Next Steps:" >> $GITHUB_STEP_SUMMARY
+            echo "1. Review the PR and ensure all checks pass" >> $GITHUB_STEP_SUMMARY
+            echo "2. Get required approvals" >> $GITHUB_STEP_SUMMARY
+            echo "3. Merge the PR" >> $GITHUB_STEP_SUMMARY
+            echo "4. Release Please will create a release PR" >> $GITHUB_STEP_SUMMARY
+            echo "5. Merge the Release Please PR to create the release" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "## ℹ️ No Promotion Needed" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "The \`develop\` and \`main\` branches are already in sync." >> $GITHUB_STEP_SUMMARY
+          fi

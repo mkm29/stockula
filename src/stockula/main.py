@@ -14,11 +14,10 @@ import os
 
 os.environ["JOBLIB_TEMP_FOLDER"] = "/tmp"
 
-import sys
 
 from dependency_injector.wiring import Provide, inject
 
-from .cli import app, parse_test_args, run_stockula
+from .cli import app
 from .config import StockulaConfig
 from .container import Container
 from .interfaces import ILoggingManager
@@ -39,14 +38,9 @@ def setup_logging(
 
 
 def main():
-    """Legacy entry point for backward compatibility with tests."""
-    # If running from tests, parse sys.argv manually
-    if "pytest" in sys.modules:
-        kwargs = parse_test_args()
-        run_stockula(**kwargs)
-    else:
-        # Otherwise, use Typer CLI
-        app()
+    """Entry point."""
+    # Present Typer CLI
+    app()
 
 
 if __name__ == "__main__":

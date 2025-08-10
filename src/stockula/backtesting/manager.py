@@ -6,7 +6,7 @@ from ..data import strategy_repository as strategy_registry
 from ..interfaces import ILoggingManager
 
 if TYPE_CHECKING:
-    from ..config.models import Config
+    from ..config.models import StockulaConfig
     from ..data.fetcher import DataFetcher
     from .runner import BacktestRunner
 
@@ -25,7 +25,7 @@ class BacktestingManager:
         self.logger = logging_manager
 
         # Initialize BacktestRunner (will be set with proper configuration)
-        self._runner = None
+        self._runner: BacktestRunner | None = None
 
         # Use centralized strategy registry
         self.strategy_registry = strategy_registry
@@ -42,7 +42,7 @@ class BacktestingManager:
         self,
         ticker: str,
         strategy_name: str,
-        config: Optional["Config"] = None,
+        config: Optional["StockulaConfig"] = None,
         strategy_params: dict[str, Any] | None = None,
         start_date: str | None = None,
         end_date: str | None = None,
@@ -95,7 +95,7 @@ class BacktestingManager:
         self,
         ticker: str,
         strategy_group: str = "basic",
-        config: Optional["Config"] = None,
+        config: Optional["StockulaConfig"] = None,
         start_date: str | None = None,
         end_date: str | None = None,
     ) -> dict[str, dict[str, Any]]:
@@ -137,7 +137,7 @@ class BacktestingManager:
         self,
         tickers: list[str],
         strategy_name: str,
-        config: Optional["Config"] = None,
+        config: Optional["StockulaConfig"] = None,
         strategy_params: dict[str, Any] | None = None,
         start_date: str | None = None,
         end_date: str | None = None,
@@ -176,7 +176,7 @@ class BacktestingManager:
         self,
         tickers: list[str],
         strategy_group: str = "comprehensive",
-        config: Optional["Config"] = None,
+        config: Optional["StockulaConfig"] = None,
         start_date: str | None = None,
         end_date: str | None = None,
     ) -> dict[str, dict[str, dict[str, Any]]]:
@@ -213,7 +213,7 @@ class BacktestingManager:
         ticker: str,
         strategy_name: str,
         train_ratio: float = 0.7,
-        config: Optional["Config"] = None,
+        config: Optional["StockulaConfig"] = None,
         strategy_params: dict[str, Any] | None = None,
         optimize_on_train: bool = True,
         param_ranges: dict[str, Any] | None = None,
@@ -268,7 +268,7 @@ class BacktestingManager:
         self,
         ticker: str,
         strategy_name: str = "smacross",
-        config: Optional["Config"] = None,
+        config: Optional["StockulaConfig"] = None,
     ) -> dict[str, Any]:
         """Run a quick backtest with default parameters for rapid testing.
 

@@ -1,6 +1,7 @@
 # Technical Analysis
 
-Stockula provides comprehensive technical analysis capabilities through the finta library wrapper, offering over 40 technical indicators with clean, consistent interfaces.
+Stockula provides comprehensive technical analysis capabilities through the finta library wrapper, offering over 40
+technical indicators with clean, consistent interfaces.
 
 ## Overview
 
@@ -17,7 +18,8 @@ The technical analysis module offers:
 
 ## TechnicalAnalysisManager
 
-The TechnicalAnalysisManager coordinates different technical analysis strategies and provides a unified interface for all indicator calculations.
+The TechnicalAnalysisManager coordinates different technical analysis strategies and provides a unified interface for
+all indicator calculations.
 
 ### Available Analysis Types
 
@@ -195,13 +197,13 @@ technical_analysis:
 
 ```bash
 # Basic technical analysis
-uv run python -m stockula.main --ticker AAPL --mode ta
+uv run python -m stockula --ticker AAPL --mode ta
 
 # With custom configuration
-uv run python -m stockula.main --config examples/config.technical.yaml --mode ta
+uv run python -m stockula --config examples/config.technical.yaml --mode ta
 
 # Multiple tickers
-uv run python -m stockula.main --config myconfig.yaml --mode ta
+uv run python -m stockula --config my.stockula.yaml --mode ta
 ```
 
 ### Programmatic Usage
@@ -213,7 +215,7 @@ from stockula.container import Container
 from stockula.config.settings import load_config
 
 # Load configuration and get manager
-config = load_config("myconfig.yaml")
+config = load_config("my.stockula.yaml")
 container = Container()
 ta_manager = container.technical_analysis_manager()
 
@@ -263,7 +265,7 @@ from stockula.config.settings import load_config
 from stockula.domain.factory import DomainFactory
 
 # Load configuration
-config = load_config("myconfig.yaml")
+config = load_config("my.stockula.yaml")
 container = Container()
 ta_manager = container.technical_analysis_manager()
 
@@ -292,7 +294,7 @@ from stockula.domain.factory import DomainFactory
 from stockula.technical_analysis.indicators import TechnicalIndicators
 
 # Load configuration
-config = load_config("myconfig.yaml")
+config = load_config("my.stockula.yaml")
 
 # Create portfolio
 factory = DomainFactory(config)
@@ -578,4 +580,5 @@ def calculate_indicators_chunked(data, chunk_size=1000):
 1. **Filter false signals**: Use additional criteria to reduce noise
 1. **Monitor performance**: Track indicator effectiveness over time
 
-The technical analysis module provides a comprehensive toolkit for market analysis while maintaining simplicity and performance through its clean interface and Rich integration.
+The technical analysis module provides a comprehensive toolkit for market analysis while maintaining simplicity and
+performance through its clean interface and Rich integration.

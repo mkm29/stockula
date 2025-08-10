@@ -1,10 +1,13 @@
 # StrategyRegistry API Reference
 
-The `StrategyRegistry` is a centralized static class that manages all trading strategies in Stockula. It provides a single source of truth for strategy classes, naming conventions, parameter presets, and strategy groups.
+The `StrategyRegistry` is a centralized static class that manages all trading strategies in Stockula. It provides a
+single source of truth for strategy classes, naming conventions, parameter presets, and strategy groups.
 
 ## Overview
 
-The registry eliminates code duplication and ensures consistency across the application by centralizing all strategy-related operations. It handles automatic name normalization, allowing configuration files to use either PascalCase or snake_case naming formats.
+The registry eliminates code duplication and ensures consistency across the application by centralizing all
+strategy-related operations. It handles automatic name normalization, allowing configuration files to use either
+PascalCase or snake_case naming formats.
 
 ## Import
 
@@ -265,33 +268,28 @@ The registry provides predefined strategy groups for different trading approache
 
 ### Basic Group
 
-**Strategies**: `["smacross", "rsi"]`
-**Purpose**: Simple strategies suitable for beginners
-**Characteristics**: Easy to understand, minimal parameters
+**Strategies**: `["smacross", "rsi"]` **Purpose**: Simple strategies suitable for beginners **Characteristics**: Easy to
+understand, minimal parameters
 
 ### Momentum Group
 
-**Strategies**: `["rsi", "macd", "double_ema_cross"]`
-**Purpose**: Strategies that capitalize on price momentum
+**Strategies**: `["rsi", "macd", "double_ema_cross"]` **Purpose**: Strategies that capitalize on price momentum
 **Characteristics**: Focus on trend strength and momentum indicators
 
 ### Trend Group
 
-**Strategies**: `["smacross", "triple_ema_cross", "trima_cross"]`
-**Purpose**: Trend-following strategies
+**Strategies**: `["smacross", "triple_ema_cross", "trima_cross"]` **Purpose**: Trend-following strategies
 **Characteristics**: Moving average based, good for trending markets
 
 ### Advanced Group
 
-**Strategies**: `["kama", "frama", "vama", "vidya"]`
-**Purpose**: Sophisticated adaptive strategies
-**Characteristics**: Dynamic parameters, adapt to market conditions
+**Strategies**: `["kama", "frama", "vama", "vidya"]` **Purpose**: Sophisticated adaptive strategies **Characteristics**:
+Dynamic parameters, adapt to market conditions
 
 ### Comprehensive Group
 
-**Strategies**: All available strategies combined
-**Purpose**: Complete strategy testing
-**Characteristics**: Includes all 11 strategies for comprehensive backtesting
+**Strategies**: All available strategies combined **Purpose**: Complete strategy testing **Characteristics**: Includes
+all 11 strategies for comprehensive backtesting
 
 ## Name Mapping Reference
 
@@ -353,11 +351,11 @@ from stockula.backtesting.strategies import BaseStrategy
 # 1. Create your strategy class
 class MyCustomStrategy(BaseStrategy):
     period = 20  # Required class variable
-    
+
     def init(self):
         # Strategy initialization
         pass
-    
+
     def next(self):
         # Strategy logic
         pass
@@ -405,4 +403,5 @@ available = manager.get_available_strategies()  # Uses registry internally
 1. **Use the registry API** instead of hardcoding strategy names
 1. **Check available strategies** programmatically for dynamic interfaces
 
-The StrategyRegistry provides a robust, flexible foundation for strategy management that grows with your application needs while maintaining backward compatibility.
+The StrategyRegistry provides a robust, flexible foundation for strategy management that grows with your application
+needs while maintaining backward compatibility.

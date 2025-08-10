@@ -1,6 +1,7 @@
 # Architecture Overview
 
-Stockula is built with a modular, domain-driven architecture that separates concerns and provides clean interfaces between components.
+Stockula is built with a modular, domain-driven architecture that separates concerns and provides clean interfaces
+between components.
 
 ## High-Level Architecture
 
@@ -11,7 +12,7 @@ graph TB
         Main[Legacy Entry Point<br/>main.py]
         Manager[Business Logic<br/>StockulaManager]
         Display[Results Display<br/>ResultsDisplay]
-        Config[Configuration<br/>.config.yaml]
+        Config[Configuration<br/>.stockula.yaml]
     end
 
     subgraph "Core Domain"
@@ -76,7 +77,7 @@ graph TB
     DataMgr --> Fetcher
     DataMgr --> Registry
     Registry --> StrategyRepo
-    
+
     TA --> Fetcher
     BT --> Fetcher
     FC --> Fetcher
@@ -126,7 +127,7 @@ sequenceDiagram
     participant Analysis
 
     User->>CLI: Run command
-    CLI->>Config: Load .config.yaml
+    CLI->>Config: Load .stockula.yaml
     CLI->>Manager: Create manager instance
     Manager->>Factory: Create domain objects
     Factory->>Portfolio: Build portfolio
@@ -146,6 +147,19 @@ sequenceDiagram
     Display-->>CLI: Formatted output
     CLI-->>User: Display output
 ```
+
+## Module Structure
+
+### Database-Driven Model Validation
+
+The system now uses a database-driven approach for AutoTS model validation:
+
+- **AutoTSModel**: SQLModel-based model with self-validation capabilities
+- **AutoTSPreset**: Database-stored preset configurations
+- **AutoTSRepository**: Repository pattern for model and preset management
+- **Database Seeding**: Automatic population directly from AutoTS library if database is empty
+
+This architecture eliminates hardcoded model lists and provides flexibility for adding new models as AutoTS is updated.
 
 ## Module Structure
 
@@ -234,7 +248,8 @@ src/stockula/
 - **AllocatorManager**: Coordinates all allocation strategies and provides unified interface
 - **Allocator**: Standard allocator for basic strategies (equal weight, market cap, custom, dynamic, auto)
 - **BacktestOptimizedAllocator**: Advanced allocation using backtest performance data
-- **ForecastingManager**: Coordinates forecasting strategies and provides unified interface for different forecasting models
+- **ForecastingManager**: Coordinates forecasting strategies and provides unified interface for different forecasting
+  models
 
 **Patterns**:
 
@@ -269,7 +284,8 @@ src/stockula/
 
 ### Strategy Registry
 
-The `StrategyRegistry` is a centralized static class that manages all trading strategies, their mappings, parameters, and groups. It provides a single source of truth for strategy-related operations across the entire application.
+The `StrategyRegistry` is a centralized static class that manages all trading strategies, their mappings, parameters,
+and groups. It provides a single source of truth for strategy-related operations across the entire application.
 
 #### Key Features
 
@@ -554,11 +570,11 @@ tests/
 # 1. Create the strategy class
 class MyCustomStrategy(BaseStrategy):
     period = 20  # Required class variable
-    
+
     def init(self):
         # Strategy initialization
         pass
-    
+
     def next(self):
         # Strategy logic
         pass

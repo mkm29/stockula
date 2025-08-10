@@ -384,7 +384,8 @@ class BrokerConfig(BaseModel):
         }
 
         if broker_name.lower() in presets:
-            return cls(**presets[broker_name.lower()])
+            broker_dict = presets[broker_name.lower()]
+            return cls(**broker_dict)  # type: ignore[arg-type]
         else:
             raise ValueError(f"Unknown broker preset: {broker_name}")
 
@@ -442,12 +443,12 @@ class BacktestConfig(BaseModel):
 
 
 class ForecastConfig(BaseModel):
-    """Configuration for forecasting."""
+    """Configuration for AutoGluon forecasting."""
 
     forecast_length: int | None = Field(
-        default=None,
+        default=7,
         ge=1,
-        description="Number of periods to forecast from today (mutually exclusive with test dates)",
+        description="Number of periods to forecast from today",
     )
 
     # Train/test split for forecast evaluation
@@ -455,49 +456,58 @@ class ForecastConfig(BaseModel):
     train_end_date: str | date | None = Field(default=None, description="End date for training data (YYYY-MM-DD)")
     test_start_date: str | date | None = Field(default=None, description="Start date for testing data (YYYY-MM-DD)")
     test_end_date: str | date | None = Field(default=None, description="End date for testing data (YYYY-MM-DD)")
+
     frequency: str = Field(
         default="infer",
         description="Time series frequency ('D', 'W', 'M', etc.), 'infer' to auto-detect",
     )
     prediction_interval: float = Field(default=0.9, ge=0, le=1, description="Confidence interval for predictions")
-    model_list: str = Field(
-        default="clean",
-        description=(
-            "Model subset to use. Options: 'ultra_fast' (3 models, fastest), 'fast' (6 models, balanced), "
-            "'clean' (8 models, no warnings, recommended), 'financial' (12 models, finance-optimized), "
-            "'fast_financial' (intersection of fast + financial)"
-        ),
+
+    # AutoGluon settings
+    preset: str = Field(
+        default="medium_quality",
+        description="Training preset ('fast_training', 'medium_quality', 'high_quality', 'best_quality')",
     )
-    ensemble: str = Field(
-        default="auto",
-        description="Ensemble method ('auto', 'simple', 'distance', 'horizontal')",
-    )
-    use_financial_models: bool = Field(
-        default=True,
-        description="Use financial-appropriate models to avoid statsmodels warnings",
-    )
-    max_generations: int = Field(
-        default=2,
+    time_limit: int | None = Field(
+        default=None,
         ge=1,
+        description="Time limit in seconds for training",
+    )
+    eval_metric: str = Field(
+        default="MASE",
         description=(
-            "Maximum generations for model evolution. 1=basic (try original models), "
-            "2=balanced (try variations of best models), 3+=thorough but slow"
+            "Evaluation metric for model selection. "
+            "Options: 'MASE' (default, scale-independent), 'MAPE' (percentage error), "
+            "'MAE' (absolute error), 'RMSE' (squared error), 'SMAPE' (symmetric percentage), "
+            "'WAPE' (weighted percentage). MASE recommended for stock prices."
         ),
     )
-    num_validations: int = Field(
-        default=2,
-        ge=1,
+    models: str | list[str] | None = Field(
+        default=None,
         description=(
-            "Number of time-based validation splits for model selection. "
-            "1=faster but less robust, 2=good balance, 3+=more robust but slower"
+            "Model selection for AutoGluon. Use 'zero_shot' to enable Chronos or provide a list of model names, "
+            "e.g., ['Chronos'] or other supported models like ['DeepAR', 'LightGBM']."
         ),
     )
-    validation_method: str = Field(
-        default="backwards",
-        description="Validation method ('backwards', 'seasonal', 'similarity')",
-    )
+
     max_workers: int = Field(default=1, ge=1, description="Maximum parallel workers for forecasting")
     no_negatives: bool = Field(default=True, description="Constraint predictions to be non-negative")
+
+    # Covariate configuration (for AutoGluon/Chronos integration)
+    use_calendar_covariates: bool = Field(
+        default=True,
+        description=(
+            "Include simple known covariates derived from calendar features (day_of_week, month, "
+            "is_month_start, is_month_end)."
+        ),
+    )
+    past_covariate_columns: list[str] | None = Field(
+        default=None,
+        description=(
+            "Columns from the input DataFrame to use as past covariates (e.g., ['Open','High','Low','Volume']). "
+            "If None, a sensible default set is chosen when present. If an empty list, no past covariates are used."
+        ),
+    )
 
     @field_validator(
         "train_start_date",
@@ -517,15 +527,14 @@ class ForecastConfig(BaseModel):
     @model_validator(mode="after")
     def validate_date_ranges(self):
         """Validate date ranges and ensure mutual exclusivity."""
-        # Check mutual exclusivity between forecast_length and test dates
+        # Check if test dates are provided
         has_test_dates = self.test_start_date is not None and self.test_end_date is not None
-        has_forecast_length = self.forecast_length is not None
 
-        if has_test_dates and has_forecast_length:
-            raise ValueError(
-                "Cannot specify both forecast_length and test dates. "
-                "Use forecast_length for future predictions OR test dates for historical evaluation."
-            )
+        # If test dates are provided, clear forecast_length to avoid conflict
+        # This allows the config to work with either mode
+        if has_test_dates and self.forecast_length is not None:
+            # Prefer test dates over forecast_length
+            self.forecast_length = None
 
         # If using test dates, train dates are required
         if has_test_dates and (self.train_start_date is None or self.train_end_date is None):
@@ -605,6 +614,24 @@ class BacktestOptimizationConfig(BaseModel):
     )
     initial_allocation_pct: float = Field(
         default=2.0, ge=0.0, le=100.0, description="Initial allocation percentage for training period"
+    )
+
+    # Forecast integration settings
+    use_forecast: bool = Field(
+        default=False, description="Enable forecast integration for forward-looking allocation optimization"
+    )
+    forecast_weight: float = Field(
+        default=0.3,
+        ge=0.0,
+        le=1.0,
+        description="Weight for forecast score (0-1). Historical weight = 1 - forecast_weight",
+    )
+    forecast_length: int = Field(
+        default=14, ge=1, le=365, description="Number of days to forecast ahead for allocation decisions"
+    )
+    forecast_backend: str | None = Field(
+        default=None,
+        description="Forecast backend to use: 'chronos', 'autogluon', 'simple', or None for auto-selection",
     )
 
     @field_validator("train_start_date", "train_end_date", "test_start_date", "test_end_date", mode="before")

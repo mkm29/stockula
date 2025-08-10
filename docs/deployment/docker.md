@@ -1,19 +1,31 @@
 # Docker Deployment Guide
 
-This guide explains how to build and run Stockula using Docker for different use cases. The Stockula project uses a comprehensive multi-stage Docker setup following industry best practices.
+This guide explains how to build and run Stockula using Docker for different use cases. The Stockula project uses a
+comprehensive multi-stage Docker setup following industry best practices.
 
 ## Overview
 
-The Docker implementation provides optimized containers for different scenarios using a multi-stage Dockerfile with 8 specialized stages:
+The Docker implementation provides optimized containers for different scenarios:
 
-- **base**: Common foundation with Python 3.13 and uv package manager
-- **builder**: Dependencies installation with virtual environment
-- **development**: Full development environment with all dependencies
-- **test**: Testing environment with coverage and linting tools
+### Standard Images (CPU)
+
+Multi-stage Dockerfile with specialized stages:
+
+- **base**: Common foundation with Python 3.11 and uv package manager
+- **dependencies**: Virtual environment with production packages
+- **source**: Application source code
 - **production**: Minimal production runtime (~500MB)
 - **cli**: Command-line interface optimized image (~550MB)
-- **api**: API server (placeholder for future implementation)
-- **jupyter**: Interactive analysis with Jupyter Lab (~1.5GB)
+
+### GPU-Accelerated Images
+
+Based on PyTorch official images for optimal compatibility:
+
+- **Base Image**: `pytorch/pytorch:2.8.0-cuda12.9-cudnn9` series
+- **Python Version**: 3.11 (pre-installed)
+- **Platform**: linux/amd64 only
+- **GPU Support**: CUDA 12.6/12.9 with cuDNN 9
+- **Time Series Models**: Chronos, GluonTS, AutoGluon TimeSeries
 
 ## Quick Start
 
@@ -123,7 +135,7 @@ docker run --rm \
   -v stockula-data:/app/data \
   -v stockula-results:/app/results \
   stockula:cli \
-  python -m stockula.main --config /app/config/config.example.yaml
+  python -m stockula --config /app/config/config.example.yaml
 ```
 
 ### 3. Jupyter Analysis Environment
@@ -139,7 +151,41 @@ docker-compose up stockula-jupyter
 # Access at http://localhost:8889
 ```
 
-### 4. Running Tests
+### 4. GPU-Accelerated Forecasting
+
+For high-performance time series forecasting with GPU acceleration:
+
+```bash
+# Pull GPU-enabled image
+docker pull ghcr.io/mkm29/stockula-gpu:latest
+
+# Run with GPU support
+docker run --gpus all --rm \
+  -v $(pwd)/data:/home/stockula/data \
+  -v $(pwd)/results:/home/stockula/results \
+  ghcr.io/mkm29/stockula-gpu:latest \
+  -m stockula --ticker AAPL --mode forecast --days 30
+
+# Check GPU availability
+docker run --gpus all --rm ghcr.io/mkm29/stockula-gpu:latest \
+  bash -c "/home/stockula/gpu_info.sh"
+
+# Interactive GPU session
+docker run --gpus all -it --rm \
+  -v $(pwd):/home/stockula/workspace \
+  ghcr.io/mkm29/stockula-gpu:latest \
+  /bin/bash
+```
+
+**GPU Features:**
+
+- **Chronos**: Zero-shot forecasting with pretrained transformers
+- **GluonTS**: Advanced probabilistic models (DeepAR, TFT)
+- **AutoGluon**: Full AutoML with GPU acceleration
+- **XGBoost/LightGBM**: GPU-accelerated gradient boosting
+- **User**: Non-root `stockula` user (UID 1000) for security
+
+### 5. Running Tests
 
 ```bash
 # Run all tests
@@ -339,37 +385,51 @@ make size
 
 ## CI/CD Integration
 
-### GitHub Actions Example
+### Automated Docker Builds
 
-```yaml
-name: Docker Build and Test
+Stockula uses GitHub Actions for automated Docker image builds and publishing to GitHub Container Registry (GHCR).
 
-on: [push, pull_request]
+#### Release Process
 
-jobs:
-  test:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
+Docker images are automatically built in the following scenarios:
 
-      - name: Build test image
-        run: docker build --target test -t stockula:test .
+- **Feature Branches**: Built on push to `feature/*` or `feat/*` branches (Docker only, no Git tags)
+- **Release Candidates**: Built from `develop` branch when RC tags are created (e.g., `0.12.1-rc.1`)
+- **Stable Releases**: Built from `main` branch when version tags are created (e.g., `v0.12.1`)
 
-      - name: Run tests
-        run: docker run --rm stockula:test
+#### Available Images
 
-      - name: Build production image
-        run: docker build --target production -t stockula:latest .
-```
+| Image                        | Description                                      | Platform       | Tags                                                           |
+| ---------------------------- | ------------------------------------------------ | -------------- | -------------------------------------------------------------- |
+| `ghcr.io/mkm29/stockula`     | CLI with development tools (Python 3.11)         | Multi-platform | `latest`, `vX.Y.Z`, `0.Y.Z-rc.N`, `X.Y.Z-feat.*`, `rc`, `feat` |
+| `ghcr.io/mkm29/stockula-gpu` | GPU-accelerated CLI (PyTorch 2.8.0, Python 3.11) | linux/amd64    | `latest`, `vX.Y.Z`, `0.Y.Z-rc.N`, `rc`                         |
+
+Docker tag formats:
+
+- Feature branches: `0.12.1-feat.<branch-name>.<short-sha>` (e.g., `0.12.1-feat.new-api.a1b2c3d`)
+- Release candidates: `0.12.1-rc.1` (matches Git tag)
+- Stable releases: `v0.12.1` (matches Git tag)
 
 ### Production Deployment
 
 ```bash
-# Tag for registry
-make tag-version VERSION=v1.0.0
+# Pull latest stable release
+docker pull ghcr.io/mkm29/stockula:latest
 
-# Push to registry
-make push-version VERSION=v1.0.0
+# Pull specific version (tags match Git tags for releases)
+docker pull ghcr.io/mkm29/stockula:v0.12.1
+
+# Pull latest release candidate
+docker pull ghcr.io/mkm29/stockula:rc
+
+# Pull specific RC
+docker pull ghcr.io/mkm29/stockula:0.12.1-rc.1
+
+# Pull latest feature branch build (for testing)
+docker pull ghcr.io/mkm29/stockula:feat
+
+# Pull specific feature branch build
+docker pull ghcr.io/mkm29/stockula:0.12.1-feat.new-api.a1b2c3d
 
 # Deploy to production
 docker run -d \
@@ -377,7 +437,16 @@ docker run -d \
   --restart unless-stopped \
   -v stockula-data:/app/data \
   -v stockula-results:/app/results \
-  your-registry.com/stockula:v1.0.0
+  ghcr.io/mkm29/stockula:v0.12.1
+
+# Deploy GPU version
+docker run -d \
+  --name stockula-gpu \
+  --restart unless-stopped \
+  --gpus all \
+  -v stockula-data:/app/data \
+  -v stockula-results:/app/results \
+  ghcr.io/mkm29/stockula-gpu:v0.12.1
 ```
 
 ## Security Best Practices
@@ -491,9 +560,11 @@ For Docker-related issues:
 1. Check the troubleshooting section above
 1. Review Docker logs: `make logs`
 1. Verify image builds: `make build-test`
-1. Run validation script: `scripts/validate-docker.sh`
+1. Run validation script: `uv run validate-docker` (see [Docker Validation Guide](../development/docker-validation.md))
 1. Submit issues to the [Stockula GitHub repository](https://github.com/mkm29/stockula/issues)
 
 ## Summary
 
-This Docker implementation provides a production-ready, secure, and developer-friendly containerization solution for the Stockula trading library. It follows industry best practices while being tailored specifically for the project's needs, including comprehensive tooling for development, testing, and deployment scenarios.
+This Docker implementation provides a production-ready, secure, and developer-friendly containerization solution for the
+Stockula trading library. It follows industry best practices while being tailored specifically for the project's needs,
+including comprehensive tooling for development, testing, and deployment scenarios.

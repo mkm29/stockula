@@ -71,7 +71,7 @@ instance/
 .webassets-cache
 
 # Scrapy stuff:
-.scrapy
+AGENTS.md
 
 # Sphinx documentation
 docs/_build/
@@ -193,7 +193,7 @@ secrets.json
 .secrets
 api_keys.txt
 # User's personal configuration (use examples/ for templates)
-.config.yaml
+.stockula.yaml
 
 # Trading/Financial specific
 trades/

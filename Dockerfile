@@ -13,7 +13,7 @@
 #   docker buildx build --target cli -t stockula:cli .
 
 # Stage 1: Base image with uv and system dependencies
-FROM ghcr.io/astral-sh/uv:0.5.21-python3.13-bookworm-slim AS base
+FROM ghcr.io/astral-sh/uv:0.8.8-python3.11-bookworm-slim@sha256:2617b6c6dd4319f62e014302013dd6ed6839f6561b4dfae2b5e647938e49db00 AS base
 
 # Build arguments for labels
 ARG VERSION="0.0.0"
@@ -30,7 +30,8 @@ ENV PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
     UV_SYSTEM_PYTHON=1 \
-    UV_COMPILE_BYTECODE=1
+    UV_COMPILE_BYTECODE=1 \
+    UV_LINK_MODE=copy
 
 # Install system dependencies with cache mount
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
@@ -51,7 +52,7 @@ COPY pyproject.toml uv.lock README.md ./
 
 # Create virtual environment and install dependencies with cache mount
 RUN --mount=type=cache,target=/root/.cache/uv,sharing=locked \
-    uv venv /opt/venv --python 3.13 && \
+    uv venv /opt/venv --python 3.11 && \
     . /opt/venv/bin/activate && \
     uv sync --frozen --no-dev --compile-bytecode
 
@@ -65,13 +66,13 @@ COPY alembic.ini ./
 COPY alembic/ alembic/
 COPY examples/ examples/
 
-# Install the package
+# Install the package (not in editable mode for production)
 RUN --mount=type=cache,target=/root/.cache/uv,sharing=locked \
     . /opt/venv/bin/activate && \
-    uv pip install --no-deps -e .
+    uv pip install .
 
 # Stage 4: Production runtime - minimal image
-FROM ghcr.io/astral-sh/uv:python3.13-bookworm-slim AS production
+FROM ghcr.io/astral-sh/uv:python3.11-bookworm-slim AS production
 
 # Re-declare build arguments for this stage
 ARG VERSION=dev
@@ -94,8 +95,8 @@ LABEL org.opencontainers.image.created="${BUILD_DATE}" \
       org.opencontainers.image.description="A comprehensive Python trading platform for technical analysis, backtesting, and forecasting"
 
 # Custom Labels for additional metadata
-LABEL com.stockula.python.version="3.13" \
-      com.stockula.base.image="ghcr.io/astral-sh/uv:python3.13-bookworm-slim" \
+LABEL com.stockula.python.version="3.11" \
+      com.stockula.base.image="ghcr.io/astral-sh/uv:python3.11-bookworm-slim" \
       com.stockula.build.stage="production" \
       com.stockula.maintainer="mkm29"
 
@@ -138,8 +139,8 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
 EXPOSE 8888/tcp
 
 # Default entrypoint and command
-ENTRYPOINT ["python", "-m"]
-CMD ["stockula.main", "--help"]
+ENTRYPOINT ["python"]
+CMD ["-m", "stockula", "--help"]
 
 # Stage 5: CLI stage - optimized for command-line usage
 FROM production AS cli

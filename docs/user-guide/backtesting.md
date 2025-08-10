@@ -1,6 +1,7 @@
 # Backtesting
 
-Stockula provides comprehensive backtesting capabilities through the backtesting.py library wrapper, offering multiple trading strategies with optimization and validation features.
+Stockula provides comprehensive backtesting capabilities through the backtesting.py library wrapper, offering multiple
+trading strategies with optimization and validation features.
 
 ## Overview
 
@@ -17,7 +18,8 @@ The backtesting module offers:
 
 ## BacktestingManager
 
-The BacktestingManager coordinates different backtesting strategies and provides a unified interface for all backtesting operations.
+The BacktestingManager coordinates different backtesting strategies and provides a unified interface for all backtesting
+operations.
 
 ### Available Strategy Groups
 
@@ -173,7 +175,8 @@ backtest:
 
 ### Train/Test Split Configuration
 
-Stockula supports train/test split for backtesting, allowing you to optimize strategies on training data and validate performance on out-of-sample test data:
+Stockula supports train/test split for backtesting, allowing you to optimize strategies on training data and validate
+performance on out-of-sample test data:
 
 ```yaml
 data:
@@ -278,13 +281,13 @@ backtest:
 
 ```bash
 # Basic backtesting with default strategy
-uv run python -m stockula.main --ticker AAPL --mode backtest
+uv run python -m stockula --ticker AAPL --mode backtest
 
 # With custom configuration
-uv run python -m stockula.main --config examples/config.strategies.yaml --mode backtest
+uv run python -m stockula --config examples/config.strategies.yaml --mode backtest
 
 # Portfolio backtesting
-uv run python -m stockula.main --config myconfig.yaml --mode backtest
+uv run python -m stockula --config my.stockula.yaml --mode backtest
 ```
 
 ### Programmatic Usage
@@ -295,7 +298,7 @@ from stockula.config.settings import load_config
 from stockula.data.fetcher import DataFetcher
 
 # Load configuration
-config = load_config("myconfig.yaml")
+config = load_config("my.stockula.yaml")
 
 # Create backtest runner
 runner = BacktestRunner(config)
@@ -315,7 +318,8 @@ print(f"Max Drawdown: {results['Max. Drawdown [%]']:.2f}%")
 
 ### Backtesting Results Display
 
-The backtesting output begins with general portfolio information, followed by detailed results for each strategy and asset:
+The backtesting output begins with general portfolio information, followed by detailed results for each strategy and
+asset:
 
 #### Portfolio Information Section
 
@@ -675,9 +679,11 @@ def analyze_strategy_correlation(tickers, strategy):
 1. **Cross-Validation**: Use multiple validation techniques
 1. **Monitor Performance**: Track strategy performance in live conditions
 
-The backtesting framework provides a comprehensive environment for developing, testing, and optimizing trading strategies with realistic market conditions and costs.
+The backtesting framework provides a comprehensive environment for developing, testing, and optimizing trading
+strategies with realistic market conditions and costs.
 
 ## See Also
 
-- [Allocation Strategies](allocation-strategies.md) - Learn about BacktestOptimizedAllocator which uses backtest results to optimize portfolio allocation
+- [Allocation Strategies](allocation-strategies.md) - Learn about BacktestOptimizedAllocator which uses backtest results
+  to optimize portfolio allocation
 - [Strategies API Reference](../api/strategies.md) - Detailed documentation of all available trading strategies

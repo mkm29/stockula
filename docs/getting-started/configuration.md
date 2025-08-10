@@ -1,6 +1,7 @@
 # Configuration
 
-Stockula uses Pydantic for configuration validation and supports YAML files for easy settings management. By default, Stockula looks for `.config.yaml` in the current directory.
+Stockula uses Pydantic for configuration validation and supports YAML files for easy settings management. By default,
+Stockula looks for `.stockula.yaml` in the current directory.
 
 ## Configuration Structure
 
@@ -334,7 +335,8 @@ forecast:
   validation_method: "backwards"
 ```
 
-**Important**: Do not specify both `forecast_length` and test dates. Choose one mode or the other. The system will validate this and raise an error if both are configured.
+**Important**: Do not specify both `forecast_length` and test dates. Choose one mode or the other. The system will
+validate this and raise an error if both are configured.
 
 ### Performance Optimization
 
@@ -384,7 +386,7 @@ output:
 Override configuration with environment variables:
 
 ```bash
-export STOCKULA_CONFIG_FILE=my_config.yaml
+export STOCKULA_CONFIG_FILE=my_.stockula.yaml
 export STOCKULA_DEBUG=true
 export STOCKULA_LOG_LEVEL=DEBUG
 ```
@@ -421,7 +423,7 @@ from stockula.config.models import StockulaConfig, PortfolioConfig, BacktestConf
 from stockula.config.settings import load_config, save_config
 
 # Load from file
-config = load_config("my_config.yaml")
+config = load_config("my_.stockula.yaml")
 
 # Create programmatically
 config = StockulaConfig(

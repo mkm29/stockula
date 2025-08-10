@@ -3,7 +3,7 @@
 import json
 from datetime import date, datetime, timedelta
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import pandas as pd
 import yaml
@@ -135,17 +135,17 @@ class StockulaManager:
         results_table.add_column("Allocation %", style="yellow", justify="right")
 
         # Calculate total value for percentage
-        total_value = 0
-        ticker_values = {}
-        for ticker_config in self.config.portfolio.tickers:
-            symbol = ticker_config.symbol
-            if symbol in optimized_quantities:
-                # Get current price for value calculation
-                prices = self.container.data_fetcher().get_current_prices([symbol])
-                if symbol in prices:
-                    value = optimized_quantities[symbol] * prices[symbol]
-                    ticker_values[symbol] = value
-                    total_value += value
+        total_value = 0.0
+        ticker_values: dict[str, float] = {}
+        symbols_to_price = [t.symbol for t in self.config.portfolio.tickers if t.symbol in optimized_quantities]
+
+        # Fetch all prices in one call for efficiency
+        prices = self.container.data_fetcher().get_current_prices(symbols_to_price, show_progress=False)
+        for symbol in symbols_to_price:
+            if symbol in prices:
+                value = float(optimized_quantities[symbol]) * float(prices[symbol])
+                ticker_values[symbol] = value
+                total_value += value
 
         # Display results
         for ticker_config in self.config.portfolio.tickers:
@@ -224,8 +224,7 @@ class StockulaManager:
 
         self.console.print(f"\n[green]✓ Optimized configuration saved to: {save_path}[/green]")
         self.console.print(
-            "[dim]You can now run backtest with: "
-            f"uv run python -m stockula.main --config {save_path} --mode backtest[/dim]"
+            f"[dim]You can now run backtest with: uv run python -m stockula --config {save_path} --mode backtest[/dim]"
         )
 
     def _convert_dates(self, obj: Any) -> Any:
@@ -252,7 +251,10 @@ class StockulaManager:
             Portfolio instance
         """
         factory = self.container.domain_factory()
-        return factory.create_portfolio(self.config)
+        portfolio = factory.create_portfolio(self.config)
+        from .domain import Portfolio
+
+        return cast(Portfolio, portfolio)
 
     def display_portfolio_summary(self, portfolio: Portfolio) -> None:
         """Display portfolio summary table.
@@ -461,7 +463,7 @@ class StockulaManager:
                 if "adx" in ta_config.indicators and "adx" in result["indicators"]:
                     result["indicators"]["ADX"] = result["indicators"]["adx"]["current"]
 
-        return result
+        return cast(dict[str, Any], result)
 
     def _compute_indicators(
         self,
@@ -589,7 +591,9 @@ class StockulaManager:
                     )
 
                     # Create result entry with train/test results
-                    result_entry = self._create_train_test_result(ticker, strategy_config, backtest_result)
+                    result_entry: dict[str, Any] | None = self._create_train_test_result(
+                        ticker, strategy_config, backtest_result
+                    )
 
                 else:
                     # Run traditional backtest without train/test split
@@ -605,7 +609,7 @@ class StockulaManager:
                         end_date=backtest_end,
                     )
 
-                    result_entry = self._create_standard_result(ticker, strategy_config, backtest_result)
+                    result_entry = self._create_standard_result(ticker, strategy_config, backtest_result)  # type: ignore[no-redef]
 
                 # Only append if result_entry is not None (i.e., backtest succeeded)
                 if result_entry is not None:
@@ -762,12 +766,21 @@ class StockulaManager:
 
             # Add additional info if evaluation was used
             if use_evaluation and "evaluation" in result:
-                self.log_manager.info(
-                    f"Evaluation metrics for {ticker}: RMSE={result['evaluation']['rmse']:.2f}, "
-                    f"MAPE={result['evaluation']['mape']:.2f}%"
-                )
+                # Log MASE if available, otherwise log MAPE
+                eval_metrics = result["evaluation"]
+                if "mase" in eval_metrics:
+                    self.log_manager.info(
+                        f"Evaluation metrics for {ticker}: RMSE={eval_metrics['rmse']:.2f}, "
+                        f"MASE={eval_metrics['mase']:.3f}"
+                    )
+                else:
+                    # Fallback to MAPE for backward compatibility
+                    self.log_manager.info(
+                        f"Evaluation metrics for {ticker}: RMSE={eval_metrics['rmse']:.2f}, "
+                        f"MAPE={eval_metrics.get('mape', 0):.2f}%"
+                    )
 
-            return result
+            return cast(dict[str, Any], result)
 
         except KeyboardInterrupt:
             self.log_manager.warning(f"Forecast for {ticker} interrupted by user")
@@ -796,7 +809,7 @@ class StockulaManager:
                 use_evaluation=False,  # Explicit no evaluation for standard forecast
             )
 
-            return result
+            return cast(dict[str, Any], result)
         except KeyboardInterrupt:
             self.log_manager.warning(f"Forecast for {ticker} interrupted by user")
             return {"ticker": ticker, "error": "Interrupted by user"}

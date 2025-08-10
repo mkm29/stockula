@@ -30,7 +30,7 @@ def calculate_dynamic_sharpe_ratio(
     aligned_data = pd.DataFrame({"returns": returns, "rf_rates": risk_free_rates}).dropna()
 
     if len(aligned_data) == 0:
-        return np.nan
+        return float(np.nan)
 
     # Convert annual risk-free rates to daily
     daily_rf_rates = aligned_data["rf_rates"] / periods_per_year
@@ -44,9 +44,9 @@ def calculate_dynamic_sharpe_ratio(
 
     # Handle zero or near-zero volatility
     if volatility == 0 or np.isclose(volatility, 0, atol=1e-10):
-        return np.nan
+        return float(np.nan)
 
-    return mean_excess_return / volatility
+    return float(mean_excess_return / volatility)
 
 
 def calculate_rolling_sharpe_ratio(
@@ -120,7 +120,7 @@ def calculate_sortino_ratio_dynamic(
     aligned_data = pd.DataFrame({"returns": returns, "rf_rates": risk_free_rates}).dropna()
 
     if len(aligned_data) == 0:
-        return np.nan
+        return float(np.nan)
 
     # Convert annual risk-free rates to daily
     daily_rf_rates = aligned_data["rf_rates"] / periods_per_year
@@ -137,9 +137,9 @@ def calculate_sortino_ratio_dynamic(
 
     # Handle zero or near-zero downside deviation
     if downside_deviation == 0 or np.isclose(downside_deviation, 0, atol=1e-10):
-        return np.nan
+        return float(np.nan)
 
-    return mean_excess_return / downside_deviation
+    return float(mean_excess_return / downside_deviation)
 
 
 def enhance_backtest_metrics(

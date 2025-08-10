@@ -85,7 +85,9 @@ def main():
     print(f"Training Period: {train_start} to {train_end}")
     print(f"Testing Period: {test_start} to {test_end}")
     print(f"Ranking Metric: {config.backtest_optimization.ranking_metric}")
-    print(f"Allocation Range: {config.backtest_optimization.min_allocation_pct}% - {config.backtest_optimization.max_allocation_pct}%")
+    print(
+        f"Allocation Range: {config.backtest_optimization.min_allocation_pct}% - {config.backtest_optimization.max_allocation_pct}%"
+    )
     print(f"Initial Allocation: {config.backtest_optimization.initial_allocation_pct}%")
     print(f"Number of Assets: {len(tickers)}")
     print("=" * 80)
@@ -112,17 +114,19 @@ def main():
     print("3. Allocation Calculation:")
     print(f"   - Assets are ranked by {config.backtest_optimization.ranking_metric}")
     print("   - Higher performing assets get larger allocations")
-    print(f"   - Allocations are constrained between {config.backtest_optimization.min_allocation_pct}% and {config.backtest_optimization.max_allocation_pct}%")
+    print(
+        f"   - Allocations are constrained between {config.backtest_optimization.min_allocation_pct}% and {config.backtest_optimization.max_allocation_pct}%"
+    )
     print("   - Final allocations sum to 100%")
     print()
-    
+
     print("\nTo run actual optimization in your application:")
     print("-" * 80)
     print("```python")
     print("from stockula.container import create_container")
     print()
     print("# Create container with your config")
-    print("container = create_container('config.yaml')")
+    print("container = create_container('.stockula.yaml')")
     print()
     print("# Get the backtest allocator")
     print("allocator = container.backtest_allocator()")
@@ -134,7 +138,6 @@ def main():
     print(")")
     print("```")
     print("=" * 80)
-
 
 
 if __name__ == "__main__":
