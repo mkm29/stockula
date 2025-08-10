@@ -125,14 +125,12 @@ backtest_optimization:
   max_allocation_pct: 25.0
   initial_allocation_pct: 10.0
 forecast:
+  forecast_length: 7
   frequency: infer
   prediction_interval: 0.9
-  model_list: clean
-  ensemble: auto
-  use_financial_models: true
-  max_generations: 2
-  num_validations: 2
-  validation_method: backwards
+  preset: medium_quality
+  time_limit: 120
+  eval_metric: MASE
   max_workers: 1
   no_negatives: true
 technical_analysis:

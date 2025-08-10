@@ -66,7 +66,7 @@ from stockula.config import BacktestConfig, DataConfig, ForecastConfig, Portfoli
 from stockula.container import Container
 from stockula.database.manager import DatabaseManager
 from stockula.domain import Asset, Category, DomainFactory, Portfolio
-from stockula.forecasting import StockForecaster
+from stockula.forecasting import ForecastingManager
 from stockula.utils import LoggingManager
 
 # ===== Configuration Fixtures =====
@@ -158,7 +158,7 @@ def sample_stockula_config(sample_portfolio_config, sample_data_config):
         portfolio=sample_portfolio_config,
         data=sample_data_config,
         backtest=BacktestConfig(initial_cash=10000.0, commission=0.002, hold_only_categories=["INDEX"]),
-        forecast=ForecastConfig(forecast_length=30, model_list="fast"),
+        forecast=ForecastConfig(forecast_length=30, preset="fast_training"),
     )
 
 
@@ -710,8 +710,8 @@ def mock_container(mock_data_fetcher):
     mock_backtest_runner = Mock(spec=BacktestRunner)
     mock_backtest_runner.data_fetcher = mock_data_fetcher
 
-    mock_stock_forecaster = Mock(spec=StockForecaster)
-    mock_stock_forecaster.data_fetcher = mock_data_fetcher
+    mock_forecasting_manager = Mock(spec=ForecastingManager)
+    mock_forecasting_manager.data_fetcher = mock_data_fetcher
 
     # Override container providers with mocks
     container.logging_manager.override(mock_logging_manager)
@@ -719,7 +719,7 @@ def mock_container(mock_data_fetcher):
     container.data_fetcher.override(mock_data_fetcher)
     container.domain_factory.override(mock_domain_factory)
     container.backtest_runner.override(Mock(return_value=mock_backtest_runner))
-    container.stock_forecaster.override(Mock(return_value=mock_stock_forecaster))
+    container.forecasting_manager.override(Mock(return_value=mock_forecasting_manager))
 
     # Wire the container
     container.wire(modules=["stockula.main"])

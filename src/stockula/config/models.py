@@ -442,18 +442,12 @@ class BacktestConfig(BaseModel):
 
 
 class ForecastConfig(BaseModel):
-    """Configuration for forecasting."""
-
-    # Backend selection
-    backend: str = Field(
-        default="autots",
-        description="Forecasting backend to use ('autots' or 'autogluon')",
-    )
+    """Configuration for AutoGluon forecasting."""
 
     forecast_length: int | None = Field(
-        default=None,
+        default=7,
         ge=1,
-        description="Number of periods to forecast from today (mutually exclusive with test dates)",
+        description="Number of periods to forecast from today",
     )
 
     # Train/test split for forecast evaluation
@@ -461,63 +455,27 @@ class ForecastConfig(BaseModel):
     train_end_date: str | date | None = Field(default=None, description="End date for training data (YYYY-MM-DD)")
     test_start_date: str | date | None = Field(default=None, description="Start date for testing data (YYYY-MM-DD)")
     test_end_date: str | date | None = Field(default=None, description="End date for testing data (YYYY-MM-DD)")
+
     frequency: str = Field(
         default="infer",
         description="Time series frequency ('D', 'W', 'M', etc.), 'infer' to auto-detect",
     )
     prediction_interval: float = Field(default=0.9, ge=0, le=1, description="Confidence interval for predictions")
-    # AutoTS-specific settings
-    model_list: str = Field(
-        default="clean",
-        description=(
-            "AutoTS: Model subset to use. Options: 'ultra_fast' (3 models, fastest), 'fast' (6 models, balanced), "
-            "'clean' (8 models, no warnings, recommended), 'financial' (12 models, finance-optimized), "
-            "'fast_financial' (intersection of fast + financial)"
-        ),
-    )
-    ensemble: str = Field(
-        default="auto",
-        description="AutoTS: Ensemble method ('auto', 'simple', 'distance', 'horizontal')",
-    )
-    use_financial_models: bool = Field(
-        default=True,
-        description="AutoTS: Use financial-appropriate models to avoid statsmodels warnings",
-    )
-    max_generations: int = Field(
-        default=2,
-        ge=1,
-        description=(
-            "AutoTS: Maximum generations for model evolution. 1=basic (try original models), "
-            "2=balanced (try variations of best models), 3+=thorough but slow"
-        ),
-    )
-    num_validations: int = Field(
-        default=2,
-        ge=1,
-        description=(
-            "AutoTS: Number of time-based validation splits for model selection. "
-            "1=faster but less robust, 2=good balance, 3+=more robust but slower"
-        ),
-    )
-    validation_method: str = Field(
-        default="backwards",
-        description="AutoTS: Validation method ('backwards', 'seasonal', 'similarity')",
-    )
 
-    # AutoGluon-specific settings
+    # AutoGluon settings
     preset: str = Field(
         default="medium_quality",
-        description="AutoGluon: Training preset ('fast_training', 'medium_quality', 'high_quality', 'best_quality')",
+        description="Training preset ('fast_training', 'medium_quality', 'high_quality', 'best_quality')",
     )
     time_limit: int | None = Field(
         default=None,
         ge=1,
-        description="AutoGluon: Time limit in seconds for training",
+        description="Time limit in seconds for training",
     )
     eval_metric: str = Field(
         default="MASE",
         description=(
-            "AutoGluon: Evaluation metric for model selection. "
+            "Evaluation metric for model selection. "
             "Options: 'MASE' (default, scale-independent), 'MAPE' (percentage error), "
             "'MAE' (absolute error), 'RMSE' (squared error), 'SMAPE' (symmetric percentage), "
             "'WAPE' (weighted percentage). MASE recommended for stock prices."
@@ -545,15 +503,14 @@ class ForecastConfig(BaseModel):
     @model_validator(mode="after")
     def validate_date_ranges(self):
         """Validate date ranges and ensure mutual exclusivity."""
-        # Check mutual exclusivity between forecast_length and test dates
+        # Check if test dates are provided
         has_test_dates = self.test_start_date is not None and self.test_end_date is not None
-        has_forecast_length = self.forecast_length is not None
 
-        if has_test_dates and has_forecast_length:
-            raise ValueError(
-                "Cannot specify both forecast_length and test dates. "
-                "Use forecast_length for future predictions OR test dates for historical evaluation."
-            )
+        # If test dates are provided, clear forecast_length to avoid conflict
+        # This allows the config to work with either mode
+        if has_test_dates and self.forecast_length is not None:
+            # Prefer test dates over forecast_length
+            self.forecast_length = None
 
         # If using test dates, train dates are required
         if has_test_dates and (self.train_start_date is None or self.train_end_date is None):

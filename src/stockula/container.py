@@ -11,7 +11,7 @@ from .config import load_config
 from .data.manager import DataManager
 from .database.manager import DatabaseManager
 from .domain.factory import DomainFactory
-from .forecasting import ForecastingManager, StockForecaster
+from .forecasting import ForecastingManager
 from .technical_analysis import TechnicalAnalysisManager, TechnicalIndicators
 from .utils.logging_manager import LoggingManager
 
@@ -120,16 +120,7 @@ class Container(containers.DeclarativeContainer):
         logging_manager=logging_manager,
     )
 
-    # Stock forecaster
-    stock_forecaster = providers.Factory(
-        StockForecaster,
-        forecast_length=providers.Callable(lambda config: config.forecast.forecast_length, stockula_config),
-        frequency=providers.Callable(lambda config: config.forecast.frequency, stockula_config),
-        model_list=providers.Callable(lambda config: config.forecast.model_list, stockula_config),
-        prediction_interval=providers.Callable(lambda config: config.forecast.prediction_interval, stockula_config),
-        data_fetcher=data_fetcher,
-        logging_manager=logging_manager,
-    )
+    # Stock forecaster (removed - using ForecastingManager instead)
 
     # Technical indicators factory
     technical_indicators = providers.Factory(TechnicalIndicators)
@@ -160,8 +151,9 @@ def create_container(config_path: str | None = None) -> Container:
             "stockula.data.manager",
             "stockula.domain.factory",
             "stockula.domain.portfolio",
-            "stockula.forecasting.forecaster",
             "stockula.forecasting.manager",
+            "stockula.forecasting.factory",
+            "stockula.forecasting.backends.base",
             "stockula.technical_analysis.manager",
             "stockula.backtesting.manager",
         ]

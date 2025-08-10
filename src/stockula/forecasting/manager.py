@@ -52,7 +52,7 @@ class ForecastingManager:
         Returns:
             Configured forecasting backend
         """
-        return create_forecast_backend(config, self.logger)
+        return create_forecast_backend(config)
 
     def forecast_symbol(
         self,
@@ -60,7 +60,7 @@ class ForecastingManager:
         config: "StockulaConfig",
         use_evaluation: bool = False,
     ) -> dict[str, Any]:
-        """Forecast a single symbol using configuration settings.
+        """Forecast a single symbol using AutoGluon.
 
         Args:
             symbol: Stock symbol to forecast
@@ -77,7 +77,7 @@ class ForecastingManager:
         start_date = self._date_to_string(config.data.start_date)
         end_date = self._date_to_string(config.data.end_date)
 
-        self.logger.info(f"Forecasting {symbol} using {config.forecast.backend} backend...")
+        self.logger.info(f"Forecasting {symbol} using AutoGluon backend...")
 
         # Fetch data
         data = self.data_fetcher.get_stock_data(symbol, start_date, end_date)
@@ -98,16 +98,18 @@ class ForecastingManager:
 
         today = datetime.now().date()
         forecast_start = today + timedelta(days=1)
-        forecast_end = forecast_start + timedelta(days=config.forecast.forecast_length - 1)
+        # Use actual forecast_length from config, or default to 7 if not specified
+        forecast_days = config.forecast.forecast_length if config.forecast.forecast_length is not None else 7
+        forecast_end = forecast_start + timedelta(days=forecast_days - 1)
 
         return {
             "ticker": symbol,
-            "backend": config.forecast.backend,
+            "backend": "autogluon",
             "current_price": float(result.forecast["forecast"].iloc[0]),
             "forecast_price": float(result.forecast["forecast"].iloc[-1]),
             "lower_bound": float(result.forecast["lower_bound"].iloc[-1]),
             "upper_bound": float(result.forecast["upper_bound"].iloc[-1]),
-            "forecast_length": config.forecast.forecast_length,
+            "forecast_length": forecast_days,
             "best_model": model_info["model_name"],
             "model_params": model_info.get("model_params", {}),
             "metrics": result.metrics,
@@ -130,9 +132,9 @@ class ForecastingManager:
             Dictionary mapping symbols to their forecast results
         """
         results = {}
-        backend_name = config.forecast.backend
+        backend_name = "autogluon"
 
-        self.logger.info(f"Starting forecast for {len(symbols)} symbols using {backend_name} backend")
+        self.logger.info(f"Starting forecast for {len(symbols)} symbols using AutoGluon backend")
 
         for idx, symbol in enumerate(symbols, 1):
             try:
@@ -170,19 +172,12 @@ class ForecastingManager:
         if console is None:
             console = cli_manager.get_console()
 
-        backend_name = config.forecast.backend
-        console.print(f"\n[bold blue]Starting forecasting with {backend_name} backend...[/bold blue]")
+        backend_name = "autogluon"
+        console.print("\n[bold blue]Starting forecasting with AutoGluon backend...[/bold blue]")
 
-        if backend_name == "autots":
-            console.print(
-                f"[dim]Configuration: max_generations={config.forecast.max_generations}, "
-                f"num_validations={config.forecast.num_validations}, "
-                f"model_list={config.forecast.model_list}[/dim]"
-            )
-        else:  # autogluon
-            console.print(
-                f"[dim]Configuration: preset={config.forecast.preset}, time_limit={config.forecast.time_limit}s[/dim]"
-            )
+        console.print(
+            f"[dim]Configuration: preset={config.forecast.preset}, time_limit={config.forecast.time_limit}s[/dim]"
+        )
 
         results = []
 
@@ -196,14 +191,14 @@ class ForecastingManager:
             transient=True,
         ) as forecast_progress:
             forecast_task = forecast_progress.add_task(
-                f"[blue]Forecasting {len(symbols)} tickers with {backend_name}...",
+                f"[blue]Forecasting {len(symbols)} tickers with AutoGluon...",
                 total=len(symbols),
             )
 
             for idx, symbol in enumerate(symbols, 1):
                 forecast_progress.update(
                     forecast_task,
-                    description=f"[blue]Forecasting {symbol} ({idx}/{len(symbols)}) with {backend_name}...",
+                    description=f"[blue]Forecasting {symbol} ({idx}/{len(symbols)}) with AutoGluon...",
                 )
 
                 try:
@@ -232,75 +227,8 @@ class ForecastingManager:
 
             forecast_progress.update(
                 forecast_task,
-                description=f"[green]Forecasting complete with {backend_name}!",
+                description="[green]Forecasting complete with AutoGluon!",
             )
-
-        return results
-
-    def compare_backends(
-        self,
-        symbol: str,
-        config: "StockulaConfig",
-    ) -> dict[str, dict[str, Any]]:
-        """Compare forecasts from different backends for the same symbol.
-
-        Args:
-            symbol: Stock symbol to forecast
-            config: Stockula configuration
-
-        Returns:
-            Dictionary with results from each backend
-        """
-        results = {}
-
-        # Fetch data once
-        start_date = self._date_to_string(config.data.start_date)
-        end_date = self._date_to_string(config.data.end_date)
-        data = self.data_fetcher.get_stock_data(symbol, start_date, end_date)
-
-        if data.empty:
-            raise ValueError(f"No data available for symbol {symbol}")
-
-        # Try AutoTS backend
-        try:
-            self.logger.info(f"Forecasting {symbol} with AutoTS backend...")
-            autots_config = config.forecast.model_copy()
-            autots_config.backend = "autots"
-            autots_backend = self.create_backend(autots_config)
-            autots_result = autots_backend.fit_predict(data, target_column="Close")
-            autots_info = autots_backend.get_model_info()
-
-            results["autots"] = {
-                "forecast": autots_result.forecast["forecast"].tolist(),
-                "lower_bound": autots_result.forecast["lower_bound"].tolist(),
-                "upper_bound": autots_result.forecast["upper_bound"].tolist(),
-                "model_name": autots_info["model_name"],
-                "model_params": autots_info.get("model_params", {}),
-            }
-        except Exception as e:
-            self.logger.error(f"AutoTS backend failed: {e}")
-            results["autots"] = {"error": str(e)}
-
-        # Try AutoGluon backend
-        try:
-            self.logger.info(f"Forecasting {symbol} with AutoGluon backend...")
-            autogluon_config = config.forecast.model_copy()
-            autogluon_config.backend = "autogluon"
-            autogluon_backend = self.create_backend(autogluon_config)
-            autogluon_result = autogluon_backend.fit_predict(data, target_column="Close")
-            autogluon_info = autogluon_backend.get_model_info()
-
-            results["autogluon"] = {
-                "forecast": autogluon_result.forecast["forecast"].tolist(),
-                "lower_bound": autogluon_result.forecast["lower_bound"].tolist(),
-                "upper_bound": autogluon_result.forecast["upper_bound"].tolist(),
-                "model_name": autogluon_info["model_name"],
-                "model_params": autogluon_info.get("model_params", {}),
-                "metrics": autogluon_result.metrics,
-            }
-        except Exception as e:
-            self.logger.error(f"AutoGluon backend failed: {e}")
-            results["autogluon"] = {"error": str(e)}
 
         return results
 
@@ -309,15 +237,13 @@ class ForecastingManager:
         symbol: str,
         forecast_days: int = 7,
         historical_days: int = 90,
-        backend: str = "autots",
     ) -> dict[str, Any]:
-        """Quick forecast using fast presets.
+        """Quick forecast using AutoGluon fast presets.
 
         Args:
             symbol: Stock symbol to forecast
             forecast_days: Number of days to forecast
             historical_days: Number of historical days to use
-            backend: Backend to use ('autots' or 'autogluon')
 
         Returns:
             Dictionary with forecast results
@@ -336,27 +262,18 @@ class ForecastingManager:
         if data.empty:
             raise ValueError(f"No data available for symbol {symbol}")
 
-        # Create backend with fast settings
-        if backend == "autots":
-            from .backends import AutoTSBackend
+        # Create backend using factory with fast settings
+        from ..config.models import ForecastConfig
+        from .factory import create_forecast_backend
 
-            backend_instance = AutoTSBackend(
-                forecast_length=forecast_days,
-                model_list="ultra_fast",
-                max_generations=1,
-                num_validations=1,
-                logging_manager=self.logger,
-            )
-        else:  # autogluon
-            from .backends import AutoGluonBackend
+        config = ForecastConfig(
+            forecast_length=forecast_days,
+            preset="fast_training",
+            time_limit=60,  # 1 minute time limit
+            eval_metric="MASE",  # Use MASE for scale-independent evaluation
+        )
 
-            backend_instance = AutoGluonBackend(
-                forecast_length=forecast_days,
-                preset="fast_training",
-                time_limit=60,  # 1 minute time limit
-                eval_metric="MASE",  # Use MASE for scale-independent evaluation
-                logging_manager=self.logger,
-            )
+        backend_instance = create_forecast_backend(config)
 
         # Fit and predict
         result = backend_instance.fit_predict(data, target_column="Close", show_progress=False)
@@ -364,7 +281,7 @@ class ForecastingManager:
 
         return {
             "ticker": symbol,
-            "backend": backend,
+            "backend": "autogluon",
             "current_price": float(result.forecast["forecast"].iloc[0]),
             "forecast_price": float(result.forecast["forecast"].iloc[-1]),
             "lower_bound": float(result.forecast["lower_bound"].iloc[-1]),
@@ -383,25 +300,19 @@ class ForecastingManager:
         Raises:
             ValueError: If configuration is invalid
         """
-        if config.forecast_length is None or config.forecast_length <= 0:
-            raise ValueError("forecast_length must be positive")
+        # Check if we're in evaluation mode (test dates provided) or forecast mode
+        has_test_dates = config.test_start_date is not None and config.test_end_date is not None
+
+        if not has_test_dates and (config.forecast_length is None or config.forecast_length <= 0):
+            raise ValueError("forecast_length must be positive when not using test dates for evaluation")
 
         if config.prediction_interval <= 0 or config.prediction_interval >= 1:
             raise ValueError("prediction_interval must be between 0 and 1")
 
-        if config.backend not in ["autots", "autogluon"]:
-            raise ValueError(f"Invalid backend: {config.backend}. Must be 'autots' or 'autogluon'")
-
-        # Backend-specific validation
-        if config.backend == "autots":
-            if config.num_validations < 1:
-                raise ValueError("num_validations must be at least 1")
-            if config.max_generations < 1:
-                raise ValueError("max_generations must be at least 1")
-        elif config.backend == "autogluon":
-            valid_presets = ["fast_training", "medium_quality", "high_quality", "best_quality"]
-            if config.preset not in valid_presets:
-                raise ValueError(f"Invalid preset: {config.preset}. Must be one of {valid_presets}")
+        # AutoGluon validation
+        valid_presets = ["fast_training", "medium_quality", "high_quality", "best_quality"]
+        if config.preset not in valid_presets:
+            raise ValueError(f"Invalid preset: {config.preset}. Must be one of {valid_presets}")
 
     @staticmethod
     def _date_to_string(date_value) -> str | None:

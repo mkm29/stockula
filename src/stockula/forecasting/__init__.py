@@ -1,18 +1,17 @@
-"""Forecasting module with swappable backends (AutoTS and AutoGluon)."""
+"""Forecasting module with AutoGluon backend (falls back to simple if unavailable)."""
 
-from .backends import AutoGluonBackend, AutoTSBackend, ForecastBackend, ForecastResult
+from .backends import AUTOGLUON_AVAILABLE, AutoGluonBackend, ForecastBackend, ForecastResult, SimpleForecastBackend
 from .factory import create_forecast_backend
-from .forecaster import StockForecaster
 from .manager import ForecastingManager
 
 __all__ = [
     # Core components
-    "StockForecaster",
     "ForecastingManager",
     # Backend abstraction
     "ForecastBackend",
     "ForecastResult",
-    "AutoTSBackend",
     "AutoGluonBackend",
+    "SimpleForecastBackend",
     "create_forecast_backend",
+    "AUTOGLUON_AVAILABLE",
 ]

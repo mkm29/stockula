@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 from dependency_injector.wiring import Provide, inject
 
 from ..interfaces import ILoggingManager
-from .backends import AutoGluonBackend, AutoTSBackend, ForecastBackend
+from .backends import AUTOGLUON_AVAILABLE, AutoGluonBackend, ForecastBackend, SimpleForecastBackend
 
 if TYPE_CHECKING:
     from ..config import ForecastConfig
@@ -16,7 +16,7 @@ def create_forecast_backend(
     config: "ForecastConfig",
     logging_manager: ILoggingManager = Provide["logging_manager"],
 ) -> ForecastBackend:
-    """Create a forecasting backend based on configuration.
+    """Create forecasting backend (AutoGluon if available, otherwise Simple).
 
     Args:
         config: Forecast configuration
@@ -24,35 +24,28 @@ def create_forecast_backend(
 
     Returns:
         Configured forecasting backend
-
-    Raises:
-        ValueError: If backend is not supported
     """
-    backend_name = config.backend.lower()
+    # Use default forecast_length of 7 if not specified
+    forecast_length = config.forecast_length if config.forecast_length is not None else 7
 
-    if backend_name == "autots":
-        return AutoTSBackend(
-            forecast_length=config.forecast_length,
-            frequency=config.frequency,
-            prediction_interval=config.prediction_interval,
-            ensemble=config.ensemble,
-            num_validations=config.num_validations,
-            validation_method=config.validation_method,
-            model_list=config.model_list,
-            max_generations=config.max_generations,
-            no_negatives=config.no_negatives,
-            logging_manager=logging_manager,
-        )
-    elif backend_name == "autogluon":
+    if AUTOGLUON_AVAILABLE:
         return AutoGluonBackend(
-            forecast_length=config.forecast_length,
+            forecast_length=forecast_length,
             frequency=config.frequency,
             prediction_interval=config.prediction_interval,
             preset=config.preset,
             time_limit=config.time_limit,
             eval_metric=config.eval_metric,
             no_negatives=config.no_negatives,
-            logging_manager=logging_manager,
         )
     else:
-        raise ValueError(f"Unsupported forecasting backend: {backend_name}. Supported: 'autots', 'autogluon'")
+        # Fall back to simple backend if AutoGluon is not available
+        logging_manager.warning(
+            "AutoGluon not available (requires Python < 3.13). Using simple linear regression for forecasting."
+        )
+        return SimpleForecastBackend(
+            forecast_length=forecast_length,
+            frequency=config.frequency,
+            prediction_interval=config.prediction_interval,
+            no_negatives=config.no_negatives,
+        )

@@ -91,12 +91,12 @@ class TestEndToEndWorkflow:
         assert runner.cash == 10000.0
 
         # Test Forecasting setup
-        from stockula.forecasting import StockForecaster
+        from stockula.forecasting import ForecastingManager
 
-        forecaster = StockForecaster(
-            forecast_length=30, frequency="infer", logging_manager=integration_container.logging_manager()
+        forecaster = ForecastingManager(
+            data_fetcher=integration_container.data_fetcher(), logging_manager=integration_container.logging_manager()
         )
-        assert forecaster.forecast_length == 30
+        assert forecaster is not None  # Just check that it initialized successfully
 
 
 @pytest.mark.integration

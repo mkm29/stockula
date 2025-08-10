@@ -640,7 +640,7 @@ class ResultsDisplay:
             Panel.fit(
                 f"[bold yellow]FORECAST MODE - IMPORTANT NOTES:[/bold yellow]\n"
                 f"{forecast_msg}\n"
-                f"• AutoTS will try multiple models to find the best fit\n"
+                f"• AutoGluon will automatically select the best model\n"
                 f"• This process may take several minutes per ticker\n"
                 f"• Press Ctrl+C at any time to cancel\n"
                 f"• Enable logging for more detailed progress information",
