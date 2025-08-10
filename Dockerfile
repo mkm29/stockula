@@ -30,7 +30,8 @@ ENV PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
     UV_SYSTEM_PYTHON=1 \
-    UV_COMPILE_BYTECODE=1
+    UV_COMPILE_BYTECODE=1 \
+    UV_LINK_MODE=copy
 
 # Install system dependencies with cache mount
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
