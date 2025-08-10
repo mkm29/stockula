@@ -14,7 +14,7 @@ from .forecasting import ForecastingManager
 from .manager import StockulaManager
 from .technical_analysis import TechnicalIndicators
 
-__version__ = "0.13.0"
+__version__ = "0.13.1"
 
 __all__ = [
     "DataFetcher",
