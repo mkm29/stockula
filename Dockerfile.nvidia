@@ -5,7 +5,8 @@
 # ============================================
 # Stage 1: Builder
 # ============================================
-FROM --platform=linux/amd64 pytorch/pytorch:2.8.0-cuda12.9-cudnn9-devel@sha256:cf5aa3f7045a68c10d80f546746591c5ccae6a33729e5e32625ff76bd2c036fe AS builder
+# Use runtime image for building to reduce download size (3.2GB vs 4.76GB)
+FROM --platform=linux/amd64 pytorch/pytorch:2.8.0-cuda12.9-cudnn9-runtime@sha256:e05438443ae3c407e8d04447091a959dbb6757b6290b128770c3c787d4bd442b AS builder
 
 # Set environment for non-interactive installation
 ENV DEBIAN_FRONTEND=noninteractive \
@@ -13,6 +14,12 @@ ENV DEBIAN_FRONTEND=noninteractive \
     PYTHONDONTWRITEBYTECODE=1 \
     PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1
+
+# Install build dependencies (needed since we're using runtime image)
+USER root
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
 
 # Create stockula user with uid 1000 and home directory
 RUN useradd -m -u 1000 -s /bin/bash stockula

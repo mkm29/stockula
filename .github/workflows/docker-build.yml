@@ -31,6 +31,7 @@ jobs:
       contents: read
       packages: write
     strategy:
+      fail-fast: false  # Continue building other images even if one fails
       matrix:
         include:
           - dockerfile: Dockerfile
@@ -107,6 +108,7 @@ jobs:
 
       - name: Build and push Docker image
         if: steps.should_build.outputs.should_run == 'true'
+        timeout-minutes: 30  # Prevent hanging builds (especially for large GPU images)
         uses: docker/build-push-action@v5
         with:
           context: .
@@ -156,7 +158,7 @@ jobs:
   publish-manifest:
     needs: build-and-push
     runs-on: ubuntu-latest
-    if: success()
+    if: always() && needs.build-and-push.result != 'cancelled'  # Run even if some builds fail
     permissions:
       packages: write
     steps:
