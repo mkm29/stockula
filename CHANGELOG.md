@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.13.1](https://github.com/mkm29/stockula/compare/v0.13.0...v0.13.1) (2025-08-10)
+
+
+### Bug Fixes
+
+* remove obsolete test for repository patterns from workflow ([af0668f](https://github.com/mkm29/stockula/commit/af0668f0913c34053bc07209fb9918bef2948f37))
+* removed autots tests from .github/workflows/test.yaml ([e61bfc3](https://github.com/mkm29/stockula/commit/e61bfc37a43c5a7a584dee901836a37f4893581a))
+
 ## [Unreleased]
 
 ### Changed
