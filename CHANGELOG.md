@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.15.2](https://github.com/mkm29/stockula/compare/v0.15.1...v0.15.2) (2025-08-11)
+
+
+### Bug Fixes
+
+* enhance Docker build workflow with disk space checks and cleanup for GPU builds ([05ad83f](https://github.com/mkm29/stockula/commit/05ad83f6c3de393ae4655c6167e47210ac44aca7))
+* enhance Docker build workflow with disk space checks and cleanup… ([ec6cde9](https://github.com/mkm29/stockula/commit/ec6cde9b93032d3b1e6c41058f3d9ae767084c6e))
+
 ## [0.15.1](https://github.com/mkm29/stockula/compare/v0.15.0...v0.15.1) (2025-08-10)
 
 
