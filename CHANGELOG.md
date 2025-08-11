@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.17.0](https://github.com/mkm29/stockula/compare/v0.16.0...v0.17.0) (2025-08-11)
+
+
+### Features
+
+* introducing StockulaPipeline to streamline entire process ([4f972a1](https://github.com/mkm29/stockula/commit/4f972a1bcdba29ede6e7f9806c1dd5c26f83cc1d))
+* stockula pipeline ([c82953d](https://github.com/mkm29/stockula/commit/c82953dc1463d0cbae331c61d408e5f490396034))
+* **tests:** Add mock for chronos module and skip tests if unavailable ([8ced840](https://github.com/mkm29/stockula/commit/8ced840e3eaf25e64ade92266f415a2ed2d1a310))
+* update portfolio configuration and optimize allocation logic ([31b60d9](https://github.com/mkm29/stockula/commit/31b60d993fe756102d20caaed860b5311cf66806))
+* update portfolio configuration and optimize allocation logic ([8023bf9](https://github.com/mkm29/stockula/commit/8023bf961559c900d980f97ad7f3b859edfc929a))
+
 ## [0.16.0](https://github.com/mkm29/stockula/compare/v0.15.7...v0.16.0) (2025-08-11)
 
 
