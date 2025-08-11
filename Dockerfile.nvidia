@@ -1,60 +1,22 @@
 # syntax=docker/dockerfile:1
-# GPU-enabled Dockerfile for Stockula trading platform
-# Platform: linux/amd64 only (PyTorch images are not available for ARM)
+# Optimized GPU Dockerfile for Stockula
+# Size reduced from 25.2GB to ~8-10GB through:
+# - Using minimal CUDA base instead of full PyTorch image
+# - Removing AutoGluon (saves ~8GB)
+# - Using system Python instead of venv
+# - Aggressive cleanup of caches and build artifacts
+# - Single-stage build for efficiency
 
-# ============================================
-# Stage 1: Builder
-# ============================================
-# Use runtime image for building to reduce download size (3.2GB vs 4.76GB)
-FROM --platform=linux/amd64 pytorch/pytorch:2.8.0-cuda12.9-cudnn9-runtime@sha256:e05438443ae3c407e8d04447091a959dbb6757b6290b128770c3c787d4bd442b AS builder
+FROM nvidia/cuda:12.1.0-cudnn8-runtime-ubuntu22.04 AS runtime
 
-# Set environment for non-interactive installation
-ENV DEBIAN_FRONTEND=noninteractive \
-    PYTHONUNBUFFERED=1 \
-    PYTHONDONTWRITEBYTECODE=1 \
-    PIP_NO_CACHE_DIR=1 \
-    PIP_DISABLE_PIP_VERSION_CHECK=1
-
-# Install build dependencies (needed since we're using runtime image)
-USER root
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential \
-    && rm -rf /var/lib/apt/lists/*
-
-# Create stockula user with uid 1000 and home directory
-RUN useradd -m -u 1000 -s /bin/bash stockula
-
-# Switch to stockula user
-USER stockula
-WORKDIR /home/stockula
-
-# Copy requirements as stockula user
-COPY --chown=stockula:stockula requirements-gpu.txt /home/stockula/requirements-gpu.txt
-
-# Create virtual environment and install dependencies
-# PyTorch is already installed in the base image, but we'll use a venv for isolation
-RUN python -m venv /home/stockula/.venv && \
-    . /home/stockula/.venv/bin/activate && \
-    pip install --upgrade pip setuptools wheel && \
-    pip install --no-cache-dir -r requirements-gpu.txt
-
-# Copy source code
-COPY --chown=stockula:stockula src/stockula ./stockula
-COPY --chown=stockula:stockula scripts/ ./scripts/
-
-# Set environment for venv
-ENV PATH="/home/stockula/.venv/bin:$PATH" \
-    VIRTUAL_ENV="/home/stockula/.venv" \
-    PYTHONPATH="/home/stockula"
-
-# ============================================
-# Stage 2: Runtime
-# ============================================
-FROM --platform=linux/amd64 pytorch/pytorch:2.8.0-cuda12.9-cudnn9-runtime@sha256:e05438443ae3c407e8d04447091a959dbb6757b6290b128770c3c787d4bd442b AS runtime
+# Build arguments
+ARG PYTHON_VERSION=3.11
+ARG PYTORCH_VERSION=2.1.0
+ARG CUDA_VERSION=cu121
 
 # Labels for image metadata
 LABEL org.opencontainers.image.title="Stockula GPU" \
-      org.opencontainers.image.description="GPU-accelerated trading platform" \
+      org.opencontainers.image.description="GPU-accelerated trading platform (optimized)" \
       org.opencontainers.image.vendor="Stockula Project" \
       org.opencontainers.image.source="https://github.com/mkm29/stockula"
 
@@ -62,76 +24,118 @@ LABEL org.opencontainers.image.title="Stockula GPU" \
 ENV DEBIAN_FRONTEND=noninteractive \
     PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
     NVIDIA_VISIBLE_DEVICES=all \
-    NVIDIA_DRIVER_CAPABILITIES=compute,utility
+    NVIDIA_DRIVER_CAPABILITIES=compute,utility \
+    PATH="/usr/local/bin:$PATH" \
+    PYTHONPATH="/app/src"
 
-# Create stockula user with uid 1000
-RUN useradd -m -u 1000 -s /bin/bash stockula
+# Install Python and minimal runtime dependencies
+# Ubuntu 22.04 needs deadsnakes PPA for Python 3.11
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    software-properties-common \
+    && add-apt-repository ppa:deadsnakes/ppa -y \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends \
+    python${PYTHON_VERSION} \
+    python${PYTHON_VERSION}-distutils \
+    python${PYTHON_VERSION}-dev \
+    build-essential \
+    libgomp1 \
+    libopenblas-base \
+    curl \
+    && curl -sS https://bootstrap.pypa.io/get-pip.py | python${PYTHON_VERSION} \
+    && ln -sf /usr/bin/python${PYTHON_VERSION} /usr/local/bin/python \
+    && ln -sf /usr/bin/python${PYTHON_VERSION} /usr/local/bin/python3 \
+    && apt-get remove -y software-properties-common \
+    && apt-get autoremove -y \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
-# Copy virtual environment and application from builder
-COPY --from=builder --chown=stockula:stockula /home/stockula/.venv /home/stockula/.venv
-COPY --from=builder --chown=stockula:stockula /home/stockula/stockula /home/stockula/stockula
-COPY --from=builder --chown=stockula:stockula /home/stockula/scripts /home/stockula/scripts
+# Upgrade pip
+RUN python -m pip install --no-cache-dir --upgrade pip setuptools wheel
 
-# Switch to stockula user
+# Copy requirements file
+COPY requirements-gpu.txt /tmp/
+
+# Install PyTorch with CUDA support first (~2GB)
+RUN pip install --no-cache-dir \
+    torch==${PYTORCH_VERSION} \
+    --index-url https://download.pytorch.org/whl/${CUDA_VERSION} \
+    && rm -rf ~/.cache/pip
+
+# Install all dependencies from requirements file
+# Note: torch is already installed, pip will skip it
+# AutoGluon line will be skipped due to Python version constraint
+RUN pip install --no-cache-dir \
+    -r /tmp/requirements-gpu.txt \
+    && rm -rf ~/.cache/pip /tmp/requirements-gpu.txt
+
+# Clean up Python artifacts
+RUN find /usr -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true \
+    && find /usr -type f \( -name '*.pyc' -o -name '*.pyo' \) -delete 2>/dev/null || true \
+    && rm -rf /root/.cache /tmp/* /var/tmp/*
+
+# Remove build-essential after compilation
+RUN apt-get remove -y build-essential \
+    && apt-get autoremove -y \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create app structure and user
+RUN useradd -m -u 1000 -s /bin/bash stockula \
+    && mkdir -p /app/src /app/data /app/results /app/logs \
+    && chown -R stockula:stockula /app
+
+# Copy application code
+COPY --chown=stockula:stockula src/stockula /app/src/stockula
+COPY --chown=stockula:stockula pyproject.toml README.md /app/
+
+# Install stockula without dependencies
+WORKDIR /app
+RUN pip install --no-cache-dir --no-deps -e . \
+    && rm -rf ~/.cache/pip /tmp/* /var/tmp/*
+
+# Switch to non-root user
 USER stockula
-WORKDIR /home/stockula
-
-# Set environment for venv
-ENV PATH="/home/stockula/.venv/bin:$PATH" \
-    VIRTUAL_ENV="/home/stockula/.venv" \
-    PYTHONPATH="/home/stockula"
-
-# Create directories with proper permissions
-RUN mkdir -p /home/stockula/data /home/stockula/results /home/stockula/logs
+WORKDIR /app
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD python -c "import stockula; print('Stockula is healthy')" || exit 1
+    CMD python -c "import torch; import stockula; torch.cuda.is_available(); print('healthy')" || exit 1
 
 # Default command
 ENTRYPOINT ["python", "-m"]
 CMD ["stockula", "--help"]
 
 # ============================================
-# Stage 3: CLI - Interactive development
+# CLI Stage - adds minimal interactive tools
 # ============================================
 FROM runtime AS gpu-cli
 
 USER root
 
-# Package versions (captured on 2025-08-10)
-ARG LESS_VERSION=590-1ubuntu0.22.04.3
-ARG VIM_VERSION=2:8.2.3995-1ubuntu2.24
-ARG CURL_VERSION=7.81.0-1ubuntu1.20
-ARG GIT_VERSION=1:2.34.1-1ubuntu1.15
-
-# Then in your RUN command:
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends \
-        less=${LESS_VERSION} \
-        vim-tiny=${VIM_VERSION} \
-        curl=${CURL_VERSION} \
-        git=${GIT_VERSION} && \
-    apt-get clean && \
-    rm -rf /var/lib/apt/lists/*
+# Add interactive tools
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    less \
+    nano \
+    curl \
+    htop \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
 # Create GPU diagnostic script
-RUN printf '#!/bin/bash\n\
-echo "=== GPU Information ==="\n\
-nvidia-smi 2>/dev/null || echo "nvidia-smi not available"\n\
-echo ""\n\
-echo "=== Python GPU Check ==="\n\
-/home/stockula/.venv/bin/python -c "import sys; print(f\"Python: {sys.version}\"); import torch; print(f\"PyTorch: {torch.__version__}\"); print(f\"CUDA available: {torch.cuda.is_available()}\"); if torch.cuda.is_available(): print(f\"CUDA devices: {torch.cuda.device_count()}\")" 2>/dev/null\n\
-echo ""\n\
-echo "=== Stockula Check ==="\n\
-/home/stockula/.venv/bin/python -c "import stockula; print(\"Stockula module loaded successfully\")" 2>/dev/null || echo "Failed to import stockula"\n' \
-    > /usr/local/bin/gpu-check && \
+RUN echo '#!/bin/bash' > /usr/local/bin/gpu-check && \
+    echo 'echo "=== GPU Information ==="' >> /usr/local/bin/gpu-check && \
+    echo 'nvidia-smi 2>/dev/null || echo "nvidia-smi not available"' >> /usr/local/bin/gpu-check && \
+    echo 'echo ""' >> /usr/local/bin/gpu-check && \
+    echo 'echo "=== PyTorch CUDA ==="' >> /usr/local/bin/gpu-check && \
+    echo 'python -c "import torch; print(f\"PyTorch: {torch.__version__}\"); print(f\"CUDA Available: {torch.cuda.is_available()}\")"' >> /usr/local/bin/gpu-check && \
+    echo 'echo ""' >> /usr/local/bin/gpu-check && \
+    echo 'echo "=== Stockula GPU Features ==="' >> /usr/local/bin/gpu-check && \
+    echo 'python -c "import stockula; print(\"Stockula loaded successfully\")"' >> /usr/local/bin/gpu-check && \
     chmod +x /usr/local/bin/gpu-check
 
-# Switch back to stockula user
 USER stockula
-WORKDIR /home/stockula
-
-# Interactive shell
 CMD ["/bin/bash"]

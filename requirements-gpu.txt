@@ -10,7 +10,7 @@
 # Core app dependencies
 alembic==1.16.4
 dependency-injector==4.48.1
-numpy>=1.25.0,<2.3.0
+numpy==2.3.0
 pandas==2.3.1
 pydantic==2.11.7
 pydantic-settings==2.10.1
@@ -33,6 +33,7 @@ scikit-learn==1.7.1
 scipy==1.15.3
 
 # Time series forecasting with GPU acceleration
+torch==2.8.0
 gluonts[torch]==0.16.2
 chronos-forecasting>=1.5.2
 # AutoGluon not installed on Python 3.13+ due to ray wheels availability
