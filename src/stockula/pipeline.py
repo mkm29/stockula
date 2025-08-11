@@ -401,11 +401,17 @@ class StockulaPipeline:
         table.add_column("Allocation %", justify="right")
 
         allocations = results["optimized_allocations"]
-        total = sum(allocations.values())
+        # Filter out None values and convert to float
+        valid_allocations = {k: float(v) for k, v in allocations.items() if v is not None}
+        total = sum(valid_allocations.values())
 
         for symbol, quantity in sorted(allocations.items()):
-            percentage = (quantity / total * 100) if total > 0 else 0
-            table.add_row(symbol, f"{quantity:.2f}", f"{percentage:.1f}%")
+            if quantity is not None:
+                quantity_float = float(quantity)
+                percentage = (quantity_float / total * 100) if total > 0 else 0
+                table.add_row(symbol, f"{quantity_float:.2f}", f"{percentage:.1f}%")
+            else:
+                table.add_row(symbol, "N/A", "0.0%")
 
         self.console.print(table)
 
