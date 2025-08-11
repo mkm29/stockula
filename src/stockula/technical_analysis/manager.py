@@ -5,8 +5,7 @@ from typing import Any
 import pandas as pd
 
 from stockula.config import StockulaConfig
-from stockula.data.fetcher import DataFetcher
-from stockula.interfaces import ILoggingManager
+from stockula.interfaces import IDataFetcher, ILoggingManager
 
 from .indicators import TechnicalIndicators
 
@@ -14,7 +13,7 @@ from .indicators import TechnicalIndicators
 class TechnicalAnalysisManager:
     """Manages different technical analysis strategies and provides unified interface."""
 
-    def __init__(self, data_fetcher: DataFetcher, logging_manager: ILoggingManager):
+    def __init__(self, data_fetcher: IDataFetcher, logging_manager: ILoggingManager):
         """Initialize TechnicalAnalysisManager.
 
         Args:
