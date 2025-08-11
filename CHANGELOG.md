@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.15.3](https://github.com/mkm29/stockula/compare/v0.15.2...v0.15.3) (2025-08-11)
+
+
+### Bug Fixes
+
+* remove unnecessary SHA-based tagging for Docker image builds ([330ee1d](https://github.com/mkm29/stockula/commit/330ee1d2bab31b35744386dd903014b61e45a568))
+* remove unnecessary SHA-based tagging for Docker image builds ([f4a3104](https://github.com/mkm29/stockula/commit/f4a3104085a9e425b3aa0911c9a71903e751fbcb))
+
 ## [0.15.2](https://github.com/mkm29/stockula/compare/v0.15.1...v0.15.2) (2025-08-11)
 
 
