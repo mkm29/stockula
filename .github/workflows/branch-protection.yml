@@ -37,11 +37,11 @@ jobs:
               if [[ "$SOURCE_BRANCH" == "develop" ]] || \
                  [[ "$SOURCE_BRANCH" == hotfix/* ]] || \
                  [[ "$SOURCE_BRANCH" == fix/* ]] || \
-                 [[ "$SOURCE_BRANCH" == release/* ]]; then
+                 [[ "$SOURCE_BRANCH" == release-please* ]]; then
                 MESSAGE="✅ Valid: $SOURCE_BRANCH -> main"
               else
                 VALID=false
-                MESSAGE="❌ Invalid: Only 'develop', 'hotfix/*', 'fix/*', or 'release/*' branches can merge to main"
+                MESSAGE="❌ Invalid: Only 'develop', 'hotfix/*', 'fix/*', or 'release-please*' branches can merge to main"
               fi
               ;;
 
