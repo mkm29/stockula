@@ -188,33 +188,34 @@ class TestRunStockula:
         # Mock the manager methods
         mock_manager = Mock()
         mock_manager.create_portfolio.return_value = Mock()
-        mock_manager.display_portfolio_summary = Mock()
-        mock_manager.display_portfolio_holdings = Mock()
         mock_manager.run_main_processing.return_value = {"technical_analysis": [{"ticker": "AAPL", "indicators": {}}]}
 
         with patch("stockula.cli.create_container", return_value=mock_container):
             with patch("stockula.cli.StockulaManager", return_value=mock_manager):
-                with patch("stockula.cli.print_results") as mock_print:
-                    run_stockula(config=temp_config_file, mode="ta")
+                with patch("stockula.cli.ResultsDisplay") as mock_display_cls:
+                    mock_display = mock_display_cls.return_value
+                    with patch("stockula.cli.print_results") as mock_print:
+                        run_stockula(config=temp_config_file, mode="ta")
 
-                    # Verify manager methods were called
-                    mock_manager.create_portfolio.assert_called_once()
-                    mock_manager.run_main_processing.assert_called_once()
-                    mock_print.assert_called_once()
+                        # Verify manager and display methods were called
+                        mock_manager.create_portfolio.assert_called_once()
+                        mock_manager.run_main_processing.assert_called_once()
+                        mock_display.show_portfolio_summary.assert_called_once()
+                        mock_display.show_portfolio_holdings.assert_called_once()
+                        mock_print.assert_called_once()
 
     def test_run_stockula_with_ticker_override(self, mock_container):
         """Test run_stockula with ticker override."""
         # Mock the manager methods
         mock_manager = Mock()
         mock_manager.create_portfolio.return_value = Mock()
-        mock_manager.display_portfolio_summary = Mock()
-        mock_manager.display_portfolio_holdings = Mock()
         mock_manager.run_main_processing.return_value = {"technical_analysis": [{"ticker": "TSLA", "indicators": {}}]}
 
         with patch("stockula.cli.create_container", return_value=mock_container):
             with patch("stockula.cli.StockulaManager", return_value=mock_manager):
-                with patch("stockula.cli.print_results"):
-                    run_stockula(ticker="TSLA", mode="ta")
+                with patch("stockula.cli.ResultsDisplay"):
+                    with patch("stockula.cli.print_results"):
+                        run_stockula(ticker="TSLA", mode="ta")
 
                     # Verify config was updated with ticker
                     mock_config = mock_container.stockula_config()

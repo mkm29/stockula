@@ -62,7 +62,7 @@ workflows:
   - Creates GitHub release with version tag
   - Tags version (e.g., `v0.15.6`)
   - Updates CHANGELOG.md
-  - Bumps version in pyproject.toml and __init__.py
+  - Bumps version in pyproject.toml and **init**.py
   - Publishes to PyPI
 
 **Important Notes:**

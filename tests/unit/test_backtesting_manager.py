@@ -5,6 +5,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from stockula.backtesting.manager import BacktestingManager
+from stockula.data.strategy_repository import StrategyRepository
 from stockula.interfaces import ILoggingManager
 
 
@@ -45,17 +46,23 @@ def mock_backtest_runner():
 
 
 @pytest.fixture
-def backtesting_manager(mock_data_fetcher, mock_logging_manager):
+def mock_strategy_repository():
+    """Provide a real StrategyRepository (no DB) for testing."""
+    return StrategyRepository()
+
+
+@pytest.fixture
+def backtesting_manager(mock_data_fetcher, mock_logging_manager, mock_strategy_repository):
     """Create BacktestingManager instance for testing."""
-    return BacktestingManager(mock_data_fetcher, mock_logging_manager)
+    return BacktestingManager(mock_data_fetcher, mock_logging_manager, mock_strategy_repository)
 
 
 class TestBacktestingManagerInitialization:
     """Test BacktestingManager initialization."""
 
-    def test_initialization(self, mock_data_fetcher, mock_logging_manager):
+    def test_initialization(self, mock_data_fetcher, mock_logging_manager, mock_strategy_repository):
         """Test manager initialization."""
-        manager = BacktestingManager(mock_data_fetcher, mock_logging_manager)
+        manager = BacktestingManager(mock_data_fetcher, mock_logging_manager, mock_strategy_repository)
 
         assert manager.data_fetcher == mock_data_fetcher
         assert manager.logger == mock_logging_manager

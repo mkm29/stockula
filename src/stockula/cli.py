@@ -138,9 +138,10 @@ def run_stockula(
             console.print(f"\n[bold red]❌ Portfolio Error:[/bold red] [red]{error_msg}[/red]\n")
         raise typer.Exit(1) from None
 
-    # Display portfolio summary
-    manager.display_portfolio_summary(portfolio)
-    manager.display_portfolio_holdings(portfolio, mode=mode)
+    # Display portfolio summary and holdings via display layer
+    display = ResultsDisplay(cli_manager.get_console())
+    display.show_portfolio_summary(portfolio)
+    display.show_portfolio_holdings(portfolio, mode=mode, data_fetcher=container.data_fetcher())
 
     # Run main processing through StockulaManager
     try:
