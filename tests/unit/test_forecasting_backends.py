@@ -9,6 +9,8 @@ import pytest
 from stockula.forecasting.backends.base import ForecastResult
 from stockula.forecasting.backends.simple import SimpleForecastBackend
 
+from .conftest import is_chronos_available
+
 
 class TestForecastResult:
     """Test the ForecastResult dataclass."""
@@ -688,6 +690,7 @@ class TestForecastBackendEvaluateMethod:
             assert not np.isnan(metrics["mase"])
 
 
+@pytest.mark.skipif(not is_chronos_available(), reason="Chronos not installed")
 class TestChronosBackend:
     """Test the ChronosBackend implementation."""
 

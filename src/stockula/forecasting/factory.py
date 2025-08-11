@@ -105,12 +105,17 @@ def create_forecast_backend(
         )
     else:
         # Fall back to simple backend if AutoGluon is not available
-        logging_manager.warning(
-            "AutoGluon not available (requires Python < 3.13). Using simple linear regression for forecasting."
-        )
-        return SimpleForecastBackend(
-            forecast_length=forecast_length,
-            frequency=config.frequency,
-            prediction_interval=config.prediction_interval,
-            no_negatives=config.no_negatives,
+        # Check if logging_manager is properly injected
+        if hasattr(logging_manager, "warning"):
+            logging_manager.warning(
+                "AutoGluon not available (requires Python < 3.13). Using simple linear regression for forecasting."
+            )
+        return cast(
+            ForecastBackend,
+            SimpleForecastBackend(
+                forecast_length=forecast_length,
+                frequency=config.frequency,
+                prediction_interval=config.prediction_interval,
+                no_negatives=config.no_negatives,
+            ),
         )
