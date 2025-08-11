@@ -142,10 +142,6 @@ jobs:
             type=raw,value=feat,enable=${{ contains(steps.version.outputs.version, 'feat') && matrix.suffix == '' }}
             # For development builds
             type=raw,value=dev,enable=${{ steps.version.outputs.version == 'dev' }}
-            # SHA-based tag for traceability (only for non-release events)
-            type=sha,prefix={{branch}}-,format=short,enable=${{ github.event_name != 'release' }}
-            # SHA-based tag for releases (without branch prefix since there's no branch context)
-            type=sha,format=short,enable=${{ github.event_name == 'release' }}
 
       - name: Build and push Docker image
         if: steps.should_build.outputs.should_run == 'true'
