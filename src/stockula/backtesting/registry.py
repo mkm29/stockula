@@ -65,6 +65,9 @@ class StrategyRegistry:
         "vama": "vama",
         "vidya": "vidya",
         "kaufman_efficiency": "kaufman_efficiency",
+        # Additional common variations
+        "doubleemacross": "double_ema_cross",  # Config uses this format
+        "er": "kaufman_efficiency",  # Lowercase variant
     }
 
     # Predefined strategy groups for different trading approaches

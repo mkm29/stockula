@@ -209,7 +209,7 @@
   ([109397e](https://github.com/mkm29/stockula/commit/109397e1711caf71d302d3e7f319bcfbb359d6b0))
 - remove obsolete test for repository patterns from workflow
   ([af0668f](https://github.com/mkm29/stockula/commit/af0668f0913c34053bc07209fb9918bef2948f37))
-- removed autots tests from .github/workflows/test.yaml
+- removed autots tests from .GitHub/workflows/test.yaml
   ([e61bfc3](https://github.com/mkm29/stockula/commit/e61bfc37a43c5a7a584dee901836a37f4893581a))
 - removed unused packages from pyproject.toml
   ([cf2abac](https://github.com/mkm29/stockula/commit/cf2abacd83f6eec1a20f47c3cc3dad4a021b48a9))
@@ -387,7 +387,7 @@
   ([7074d82](https://github.com/mkm29/stockula/commit/7074d82544f45156970e02dcc6dc7d5cf460283e))
 - reset version to v0.1.0 for initial release
   ([036fa12](https://github.com/mkm29/stockula/commit/036fa12646f68a386c82b38dff7ec28766d344cd))
-- Update .gitignore to include AutoTS cache and sqlite database files
+- Update .gitignore to include AutoTS cache and SQLite database files
   ([6117bd3](https://github.com/mkm29/stockula/commit/6117bd30f6d55fcf62b798eb2cf9ded29300cfb3))
 - update changelog with test suite fixes and improvements; modif…
   ([cf734ea](https://github.com/mkm29/stockula/commit/cf734ea913c9819b78da6b5b2dcb6e1b4bedf44a))
@@ -418,7 +418,7 @@
 
 - remove obsolete test for repository patterns from workflow
   ([af0668f](https://github.com/mkm29/stockula/commit/af0668f0913c34053bc07209fb9918bef2948f37))
-- removed autots tests from .github/workflows/test.yaml
+- removed autots tests from .GitHub/workflows/test.yaml
   ([e61bfc3](https://github.com/mkm29/stockula/commit/e61bfc37a43c5a7a584dee901836a37f4893581a))
 
 ## [Unreleased]

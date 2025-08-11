@@ -252,14 +252,42 @@ class BacktestingManager:
                 available_strategies = self.strategy_registry.get_available_strategy_names()
                 raise ValueError(f"Unknown strategy: {strategy_name}. Available: {available_strategies}")
 
+            # Get date ranges from config if available
+            train_start_date = None
+            train_end_date = None
+            test_start_date = None
+            test_end_date = None
+
+            if config and hasattr(config, "forecast"):
+                # Use forecast dates for train/test split
+                if hasattr(config.forecast, "train_start_date"):
+                    train_start_date = (
+                        str(config.forecast.train_start_date) if config.forecast.train_start_date else None
+                    )
+                if hasattr(config.forecast, "train_end_date"):
+                    train_end_date = str(config.forecast.train_end_date) if config.forecast.train_end_date else None
+                if hasattr(config.forecast, "test_start_date"):
+                    test_start_date = str(config.forecast.test_start_date) if config.forecast.test_start_date else None
+                if hasattr(config.forecast, "test_end_date"):
+                    test_end_date = str(config.forecast.test_end_date) if config.forecast.test_end_date else None
+
+            # Prepare kwargs for the runner
+            run_kwargs = dict(params) if params else {}
+
+            # Add param_ranges to kwargs if optimization is enabled
+            if optimize_on_train and param_ranges:
+                run_kwargs["param_ranges"] = param_ranges
+
             # Run train/test split backtest using the runner
             result = self._runner.run_with_train_test_split(
                 symbol=ticker,
                 strategy=strategy_class,
-                train_ratio=train_ratio,
+                train_start_date=train_start_date,
+                train_end_date=train_end_date,
+                test_start_date=test_start_date,
+                test_end_date=test_end_date,
                 optimize_on_train=optimize_on_train,
-                param_ranges=param_ranges,
-                **params,
+                **run_kwargs,
             )
 
             self.logger.info(f"Completed train/test split backtest for {ticker}")

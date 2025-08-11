@@ -466,6 +466,14 @@ class StockulaManager:
                         else None,
                     )
 
+                    # Check if there was an error
+                    if "error" in backtest_result:
+                        # Log the error and skip this strategy
+                        self.log_manager.error(
+                            f"Error backtesting {strategy_config.name} on {ticker}: {backtest_result.get('error')}"
+                        )
+                        continue
+
                     # Create result entry with train/test results
                     result_entry: dict[str, Any] | None = self._create_train_test_result(
                         ticker, strategy_config, backtest_result
