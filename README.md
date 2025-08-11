@@ -51,6 +51,11 @@ a complete solution for quantitative trading strategy development.
   - Future prediction mode: Forecast N days from today
   - Historical evaluation mode: Train/test split with accuracy metrics (RMSE, MAE, MASE)
   - **GPU Acceleration**: Full CUDA support via PyTorch 2.8.0 base images
+- **🚀 Pipeline Orchestration**: Automated workflow for portfolio optimization and backtesting
+  - Run complete optimization → backtesting pipeline in one command
+  - Compare performance before and after optimization
+  - Save and reuse optimized configurations
+  - Export results in JSON, YAML, or CSV formats
 - **🎨 Rich CLI Interface**: Beautiful progress bars, tables, and colored output
 - **🗄️ Database Caching**: Automatic SQLite caching for offline analysis and fast data access
 - **🚀 Modern Python**: Built with uv for fast package management and Pydantic for configuration
@@ -120,6 +125,9 @@ uv run python -m stockula
 uv run python -m stockula --ticker GOOGL --mode ta        # Technical analysis
 uv run python -m stockula --ticker MSFT --mode backtest  # Backtesting (results sorted by return, highest first)
 uv run python -m stockula --ticker NVDA --mode forecast  # Forecasting with AutoGluon or fallback
+
+# Run complete optimization → backtesting pipeline
+uv run python -m stockula pipeline --base-config .stockula.yaml --optimized-config .stockula-opt.yaml
 
 # Show help
 uv run python -m stockula --help
@@ -264,6 +272,57 @@ documentation for more details.
 > **Note**: Currently, the `backtest_optimized` allocation method requires placeholder quantities in the config. Full
 > CLI integration is planned for a future release.
 
+### Pipeline Orchestration
+
+Stockula includes a powerful pipeline system that automates the complete workflow from portfolio optimization to
+backtesting:
+
+```bash
+# Run the complete pipeline: optimization → backtesting
+uv run python -m stockula pipeline \
+    --base-config .stockula.yaml \
+    --optimized-config .stockula-optimized.yaml \
+    --output results.json
+
+# Run optimization only
+uv run python -m stockula pipeline \
+    --base-config portfolio.yaml \
+    --optimized-config portfolio-opt.yaml \
+    --skip-backtest
+
+# Use existing optimized config for backtesting
+uv run python -m stockula pipeline \
+    --base-config optimized.yaml \
+    --skip-optimization
+```
+
+**Python API Example:**
+
+```python
+from stockula.pipeline import StockulaPipeline
+
+# Create and run pipeline
+pipeline = StockulaPipeline(base_config_path=".stockula.yaml", verbose=True)
+results = pipeline.run_full_pipeline(
+    optimized_config_path=".stockula-optimized.yaml"
+)
+
+# Compare performance
+print(f"Original Return: {results['backtest']['original']['total_return']:.2%}")
+print(f"Optimized Return: {results['backtest']['optimized']['total_return']:.2%}")
+```
+
+The pipeline provides:
+
+- **Automated workflow**: Optimization followed by backtesting in one command
+- **Performance comparison**: See improvements from optimization
+- **Configuration management**: Save and reuse optimized portfolios
+- **Flexible output**: Export results as JSON, YAML, or CSV
+- **Batch processing**: Process multiple portfolios programmatically
+
+See the [Pipeline Documentation](https://github.com/mkm29/stockula/blob/main/docs/user-guide/pipeline.md) for detailed
+examples and API reference.
+
 ### Forecast Evaluation
 
 When running forecasts in evaluation mode (with train/test split), Stockula provides accuracy metrics:
@@ -328,6 +387,8 @@ For comprehensive documentation, visit our
   Portfolio allocation methods including backtest optimization
 - [**Forecasting**](https://github.com/mkm29/stockula/blob/main/docs/user-guide/forecasting.md) - Time series prediction
   with AutoGluon
+- [**Pipeline Orchestration**](https://github.com/mkm29/stockula/blob/main/docs/user-guide/pipeline.md) - Automated
+  optimization and backtesting workflow
 - [**Forecasting Models**](https://github.com/mkm29/stockula/blob/main/docs/FORECASTING_MODELS.md) - Fast & full
   financial model details
 - [**Rich CLI Features**](https://github.com/mkm29/stockula/blob/main/docs/user-guide/rich-cli.md) - Enhanced

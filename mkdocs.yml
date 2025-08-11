@@ -59,6 +59,7 @@ nav:
       - Backtesting: user-guide/backtesting.md
       - Allocation Strategies: user-guide/allocation-strategies.md
       - Forecasting: user-guide/forecasting.md
+      - Pipeline Orchestration: user-guide/pipeline.md
       - Rich CLI Features: user-guide/rich-cli.md
   - Development:
       - Testing Guide: development/testing.md

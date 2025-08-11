@@ -14,6 +14,7 @@ from .config.settings import save_config
 from .container import create_container
 from .display import ResultsDisplay
 from .manager import StockulaManager
+from .pipeline import StockulaPipeline
 
 # Create Typer app
 app = typer.Typer(
@@ -174,8 +175,9 @@ def run_stockula(
         display.show_strategy_summaries(manager, stockula_config, results)
 
 
-@app.command()
+@app.callback(invoke_without_command=True)
 def main(
+    ctx: typer.Context,
     config: Annotated[str | None, typer.Option("--config", "-c", help="Path to configuration file (YAML)")] = None,
     ticker: Annotated[
         str | None, typer.Option("--ticker", "-t", help="Override ticker symbol (single ticker mode)")
@@ -203,6 +205,11 @@ def main(
     and machine learning forecasts. Supports portfolio optimization
     and multiple output formats.
     """
+    # If a subcommand is invoked, don't run the main logic
+    if ctx.invoked_subcommand is not None:
+        return
+
+    # Otherwise, run the main stockula logic
     run_stockula(
         config=config,
         ticker=ticker,
@@ -215,6 +222,137 @@ def main(
         test_start=test_start,
         test_end=test_end,
     )
+
+
+@app.command(name="pipeline")
+def pipeline_command(
+    base_config: Annotated[
+        str,
+        typer.Option(
+            "--base-config",
+            "-b",
+            help="Path to base configuration file",
+        ),
+    ] = ".stockula.yaml",
+    optimized_config: Annotated[
+        str | None,
+        typer.Option(
+            "--optimized-config",
+            "-o",
+            help="Path to save optimized configuration",
+        ),
+    ] = None,
+    output: Annotated[
+        str | None,
+        typer.Option(
+            "--output",
+            help="Path to save pipeline results (json/yaml/csv)",
+        ),
+    ] = None,
+    skip_optimization: Annotated[
+        bool,
+        typer.Option(
+            "--skip-optimization",
+            help="Skip optimization and use existing config",
+        ),
+    ] = False,
+    skip_backtest: Annotated[
+        bool,
+        typer.Option(
+            "--skip-backtest",
+            help="Skip backtesting after optimization",
+        ),
+    ] = False,
+    verbose: Annotated[
+        bool,
+        typer.Option(
+            "--verbose",
+            "-v",
+            help="Enable verbose output",
+        ),
+    ] = False,
+):
+    """
+    Run the complete Stockula pipeline: optimization followed by backtesting.
+
+    This command orchestrates the full workflow:
+    1. Load base configuration
+    2. Run portfolio optimization
+    3. Save optimized configuration
+    4. Run backtesting with optimized allocations
+    5. Compare and report results
+
+    Examples:
+        # Run full pipeline
+        stockula pipeline --base-config .stockula.yaml --optimized-config .stockula-opt.yaml
+
+        # Run with results output
+        stockula pipeline -b config.yaml -o optimized.yaml --output results.json
+
+        # Skip optimization and use existing optimized config
+        stockula pipeline -b optimized.yaml --skip-optimization
+    """
+    from rich.console import Console
+
+    console = Console()
+
+    try:
+        # Create pipeline instance
+        pipeline = StockulaPipeline(
+            base_config_path=base_config,
+            verbose=verbose,
+            console=console,
+        )
+
+        if skip_optimization and skip_backtest:
+            console.print("[red]Error: Cannot skip both optimization and backtesting[/red]")
+            raise typer.Exit(1)
+
+        # Run based on options
+        if not skip_optimization and not skip_backtest:
+            # Run full pipeline
+            results = pipeline.run_full_pipeline(
+                optimized_config_path=optimized_config,
+            )
+        elif skip_optimization:
+            # Just run backtest with existing config
+            config = pipeline.load_configuration(base_config)
+            results = pipeline.run_backtest(config=config, use_optimized=False)
+        else:  # skip_backtest
+            # Just run optimization
+            config = pipeline.load_configuration(base_config)
+            _, results = pipeline.run_optimization(
+                config=config,
+                save_config_path=optimized_config,
+            )
+
+        # Save results if output path provided
+        if output:
+            format = "json"
+            if output.endswith(".yaml") or output.endswith(".yml"):
+                format = "yaml"
+            elif output.endswith(".csv"):
+                format = "csv"
+            pipeline.save_results(output, format=format)
+
+        console.print("\n[bold green]✨ Pipeline completed successfully![/bold green]")
+
+    except FileNotFoundError as e:
+        console.print(f"[red]Error: {e}[/red]")
+        raise typer.Exit(1) from None
+    except ValidationError as e:
+        handle_validation_error(e, base_config)
+        raise typer.Exit(1) from None
+    except KeyboardInterrupt:
+        console.print("\n[yellow]Pipeline interrupted by user[/yellow]")
+        raise typer.Exit(130) from None
+    except Exception as e:
+        console.print(f"[red]Unexpected error: {e}[/red]")
+        if verbose:
+            import traceback
+
+            console.print(traceback.format_exc())
+        raise typer.Exit(1) from None
 
 
 def handle_validation_error(error: ValidationError, config_path: str) -> None:

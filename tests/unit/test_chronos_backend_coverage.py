@@ -7,20 +7,12 @@ import pandas as pd
 import pytest
 
 from stockula.forecasting.backends.base import ForecastResult
+from stockula.forecasting.backends.chronos import ChronosBackend
 
-# Check if chronos is available
-try:
-    import chronos  # noqa: F401
-
-    from stockula.forecasting.backends.chronos import ChronosBackend
-
-    CHRONOS_AVAILABLE = True
-except ImportError:
-    CHRONOS_AVAILABLE = False
-    ChronosBackend = None  # Define as None when not available
+from .conftest import is_chronos_available
 
 
-@pytest.mark.skipif(not CHRONOS_AVAILABLE, reason="chronos not installed")
+@pytest.mark.skipif(not is_chronos_available(), reason="Chronos not installed")
 class TestChronosBackendCoverage:
     """Test ChronosBackend with focus on achieving 70%+ code coverage."""
 
