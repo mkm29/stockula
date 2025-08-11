@@ -11,7 +11,7 @@ FROM nvidia/cuda:12.1.0-cudnn8-runtime-ubuntu22.04 AS runtime
 
 # Build arguments
 ARG PYTHON_VERSION=3.11
-ARG PYTORCH_VERSION=2.1.0
+ARG PYTORCH_VERSION=2.5.1
 ARG CUDA_VERSION=cu121
 
 # Labels for image metadata
@@ -125,17 +125,24 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
-# Create GPU diagnostic script
-RUN echo '#!/bin/bash' > /usr/local/bin/gpu-check && \
-    echo 'echo "=== GPU Information ==="' >> /usr/local/bin/gpu-check && \
-    echo 'nvidia-smi 2>/dev/null || echo "nvidia-smi not available"' >> /usr/local/bin/gpu-check && \
-    echo 'echo ""' >> /usr/local/bin/gpu-check && \
-    echo 'echo "=== PyTorch CUDA ==="' >> /usr/local/bin/gpu-check && \
-    echo 'python -c "import torch; print(f\"PyTorch: {torch.__version__}\"); print(f\"CUDA Available: {torch.cuda.is_available()}\")"' >> /usr/local/bin/gpu-check && \
-    echo 'echo ""' >> /usr/local/bin/gpu-check && \
-    echo 'echo "=== Stockula GPU Features ==="' >> /usr/local/bin/gpu-check && \
-    echo 'python -c "import stockula; print(\"Stockula loaded successfully\")"' >> /usr/local/bin/gpu-check && \
-    chmod +x /usr/local/bin/gpu-check
-
 USER stockula
+RUN mkdir -p /home/stockula/.local/bin && \
+    ln -s /usr/local/bin/python /home/stockula/.local/bin/python3 && \
+    echo 'export PATH="/home/stockula/.local/bin:$PATH"' >> /home/stockula/.bashrc
+
+# Create GPU diagnostic script
+RUN cat <<EOF > /home/stockula/.local/bin/gpu-check
+#!/bin/bash
+echo "=== GPU Information ==="
+nvidia-smi 2>/dev/null || echo "nvidia-smi not available"
+echo ""
+echo "=== PyTorch CUDA ==="
+python -c "import torch; print(f'PyTorch: {torch.__version__}'); print(f'CUDA Available: {torch.cuda.is_available()}')"
+echo ""
+echo "=== Stockula GPU Features ==="
+python -c "import stockula; print('Stockula loaded successfully')"
+EOF
+RUN chmod +x /home/stockula/.local/bin/gpu-check
+
+
 CMD ["/bin/bash"]
