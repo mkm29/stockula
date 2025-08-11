@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.15.4](https://github.com/mkm29/stockula/compare/v0.15.3...v0.15.4) (2025-08-11)
+
+
+### Bug Fixes
+
+* optimize Dockerfile and update requirements for improved build e… ([777a650](https://github.com/mkm29/stockula/commit/777a650df48c38dc6586f2965bbbd9534f77b2f5))
+* optimize Dockerfile and update requirements for improved build efficiency and dependency management ([25621fa](https://github.com/mkm29/stockula/commit/25621fab2f4dce364c9ddd55ac8ffe6f5c626d43))
+
 ## [0.15.3](https://github.com/mkm29/stockula/compare/v0.15.2...v0.15.3) (2025-08-11)
 
 
