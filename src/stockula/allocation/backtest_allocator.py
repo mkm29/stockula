@@ -189,7 +189,7 @@ class BacktestOptimizedAllocator(BaseAllocator):
         # Step 4: Convert allocations to quantities
         self.logger.info("Step 4: Converting allocations to quantities...")
         calculated_quantities = self._convert_allocations_to_quantities(
-            config, symbols, allocation_percentages, test_end_date or "1900-01-01"
+            config, symbols, allocation_percentages, test_end or "1900-01-01"
         )
 
         # Log summary
