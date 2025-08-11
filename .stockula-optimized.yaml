@@ -1,140 +1,259 @@
 ---
 data:
-  start_date: '2023-01-01'
-  end_date: '2025-08-08'
+  start_date: null
+  end_date: null
   interval: 1d
   use_cache: true
   db_path: stockula.db
 portfolio:
-  name: Backtest-Optimized Portfolio
-  initial_capital: 25000.0
-  allocation_method: custom
+  name: Auto-Allocated Smigula Portfolio
+  initial_capital: 20000.0
+  allocation_method: optimized
   dynamic_allocation: false
-  auto_allocate: false
-  allow_fractional_shares: true
-  capital_utilization_target: 0.95
+  auto_allocate: true
+  category_ratios:
+    INDEX: 0.35
+    MOMENTUM: 0.475
+    SPECULATIVE: 0.175
+  allow_fractional_shares: false
+  capital_utilization_target: 1.0
   rebalance_frequency: monthly
   tickers:
+    - symbol: SPY
+      quantity: 1.0
+      allocation_pct: null
+      allocation_amount: null
+      market_cap: null
+      price_range: null
+      sector: null
+      category: INDEX
+    - symbol: VOO
+      quantity: 1.0
+      allocation_pct: null
+      allocation_amount: null
+      market_cap: null
+      price_range: null
+      sector: null
+      category: INDEX
+    - symbol: IWM
+      quantity: 1.0
+      allocation_pct: null
+      allocation_amount: null
+      market_cap: null
+      price_range: null
+      sector: null
+      category: INDEX
+    - symbol: VTI
+      quantity: 1.0
+      allocation_pct: null
+      allocation_amount: null
+      market_cap: null
+      price_range: null
+      sector: null
+      category: INDEX
+    - symbol: QQQ
+      quantity: 1.0
+      allocation_pct: null
+      allocation_amount: null
+      market_cap: null
+      price_range: null
+      sector: null
+      category: INDEX
+    - symbol: DIA
+      quantity: 1.0
+      allocation_pct: null
+      allocation_amount: null
+      market_cap: null
+      price_range: null
+      sector: null
+      category: INDEX
     - symbol: NVDA
-      quantity: 5.0
+      quantity: 21.0
+      allocation_pct: null
+      allocation_amount: null
+      market_cap: null
+      price_range: null
       sector: Technology
       category: MOMENTUM
     - symbol: AMD
-      quantity: 5.0
+      quantity: 2.0
+      allocation_pct: null
+      allocation_amount: null
+      market_cap: null
+      price_range: null
       sector: Technology
       category: MOMENTUM
     - symbol: TSM
-      quantity: 4.0
+      quantity: 10.0
+      allocation_pct: null
+      allocation_amount: null
+      market_cap: null
+      price_range: null
       sector: Technology
       category: MOMENTUM
     - symbol: AAPL
-      quantity: 53.0
+      quantity: 6.0
+      allocation_pct: null
+      allocation_amount: null
+      market_cap: null
+      price_range: null
       sector: Technology
       category: MOMENTUM
     - symbol: MSFT
       quantity: 1.0
+      allocation_pct: null
+      allocation_amount: null
+      market_cap: null
+      price_range: null
       sector: Technology
       category: MOMENTUM
     - symbol: GOOGL
-      quantity: 4.0
+      quantity: 1.0
+      allocation_pct: null
+      allocation_amount: null
+      market_cap: null
+      price_range: null
       sector: Technology
       category: MOMENTUM
     - symbol: AMZN
-      quantity: 4.0
+      quantity: 2.0
+      allocation_pct: null
+      allocation_amount: null
+      market_cap: null
+      price_range: null
       sector: Consumer Cyclical
       category: MOMENTUM
     - symbol: META
       quantity: 1.0
+      allocation_pct: null
+      allocation_amount: null
+      market_cap: null
+      price_range: null
       sector: Technology
       category: MOMENTUM
     - symbol: TSLA
-      quantity: 2.0
+      quantity: 8.0
+      allocation_pct: null
+      allocation_amount: null
+      market_cap: null
+      price_range: null
       sector: Consumer Cyclical
       category: MOMENTUM
     - symbol: PLTR
-      quantity: 5.0
+      quantity: 51.0
+      allocation_pct: null
+      allocation_amount: null
+      market_cap: null
+      price_range: null
       sector: Technology
       category: MOMENTUM
     - symbol: LIDR
-      quantity: 350.0
+      quantity: 260.0
+      allocation_pct: null
+      allocation_amount: null
+      market_cap: null
+      price_range: null
       sector: Technology
       category: SPECULATIVE
     - symbol: OPEN
-      quantity: 502.0
+      quantity: 206.0
+      allocation_pct: null
+      allocation_amount: null
+      market_cap: null
+      price_range: null
       sector: Real Estate
       category: SPECULATIVE
     - symbol: SOFI
-      quantity: 44.0
+      quantity: 21.0
+      allocation_pct: null
+      allocation_amount: null
+      market_cap: null
+      price_range: null
       sector: Financial
       category: SPECULATIVE
     - symbol: IONQ
-      quantity: 23.0
+      quantity: 21.0
+      allocation_pct: null
+      allocation_amount: null
+      market_cap: null
+      price_range: null
       sector: Technology
       category: SPECULATIVE
+  max_position_size: 10.0
+  stop_loss_pct: null
 backtest:
   initial_cash: 10000.0
+  start_date: 2023-01-01
+  end_date: 2024-12-31
   commission: 0.002
   broker_config:
     name: robinhood
     commission_type: percentage
     commission_value: 0.002
+    min_commission: null
+    max_commission: null
+    per_share_commission: null
     regulatory_fees: 0.0
     exchange_fees: 0.0
   margin: 1.0
   strategies:
+    - name: vidya
+      parameters: {}
     - name: smacross
       parameters:
         fast_period: 10
         slow_period: 20
-    - name: rsi
-      parameters:
-        period: 14
-        oversold_threshold: 30.0
-        overbought_threshold: 70.0
-    - name: macd
+    - name: doubleemacross
       parameters:
         fast_period: 12
         slow_period: 26
-        signal_period: 9
-    - name: double_ema_cross
-      parameters: {}
-    - name: vidya
-      parameters: {}
-    - name: kama
-      parameters: {}
-    - name: frama
-      parameters: {}
-    - name: triple_ema_cross
-      parameters: {}
-    - name: trima_cross
-      parameters: {}
     - name: vama
       parameters: {}
-    - name: kaufman_efficiency
+    - name: er
       parameters: {}
   optimize: false
+  optimization_params:
+    smacross:
+      fast_period:
+        - 5
+        - 10
+        - 20
+      slow_period:
+        - 20
+        - 50
+        - 100
   hold_only_categories:
     - INDEX
     - BOND
 backtest_optimization:
-  train_start_date: '2023-01-01'
-  train_end_date: '2023-12-31'
-  test_start_date: '2024-01-01'
-  test_end_date: '2024-06-30'
+  train_start_date: 2023-01-01
+  train_end_date: 2023-12-31
+  test_start_date: 2024-01-01
+  test_end_date: 2024-12-31
   ranking_metric: Return [%]
   min_allocation_pct: 2.0
   max_allocation_pct: 25.0
-  initial_allocation_pct: 10.0
+  initial_allocation_pct: 2.0
+  use_forecast: false
+  forecast_weight: 0.3
+  forecast_length: 14
+  forecast_backend: null
 forecast:
-  forecast_length: 7
+  forecast_length: null
+  train_start_date: 2023-01-01
+  train_end_date: 2024-06-30
+  test_start_date: 2024-07-01
+  test_end_date: 2024-12-31
   frequency: infer
-  prediction_interval: 0.9
+  prediction_interval: 0.95
   preset: medium_quality
-  time_limit: 120
+  time_limit: null
   eval_metric: MASE
+  models: null
   max_workers: 1
   no_negatives: true
   use_calendar_covariates: true
+  past_covariate_columns: null
 technical_analysis:
   indicators:
     - sma
@@ -142,6 +261,7 @@ technical_analysis:
     - rsi
     - macd
     - bbands
+    - atr
   sma_periods:
     - 20
     - 50
@@ -160,8 +280,7 @@ technical_analysis:
   atr_period: 14
 output:
   format: console
-  save_results: true
-  results_dir: ./results/backtest-optimized
+  results_dir: ./results
 logging:
   enabled: true
   level: INFO

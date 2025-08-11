@@ -115,6 +115,24 @@ class StockulaManager:
                 data_fetcher=self.container.data_fetcher(),
             )
 
+            # Update the config with optimized quantities (even if not saving to file)
+            for ticker_config in self.config.portfolio.tickers:
+                if ticker_config.symbol in optimized_quantities:
+                    # Convert numpy types to native Python types
+                    quantity = optimized_quantities[ticker_config.symbol]
+                    if hasattr(quantity, "item"):
+                        # Convert numpy scalar to Python type
+                        ticker_config.quantity = float(quantity.item())
+                    else:
+                        # Keep as integer if it's already an integer (from backtest_optimized)
+                        if isinstance(quantity, int):
+                            ticker_config.quantity = float(quantity)
+                        else:
+                            ticker_config.quantity = float(quantity)
+                    # Clear allocation_pct and allocation_amount since we now have quantities
+                    ticker_config.allocation_pct = None
+                    ticker_config.allocation_amount = None
+
             # Save optimized config if requested
             if save_path:
                 self._save_optimized_config(save_path, optimized_quantities)
