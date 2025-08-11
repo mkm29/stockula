@@ -2,15 +2,15 @@
 #
 # This file lists the minimal, top-level packages needed in the GPU image.
 # Transitive dependencies (e.g., requests, joblib) are resolved by pip.
-# Base image: pytorch/pytorch:2.8.0-cuda12.9-cudnn9-*
+# PyTorch 2.5.1 with CUDA 12.1 is installed separately in Dockerfile
 #
 # Install:
-#   pip install -r requirements-gpu.txt --index-url https://download.pytorch.org/whl/cu118
+#   pip install -r requirements-gpu.txt
 
 # Core app dependencies
 alembic==1.16.4
 dependency-injector==4.48.1
-numpy>=1.25.0,<2.3.0
+numpy==2.1.0
 pandas==2.3.1
 pydantic==2.11.7
 pydantic-settings==2.10.1
@@ -33,6 +33,7 @@ scikit-learn==1.7.1
 scipy==1.15.3
 
 # Time series forecasting with GPU acceleration
+# torch is installed separately with CUDA support in Dockerfile
 gluonts[torch]==0.16.2
 chronos-forecasting>=1.5.2
 # AutoGluon not installed on Python 3.13+ due to ray wheels availability
