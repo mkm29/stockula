@@ -9,12 +9,12 @@ import pandas as pd
 import yaml
 from rich.console import Console
 from rich.progress import BarColumn, Progress, SpinnerColumn, TextColumn, TimeRemainingColumn
-from rich.table import Table
 
 from .backtesting import BaseStrategy, strategy_registry
 from .config import StockulaConfig
 from .config.models import BacktestResult, PortfolioBacktestResults, StrategyBacktestSummary
 from .container import Container
+from .display import ResultsDisplay
 from .domain import Category, Portfolio
 from .technical_analysis import TechnicalIndicators
 
@@ -108,7 +108,12 @@ class StockulaManager:
             )
 
             # Display results
-            self._display_optimization_results(optimized_quantities)
+            display = ResultsDisplay(self.console)
+            display.show_allocation_optimization(
+                optimized_quantities=optimized_quantities,
+                config=self.config,
+                data_fetcher=self.container.data_fetcher(),
+            )
 
             # Save optimized config if requested
             if save_path:
@@ -120,51 +125,6 @@ class StockulaManager:
             self.console.print(f"[red]Error during optimization: {e}[/red]")
             self.log_manager.error(f"Optimization error: {e}", exc_info=True)
             return 1
-
-    def _display_optimization_results(self, optimized_quantities: dict[str, float]) -> None:
-        """Display optimization results in a table.
-
-        Args:
-            optimized_quantities: Dictionary of symbol to quantity
-        """
-        self.console.print("\n[bold green]Optimization Results:[/bold green]")
-
-        results_table = Table(title="Optimized Allocation")
-        results_table.add_column("Ticker", style="cyan", no_wrap=True)
-        results_table.add_column("Quantity", style="green", justify="right")
-        results_table.add_column("Allocation %", style="yellow", justify="right")
-
-        # Calculate total value for percentage
-        total_value = 0.0
-        ticker_values: dict[str, float] = {}
-        symbols_to_price = [t.symbol for t in self.config.portfolio.tickers if t.symbol in optimized_quantities]
-
-        # Fetch all prices in one call for efficiency
-        prices = self.container.data_fetcher().get_current_prices(symbols_to_price, show_progress=False)
-        for symbol in symbols_to_price:
-            if symbol in prices:
-                value = float(optimized_quantities[symbol]) * float(prices[symbol])
-                ticker_values[symbol] = value
-                total_value += value
-
-        # Display results
-        for ticker_config in self.config.portfolio.tickers:
-            symbol = ticker_config.symbol
-            quantity = optimized_quantities.get(symbol, 0)
-
-            # Calculate allocation percentage
-            if symbol in ticker_values and total_value > 0:
-                allocation_pct = (ticker_values[symbol] / total_value) * 100
-            else:
-                allocation_pct = 0
-
-            results_table.add_row(
-                symbol,
-                f"{quantity:.4f}" if self.config.portfolio.allow_fractional_shares else f"{int(quantity)}",
-                f"{allocation_pct:.2f}%",
-            )
-
-        self.console.print(results_table)
 
     def _normalize_strategy_name(self, strategy_name: str) -> str:
         """Normalize strategy name to snake_case format.
@@ -256,91 +216,7 @@ class StockulaManager:
 
         return cast(Portfolio, portfolio)
 
-    def display_portfolio_summary(self, portfolio: Portfolio) -> None:
-        """Display portfolio summary table.
-
-        Args:
-            portfolio: Portfolio instance
-        """
-        portfolio_table = Table(title="Portfolio Summary")
-        portfolio_table.add_column("Property", style="cyan", no_wrap=True)
-        portfolio_table.add_column("Value", style="white")
-
-        portfolio_table.add_row("Name", portfolio.name)
-        portfolio_table.add_row("Initial Capital", f"${portfolio.initial_capital:,.2f}")
-        portfolio_table.add_row("Total Assets", str(len(portfolio.get_all_assets())))
-        portfolio_table.add_row("Allocation Method", portfolio.allocation_method)
-
-        self.console.print(portfolio_table)
-
-    def display_portfolio_holdings(self, portfolio: Portfolio, mode: str | None = None) -> None:
-        """Display detailed portfolio holdings.
-
-        Args:
-            portfolio: Portfolio instance
-            mode: Optional operation mode (if 'forecast', shows price and value columns)
-        """
-        holdings_table = Table(title="Portfolio Holdings")
-        holdings_table.add_column("Ticker", style="cyan", no_wrap=True)
-        holdings_table.add_column("Type", style="yellow")
-        holdings_table.add_column("Quantity", style="green", justify="right")
-
-        # Add price and value columns for forecast mode
-        if mode == "forecast":
-            holdings_table.add_column("Price", style="white", justify="right")
-            holdings_table.add_column("Value", style="blue", justify="right")
-
-            # Fetch current prices for all assets
-            all_assets = portfolio.get_all_assets()
-            symbols = [asset.symbol for asset in all_assets]
-            fetcher = self.container.data_fetcher()
-
-            try:
-                current_prices = fetcher.get_current_prices(symbols, show_progress=False)
-            except Exception as e:
-                self.log_manager.warning(f"Could not fetch current prices: {e}")
-                current_prices = {}
-        else:
-            all_assets = portfolio.get_all_assets()
-            current_prices = {}
-
-        for asset in all_assets:
-            # Get symbol as string
-            symbol = asset.symbol if hasattr(asset, "symbol") else "N/A"
-
-            # Get category name as string
-            category_name = "N/A"
-            if hasattr(asset, "category") and asset.category is not None:
-                if hasattr(asset.category, "name"):
-                    category_name = str(asset.category.name)
-                else:
-                    category_name = str(asset.category)
-
-            # Handle quantity formatting - check if it's a real number
-            quantity_str = "N/A"
-            quantity_val = 0.0
-            if hasattr(asset, "quantity") and isinstance(asset.quantity, int | float):
-                quantity_val = asset.quantity
-                quantity_str = f"{asset.quantity:.2f}"
-            elif hasattr(asset, "quantity"):
-                # Try to convert to float if possible
-                try:
-                    quantity_val = float(asset.quantity)
-                    quantity_str = f"{quantity_val:.2f}"
-                except (TypeError, ValueError):
-                    quantity_str = str(asset.quantity)
-
-            if mode == "forecast":
-                # Add price and value columns
-                price = current_prices.get(symbol, 0.0)
-                value = quantity_val * price
-                price_str = f"${price:.2f}" if price > 0 else "N/A"
-                value_str = f"${value:,.2f}" if value > 0 else "N/A"
-                holdings_table.add_row(symbol, category_name, quantity_str, price_str, value_str)
-            else:
-                holdings_table.add_row(symbol, category_name, quantity_str)
-
-        self.console.print(holdings_table)
+    # Presentation methods have moved to ResultsDisplay.
 
     def run_technical_analysis(
         self,

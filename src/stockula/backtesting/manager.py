@@ -2,24 +2,29 @@
 
 from typing import TYPE_CHECKING, Any, Optional
 
-from ..data import strategy_repository as strategy_registry
-from ..interfaces import ILoggingManager
+from ..interfaces import IDataFetcher, ILoggingManager
 
 if TYPE_CHECKING:
     from ..config.models import StockulaConfig
-    from ..data.fetcher import DataFetcher
+    from ..data.strategy_repository import StrategyRepository
     from .runner import BacktestRunner
 
 
 class BacktestingManager:
     """Manages different backtesting strategies and provides unified interface."""
 
-    def __init__(self, data_fetcher: "DataFetcher", logging_manager: ILoggingManager):
+    def __init__(
+        self,
+        data_fetcher: "IDataFetcher",
+        logging_manager: ILoggingManager,
+        strategy_repository: "StrategyRepository",
+    ):
         """Initialize BacktestingManager.
 
         Args:
-            data_fetcher: DataFetcher instance for retrieving market data
+            data_fetcher: Data fetcher interface for retrieving market data
             logging_manager: Logging manager for structured logging
+            strategy_repository: Repository of strategies and presets
         """
         self.data_fetcher = data_fetcher
         self.logger = logging_manager
@@ -27,8 +32,8 @@ class BacktestingManager:
         # Initialize BacktestRunner (will be set with proper configuration)
         self._runner: BacktestRunner | None = None
 
-        # Use centralized strategy registry
-        self.strategy_registry = strategy_registry
+        # Use injected strategy repository/registry
+        self.strategy_registry = strategy_repository
 
     def set_runner(self, runner: "BacktestRunner") -> None:
         """Set the BacktestRunner instance.

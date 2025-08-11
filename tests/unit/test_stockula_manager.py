@@ -11,6 +11,7 @@ import yaml
 
 from stockula.backtesting import RSIStrategy, SMACrossStrategy
 from stockula.config import StockulaConfig, TickerConfig
+from stockula.display import ResultsDisplay
 from stockula.domain.category import Category
 from stockula.manager import StockulaManager
 
@@ -189,7 +190,7 @@ class TestStockulaManager:
         assert result == 1
 
     def test_display_optimization_results(self, mock_config, mock_container):
-        """Test displaying optimization results."""
+        """Test displaying optimization results via ResultsDisplay."""
         mock_config.portfolio.tickers = [
             TickerConfig(symbol="AAPL", quantity=1.0),
             TickerConfig(symbol="GOOGL", quantity=1.0),
@@ -198,13 +199,12 @@ class TestStockulaManager:
         # Mock data fetcher for prices
         mock_data_fetcher = Mock()
         mock_data_fetcher.get_current_prices.return_value = {"AAPL": 150.0, "GOOGL": 2800.0}
-        mock_container.data_fetcher.return_value = mock_data_fetcher
 
-        manager = StockulaManager(mock_config, mock_container)
+        display = ResultsDisplay()
         optimized_quantities = {"AAPL": 10.5, "GOOGL": 2.3}
 
         # Should not raise exception
-        manager._display_optimization_results(optimized_quantities)
+        display.show_allocation_optimization(optimized_quantities, mock_config, mock_data_fetcher)
 
     def test_save_optimized_config(self, mock_config, mock_container, tmp_path):
         """Test saving optimized configuration."""
@@ -272,8 +272,9 @@ class TestStockulaManager:
         assert result == mock_portfolio
         mock_factory.create_portfolio.assert_called_once_with(manager.config)
 
-    def test_display_portfolio_summary(self, manager):
-        """Test portfolio summary display."""
+    def test_display_portfolio_summary(self):
+        """Test portfolio summary display via ResultsDisplay."""
+        display = ResultsDisplay()
         mock_portfolio = Mock()
         mock_portfolio.name = "Test Portfolio"
         mock_portfolio.initial_capital = 100000.0
@@ -281,12 +282,11 @@ class TestStockulaManager:
         mock_portfolio.get_all_assets.return_value = ["asset1", "asset2"]
 
         # Should not raise exception
-        manager.display_portfolio_summary(mock_portfolio)
+        display.show_portfolio_summary(mock_portfolio)
 
     def test_display_portfolio_holdings(self, mock_config, mock_container):
-        """Test portfolio holdings display."""
-        manager = StockulaManager(mock_config, mock_container)
-
+        """Test portfolio holdings display via ResultsDisplay."""
+        display = ResultsDisplay()
         # Create mock assets with different scenarios
         mock_asset1 = Mock()
         mock_asset1.symbol = "AAPL"
@@ -308,10 +308,11 @@ class TestStockulaManager:
         mock_portfolio.get_all_assets.return_value = [mock_asset1, mock_asset2, mock_asset3]
 
         # Should not raise exception
-        manager.display_portfolio_holdings(mock_portfolio)
+        display.show_portfolio_holdings(mock_portfolio)
 
-    def test_display_portfolio_holdings_edge_cases(self, manager):
-        """Test portfolio holdings display with edge cases."""
+    def test_display_portfolio_holdings_edge_cases(self):
+        """Test portfolio holdings display with edge cases via ResultsDisplay."""
+        display = ResultsDisplay()
         # Asset without symbol attribute
         mock_asset_no_symbol = Mock(spec=[])  # No attributes
 
@@ -325,7 +326,7 @@ class TestStockulaManager:
         mock_portfolio.get_all_assets.return_value = [mock_asset_no_symbol, mock_asset_string_category]
 
         # Should not raise exception
-        manager.display_portfolio_holdings(mock_portfolio)
+        display.show_portfolio_holdings(mock_portfolio)
 
     def test_technical_analysis_custom_indicators(self, mock_config, mock_container):
         """Test technical analysis with custom indicators."""

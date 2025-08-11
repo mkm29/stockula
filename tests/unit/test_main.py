@@ -1736,16 +1736,18 @@ class TestMainHoldingsDisplay:
         with patch("stockula.manager.StockulaManager.run_technical_analysis") as mock_ta:
             mock_ta.return_value = {"ticker": "AAPL", "indicators": {}}
             with patch("stockula.cli.print_results"):
-                with patch("stockula.cli.console") as mock_console:
+                # Patch cli_manager.get_console() to return our mocked console
+                mock_console = Mock()
+                with patch("stockula.cli.cli_manager.get_console", return_value=mock_console):
                     with pytest.raises(SystemExit) as exc_info:
                         main()
                     assert exc_info.value.code == 0
 
-                    # Check that holdings table was printed with "N/A" for category
+                    # Check that holdings table was printed
                     table_calls = [
                         call
                         for call in mock_console.print.call_args_list
-                        if hasattr(call[0][0], "title") and "Holdings" in str(call[0][0].title)
+                        if len(call[0]) > 0 and hasattr(call[0][0], "title") and "Holdings" in str(call[0][0].title)
                     ]
                     assert len(table_calls) > 0
 
