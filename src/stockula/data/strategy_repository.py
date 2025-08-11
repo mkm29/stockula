@@ -49,6 +49,14 @@ class StrategyRepository(Repository[type[BaseStrategy]]):
         "kaufman_efficiency": KaufmanEfficiencyStrategy,
     }
 
+    # Strategy name normalization mapping
+    NAME_NORMALIZATION = {
+        # Common variations
+        "doubleemacross": "double_ema_cross",
+        "er": "kaufman_efficiency",
+        # Add other common variations if needed
+    }
+
     # Default strategy groups
     DEFAULT_GROUPS = {
         "basic": ["smacross", "rsi"],
@@ -216,7 +224,7 @@ class StrategyRepository(Repository[type[BaseStrategy]]):
         self._items[lowercase_name] = strategy_class
 
     def get(self, key: str, default=None):
-        """Get a strategy by name (case-insensitive).
+        """Get a strategy by name (case-insensitive with normalization).
 
         Args:
             key: Strategy name in any case
@@ -225,7 +233,8 @@ class StrategyRepository(Repository[type[BaseStrategy]]):
         Returns:
             Strategy class or default
         """
-        return self._items.get(key.lower(), default)
+        normalized_key = self.normalize_strategy_name(key)
+        return self._items.get(normalized_key, default)
 
     def remove(self, key: str) -> None:
         """Remove a strategy from the repository.
@@ -267,15 +276,20 @@ class StrategyRepository(Repository[type[BaseStrategy]]):
         return cast(type[BaseStrategy] | None, self.get(strategy_name))
 
     def normalize_strategy_name(self, strategy_name: str) -> str:
-        """Normalize strategy name to lowercase format.
+        """Normalize strategy name to canonical format.
 
         Args:
             strategy_name: Strategy name in any format
 
         Returns:
-            Normalized (lowercase) strategy name
+            Normalized strategy name
         """
-        return strategy_name.lower()
+        # First check if it's in the normalization mapping
+        lower_name = strategy_name.lower()
+        if lower_name in self.NAME_NORMALIZATION:
+            return self.NAME_NORMALIZATION[lower_name]
+        # Otherwise just return lowercase version
+        return lower_name
 
     def get_available_strategy_names(self) -> list[str]:
         """Get list of all available strategy names.

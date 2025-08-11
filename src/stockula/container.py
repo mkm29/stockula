@@ -62,6 +62,12 @@ class Container(containers.DeclarativeContainer):
         data_mgr=data_manager,
     )
 
+    # Strategy repository - thread-safe singleton via DataManager
+    strategy_repository = providers.ThreadSafeSingleton(
+        lambda data_mgr: data_mgr.strategies,
+        data_mgr=data_manager,
+    )
+
     # Allocator - thread-safe singleton
     allocator = providers.ThreadSafeSingleton(Allocator, fetcher=data_fetcher, logging_manager=logging_manager)
 
@@ -110,6 +116,7 @@ class Container(containers.DeclarativeContainer):
         BacktestingManager,
         data_fetcher=data_fetcher,
         logging_manager=logging_manager,
+        strategy_repository=strategy_repository,
     )
 
     # Domain factory - thread-safe singleton

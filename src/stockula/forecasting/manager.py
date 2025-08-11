@@ -13,7 +13,7 @@ from .factory import create_forecast_backend
 
 if TYPE_CHECKING:
     from ..config import ForecastConfig, StockulaConfig
-    from ..data.fetcher import DataFetcher
+    from ..interfaces import IDataFetcher
 
 
 class ForecastingManager:
@@ -31,7 +31,7 @@ class ForecastingManager:
     @inject
     def __init__(
         self,
-        data_fetcher: "DataFetcher",
+        data_fetcher: "IDataFetcher",
         logging_manager: ILoggingManager = Provide["logging_manager"],
     ):
         """Initialize the forecasting manager.

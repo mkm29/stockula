@@ -2,12 +2,17 @@
 name: Docker Build and Push
 
 on:
-  release:
-    types: [published]
   push:
     branches:
-      - 'feature/**'
-      - 'feat/**'
+      - main
+      - develop
+  pull_request:
+    types: [closed]
+    branches:
+      - main
+      - develop
+  release:
+    types: [published]
   workflow_dispatch:
     inputs:
       version:
@@ -31,6 +36,7 @@ jobs:
       contents: read
       packages: write
     strategy:
+      fail-fast: false  # Continue building other images even if one fails
       matrix:
         include:
           - dockerfile: Dockerfile
@@ -63,6 +69,44 @@ jobs:
         if: steps.should_build.outputs.should_run == 'true'
         uses: actions/checkout@v4
 
+      - name: Check disk space before cleanup
+        if: steps.should_build.outputs.should_run == 'true' && matrix.dockerfile == 'Dockerfile.nvidia'
+        run: |
+          echo "Disk space before cleanup:"
+          df -h
+          echo ""
+          echo "Docker images:"
+          docker images || true
+          echo ""
+          echo "Docker disk usage:"
+          docker system df || true
+
+      - name: Free Disk Space (Ubuntu)
+        if: steps.should_build.outputs.should_run == 'true' && matrix.dockerfile == 'Dockerfile.nvidia'
+        uses: jlumbroso/free-disk-space@main
+        with:
+          # This might remove tools that are actually needed,
+          # if set to "true" but frees about 6 GB
+          tool-cache: false
+
+          # All of these default to true, but feel free to set to
+          # "false" if necessary for your workflow
+          android: true
+          dotnet: true
+          haskell: true
+          large-packages: true
+          docker-images: true
+          swap-storage: true
+
+      - name: Check disk space after cleanup
+        if: steps.should_build.outputs.should_run == 'true' && matrix.dockerfile == 'Dockerfile.nvidia'
+        run: |
+          echo "Disk space after cleanup:"
+          df -h
+          echo ""
+          echo "Available space on root:"
+          df -h / | tail -1
+
       - name: Set up QEMU
         if: steps.should_build.outputs.should_run == 'true'
         uses: docker/setup-qemu-action@v3
@@ -70,6 +114,9 @@ jobs:
       - name: Set up Docker Buildx
         if: steps.should_build.outputs.should_run == 'true'
         uses: docker/setup-buildx-action@v3
+        with:
+          # Use docker driver for GPU builds to reduce disk usage
+          driver: ${{ matrix.dockerfile == 'Dockerfile.nvidia' && 'docker' || 'docker-container' }}
 
       - name: Log in to GitHub Container Registry
         if: steps.should_build.outputs.should_run == 'true'
@@ -82,7 +129,41 @@ jobs:
       - name: Determine version
         id: version
         if: steps.should_build.outputs.should_run == 'true'
-        run: "# Use input version if provided, otherwise determine based on event\nif [[ -n \"${{ inputs.version }}\" ]]; then\n  VERSION=\"${{ inputs.version }}\"\nelif [[ \"${{ github.event_name }}\" == \"release\" ]]; then\n  VERSION=\"${{ github.event.release.tag_name }}\"\nelif [[ \"${{ github.event_name }}\" == \"push\" ]] && [[ \"${{ github.ref }}\" == refs/heads/feature/* || \"${{ github.ref }}\" == refs/heads/feat/* ]]; then\n  # For feature branches, create a special Docker tag (no Git tag)\n  # Format: feat-<branch-name>-<short-sha>\n  BRANCH_NAME=\"${{ github.ref_name }}\"\n  # Replace slashes with dashes and remove feature/ or feat/ prefix\n  BRANCH_NAME=\"${BRANCH_NAME#feature/}\"\n  BRANCH_NAME=\"${BRANCH_NAME#feat/}\"\n  BRANCH_NAME=\"${BRANCH_NAME//\\//-}\"\n  # Get short SHA\n  SHORT_SHA=\"${{ github.sha }}\"\n  SHORT_SHA=\"${SHORT_SHA:0:7}\"\n  # Get current version from pyproject.toml or latest tag\n  BASE_VERSION=$(grep -E '^version = ' pyproject.toml | sed 's/version = \"\\(.*\\)\"/\\1/' || echo \"0.0.0\")\n  # Create version tag for feature branch\n  VERSION=\"${BASE_VERSION}-feat.${BRANCH_NAME}.${SHORT_SHA}\"\nelse\n  # Get the latest tag or use dev\n  VERSION=$(git describe --tags --abbrev=0 2>/dev/null || echo \"dev\")\nfi\n  #magic___^_^___line\n# Docker tags format:\n# - RC versions: 0.12.1-rc.1\n# - Stable versions: v0.12.1  \n# - Feature branches: 0.12.1-feat.<branch-name>.<short-sha>\n  #magic___^_^___line\necho \"version=$VERSION\" >> $GITHUB_OUTPUT\necho \"Using version: $VERSION\"\n  #magic___^_^___line\n"
+        run: |
+          # Use input version if provided, otherwise determine based on event
+          if [[ -n "${{ inputs.version }}" ]]; then
+            VERSION="${{ inputs.version }}"
+          elif [[ "${{ github.event_name }}" == "release" ]]; then
+            # For releases, use the release tag
+            VERSION="${{ github.event.release.tag_name }}"
+          elif [[ "${{ github.event_name }}" == "push" ]] || [[ "${{ github.event_name }}" == "pull_request" && "${{ github.event.pull_request.merged }}" == "true" ]]; then
+            # Get base version from pyproject.toml
+            BASE_VERSION=$(grep -E '^version = ' pyproject.toml | sed 's/version = "\(.*\)"/\1/' || echo "0.0.0")
+            SHORT_SHA="${{ github.sha }}"
+            SHORT_SHA="${SHORT_SHA:0:7}"
+
+            if [[ "${{ github.ref }}" == "refs/heads/main" ]] || [[ "${{ github.base_ref }}" == "main" ]]; then
+              # Main branch: use semantic version
+              VERSION="v${BASE_VERSION}"
+            elif [[ "${{ github.ref }}" == "refs/heads/develop" ]] || [[ "${{ github.base_ref }}" == "develop" ]]; then
+              # Develop branch: use dev tag with SHA
+              VERSION="${BASE_VERSION}-dev.${SHORT_SHA}"
+            else
+              # Should not reach here with new trigger rules
+              VERSION="dev"
+            fi
+          else
+            # Fallback
+            VERSION=$(git describe --tags --abbrev=0 2>/dev/null || echo "dev")
+          fi
+
+          # Docker tags format:
+          # - Main branch: v0.15.3
+          # - Develop branch: 0.15.3-dev.abc1234
+          # - Release: v0.15.3 (from release tag)
+
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Using version: $VERSION"
       - name: Extract metadata
         id: meta
         if: steps.should_build.outputs.should_run == 'true'
@@ -92,32 +173,30 @@ jobs:
           flavor: |
             suffix=${{ matrix.suffix }},onlatest=true
           tags: |
-            # Use the exact Git tag as Docker tag
+            # Use the exact version as Docker tag
             type=raw,value=${{ steps.version.outputs.version }}
+            # For develop branch, also tag as 'develop' for latest develop build
+            type=raw,value=develop,enable=${{ contains(steps.version.outputs.version, '-dev.') }}
+            # For main branch, also tag as 'latest' when it's a stable version
+            type=raw,value=latest,enable=${{ startsWith(steps.version.outputs.version, 'v') && !contains(steps.version.outputs.version, '-') && github.ref == 'refs/heads/main' }}
             # For RC releases, also tag as 'rc' for latest RC
-            type=raw,value=rc,enable=${{ contains(steps.version.outputs.version, 'rc') && matrix.suffix == '' }}
-            # For feature branches, also tag as 'feat' for latest feature build
-            type=raw,value=feat,enable=${{ contains(steps.version.outputs.version, 'feat') && matrix.suffix == '' }}
-            # For development builds
-            type=raw,value=dev,enable=${{ steps.version.outputs.version == 'dev' }}
-            # SHA-based tag for traceability (only for non-release events)
-            type=sha,prefix={{branch}}-,format=short,enable=${{ github.event_name != 'release' }}
-            # SHA-based tag for releases (without branch prefix since there's no branch context)
-            type=sha,format=short,enable=${{ github.event_name == 'release' }}
+            type=raw,value=rc,enable=${{ contains(steps.version.outputs.version, 'rc') }}
 
       - name: Build and push Docker image
         if: steps.should_build.outputs.should_run == 'true'
+        timeout-minutes: 30  # Prevent hanging builds (especially for large GPU images)
         uses: docker/build-push-action@v5
         with:
           context: .
           file: ${{ matrix.dockerfile }}
           target: ${{ matrix.target }}
           platforms: ${{ matrix.platforms }}
-          push: ${{ github.event_name == 'release' || (github.event_name == 'push' && (startsWith(github.ref, 'refs/heads/feature/') || startsWith(github.ref, 'refs/heads/feat/'))) || inputs.push }}
+          push: ${{ github.event_name == 'release' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop' || (github.event_name == 'pull_request' && github.event.pull_request.merged == true) || inputs.push }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          # Use inline cache for GPU builds to save disk space
+          cache-from: ${{ matrix.dockerfile == 'Dockerfile.nvidia' && 'type=inline' || 'type=gha' }}
+          cache-to: ${{ matrix.dockerfile == 'Dockerfile.nvidia' && 'type=inline' || 'type=gha,mode=max' }}
           build-args: |
             VERSION=${{ steps.version.outputs.version }}
             BUILD_DATE=${{ github.event.release.created_at || github.event.head_commit.timestamp }}
@@ -147,16 +226,20 @@ jobs:
           if [[ "$VERSION" == *"rc"* ]]; then
             echo "" >> $GITHUB_STEP_SUMMARY
             echo "ℹ️ **Note**: This is a release candidate image." >> $GITHUB_STEP_SUMMARY
-          elif [[ "$VERSION" == *"feat"* ]]; then
+          elif [[ "$VERSION" == *"-dev."* ]]; then
             echo "" >> $GITHUB_STEP_SUMMARY
-            echo "🚧 **Note**: This is a feature branch development image." >> $GITHUB_STEP_SUMMARY
-            echo "You can also pull the latest feature build with: \`docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}$SUFFIX:feat\`" >> $GITHUB_STEP_SUMMARY
+            echo "🚧 **Note**: This is a development image from the develop branch." >> $GITHUB_STEP_SUMMARY
+            echo "You can also pull the latest develop build with: \`docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}$SUFFIX:develop\`" >> $GITHUB_STEP_SUMMARY
+          elif [[ "$VERSION" == v* ]]; then
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "✅ **Note**: This is a stable release image." >> $GITHUB_STEP_SUMMARY
+            echo "You can also pull this as: \`docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}$SUFFIX:latest\`" >> $GITHUB_STEP_SUMMARY
           fi
 
   publish-manifest:
     needs: build-and-push
     runs-on: ubuntu-latest
-    if: success()
+    if: always() && needs.build-and-push.result != 'cancelled'  # Run even if some builds fail
     permissions:
       packages: write
     steps:

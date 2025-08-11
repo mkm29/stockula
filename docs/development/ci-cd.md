@@ -48,21 +48,28 @@ workflows:
 - **Location**: `tests/integration/`
 - **Note**: Temporarily disabled pending test infrastructure updates
 
-### Release Please Workflow (`release-please.yml`)
+### Release Please Workflow (`release.yml`)
 
 **Triggers:**
 
-- Push to `main` branch
+- Push to `main` branch **only** (not develop)
 
 **Features:**
 
-- Monitors commits for Conventional Commits format
+- Monitors commits on `main` for Conventional Commits format
 - Creates/updates release PRs automatically
 - On PR merge:
-  - Creates GitHub release
-  - Tags version (e.g., `v0.1.0`)
+  - Creates GitHub release with version tag
+  - Tags version (e.g., `v0.15.6`)
   - Updates CHANGELOG.md
+  - Bumps version in pyproject.toml and **init**.py
   - Publishes to PyPI
+
+**Important Notes:**
+
+- **Only runs on main branch** - develop branch does NOT trigger releases
+- Version bumps happen only when merging to main
+- Docker images are built separately on both main and develop branches
 
 **Configuration:**
 
@@ -74,19 +81,24 @@ workflows:
 
 **Triggers:**
 
-- Push of version tags (`v*`)
+- Push to `main` or `develop` branches
+- Pull requests merged to `main` or `develop`
+- GitHub releases
 - Manual workflow dispatch (for testing)
 
 **Features:**
 
 - Multi-platform builds using buildx
-- Platforms: `linux/amd64`, `linux/arm64/v8`
+- Platforms: `linux/amd64`, `linux/arm64` (standard image), `linux/amd64` only (GPU image)
 - Publishes to GitHub Container Registry (ghcr.io)
-- Builds single image with CLI target (includes production + interactive tools)
-- Automatic tagging:
-  - Version tags: `v0.4.1`, `0.4.1`, `0.4`
-  - Latest tag: `latest`
-  - Branch/PR specific tags
+- Two image variants:
+  - **Standard CLI**: Full-featured CLI without GPU support
+  - **GPU CLI**: CUDA-enabled image with PyTorch GPU acceleration (~8-10GB optimized)
+- Automatic tagging based on branch:
+  - **Main branch**: `v<major>.<minor>.<patch>` + `latest` floating tag
+  - **Develop branch**: `<version>-dev.<short-sha>` + `develop` floating tag
+  - **Releases**: Uses release tag (e.g., `v0.15.3`)
+  - **Release candidates**: Additional `rc` floating tag
 
 **Optimizations:**
 
@@ -107,6 +119,48 @@ workflows:
   - GitHub Actions cache (ephemeral, fast)
   - Registry cache (persistent, shared across workflows)
   - Base image caching from `:latest` tag
+
+### Docker Tagging Strategy
+
+**Main Branch (Stable Releases):**
+
+When code is pushed or PRs are merged to `main`:
+
+- **Version tag**: `v<major>.<minor>.<patch>` (e.g., `v0.15.3`)
+- **Floating tag**: `latest` - Always points to the most recent stable release
+- **GPU suffix**: `-gpu` appended for GPU-enabled images
+
+**Develop Branch (Development Builds):**
+
+When code is pushed or PRs are merged to `develop`:
+
+- **Version tag**: `<version>-dev.<short-sha>` (e.g., `0.15.3-dev.abc1234`)
+- **Floating tag**: `develop` - Always points to the most recent development build
+- **GPU suffix**: `-gpu` appended for GPU-enabled images
+
+**Examples:**
+
+```bash
+# Pull latest stable release
+docker pull ghcr.io/mkm29/stockula:latest
+docker pull ghcr.io/mkm29/stockula:v0.15.3
+
+# Pull latest development build
+docker pull ghcr.io/mkm29/stockula:develop
+docker pull ghcr.io/mkm29/stockula:0.15.3-dev.abc1234
+
+# Pull GPU-enabled images
+docker pull ghcr.io/mkm29/stockula:latest-gpu
+docker pull ghcr.io/mkm29/stockula:v0.15.3-gpu
+docker pull ghcr.io/mkm29/stockula:develop-gpu
+```
+
+**Benefits:**
+
+- **Clear separation**: Stable vs development images are clearly distinguished
+- **Traceability**: Development builds include commit SHA for exact source tracking
+- **Easy access**: Floating tags (`latest`, `develop`) for convenience
+- **Semantic versioning**: Stable releases follow standard version format
 
 ## Linting Script
 
@@ -176,7 +230,13 @@ uv run ruff format src tests
 
 ### 2. Creating a Pull Request
 
-1. Create feature branch: `git checkout -b feat/my-feature`
+1. Create feature branch from `develop`:
+
+   ```bash
+   git checkout develop
+   git pull origin develop
+   git checkout -b feat/my-feature
+   ```
 
 1. Make changes following Conventional Commits:
 
@@ -186,18 +246,40 @@ uv run ruff format src tests
    git commit -m "chore: update dependencies"
    ```
 
-1. Push branch and create PR
+1. Push branch and create PR to `develop` branch
 
 1. CI will automatically run tests and linting
 
+1. After PR is merged to `develop`:
+
+   - Docker images are automatically built with `-dev` tags
+   - Images are available at `ghcr.io/mkm29/stockula:develop`
+
 ### 3. Release Process
 
-1. **Automatic PR Creation**: Release Please monitors `main` and creates release PRs
-1. **Review Release PR**: Check CHANGELOG.md and version bump
+1. **Development Phase**:
+
+   - All feature branches merge to `develop`
+   - Docker images built with `-dev` tags for testing
+   - Development images available at `ghcr.io/mkm29/stockula:develop`
+
+1. **Release Preparation**:
+
+   - Create PR from `develop` to `main` when ready for release
+   - Review all changes accumulated in `develop`
+   - Ensure all tests pass
+
+1. **Release Please Integration**:
+
+   - Release Please monitors `main` and creates release PRs
+   - Review Release PR: Check CHANGELOG.md and version bump
+
 1. **Merge Release PR**: Triggers:
+
    - GitHub release creation
    - PyPI package publishing
-   - Docker image building
+   - Docker images with stable version tags
+   - Images tagged as `latest` and version-specific tags
 
 ## Secrets and Environment Variables
 
