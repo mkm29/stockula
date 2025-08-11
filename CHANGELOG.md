@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.16.0](https://github.com/mkm29/stockula/compare/v0.15.7...v0.16.0) (2025-08-11)
+
+
+### Features
+
+* enhance backtesting with date range configuration and error logging ([6a5b312](https://github.com/mkm29/stockula/commit/6a5b3120cd2a48f6146be0abf217474171042f5c))
+
+
+### Bug Fixes
+
+* update StockulaManager to adhere to SOLID ([924694b](https://github.com/mkm29/stockula/commit/924694b527cb7d8550fae35fd4bbe214066a13cb))
+
 ## [0.15.7](https://github.com/mkm29/stockula/compare/v0.15.6...v0.15.7) (2025-08-11)
 
 
