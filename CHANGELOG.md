@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.15.7](https://github.com/mkm29/stockula/compare/v0.15.6...v0.15.7) (2025-08-11)
+
+
+### Bug Fixes
+
+* changed release please config to only cut releases on merge to m… ([ff15386](https://github.com/mkm29/stockula/commit/ff153863f98293f1aa8a49f0c5c3294f4b9745d3))
+* changed release please config to only cut releases on merge to main branch ([511b98d](https://github.com/mkm29/stockula/commit/511b98d1eacfa1cdb5930b0019316f34f612db1e))
+* update to versioning with release please and GH ([71e09de](https://github.com/mkm29/stockula/commit/71e09deee001c2f4058aeba9d18f377f6be1c51b))
+
 ## [0.15.6](https://github.com/mkm29/stockula/compare/v0.15.5...v0.15.6) (2025-08-11)
 
 

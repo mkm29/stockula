@@ -1,7 +1,7 @@
 [project]
 name = "stockula"
 # x-release-please-start-version
-version = "0.15.6"
+version = "0.15.7"
 # x-release-please-end
 description = ""
 authors = [
