@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.15.6](https://github.com/mkm29/stockula/compare/v0.15.5...v0.15.6) (2025-08-11)
+
+
+### Bug Fixes
+
+* update Docker build workflow to improve version tagging and trig… ([b38426c](https://github.com/mkm29/stockula/commit/b38426cc612fbd4c49abdc7c1ea13f2bc873561c))
+* update Docker build workflow to improve version tagging and trigger conditions ([fd1c556](https://github.com/mkm29/stockula/commit/fd1c556cdbf70847fd7aadd803806523b1e65de6))
+
 ## [0.15.5](https://github.com/mkm29/stockula/compare/v0.15.4...v0.15.5) (2025-08-11)
 
 
