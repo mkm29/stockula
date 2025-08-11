@@ -48,21 +48,28 @@ workflows:
 - **Location**: `tests/integration/`
 - **Note**: Temporarily disabled pending test infrastructure updates
 
-### Release Please Workflow (`release-please.yml`)
+### Release Please Workflow (`release.yml`)
 
 **Triggers:**
 
-- Push to `main` branch
+- Push to `main` branch **only** (not develop)
 
 **Features:**
 
-- Monitors commits for Conventional Commits format
+- Monitors commits on `main` for Conventional Commits format
 - Creates/updates release PRs automatically
 - On PR merge:
-  - Creates GitHub release
-  - Tags version (e.g., `v0.1.0`)
+  - Creates GitHub release with version tag
+  - Tags version (e.g., `v0.15.6`)
   - Updates CHANGELOG.md
+  - Bumps version in pyproject.toml and __init__.py
   - Publishes to PyPI
+
+**Important Notes:**
+
+- **Only runs on main branch** - develop branch does NOT trigger releases
+- Version bumps happen only when merging to main
+- Docker images are built separately on both main and develop branches
 
 **Configuration:**
 
