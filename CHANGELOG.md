@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.15.5](https://github.com/mkm29/stockula/compare/v0.15.4...v0.15.5) (2025-08-11)
+
+
+### Bug Fixes
+
+* updated Python versions of GPU packages ([2d58318](https://github.com/mkm29/stockula/commit/2d583189c8f7f0f1abe1efbdf04fd4c5d100e7c4))
+* updated Python versions of GPU packages ([8fb31da](https://github.com/mkm29/stockula/commit/8fb31dadf82ee7c5a162a25db5e43fdbe1ef4209))
+
 ## [0.15.4](https://github.com/mkm29/stockula/compare/v0.15.3...v0.15.4) (2025-08-11)
 
 
