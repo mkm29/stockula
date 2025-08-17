@@ -1,7 +1,106 @@
 ---
 # Docker Compose configuration for Stockula project
-# Provides different services for various use cases
+# Consolidated file supporting both local development and TimescaleDB infrastructure
 services:
+  # TimescaleDB with pgai extension for vector operations
+  timescaledb:
+    image: timescale/timescaledb-ha:pg17
+    container_name: stockula-timescaledb
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: stockula
+      POSTGRES_USER: stockula
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-SuperSecret12}
+      POSTGRES_HOST_AUTH_METHOD: scram-sha-256
+      POSTGRES_INITDB_ARGS: --auth-host=scram-sha-256
+      # TimescaleDB specific settings
+      TIMESCALEDB_TELEMETRY: "off"
+      # Performance tuning
+      TS_TUNE_MEMORY: 4GB
+      TS_TUNE_NUM_CPUS: 4
+      TS_TUNE_MAX_CONNS: 200
+      TS_TUNE_MAX_BG_WORKERS: 16
+      TS_TUNE_LOG_STATEMENTS: "none"
+    ports:
+      - "5432:5432"
+    volumes:
+      - timescale_data:/home/postgres/pgdata/data
+      - ./database/timescale/init:/docker-entrypoint-initdb.d:ro
+      - ./database/timescale/config/postgresql.conf:/etc/postgresql/postgresql.conf:ro
+      - timescale_backups:/backups
+    command: >
+      postgres -c config_file=/etc/postgresql/postgresql.conf -c shared_preload_libraries=timescaledb,pg_stat_statements -c timescaledb.telemetry_level=off
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U stockula -d stockula"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - stockula-network
+    profiles:
+      - database
+      - full
+
+  # PgBouncer for connection pooling
+  pgbouncer:
+    image: pgbouncer/pgbouncer:1.15.0
+    container_name: stockula-pgbouncer
+    restart: unless-stopped
+    environment:
+      DATABASES_HOST: timescaledb
+      DATABASES_PORT: 5432
+      DATABASES_USER: stockula
+      DATABASES_PASSWORD: ${POSTGRES_PASSWORD:-SuperSecret12}
+      DATABASES_DBNAME: stockula
+      POOL_MODE: transaction
+      SERVER_RESET_QUERY: DISCARD ALL
+      MAX_CLIENT_CONN: 1000
+      DEFAULT_POOL_SIZE: 50
+      MIN_POOL_SIZE: 10
+      RESERVE_POOL_SIZE: 10
+      SERVER_LIFETIME: 3600
+      SERVER_IDLE_TIMEOUT: 600
+      LOG_CONNECTIONS: 1
+      LOG_DISCONNECTIONS: 1
+      LOG_POOLER_ERRORS: 1
+      STATS_PERIOD: 60
+    ports:
+      - "6432:5432"
+    volumes:
+      - ./database/timescale/pgbouncer/pgbouncer.ini:/etc/pgbouncer/pgbouncer.ini:ro
+      - ./database/timescale/pgbouncer/userlist.txt:/etc/pgbouncer/userlist.txt:ro
+    depends_on:
+      timescaledb:
+        condition: service_healthy
+    networks:
+      - stockula-network
+    profiles:
+      - database
+      - full
+
+  # Redis for caching and session management
+  redis:
+    image: redis:8.2.0-alpine
+    container_name: stockula-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+      - ./database/timescale/redis/redis.conf:/usr/local/etc/redis/redis.conf:ro
+    command: redis-server /usr/local/etc/redis/redis.conf
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+    networks:
+      - stockula-network
+    profiles:
+      - database
+      - full
+
   # Development service with all dev dependencies
   stockula-dev:
     build:
@@ -17,7 +116,22 @@ services:
     environment:
       - PYTHONPATH=/app/src
       - STOCKULA_ENV=development
+      - DATABASE_URL=postgresql://stockula:${POSTGRES_PASSWORD:-SuperSecret12}@timescaledb:5432/stockula
+      - REDIS_URL=redis://redis:6379/0
     command: ["uv", "run", "jupyter", "lab", "--ip=0.0.0.0", "--port=8888", "--no-browser", "--allow-root"]
+    depends_on:
+      timescaledb:
+        condition: service_healthy
+        required: false
+      redis:
+        condition: service_healthy
+        required: false
+    networks:
+      - stockula-network
+    profiles:
+      - dev
+      - full
+
   # Production CLI service
   stockula-cli:
     build:
@@ -31,8 +145,26 @@ services:
     environment:
       - PYTHONPATH=/app/src
       - STOCKULA_ENV=production
+      - DATABASE_URL=postgresql://stockula:${POSTGRES_PASSWORD:-SuperSecret12}@pgbouncer:5432/stockula
+      - REDIS_URL=redis://redis:6379/0
     stdin_open: true
     tty: true
+    depends_on:
+      timescaledb:
+        condition: service_healthy
+        required: false
+      pgbouncer:
+        condition: service_started
+        required: false
+      redis:
+        condition: service_healthy
+        required: false
+    networks:
+      - stockula-network
+    profiles:
+      - cli
+      - full
+
   # Jupyter service for analysis
   stockula-jupyter:
     build:
@@ -48,6 +180,21 @@ services:
     environment:
       - PYTHONPATH=/app/src
       - STOCKULA_ENV=production
+      - DATABASE_URL=postgresql://stockula:${POSTGRES_PASSWORD:-SuperSecret12}@timescaledb:5432/stockula
+      - REDIS_URL=redis://redis:6379/0
+    depends_on:
+      timescaledb:
+        condition: service_healthy
+        required: false
+      redis:
+        condition: service_healthy
+        required: false
+    networks:
+      - stockula-network
+    profiles:
+      - jupyter
+      - full
+
   # Test service for CI/CD
   stockula-test:
     build:
@@ -60,6 +207,11 @@ services:
       - PYTHONPATH=/app/src
       - STOCKULA_ENV=test
     command: ["uv", "run", "pytest", "tests/", "--verbose"]
+    networks:
+      - stockula-network
+    profiles:
+      - test
+
   # API service (placeholder for future implementation)
   stockula-api:
     build:
@@ -74,13 +226,170 @@ services:
     environment:
       - PYTHONPATH=/app/src
       - STOCKULA_ENV=production
+      - DATABASE_URL=postgresql://stockula:${POSTGRES_PASSWORD:-SuperSecret12}@pgbouncer:5432/stockula
+      - REDIS_URL=redis://redis:6379/0
+    depends_on:
+      timescaledb:
+        condition: service_healthy
+        required: false
+      pgbouncer:
+        condition: service_started
+        required: false
+      redis:
+        condition: service_healthy
+        required: false
+    networks:
+      - stockula-network
+    profiles:
+      - api
+      - full
+
+  # Production Stockula application with TimescaleDB
+  stockula-app:
+    build:
+      context: .
+      target: production
+    container_name: stockula-app
+    restart: unless-stopped
+    environment:
+      - PYTHONPATH=/app/src
+      - STOCKULA_ENV=production
+      - DATABASE_URL=postgresql://stockula:${POSTGRES_PASSWORD:-SuperSecret12}@pgbouncer:5432/stockula
+      - REDIS_URL=redis://redis:6379/0
+      - TIMESCALEDB_HOST=timescaledb
+      - TIMESCALEDB_PORT=5432
+      - TIMESCALEDB_DATABASE=stockula
+      - TIMESCALEDB_USER=stockula
+      - TIMESCALEDB_PASSWORD=${POSTGRES_PASSWORD:-SuperSecret12}
+    volumes:
+      - stockula_data:/app/data
+      - stockula_results:/app/results
+      - ./examples:/app/examples:ro
+    depends_on:
+      timescaledb:
+        condition: service_healthy
+      pgbouncer:
+        condition: service_started
+      redis:
+        condition: service_healthy
+    networks:
+      - stockula-network
+    profiles:
+      - app
+      - full
+
+  # Grafana for monitoring and dashboards
+  grafana:
+    image: grafana/grafana:12.1.1
+    container_name: stockula-grafana
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_INSTALL_PLUGINS: grafana-clock-panel,grafana-simple-json-datasource
+      GF_FEATURE_TOGGLES_ENABLE: publicDashboards
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./database/timescale/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./database/timescale/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on:
+      timescaledb:
+        condition: service_healthy
+    networks:
+      - stockula-network
+    profiles:
+      - monitoring
+      - full
+
+  # Prometheus for metrics collection
+  prometheus:
+    image: prom/prometheus:v3.5.0
+    container_name: stockula-prometheus
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    volumes:
+      - prometheus_data:/prometheus
+      - ./database/timescale/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=90d'
+      - '--web.enable-lifecycle'
+    networks:
+      - stockula-network
+    profiles:
+      - monitoring
+      - full
+
+  # Postgres Exporter for database metrics
+  postgres_exporter:
+    image: prometheuscommunity/postgres-exporter:v0.17.1
+    container_name: stockula-postgres-exporter
+    restart: unless-stopped
+    environment:
+      DATA_SOURCE_NAME: "postgresql://stockula:${POSTGRES_PASSWORD:-SuperSecret12}@timescaledb:5432/stockula?sslmode=disable"
+      PG_EXPORTER_EXTEND_QUERY_PATH: /etc/postgres_exporter/queries.yaml
+    volumes:
+      - ./database/timescale/postgres_exporter/queries.yaml:/etc/postgres_exporter/queries.yaml:ro
+    depends_on:
+      timescaledb:
+        condition: service_healthy
+    networks:
+      - stockula-network
+    profiles:
+      - monitoring
+      - full
+
+  # Backup service for automated backups
+  backup:
+    image: postgres:17-alpine
+    container_name: stockula-backup
+    restart: "no"
+    environment:
+      PGPASSWORD: ${POSTGRES_PASSWORD:-SuperSecret12}
+    volumes:
+      - timescale_backups:/backups
+      - ./database/timescale/backup/backup.sh:/backup.sh:ro
+    command: /bin/sh /backup.sh
+    depends_on:
+      timescaledb:
+        condition: service_healthy
+    networks:
+      - stockula-network
+    profiles:
+      - backup
+      - full
+
 # Named volumes for persistent data
 volumes:
+  # Local development volumes
   stockula-data:
     driver: local
   stockula-results:
     driver: local
-# Networks (optional - using default bridge network)
+  # TimescaleDB infrastructure volumes
+  timescale_data:
+    driver: local
+  timescale_backups:
+    driver: local
+  redis_data:
+    driver: local
+  grafana_data:
+    driver: local
+  prometheus_data:
+    driver: local
+  stockula_data:
+    driver: local
+  stockula_results:
+    driver: local
+
+# Unified network for all services
 networks:
-  default:
+  stockula-network:
     name: stockula-network
+    driver: bridge

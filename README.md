@@ -65,7 +65,31 @@ a complete solution for quantitative trading strategy development.
 
 ### Installation
 
-#### Method 1: Docker (Recommended for GPU Support)
+#### Method 1: Docker Compose (Recommended)
+
+```bash
+# Development with TimescaleDB
+docker compose --profile dev --profile database up
+
+# Full production stack
+docker compose --profile full up -d
+
+# GPU development (requires nvidia-docker)
+docker compose -f docker-compose.yml -f docker-compose.gpu.yml --profile gpu-dev up
+
+# Quick CLI usage
+docker compose run --rm stockula-cli python -m stockula --help
+```
+
+**Available Profiles:**
+
+- `dev` - Development environment with Jupyter Lab (port 8888)
+- `database` - TimescaleDB + PgBouncer + Redis infrastructure
+- `monitoring` - Grafana (port 3000) + Prometheus (port 9090)
+- `gpu` - GPU-accelerated services (requires NVIDIA Docker)
+- `full` - Complete stack with all services
+
+#### Method 2: Standalone Docker Images
 
 ```bash
 # Standard CPU version
@@ -81,13 +105,14 @@ docker run -v $(pwd)/.stockula.yaml:/app/.stockula.yaml ghcr.io/mkm29/stockula:l
     -m stockula --ticker AAPL --mode forecast
 ```
 
-**GPU Docker Features:**
+**Docker Compose Features:**
 
-- Based on PyTorch 2.8.0 official images for optimal compatibility
-- Python 3.11 pre-installed
-- Includes Chronos (zero-shot forecasting) and GluonTS (probabilistic models)
-- Full AutoGluon TimeSeries support with GPU acceleration
-- Non-root user `stockula` (UID 1000) for security
+- **Consolidated Configuration**: Single `docker-compose.yml` with profile-based service selection
+- **TimescaleDB Integration**: High-performance time-series database with automatic setup
+- **Connection Pooling**: PgBouncer for efficient database connections
+- **Monitoring Stack**: Grafana dashboards and Prometheus metrics collection
+- **GPU Support**: Separate `docker-compose.gpu.yml` for CUDA-accelerated workloads
+- **Development Tools**: Jupyter Lab, interactive CLI, and testing environments
 
 #### Method 2: Local Installation with uv
 
@@ -100,13 +125,16 @@ docker run -v $(pwd)/.stockula.yaml:/app/.stockula.yaml ghcr.io/mkm29/stockula:l
 1. **Setup TimescaleDB**:
 
    ```bash
-   # Using Docker (recommended)
+   # Using Docker Compose (recommended)
+   docker compose --profile database up -d
+
+   # Or standalone Docker container
    docker run -d --name stockula-timescaledb \
-     -e POSTGRES_USER=stockula_user \
-     -e POSTGRES_PASSWORD=stockula_password \
+     -e POSTGRES_USER=stockula \
+     -e POSTGRES_PASSWORD=SuperSecret12 \
      -e POSTGRES_DB=stockula \
      -p 5432:5432 \
-     timescale/timescaledb:latest-pg16
+     timescale/timescaledb-ha:pg17
    ```
 
 1. **Clone and install**:
@@ -116,12 +144,12 @@ docker run -v $(pwd)/.stockula.yaml:/app/.stockula.yaml ghcr.io/mkm29/stockula:l
    cd stockula
    uv sync
 
-   # Set TimescaleDB connection
+   # Set TimescaleDB connection (if using standalone Docker)
    export STOCKULA_DB_HOST=localhost
-   export STOCKULA_DB_PASSWORD=stockula_password
+   export STOCKULA_DB_PASSWORD=SuperSecret12
 
-   # Initialize database schema with simplified manager
-   uv run python -m stockula.database.manager setup
+   # Initialize database schema
+   uv run python -c "from stockula.database.manager import DatabaseManager; DatabaseManager().setup()"
    ```
 
 1. **For GPU support** (optional):

@@ -1,185 +1,107 @@
 ---
-# Docker Compose configuration for GPU-accelerated Stockula
-#
-# Requirements:
-#   - NVIDIA Container Runtime (nvidia-docker2)
-#   - NVIDIA GPU drivers >= 450.80.02
-#   - Docker Compose with GPU support (>= 1.28.0)
-#
-# Usage:
-#   # Build and start GPU services
-#   docker compose -f docker-compose.gpu.yml up --build
-#
-#   # Run specific GPU service
-#   docker compose -f docker-compose.gpu.yml run stockula-gpu-cli
-#
-#   # Run with specific configuration
-#   docker compose -f docker-compose.gpu.yml run stockula-gpu-cli python -m stockula --config .stockula.yaml --mode forecast
-
+# Docker Compose configuration for Stockula with GPU support
+# Extends the main docker-compose.yml with GPU-accelerated services
 services:
-  # GPU-accelerated production service
-  stockula-gpu:
+  # GPU-accelerated Stockula development environment
+  stockula-gpu-dev:
     build:
       context: .
-      dockerfile: Dockerfile.nvidia
+      target: gpu-development
+      args:
+        CUDA_VERSION: "12.4"
+    container_name: stockula-gpu-dev
+    volumes:
+      - .:/app
+      - stockula-data:/app/data
+      - stockula-results:/app/results
+    ports:
+      - "8890:8888"  # Jupyter Lab on different port
+    environment:
+      - PYTHONPATH=/app/src
+      - STOCKULA_ENV=development
+      - CUDA_VISIBLE_DEVICES=0
+      - DATABASE_URL=postgresql://stockula:${POSTGRES_PASSWORD:-SuperSecret12}@timescaledb:5432/stockula
+      - REDIS_URL=redis://redis:6379/0
+    command: ["uv", "run", "jupyter", "lab", "--ip=0.0.0.0", "--port=8888", "--no-browser", "--allow-root"]
+    depends_on:
+      timescaledb:
+        condition: service_healthy
+        required: false
+      redis:
+        condition: service_healthy
+        required: false
+    networks:
+      - stockula-network
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    profiles:
+      - gpu
+      - gpu-dev
+
+  # GPU-accelerated forecasting service
+  stockula-gpu-forecast:
+    build:
+      context: .
       target: gpu-production
       args:
-        VERSION: ${STOCKULA_VERSION:-dev}
-        BUILD_DATE: ${BUILD_DATE:-$(date -u +"%Y-%m-%dT%H:%M:%SZ")}
-        GIT_COMMIT: ${GIT_COMMIT:-unknown}
-        GIT_URL: ${GIT_URL:-https://github.com/mkm29/stockula}
-    image: stockula:gpu-production
-    container_name: stockula-gpu-prod
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: all
-              capabilities: [gpu]
-    environment:
-      - NVIDIA_VISIBLE_DEVICES=all
-      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
-      - AUTOTS_GPU_ENABLED=true
-      - AUTOTS_N_JOBS=1
-      - TF_FORCE_GPU_ALLOW_GROWTH=true
-      - STOCKULA_LOG_LEVEL=${STOCKULA_LOG_LEVEL:-INFO}
-      - PYTHONWARNINGS=ignore
+        CUDA_VERSION: "12.4"
+    container_name: stockula-gpu-forecast
     volumes:
-      # Mount configuration and data
-      - ./.stockula.yaml:/app/.stockula.yaml:ro
-      - ./data:/app/data:rw
-      - ./results:/app/results:rw
-      - ./models:/app/models:rw
-      # Cache directories for better performance
-      - stockula-gpu-cache:/app/.cache
-      - stockula-gpu-models:/home/stockula/.cache
-    working_dir: /app
-    user: stockula
-    command: ["stockula", "--help"]
-    profiles:
-      - gpu
-      - production
-
-  # GPU-accelerated CLI service for development
-  stockula-gpu-cli:
-    build:
-      context: .
-      dockerfile: Dockerfile.nvidia
-      target: gpu-cli
-      args:
-        VERSION: ${STOCKULA_VERSION:-dev}
-        BUILD_DATE: ${BUILD_DATE:-$(date -u +"%Y-%m-%dT%H:%M:%SZ")}
-        GIT_COMMIT: ${GIT_COMMIT:-unknown}
-        GIT_URL: ${GIT_URL:-https://github.com/mkm29/stockula}
-    image: stockula:gpu-cli
-    container_name: stockula-gpu-cli
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: all
-              capabilities: [gpu]
-    environment:
-      - NVIDIA_VISIBLE_DEVICES=all
-      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
-      - AUTOTS_GPU_ENABLED=true
-      - AUTOTS_N_JOBS=1
-      - TF_FORCE_GPU_ALLOW_GROWTH=true
-      - STOCKULA_LOG_LEVEL=${STOCKULA_LOG_LEVEL:-INFO}
-      - PYTHONWARNINGS=ignore
-      # Jupyter configuration
-      - JUPYTER_ENABLE_LAB=yes
-      - JUPYTER_TOKEN=${JUPYTER_TOKEN:-stockula}
-    volumes:
-      # Mount configuration and data
-      - ./.stockula.yaml:/app/.stockula.yaml:rw
-      - ./data:/app/data:rw
-      - ./results:/app/results:rw
-      - ./models:/app/models:rw
+      - stockula_data:/app/data
+      - stockula_results:/app/results
       - ./examples:/app/examples:ro
-      # Development directories
-      - ./src:/app/src:ro
-      - ./tests:/app/tests:ro
-      # Cache and temporary directories
-      - stockula-gpu-cache:/app/.cache
-      - stockula-gpu-models:/home/stockula/.cache
-      - stockula-gpu-jupyter:/home/stockula/.jupyter
-    working_dir: /app
-    user: stockula
-    ports:
-      - "${JUPYTER_PORT:-8888}:8888"
-    stdin_open: true
-    tty: true
-    command: ["/bin/bash"]
-    profiles:
-      - gpu
-      - development
-
-  # Jupyter Lab service for GPU-accelerated notebook development
-  stockula-jupyter-gpu:
-    build:
-      context: .
-      dockerfile: Dockerfile.nvidia
-      target: gpu-cli
-      args:
-        VERSION: ${STOCKULA_VERSION:-dev}
-        BUILD_DATE: ${BUILD_DATE:-$(date -u +"%Y-%m-%dT%H:%M:%SZ")}
-        GIT_COMMIT: ${GIT_COMMIT:-unknown}
-        GIT_URL: ${GIT_URL:-https://github.com/mkm29/stockula}
-    image: stockula:gpu-cli
-    container_name: stockula-jupyter-gpu
+    environment:
+      - PYTHONPATH=/app/src
+      - STOCKULA_ENV=production
+      - CUDA_VISIBLE_DEVICES=0
+      - DATABASE_URL=postgresql://stockula:${POSTGRES_PASSWORD:-SuperSecret12}@pgbouncer:5432/stockula
+      - REDIS_URL=redis://redis:6379/0
+      - TIMESCALEDB_HOST=timescaledb
+      - TIMESCALEDB_PORT=5432
+      - TIMESCALEDB_DATABASE=stockula
+      - TIMESCALEDB_USER=stockula
+      - TIMESCALEDB_PASSWORD=${POSTGRES_PASSWORD:-SuperSecret12}
+    depends_on:
+      timescaledb:
+        condition: service_healthy
+      pgbouncer:
+        condition: service_started
+      redis:
+        condition: service_healthy
+    networks:
+      - stockula-network
     deploy:
       resources:
         reservations:
           devices:
             - driver: nvidia
-              count: all
+              count: 1
               capabilities: [gpu]
-    environment:
-      - NVIDIA_VISIBLE_DEVICES=all
-      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
-      - AUTOTS_GPU_ENABLED=true
-      - AUTOTS_N_JOBS=1
-      - TF_FORCE_GPU_ALLOW_GROWTH=true
-      - STOCKULA_LOG_LEVEL=${STOCKULA_LOG_LEVEL:-DEBUG}
-      - JUPYTER_ENABLE_LAB=yes
-      - JUPYTER_TOKEN=${JUPYTER_TOKEN:-stockula}
-    volumes:
-      - ./.stockula.yaml:/app/.stockula.yaml:rw
-      - ./data:/app/data:rw
-      - ./results:/app/results:rw
-      - ./models:/app/models:rw
-      - ./examples:/app/examples:ro
-      - ./notebooks:/app/notebooks:rw
-      - stockula-gpu-cache:/app/.cache
-      - stockula-gpu-models:/home/stockula/.cache
-      - stockula-gpu-jupyter:/home/stockula/.jupyter
-    working_dir: /app
-    user: stockula
-    ports:
-      - "${JUPYTER_PORT:-8888}:8888"
-    command: ["jupyter", "lab", "--ip=0.0.0.0", "--port=8888", "--no-browser", "--allow-root"]
     profiles:
       - gpu
-      - jupyter
+      - gpu-forecast
 
-# Named volumes for persistent GPU-optimized caching
+# Uses the same volumes and networks from main docker-compose.yml
 volumes:
-  stockula-gpu-cache:
-    driver: local
-    driver_opts:
-      type: tmpfs
-      device: tmpfs
-      o: size=2g,uid=1000,gid=1000
-  stockula-gpu-models:
-    driver: local
-  stockula-gpu-jupyter:
-    driver: local
+  stockula-data:
+    external: true
+    name: stockula_stockula-data
+  stockula-results:
+    external: true
+    name: stockula_stockula-results
+  stockula_data:
+    external: true
+    name: stockula_stockula_data
+  stockula_results:
+    external: true
+    name: stockula_stockula_results
 
-# Networks
 networks:
-  default:
-    name: stockula-gpu
-    driver: bridge
+  stockula-network:
+    external: true
+    name: stockula-network

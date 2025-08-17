@@ -31,19 +31,30 @@ Based on PyTorch official images for optimal compatibility:
 
 ### Using Docker Compose (Recommended)
 
-The easiest way to get started is using Docker Compose:
+The consolidated Docker Compose setup provides profile-based service selection:
 
 ```bash
-# Start development environment with Jupyter Lab
-docker-compose up stockula-dev
+# Development environment with TimescaleDB
+docker compose --profile dev --profile database up
 # Access Jupyter Lab at http://localhost:8888
 
-# Or start CLI environment
-docker-compose up stockula-cli
+# Full production stack
+docker compose --profile full up -d
 
-# Run tests
-docker-compose up stockula-test
+# GPU development (requires nvidia-docker)
+docker compose -f docker-compose.yml -f docker-compose.gpu.yml --profile gpu-dev up
+
+# Quick CLI usage
+docker compose run --rm stockula-cli python -m stockula --help
 ```
+
+**Available Profiles:**
+
+- `dev` - Development environment with Jupyter Lab (port 8888)
+- `database` - TimescaleDB + PgBouncer + Redis infrastructure
+- `monitoring` - Grafana (port 3000) + Prometheus (port 9090)
+- `gpu` - GPU-accelerated services (requires NVIDIA Docker)
+- `full` - Complete stack with all services
 
 ### Using Makefile (Recommended)
 
@@ -81,6 +92,45 @@ docker build --target cli -t stockula:cli .
 # Build Jupyter image
 docker build --target jupyter -t stockula:jupyter .
 ```
+
+## TimescaleDB Integration
+
+The consolidated Docker setup includes a complete TimescaleDB infrastructure stack:
+
+### Database Services
+
+- **TimescaleDB**: High-performance time-series database (port 5432)
+- **PgBouncer**: Connection pooling for efficient database access (port 6432)
+- **Redis**: Caching and session management (port 6379)
+
+### Monitoring Stack
+
+- **Grafana**: Dashboard and visualization (port 3000, admin/admin)
+- **Prometheus**: Metrics collection (port 9090)
+- **Postgres Exporter**: Database metrics for Prometheus
+
+### Configuration
+
+The TimescaleDB services use environment variables for configuration:
+
+```bash
+# Required environment variables
+POSTGRES_PASSWORD=your_secure_password    # Database password
+GRAFANA_PASSWORD=grafana_admin_password   # Grafana admin password
+
+# Optional tuning parameters
+TS_TUNE_MEMORY=4GB                       # Memory allocation
+TS_TUNE_NUM_CPUS=4                       # CPU cores
+```
+
+### Volume Management
+
+Persistent data is stored in named volumes:
+
+- `timescale_data` - TimescaleDB data files
+- `redis_data` - Redis cache data
+- `grafana_data` - Grafana configurations and dashboards
+- `prometheus_data` - Prometheus metrics storage
 
 ## Services and Use Cases
 
