@@ -304,41 +304,41 @@ run_migration() {
             -v "$CONFIG_DIR:/app/config" \
             etl-migration \
             -c "
-            import sys
-            import os
-            sys.path.append('/app')
-            try:
-                from stockula.database.manager import DatabaseManager
-                from stockula.config.models import TimescaleDBConfig
+import sys
+import os
+sys.path.append('/app')
+try:
+    from stockula.database.manager import DatabaseManager
+    from stockula.config.models import TimescaleDBConfig
 
-                print('Running database initialization and migration...')
+    print('Running database initialization and migration...')
 
-                # Get password from environment or use default
-                password = os.environ.get('ETL_PASSWORD', 'etl_password_change_me')
+    # Get password from environment or use default
+    password = os.environ.get('ETL_PASSWORD', 'etl_password_change_me')
 
-                config = TimescaleDBConfig(
-                    host='timescaledb',
-                    port=5432,
-                    database='stockula',
-                    user='stockula_etl',
-                    password=password
-                )
+    config = TimescaleDBConfig(
+        host='timescaledb',
+        port=5432,
+        database='stockula',
+        user='stockula_etl',
+        password=password
+    )
 
-                print('Creating DatabaseManager and initializing database...')
-                db = DatabaseManager(config)
+    print('Creating DatabaseManager and initializing database...')
+    db = DatabaseManager(config)
 
-                # Initialize database tables and schemas
-                if hasattr(db, 'initialize_database'):
-                    db.initialize_database()
-                    print('Database initialization completed successfully')
-                else:
-                    print('No initialize_database method available, database should auto-initialize')
+    # Initialize database tables and schemas
+    if hasattr(db, 'initialize_database'):
+        db.initialize_database()
+        print('Database initialization completed successfully')
+    else:
+        print('No initialize_database method available, database should auto-initialize')
 
-            except Exception as e:
-                print(f'Migration failed: {e}')
-                print('This is expected if TimescaleDB is not fully ready yet.')
-                print('The migration will be retried when the service is available.')
-            "
+except Exception as e:
+    print(f'Migration failed: {e}')
+    print('This is expected if TimescaleDB is not fully ready yet.')
+    print('The migration will be retried when the service is available.')
+"
 
         success "Data migration completed"
     else
@@ -372,43 +372,43 @@ run_optimization() {
         -v "$CONFIG_DIR:/app/config" \
         etl-migration \
         -c "
-        import sys
-        import os
-        sys.path.append('/app')
-        try:
-            from stockula.database.manager import DatabaseManager
-            from stockula.config.models import TimescaleDBConfig
+import sys
+import os
+sys.path.append('/app')
+try:
+    from stockula.database.manager import DatabaseManager
+    from stockula.config.models import TimescaleDBConfig
 
-            print('Running database optimization...')
+    print('Running database optimization...')
 
-            # Get password from environment or use default
-            password = os.environ.get('ETL_PASSWORD', 'etl_password_change_me')
+    # Get password from environment or use default
+    password = os.environ.get('ETL_PASSWORD', 'etl_password_change_me')
 
-            config = TimescaleDBConfig(
-                host='timescaledb',
-                port=5432,
-                database='stockula',
-                user='stockula_etl',
-                password=password
-            )
+    config = TimescaleDBConfig(
+        host='timescaledb',
+        port=5432,
+        database='stockula',
+        user='stockula_etl',
+        password=password
+    )
 
-            db = DatabaseManager(config)
+    db = DatabaseManager(config)
 
-            # Run optimization operations if available
-            print('Checking for optimization methods...')
-            methods = [attr for attr in dir(db) if 'optimize' in attr.lower() or 'vacuum' in attr.lower()]
-            if methods:
-                print(f'Found optimization methods: {methods}')
-                # Call optimization methods here
-            else:
-                print('No specific optimization methods found, database handles optimization automatically')
+    # Run optimization operations if available
+    print('Checking for optimization methods...')
+    methods = [attr for attr in dir(db) if 'optimize' in attr.lower() or 'vacuum' in attr.lower()]
+    if methods:
+        print(f'Found optimization methods: {methods}')
+        # Call optimization methods here
+    else:
+        print('No specific optimization methods found, database handles optimization automatically')
 
-            print('Database optimization completed')
+    print('Database optimization completed')
 
-        except Exception as e:
-            print(f'Optimization failed: {e}')
-            print('This is expected if TimescaleDB is not fully ready yet.')
-        "
+except Exception as e:
+    print(f'Optimization failed: {e}')
+    print('This is expected if TimescaleDB is not fully ready yet.')
+"
 
     success "Database optimization completed"
 }
