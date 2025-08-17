@@ -1,12 +1,8 @@
 ---
-version: '3.8'
-
 services:
   # TimescaleDB database optimized for ETL workloads
   timescaledb:
-    build:
-      context: ./docker/timescaledb
-      dockerfile: Dockerfile
+    image: timescale/timescaledb-ha:pg17
     container_name: stockula-timescaledb
     environment:
       POSTGRES_DB: stockula
@@ -21,8 +17,7 @@ services:
       # Persistent data storage
       - timescaledb_data:/var/lib/postgresql/data
       # Configuration files
-      - ./docker/timescaledb/postgresql.conf:/etc/postgresql/postgresql.conf:ro
-      - ./docker/timescaledb/pg_hba.conf:/etc/postgresql/pg_hba.conf:ro
+      - ../database/timescale/config/postgresql.conf:/etc/postgresql/postgresql.conf:ro
       # Backup directory
       - ./backups:/var/lib/postgresql/backups
       # Logs
@@ -64,7 +59,7 @@ services:
       - "6379:6379"
     volumes:
       - redis_data:/data
-      - ./docker/redis/redis.conf:/usr/local/etc/redis/redis.conf:ro
+      - ../database/timescale/redis/redis.conf:/usr/local/etc/redis/redis.conf:ro
     networks:
       - stockula-network
     restart: unless-stopped
@@ -87,8 +82,8 @@ services:
   etl-migration:
     build:
       context: ..
-      dockerfile: deploy/docker/etl/Dockerfile
-      target: migration
+      dockerfile: deploy/docker/Dockerfile
+      target: cli
     container_name: stockula-etl-migration
     environment:
       STOCKULA_ETL__TIMESCALEDB__HOST: timescaledb
@@ -115,8 +110,8 @@ services:
   etl-streaming:
     build:
       context: ..
-      dockerfile: deploy/docker/etl/Dockerfile
-      target: streaming
+      dockerfile: deploy/docker/Dockerfile
+      target: cli
     container_name: stockula-etl-streaming
     environment:
       STOCKULA_ETL__TIMESCALEDB__HOST: timescaledb
@@ -152,8 +147,8 @@ services:
   etl-monitoring:
     build:
       context: ..
-      dockerfile: deploy/docker/etl/Dockerfile
-      target: monitoring
+      dockerfile: deploy/docker/Dockerfile
+      target: cli
     container_name: stockula-etl-monitoring
     environment:
       STOCKULA_ETL__TIMESCALEDB__HOST: timescaledb
@@ -192,8 +187,8 @@ services:
       - "3000:3000"
     volumes:
       - grafana_data:/var/lib/grafana
-      - ./docker/grafana/datasources:/etc/grafana/provisioning/datasources
-      - ./docker/grafana/dashboards:/etc/grafana/provisioning/dashboards
+      - ../database/timescale/grafana/provisioning/datasources:/etc/grafana/provisioning/datasources
+      - ../database/timescale/grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards
     networks:
       - stockula-network
     depends_on:
@@ -211,7 +206,7 @@ services:
       - "9090:9090"
     volumes:
       - prometheus_data:/prometheus
-      - ./docker/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ../database/timescale/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
     networks:
       - stockula-network
     restart: unless-stopped
@@ -231,7 +226,6 @@ services:
       - "8081:80"
     volumes:
       - pgadmin_data:/var/lib/pgadmin
-      - ./docker/pgadmin/servers.json:/pgadmin4/servers.json:ro
     networks:
       - stockula-network
     depends_on:
@@ -261,4 +255,4 @@ networks:
     driver: bridge
     ipam:
       config:
-        - subnet: 172.20.0.0/16
+        - subnet: 172.25.0.0/16

@@ -1,0 +1,66 @@
+---
+# Stockula ETL Pipeline Configuration - Production Ready
+
+# TimescaleDB connection settings
+timescaledb:
+  host: timescaledb
+  port: 5432
+  database: stockula
+  username: stockula_etl
+  password: ${ETL_PASSWORD:-etl_secure_password_change_me}
+  pool_size: 20
+  max_overflow: 30
+  pool_timeout: 30
+  pool_recycle: 3600
+
+# Data migration settings (optimized for speed)
+migration:
+  sqlite_path: /data/stockula.db
+  batch_size: 50000
+  parallel_workers: 8
+  chunk_size: 5000
+  disable_foreign_keys: true
+  use_copy_from: true
+  vacuum_analyze: true
+  verify_counts: true
+  verify_checksums: true
+  max_retries: 5
+  retry_delay: 2.0
+  exponential_backoff: true
+
+# Real-time streaming settings (production optimized)
+streaming:
+  yfinance_enabled: true
+  fetch_interval: 30
+  batch_size: 2000
+  batch_timeout: 3.0
+  max_batch_age: 15.0
+  worker_count: 4
+  worker_queue_size: 5000
+  max_retries: 5
+  retry_delay: 1.0
+  dead_letter_queue: true
+  enable_metrics: true
+  metrics_interval: 30
+
+# Data validation settings (strict for production)
+validation:
+  check_null_values: true
+  check_data_types: true
+  check_ranges: true
+  check_duplicates: true
+  null_threshold: 0.02
+  duplicate_threshold: 0.005
+  min_price: 0.01
+  max_price: 500000.0
+  max_price_change: 0.3
+  min_volume: 0
+  max_volume: 50000000000
+  generate_reports: true
+  report_format: json
+
+# Global settings
+log_level: INFO
+log_format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+environment: production
+debug: false
