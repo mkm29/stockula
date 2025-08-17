@@ -53,8 +53,11 @@ COPY pyproject.toml uv.lock README.md ./
 # Create virtual environment and install dependencies with cache mount
 RUN --mount=type=cache,target=/root/.cache/uv,sharing=locked \
     uv venv /opt/venv --python 3.11 && \
-    . /opt/venv/bin/activate && \
-    uv sync --frozen --no-dev --compile-bytecode
+    VIRTUAL_ENV=/opt/venv uv pip install --python /opt/venv/bin/python \
+        pandas numpy scikit-learn finta backtesting yfinance \
+        pydantic-settings pyyaml dependency-injector alembic \
+        sqlalchemy sqlmodel psycopg2-binary rich typer \
+        asyncpg sqlalchemy-utils
 
 # Stage 3: Source builder
 FROM dependencies AS source
@@ -68,8 +71,7 @@ COPY examples/ examples/
 
 # Install the package (not in editable mode for production)
 RUN --mount=type=cache,target=/root/.cache/uv,sharing=locked \
-    . /opt/venv/bin/activate && \
-    uv pip install .
+    VIRTUAL_ENV=/opt/venv uv pip install --python /opt/venv/bin/python .
 
 # Stage 4: Production runtime - minimal image
 FROM ghcr.io/astral-sh/uv:python3.11-bookworm-slim AS production

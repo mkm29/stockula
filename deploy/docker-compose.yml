@@ -17,7 +17,7 @@ services:
       # Persistent data storage
       - timescaledb_data:/var/lib/postgresql/data
       # Configuration files
-      - ../database/timescale/config/postgresql.conf:/etc/postgresql/postgresql.conf:ro
+      - ../database/timescale/config/postgresql.conf:/var/lib/postgresql/data/postgresql.conf:ro
       # Backup directory
       - ./backups:/var/lib/postgresql/backups
       # Logs
