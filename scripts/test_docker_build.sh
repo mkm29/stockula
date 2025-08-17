@@ -13,7 +13,7 @@ NC='\033[0m' # No Color
 # Test 1: Base image and Python installation
 echo -e "\n${YELLOW}Test 1: Building nvidia-base stage...${NC}"
 docker buildx build \
-  -f Dockerfile.nvidia \
+  -f deploy/docker/Dockerfile.nvidia \
   --target nvidia-base \
   --platform linux/amd64 \
   -t stockula:test-base \
@@ -30,7 +30,7 @@ fi
 # Test 2: Dependencies stage
 echo -e "\n${YELLOW}Test 2: Building gpu-dependencies stage...${NC}"
 docker buildx build \
-  -f Dockerfile.nvidia \
+  -f deploy/docker/Dockerfile.nvidia \
   --target gpu-dependencies \
   --platform linux/amd64 \
   -t stockula:test-deps \
@@ -47,7 +47,7 @@ fi
 # Test 3: Full build
 echo -e "\n${YELLOW}Test 3: Building full gpu-cli stage...${NC}"
 docker buildx build \
-  -f Dockerfile.nvidia \
+  -f deploy/docker/Dockerfile.nvidia \
   --target gpu-cli \
   --platform linux/amd64 \
   -t smigula/stockula:v0.13.0-gpu \

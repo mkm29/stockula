@@ -25,8 +25,8 @@ services:
       - "5432:5432"
     volumes:
       - timescale_data:/home/postgres/pgdata/data
-      - ./database/timescale/init:/docker-entrypoint-initdb.d:ro
-      - ./database/timescale/config/postgresql.conf:/etc/postgresql/postgresql.conf:ro
+      - ../../database/timescale/init:/docker-entrypoint-initdb.d:ro
+      - ../../database/timescale/config/postgresql.conf:/etc/postgresql/postgresql.conf:ro
       - timescale_backups:/backups
     command: >
       postgres -c config_file=/etc/postgresql/postgresql.conf -c shared_preload_libraries=timescaledb,pg_stat_statements -c timescaledb.telemetry_level=off
@@ -68,8 +68,8 @@ services:
     ports:
       - "6432:5432"
     volumes:
-      - ./database/timescale/pgbouncer/pgbouncer.ini:/etc/pgbouncer/pgbouncer.ini:ro
-      - ./database/timescale/pgbouncer/userlist.txt:/etc/pgbouncer/userlist.txt:ro
+      - ../../database/timescale/pgbouncer/pgbouncer.ini:/etc/pgbouncer/pgbouncer.ini:ro
+      - ../../database/timescale/pgbouncer/userlist.txt:/etc/pgbouncer/userlist.txt:ro
     depends_on:
       timescaledb:
         condition: service_healthy
@@ -88,7 +88,7 @@ services:
       - "6379:6379"
     volumes:
       - redis_data:/data
-      - ./database/timescale/redis/redis.conf:/usr/local/etc/redis/redis.conf:ro
+      - ../../database/timescale/redis/redis.conf:/usr/local/etc/redis/redis.conf:ro
     command: redis-server /usr/local/etc/redis/redis.conf
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
@@ -104,11 +104,12 @@ services:
   # Development service with all dev dependencies
   stockula-dev:
     build:
-      context: .
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile
       target: development
     container_name: stockula-dev
     volumes:
-      - .:/app
+      - ../..:/app
       - stockula-data:/app/data
       - stockula-results:/app/results
     ports:
@@ -135,13 +136,14 @@ services:
   # Production CLI service
   stockula-cli:
     build:
-      context: .
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile
       target: cli
     container_name: stockula-cli
     volumes:
       - stockula-data:/app/data
       - stockula-results:/app/results
-      - ./examples:/app/examples:ro
+      - ../../examples:/app/examples:ro
     environment:
       - PYTHONPATH=/app/src
       - STOCKULA_ENV=production
@@ -168,13 +170,14 @@ services:
   # Jupyter service for analysis
   stockula-jupyter:
     build:
-      context: .
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile
       target: jupyter
     container_name: stockula-jupyter
     volumes:
       - stockula-data:/app/data
       - stockula-results:/app/results
-      - ./notebooks:/app/notebooks
+      - ../../notebooks:/app/notebooks
     ports:
       - "8889:8888"  # Different port to avoid conflicts
     environment:
@@ -198,11 +201,12 @@ services:
   # Test service for CI/CD
   stockula-test:
     build:
-      context: .
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile
       target: test
     container_name: stockula-test
     volumes:
-      - .:/app
+      - ../..:/app
     environment:
       - PYTHONPATH=/app/src
       - STOCKULA_ENV=test
@@ -215,7 +219,8 @@ services:
   # API service (placeholder for future implementation)
   stockula-api:
     build:
-      context: .
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile
       target: api
     container_name: stockula-api
     volumes:
@@ -247,7 +252,8 @@ services:
   # Production Stockula application with TimescaleDB
   stockula-app:
     build:
-      context: .
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile
       target: production
     container_name: stockula-app
     restart: unless-stopped
@@ -264,7 +270,7 @@ services:
     volumes:
       - stockula_data:/app/data
       - stockula_results:/app/results
-      - ./examples:/app/examples:ro
+      - ../../examples:/app/examples:ro
     depends_on:
       timescaledb:
         condition: service_healthy
@@ -292,8 +298,8 @@ services:
       - "3000:3000"
     volumes:
       - grafana_data:/var/lib/grafana
-      - ./database/timescale/grafana/provisioning:/etc/grafana/provisioning:ro
-      - ./database/timescale/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - ../../database/timescale/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ../../database/timescale/grafana/dashboards:/var/lib/grafana/dashboards:ro
     depends_on:
       timescaledb:
         condition: service_healthy
@@ -312,7 +318,7 @@ services:
       - "9090:9090"
     volumes:
       - prometheus_data:/prometheus
-      - ./database/timescale/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ../../database/timescale/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'
       - '--storage.tsdb.path=/prometheus'
@@ -335,7 +341,7 @@ services:
       DATA_SOURCE_NAME: "postgresql://stockula:${POSTGRES_PASSWORD:-SuperSecret12}@timescaledb:5432/stockula?sslmode=disable"
       PG_EXPORTER_EXTEND_QUERY_PATH: /etc/postgres_exporter/queries.yaml
     volumes:
-      - ./database/timescale/postgres_exporter/queries.yaml:/etc/postgres_exporter/queries.yaml:ro
+      - ../../database/timescale/postgres_exporter/queries.yaml:/etc/postgres_exporter/queries.yaml:ro
     depends_on:
       timescaledb:
         condition: service_healthy
@@ -354,7 +360,7 @@ services:
       PGPASSWORD: ${POSTGRES_PASSWORD:-SuperSecret12}
     volumes:
       - timescale_backups:/backups
-      - ./database/timescale/backup/backup.sh:/backup.sh:ro
+      - ../../database/timescale/backup/backup.sh:/backup.sh:ro
     command: /bin/sh /backup.sh
     depends_on:
       timescaledb:

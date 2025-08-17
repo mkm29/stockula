@@ -75,7 +75,7 @@ docker compose --profile dev --profile database up
 docker compose --profile full up -d
 
 # GPU development (requires nvidia-docker)
-docker compose -f docker-compose.yml -f docker-compose.gpu.yml --profile gpu-dev up
+docker compose -f deploy/docker/docker-compose.yml -f deploy/docker/docker-compose.gpu.yml --profile gpu-dev up
 
 # Quick CLI usage
 docker compose run --rm stockula-cli python -m stockula --help
@@ -107,11 +107,11 @@ docker run -v $(pwd)/.stockula.yaml:/app/.stockula.yaml ghcr.io/mkm29/stockula:l
 
 **Docker Compose Features:**
 
-- **Consolidated Configuration**: Single `docker-compose.yml` with profile-based service selection
+- **Consolidated Configuration**: Single `deploy/docker/docker-compose.yml` with profile-based service selection
 - **TimescaleDB Integration**: High-performance time-series database with automatic setup
 - **Connection Pooling**: PgBouncer for efficient database connections
 - **Monitoring Stack**: Grafana dashboards and Prometheus metrics collection
-- **GPU Support**: Separate `docker-compose.gpu.yml` for CUDA-accelerated workloads
+- **GPU Support**: Separate `deploy/docker/docker-compose.gpu.yml` for CUDA-accelerated workloads
 - **Development Tools**: Jupyter Lab, interactive CLI, and testing environments
 
 #### Method 2: Local Installation with uv

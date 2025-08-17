@@ -1,6 +1,7 @@
 """Tests for configuration models and loading."""
 
 from datetime import date
+from unittest.mock import patch
 
 import pytest
 import yaml
@@ -416,7 +417,8 @@ class TestStockulaConfig:
 class TestConfigLoading:
     """Test configuration loading and saving."""
 
-    def test_load_config_from_file(self, temp_config_file):
+    @patch("stockula.container.Container")
+    def test_load_config_from_file(self, mock_container, temp_config_file):
         """Test loading configuration from file."""
         config = load_config(temp_config_file)
         assert isinstance(config, StockulaConfig)
@@ -428,7 +430,8 @@ class TestConfigLoading:
         with pytest.raises(FileNotFoundError, match="Configuration file not found"):
             load_config("nonexistent.yaml")
 
-    def test_load_config_no_file_uses_defaults(self, tmp_path, monkeypatch):
+    @patch("stockula.container.Container")
+    def test_load_config_no_file_uses_defaults(self, mock_container, tmp_path, monkeypatch):
         """Test loading configuration with no file uses defaults."""
         # Change to temp directory to ensure no config files are found
         monkeypatch.chdir(tmp_path)
@@ -550,7 +553,8 @@ class TestSettingsModule:
         assert result.name == "SimpleStrategy"
         assert result.parameters == {}
 
-    def test_load_config_with_default_files(self, tmp_path, monkeypatch):
+    @patch("stockula.container.Container")
+    def test_load_config_with_default_files(self, mock_container, tmp_path, monkeypatch):
         """Test load_config checks for default config files."""
         # Change to temp directory
         monkeypatch.chdir(tmp_path)
@@ -564,7 +568,8 @@ class TestSettingsModule:
         result = load_config(None)
         assert result.portfolio.name == "Default Config Portfolio"
 
-    def test_load_config_with_alternative_default_files(self, tmp_path, monkeypatch):
+    @patch("stockula.container.Container")
+    def test_load_config_with_alternative_default_files(self, mock_container, tmp_path, monkeypatch):
         """Test load_config checks alternative default config files."""
         # Change to temp directory
         monkeypatch.chdir(tmp_path)
@@ -578,7 +583,8 @@ class TestSettingsModule:
         result = load_config(None)
         assert result.portfolio.name == "Stockula YML Config"
 
-    def test_load_config_with_strategies(self, tmp_path):
+    @patch("stockula.container.Container")
+    def test_load_config_with_strategies(self, mock_container, tmp_path):
         """Test load_config parses strategies correctly."""
         config_data = {
             "portfolio": {"name": "Strategy Test Portfolio"},
@@ -610,7 +616,8 @@ class TestSettingsModule:
         assert result.backtest.strategies[2].name == "CustomStrategy"
         assert result.backtest.strategies[2].parameters["custom_param"] == "test"
 
-    def test_load_config_backtest_without_strategies(self, tmp_path):
+    @patch("stockula.container.Container")
+    def test_load_config_backtest_without_strategies(self, mock_container, tmp_path):
         """Test load_config with backtest section but no strategies."""
         config_data = {
             "portfolio": {"name": "No Strategies Portfolio"},
@@ -638,7 +645,8 @@ class TestSettingsModule:
             assert isinstance(result, StrategyConfig)
             assert result.name == strategy_name.upper()
 
-    def test_load_config_environment_settings(self, tmp_path, monkeypatch):
+    @patch("stockula.container.Container")
+    def test_load_config_environment_settings(self, mock_container, tmp_path, monkeypatch):
         """Test that Settings class is instantiated during load_config."""
         config_data = {"portfolio": {"name": "Env Test Portfolio"}}
         config_file = tmp_path / "env_config.yaml"

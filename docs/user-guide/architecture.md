@@ -511,7 +511,7 @@ Intelligent caching reduces API calls:
 1. **Selective Updates**: Fetch only missing data
 1. **Background Updates**: Refresh stale data automatically
 
-### Migration Management
+### Database Management
 
 TimescaleDB schema and optimization management:
 

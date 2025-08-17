@@ -42,7 +42,7 @@ docker compose --profile dev --profile database up
 docker compose --profile full up -d
 
 # GPU development (requires nvidia-docker)
-docker compose -f docker-compose.yml -f docker-compose.gpu.yml --profile gpu-dev up
+docker compose -f deploy/docker/docker-compose.yml -f deploy/docker/docker-compose.gpu.yml --profile gpu-dev up
 
 # Quick CLI usage
 docker compose run --rm stockula-cli python -m stockula --help
@@ -300,7 +300,7 @@ docker run --rm \
 Configure the application using environment variables:
 
 ```bash
-# Set environment in docker-compose.yml or pass to docker run
+# Set environment in deploy/docker/docker-compose.yml or pass to docker run
 STOCKULA_ENV=production          # Environment: development, production, test
 PYTHONPATH=/app/src             # Python path for imports
 STOCKULA_LOG_LEVEL=INFO         # Logging level
@@ -515,7 +515,7 @@ docker run -d \
 ```dockerfile
 # Use custom base image
 FROM your-registry.com/python:3.13-custom as base
-# ... rest of Dockerfile
+# ... rest of deploy/docker/Dockerfile
 ```
 
 ### Multi-Architecture Builds
@@ -547,11 +547,11 @@ The Docker implementation seamlessly integrates with all Stockula features:
 - Dynamic Sharpe ratio calculations work out-of-the-box
 - Treasury rate caching persists across container restarts
 
-### ✅ Database Migrations
+### ✅ Database Management
 
-- Alembic migrations run automatically in containers
+- Alembic schema management runs automatically in containers
 - Database files persist in mounted volumes
-- Migration scripts included in all relevant images
+- Database setup scripts included in all relevant images
 
 ### ✅ Examples and Documentation
 
@@ -596,7 +596,7 @@ The Docker implementation seamlessly integrates with all Stockula features:
 
 ## Best Practices
 
-1. **Layer Caching**: Order Dockerfile instructions from least to most frequently changing
+1. **Layer Caching**: Order deploy/docker/Dockerfile instructions from least to most frequently changing
 1. **Multi-stage Builds**: Use appropriate target for your use case
 1. **Volume Management**: Use named volumes for persistent data
 1. **Security**: Always run production containers as non-root

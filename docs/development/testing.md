@@ -302,8 +302,15 @@ uv run ruff format --check src tests
 # Run unit tests with coverage
 uv run pytest tests/unit -v --cov=stockula --cov-report=xml
 
+# Run database tests specifically
+uv run pytest tests/unit/database/ -v
+
 # Run integration tests
 DATABASE_URL=sqlite:///./test_stockula.db STOCKULA_ENV=test uv run pytest tests/integration -v
+
+# Test with real TimescaleDB (if available)
+TIMESCALEDB_TEST_URL=postgresql://user:pass@localhost:5432/test_db \
+uv run pytest tests/integration/test_database.py
 ```
 
 ## Best Practices

@@ -9,22 +9,15 @@ This directory contains technical documentation for developers working on Stocku
 Complete guide to the continuous integration and deployment setup, including GitHub Actions workflows, release
 automation, and Docker builds.
 
-### [AutoTS Threading Considerations](autots-threading-considerations.md)
+### [Database Development](database.md)
 
-Guidelines for working with AutoTS's threading limitations and recommendations for implementing reliable forecasting.
-
-### [SQLModel Migration](sqlmodel-migration.md)
-
-Documentation about the migration from SQLAlchemy to SQLModel for improved type safety and validation.
+Comprehensive guide for database development, including TimescaleDB architecture, performance requirements, and SQLModel
+integration.
 
 ### [Testing](testing.md)
 
-Comprehensive guide for testing in Stockula, including testing strategy, best practices, coverage improvements, and
-common patterns.
-
-### [Test Coverage Status](test-coverage-status.md)
-
-Detailed test coverage metrics, recent improvements, and important warnings about untested modules.
+Comprehensive guide for testing in Stockula, including testing strategy, database testing solutions, coverage status,
+and best practices. Includes consolidated information about test coverage improvements and database analytics testing.
 
 ### [YAML Formatting](yaml-formatting.md)
 
@@ -33,10 +26,6 @@ Configuration and usage guide for YAML formatting with yamlfmt and yamllint vali
 ### [Docker Validation](docker-validation.md)
 
 Comprehensive Docker setup validation script for ensuring proper Docker configuration and functionality.
-
-### [Migration Guide: AutoTS Validator](migration-autots-validator.md)
-
-Guide for migrating from the old AutoTSModelValidator class to the new database-driven validation system.
 
 ## Quick Links
 

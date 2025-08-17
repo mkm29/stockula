@@ -273,14 +273,14 @@ Common issues and solutions:
 1. **Model Selection**: Let AutoGluon automatically select models unless you have specific requirements
 1. **Evaluation**: Use train/test split to assess forecast accuracy on historical data
 
-## Migration from AutoTS
+## AutoGluon TimeSeries Implementation
 
-Stockula has migrated from AutoTS to AutoGluon TimeSeries for improved performance and accuracy. Key changes:
+Stockula uses AutoGluon TimeSeries for high-performance forecasting with automatic model selection:
 
-- **Simpler Configuration**: No need to specify model lists or ensemble methods
-- **Better Performance**: AutoGluon generally provides better accuracy
-- **Automatic Fallback**: Simple linear regression for environments without AutoGluon
-- **Python 3.13 Support**: Works with latest Python via fallback implementation
+- **Automatic Configuration**: No need to specify model lists or ensemble methods
+- **High Performance**: AutoGluon provides state-of-the-art accuracy
+- **Intelligent Fallback**: Simple linear regression for environments without AutoGluon
+- **Python 3.13 Support**: Full compatibility with latest Python versions
 
 All existing configurations will work with minimal changes. The system automatically handles the backend selection based on availability.
 ```

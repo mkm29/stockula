@@ -5,13 +5,14 @@ services:
   # GPU-accelerated Stockula development environment
   stockula-gpu-dev:
     build:
-      context: .
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile.nvidia
       target: gpu-development
       args:
         CUDA_VERSION: "12.4"
     container_name: stockula-gpu-dev
     volumes:
-      - .:/app
+      - ../..:/app
       - stockula-data:/app/data
       - stockula-results:/app/results
     ports:
@@ -46,7 +47,8 @@ services:
   # GPU-accelerated forecasting service
   stockula-gpu-forecast:
     build:
-      context: .
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile.nvidia
       target: gpu-production
       args:
         CUDA_VERSION: "12.4"
@@ -54,7 +56,7 @@ services:
     volumes:
       - stockula_data:/app/data
       - stockula_results:/app/results
-      - ./examples:/app/examples:ro
+      - ../../examples:/app/examples:ro
     environment:
       - PYTHONPATH=/app/src
       - STOCKULA_ENV=production
@@ -87,21 +89,4 @@ services:
       - gpu-forecast
 
 # Uses the same volumes and networks from main docker-compose.yml
-volumes:
-  stockula-data:
-    external: true
-    name: stockula_stockula-data
-  stockula-results:
-    external: true
-    name: stockula_stockula-results
-  stockula_data:
-    external: true
-    name: stockula_stockula_data
-  stockula_results:
-    external: true
-    name: stockula_stockula_results
-
-networks:
-  stockula-network:
-    external: true
-    name: stockula-network
+# Note: Volumes and networks are inherited from main docker-compose.yml when using both files

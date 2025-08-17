@@ -251,7 +251,7 @@ build_images() {
     docker compose build timescaledb
 
     # Build ETL images (if Dockerfiles exist)
-    if [ -f "$DEPLOY_DIR/docker/etl/Dockerfile" ]; then
+    if [ -f "$PROJECT_ROOT/deploy/docker/Dockerfile" ]; then
         docker compose build etl-migration etl-streaming etl-monitoring
     fi
 

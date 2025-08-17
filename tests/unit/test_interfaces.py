@@ -12,10 +12,8 @@ from stockula.interfaces import (
     IDataFetcher,
     IDomainFactory,
     ILoggingManager,
-    IStockDataRepository,
     IStockForecaster,
     ITechnicalIndicators,
-    ITimescaleAnalytics,
 )
 
 
@@ -118,63 +116,7 @@ class TestIDatabaseManager:
             pass
 
 
-class TestIStockDataRepository:
-    """Test IStockDataRepository interface definition."""
-
-    def test_is_abstract_base_class(self):
-        """Test that IStockDataRepository is an abstract base class."""
-        assert issubclass(IStockDataRepository, ABC)
-
-    def test_has_required_methods(self):
-        """Test that IStockDataRepository has all required abstract methods."""
-        required_methods = [
-            "get_price_history",
-            "store_price_history",
-            "get_stock_info",
-            "store_stock_info",
-            "has_data",
-            "get_all_symbols",
-        ]
-
-        for method in required_methods:
-            assert hasattr(IStockDataRepository, method)
-
-    def test_cannot_instantiate_directly(self):
-        """Test that IStockDataRepository cannot be instantiated directly."""
-        try:
-            IStockDataRepository()
-            raise AssertionError("Should not be able to instantiate abstract class")
-        except TypeError:
-            pass
-
-
-class TestITimescaleAnalytics:
-    """Test ITimescaleAnalytics interface definition."""
-
-    def test_is_abstract_base_class(self):
-        """Test that ITimescaleAnalytics is an abstract base class."""
-        assert issubclass(ITimescaleAnalytics, ABC)
-
-    def test_has_required_methods(self):
-        """Test that ITimescaleAnalytics has all required abstract methods."""
-        required_methods = [
-            "get_volume_profile",
-            "get_correlation_matrix",
-            "get_moving_averages",
-            "get_volatility_analysis",
-            "store_price_history_async",
-        ]
-
-        for method in required_methods:
-            assert hasattr(ITimescaleAnalytics, method)
-
-    def test_cannot_instantiate_directly(self):
-        """Test that ITimescaleAnalytics cannot be instantiated directly."""
-        try:
-            ITimescaleAnalytics()
-            raise AssertionError("Should not be able to instantiate abstract class")
-        except TypeError:
-            pass
+# IStockDataRepository and ITimescaleAnalytics interfaces removed in TimescaleDB migration
 
 
 class TestIStockForecaster:
@@ -308,23 +250,19 @@ class TestInterfaceIntegration:
             IDataFetcher,
             IDomainFactory,
             ILoggingManager,
-            IStockDataRepository,
             IStockForecaster,
             ITechnicalIndicators,
-            ITimescaleAnalytics,
         )
 
         # Just checking they exist and are classes
         for interface in [
             IDataFetcher,
             IDatabaseManager,
-            IStockDataRepository,
             IStockForecaster,
             IBacktestRunner,
             IDomainFactory,
             ILoggingManager,
             ITechnicalIndicators,
-            ITimescaleAnalytics,
         ]:
             assert inspect.isclass(interface)
             assert issubclass(interface, ABC)
@@ -334,13 +272,11 @@ class TestInterfaceIntegration:
         interfaces = [
             IDataFetcher,
             IDatabaseManager,
-            IStockDataRepository,
             IStockForecaster,
             IBacktestRunner,
             IDomainFactory,
             ILoggingManager,
             ITechnicalIndicators,
-            ITimescaleAnalytics,
         ]
 
         for interface in interfaces:
@@ -358,13 +294,11 @@ class TestInterfaceIntegration:
         interfaces = [
             IDataFetcher,
             IDatabaseManager,
-            IStockDataRepository,
             IStockForecaster,
             IBacktestRunner,
             IDomainFactory,
             ILoggingManager,
             ITechnicalIndicators,
-            ITimescaleAnalytics,
         ]
 
         for interface in interfaces:
@@ -389,7 +323,9 @@ class TestInterfaceUsage:
             def get_info(self, symbol, force_refresh=False):
                 return {}
 
-            def get_treasury_rates(self, start_date=None, end_date=None, duration="3_month"):
+            def get_treasury_rates(
+                self, start_date, end_date, duration="3_month", force_refresh=False, as_decimal=True
+            ):
                 return pd.Series()
 
         # Should be able to instantiate the implementation

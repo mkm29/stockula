@@ -43,7 +43,7 @@ workflows:
 #### 3. Integration Tests (Currently Disabled)
 
 - **Purpose**: Test component interactions with database
-- **Database**: SQLite (will migrate to PostgreSQL)
+- **Database**: TimescaleDB for time-series data
 - **Coverage**: Reports to Codecov with `integration` flag
 - **Location**: `tests/integration/`
 - **Note**: Temporarily disabled pending test infrastructure updates
@@ -371,7 +371,7 @@ chore: bump pandas to 2.2.0
 1. **Test failures in CI but not locally**
 
    - Check for environment-specific dependencies
-   - Verify database connections and migrations
+   - Verify database connections and schema
    - Review CI environment variables
 
 ### Debugging Workflows
@@ -590,10 +590,10 @@ reproduce the exact conditions that caused parallel test failures in GitHub Acti
 
 ## Future Improvements
 
-1. **PostgreSQL Migration**
+1. **PostgreSQL Integration**
 
    - Enable integration tests with PostgreSQL
-   - Add database migration testing
+   - Add database schema validation testing
    - Performance benchmarking
 
 1. **Advanced Testing**

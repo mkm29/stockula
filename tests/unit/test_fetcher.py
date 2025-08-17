@@ -24,12 +24,14 @@ def mock_logging_manager():
 class TestDataFetcherInitialization:
     """Test DataFetcher initialization."""
 
-    def test_initialization_with_defaults(self, mock_logging_manager):
+    @patch("stockula.data.fetcher.DatabaseManager")
+    @patch("stockula.data.fetcher.TimescaleDBConfig")
+    def test_initialization_with_defaults(self, mock_timescale_config, mock_db_manager, mock_logging_manager):
         """Test DataFetcher initialization with default parameters."""
-        with patch("stockula.data.fetcher.DatabaseManager"):
-            fetcher = DataFetcher(logging_manager=mock_logging_manager)
-            assert fetcher.use_cache is True
-            assert fetcher.db is not None
+        fetcher = DataFetcher(logging_manager=mock_logging_manager)
+        assert fetcher.use_cache is True
+        assert fetcher.db is not None
+        mock_db_manager.assert_called_once()
 
     def test_initialization_without_cache(self, mock_logging_manager):
         """Test DataFetcher initialization without cache."""
@@ -37,12 +39,14 @@ class TestDataFetcherInitialization:
         assert fetcher.use_cache is False
         assert fetcher.db is None
 
-    def test_initialization_with_custom_db_path(self, mock_logging_manager):
-        """Test DataFetcher initialization with custom database path."""
-        with patch("stockula.data.fetcher.DatabaseManager") as mock_db:
-            fetcher = DataFetcher(use_cache=True, db_path="custom.db", logging_manager=mock_logging_manager)
-            mock_db.assert_called_once_with("custom.db")
-            assert fetcher.db is not None
+    @patch("stockula.data.fetcher.DatabaseManager")
+    @patch("stockula.data.fetcher.TimescaleDBConfig")
+    def test_initialization_with_custom_db_path(self, mock_timescale_config, mock_db_manager, mock_logging_manager):
+        """Test DataFetcher initialization with custom database path (legacy parameter)."""
+        fetcher = DataFetcher(use_cache=True, db_path="custom.db", logging_manager=mock_logging_manager)
+        # db_path is legacy and ignored, so TimescaleDB config should be used
+        mock_db_manager.assert_called_once()
+        assert fetcher.db is not None
 
 
 class TestDataFetcherStockData:
@@ -90,17 +94,18 @@ class TestDataFetcherStockData:
         mock_db.get_price_history.return_value = pd.DataFrame()
         mock_db.has_data.return_value = False
 
-        with patch("stockula.data.fetcher.DatabaseManager", return_value=mock_db):
-            with patch("yfinance.Ticker", return_value=mock_ticker):
-                fetcher = DataFetcher(use_cache=True, logging_manager=mock_logging_manager)
-                fetcher.get_stock_data("TEST", start="2023-01-01", end="2023-01-03")
+        # Create fetcher with mocked database manager
+        fetcher = DataFetcher(use_cache=True, database_manager=mock_db, logging_manager=mock_logging_manager)
 
-                # Should try to get from cache first
-                mock_db.get_price_history.assert_called_once()
-                # Should fetch from yfinance
-                mock_ticker.history.assert_called_once()
-                # Should store in cache
-                mock_db.store_price_history.assert_called_once()
+        with patch("yfinance.Ticker", return_value=mock_ticker):
+            fetcher.get_stock_data("TEST", start="2023-01-01", end="2023-01-03")
+
+            # Should try to get from cache first
+            mock_db.get_price_history.assert_called_once()
+            # Should fetch from yfinance
+            mock_ticker.history.assert_called_once()
+            # Should store in cache
+            mock_db.store_price_history.assert_called_once()
 
     def test_get_stock_data_with_cache_hit(self, mock_logging_manager, mock_ticker):
         """Test fetching stock data with cache hit."""
@@ -119,30 +124,32 @@ class TestDataFetcherStockData:
         mock_db.has_data.return_value = True
         mock_db.get_price_history.return_value = cached_data
 
-        with patch("stockula.data.fetcher.DatabaseManager", return_value=mock_db):
-            with patch("yfinance.Ticker", return_value=mock_ticker):
-                fetcher = DataFetcher(use_cache=True, logging_manager=mock_logging_manager)
-                data = fetcher.get_stock_data("TEST", start="2023-01-01", end="2023-01-03")
+        # Create fetcher with mocked database manager
+        fetcher = DataFetcher(use_cache=True, database_manager=mock_db, logging_manager=mock_logging_manager)
 
-                # Should not call yfinance
-                mock_ticker.history.assert_not_called()
-                # Should return cached data
-                assert data.equals(cached_data)
+        with patch("yfinance.Ticker", return_value=mock_ticker):
+            data = fetcher.get_stock_data("TEST", start="2023-01-01", end="2023-01-03")
+
+            # Should not call yfinance
+            mock_ticker.history.assert_not_called()
+            # Should return cached data
+            assert data.equals(cached_data)
 
     def test_get_stock_data_force_refresh(self, mock_logging_manager, mock_ticker):
         """Test forcing refresh bypasses cache."""
         mock_db = Mock()
         mock_db.has_data.return_value = True
 
-        with patch("stockula.data.fetcher.DatabaseManager", return_value=mock_db):
-            with patch("yfinance.Ticker", return_value=mock_ticker):
-                fetcher = DataFetcher(use_cache=True, logging_manager=mock_logging_manager)
-                fetcher.get_stock_data("TEST", start="2023-01-01", end="2023-01-03", force_refresh=True)
+        # Create fetcher with mocked database manager
+        fetcher = DataFetcher(use_cache=True, database_manager=mock_db, logging_manager=mock_logging_manager)
 
-                # Should not check cache
-                mock_db.has_data.assert_not_called()
-                # Should fetch from yfinance
-                mock_ticker.history.assert_called_once()
+        with patch("yfinance.Ticker", return_value=mock_ticker):
+            fetcher.get_stock_data("TEST", start="2023-01-01", end="2023-01-03", force_refresh=True)
+
+            # Should not check cache
+            mock_db.has_data.assert_not_called()
+            # Should fetch from yfinance
+            mock_ticker.history.assert_called_once()
 
     def test_get_stock_data_empty_response(self, mock_logging_manager):
         """Test handling empty response from yfinance."""
@@ -901,21 +908,23 @@ class TestDataFetcherUtilityMethods:
             assert fetcher.use_cache is False
             assert fetcher.db is None
 
-    def test_enable_cache(self, mock_logging_manager):
+    @patch("stockula.data.fetcher.DatabaseManager")
+    @patch("stockula.data.fetcher.TimescaleDBConfig")
+    def test_enable_cache(self, mock_timescale_config, mock_db_class, mock_logging_manager):
         """Test enable_cache method - covers lines 437-438."""
-        with patch("stockula.data.fetcher.DatabaseManager") as mock_db_class:
-            mock_db = Mock()
-            mock_db_class.return_value = mock_db
+        mock_db = Mock()
+        mock_db_class.return_value = mock_db
 
-            fetcher = DataFetcher(use_cache=False, logging_manager=mock_logging_manager)
-            assert fetcher.use_cache is False
-            assert fetcher.db is None
+        fetcher = DataFetcher(use_cache=False, logging_manager=mock_logging_manager)
+        assert fetcher.use_cache is False
+        assert fetcher.db is None
 
-            fetcher.enable_cache("custom.db")
+        fetcher.enable_cache("custom.db")  # db_path parameter is legacy and ignored
 
-            assert fetcher.use_cache is True
-            assert fetcher.db is mock_db
-            mock_db_class.assert_called_with("custom.db")
+        assert fetcher.use_cache is True
+        assert fetcher.db is mock_db
+        # Should create TimescaleDB manager with default config, not use the db_path
+        mock_db_class.assert_called_with(config=mock_timescale_config.return_value, enable_async=True)
 
     def test_initialization_with_injected_database_manager(self, mock_logging_manager):
         """Test initialization with injected database manager - covers line 30."""

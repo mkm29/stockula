@@ -644,9 +644,9 @@ backtesting, 1+ years for forecasting.
 **Q: Can I run Stockula on a server without a display?** A: Yes, set `NO_COLOR=1` environment variable or use JSON
 output format for headless operation. Ensure TimescaleDB is accessible from your server environment.
 
-**Q: How do I migrate from an older SQLite-based Stockula?** A: The migration to pure TimescaleDB with consolidated
-architecture is complete. Use the single DatabaseManager for all operations. See `docs/timescaledb_migration.md` for
-architecture details and migration history.
+**Q: How do I set up TimescaleDB for Stockula?** A: Stockula uses a pure TimescaleDB implementation with consolidated
+architecture. Use the single DatabaseManager for all operations. See `docs/development/database.md` for architecture
+details and setup instructions.
 
 For additional help, check the [GitHub Issues](https://github.com/mkm29/stockula/issues) page or create a new issue with
 your specific problem.

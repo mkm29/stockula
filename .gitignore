@@ -251,3 +251,4 @@ autots_cache/
 # Test data
 tests/data/
 *.db
+AutogluonModels/

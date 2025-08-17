@@ -165,7 +165,7 @@ class CustomRepository(Repository[T]):
 
 - **Optional**: Repositories work without database
 - **Automatic Sync**: Changes are automatically persisted when database is available
-- **Migration Support**: Uses SQLModel for easy schema migrations
+- **Schema Management**: Uses SQLModel for database schema handling
 
 ## Testing
 
@@ -218,4 +218,4 @@ def test_registry_operations():
 
 1. **Validation Framework**: Standardized validation for all repositories
 
-1. **Migration Tools**: Automated migration for repository schema changes
+1. **Schema Tools**: Automated tools for repository schema management

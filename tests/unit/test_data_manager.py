@@ -21,13 +21,17 @@ class TestDataManager:
 
         registry.clear()
 
-    def test_initialization_without_db(self):
+    @patch("stockula.data.manager.DataFetcher")
+    def test_initialization_without_db(self, mock_data_fetcher_class):
         """Test initializing DataManager without database."""
+        mock_fetcher = Mock(spec=DataFetcher)
+        mock_data_fetcher_class.return_value = mock_fetcher
+
         manager = DataManager(use_cache=False)
 
         assert manager._db_manager is None
         assert manager._logging_manager is None
-        assert isinstance(manager.fetcher, DataFetcher)
+        assert manager.fetcher is mock_fetcher
         assert isinstance(manager.registry, Registry)
 
         # Check strategy repository is registered
@@ -36,7 +40,8 @@ class TestDataManager:
         assert isinstance(strategy_repo, StrategyRepository)
         assert strategy_repo.db_manager is None
 
-    def test_initialization_with_db_and_logging(self):
+    @patch("stockula.data.manager.DataFetcher")
+    def test_initialization_with_db_and_logging(self, mock_data_fetcher_class):
         """Test initializing DataManager with database and logging."""
         mock_db = Mock()
         mock_session = MagicMock()
@@ -45,6 +50,8 @@ class TestDataManager:
         mock_session.query.return_value.filter.return_value.all.return_value = []
 
         mock_logging = Mock()
+        mock_fetcher = Mock(spec=DataFetcher)
+        mock_data_fetcher_class.return_value = mock_fetcher
 
         manager = DataManager(db_manager=mock_db, logging_manager=mock_logging, use_cache=True, db_path="test.db")
 
@@ -52,20 +59,28 @@ class TestDataManager:
         assert manager._logging_manager is mock_logging
 
         # Check DataFetcher was initialized with correct params
-        assert manager.fetcher.use_cache is True
-        assert manager.fetcher.db is mock_db
-        assert manager.fetcher.logger is mock_logging
+        mock_data_fetcher_class.assert_called_once_with(
+            use_cache=True,
+            db_path="test.db",
+            database_manager=mock_db,
+            logging_manager=mock_logging,
+        )
 
-    def test_fetcher_property(self):
+    @patch("stockula.data.manager.DataFetcher")
+    def test_fetcher_property(self, mock_data_fetcher_class):
         """Test fetcher property returns DataFetcher instance."""
+        mock_fetcher = Mock(spec=DataFetcher)
+        mock_data_fetcher_class.return_value = mock_fetcher
+
         manager = DataManager(use_cache=False)
         fetcher = manager.fetcher
 
-        assert isinstance(fetcher, DataFetcher)
+        assert fetcher is mock_fetcher
         # Multiple calls return same instance
         assert manager.fetcher is fetcher
 
-    def test_registry_property(self):
+    @patch("stockula.data.manager.DataFetcher")
+    def test_registry_property(self, mock_data_fetcher_class):
         """Test registry property returns Registry instance."""
         manager = DataManager(use_cache=False)
         registry = manager.registry
@@ -74,7 +89,8 @@ class TestDataManager:
         # Multiple calls return same instance
         assert manager.registry is registry
 
-    def test_get_repository(self):
+    @patch("stockula.data.manager.DataFetcher")
+    def test_get_repository(self, mock_data_fetcher_class):
         """Test getting repositories by name."""
         manager = DataManager(use_cache=False)
 
@@ -85,7 +101,8 @@ class TestDataManager:
         # Get non-existent repository
         assert manager.get_repository("nonexistent") is None
 
-    def test_strategies_property(self):
+    @patch("stockula.data.manager.DataFetcher")
+    def test_strategies_property(self, mock_data_fetcher_class):
         """Test strategies property returns StrategyRepository."""
         manager = DataManager(use_cache=False)
 
@@ -95,7 +112,8 @@ class TestDataManager:
         # Multiple calls return same instance
         assert manager.strategies is repo
 
-    def test_strategies_property_auto_register(self):
+    @patch("stockula.data.manager.DataFetcher")
+    def test_strategies_property_auto_register(self, mock_data_fetcher_class):
         """Test strategy repository is auto-registered if not exists."""
         manager = DataManager(use_cache=False)
 
@@ -224,15 +242,26 @@ class TestDataManager:
             assert repo.db_manager is mock_db
             mock_sync.assert_called_once()
 
-    def test_data_manager_with_custom_db_path(self):
+    @patch("stockula.data.manager.DataFetcher")
+    def test_data_manager_with_custom_db_path(self, mock_data_fetcher_class):
         """Test DataManager with custom database path."""
+        mock_fetcher = Mock(spec=DataFetcher)
+        mock_data_fetcher_class.return_value = mock_fetcher
+
         manager = DataManager(use_cache=True, db_path="custom.db")
 
         # DataFetcher should have been initialized with the custom path
-        # Note: DataFetcher doesn't expose _db_path directly, but we can check it was created
-        assert manager.fetcher.use_cache is True
+        # Note: db_path is legacy parameter, but should still be passed through
+        mock_data_fetcher_class.assert_called_once_with(
+            use_cache=True,
+            db_path="custom.db",
+            database_manager=None,
+            logging_manager=None,
+        )
+        assert manager.fetcher is mock_fetcher
 
-    def test_data_manager_shares_global_registry(self):
+    @patch("stockula.data.manager.DataFetcher")
+    def test_data_manager_shares_global_registry(self, mock_data_fetcher_class):
         """Test that multiple DataManager instances share the same registry."""
         manager1 = DataManager(use_cache=False)
         manager2 = DataManager(use_cache=False)
