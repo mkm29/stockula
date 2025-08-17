@@ -31,7 +31,7 @@ graph TB
         Fetcher[Data Fetcher<br/>yfinance wrapper]
         Registry[Registry<br/>Repository Pattern]
         StrategyRepo[Strategy Repository]
-        DB[(SQLite Database<br/>stockula.db)]
+        DB[(TimescaleDB<br/>Time-Series Database)]
         Cache[Cache Manager]
     end
 
@@ -192,10 +192,10 @@ src/stockula/
 ├── data/                 # Data fetching module
 │   ├── __init__.py
 │   └── fetcher.py       # yfinance wrapper with SQLite caching
-├── database/             # SQLite database management
-│   ├── __init__.py
-│   ├── manager.py       # Database operations
-│   └── cli.py           # Command-line interface
+├── database/             # Simplified TimescaleDB layer (3 core files)
+│   ├── models.py        # SQLModel definitions with TimescaleDB hypertables
+│   ├── manager.py       # Consolidated DatabaseManager (1,766 lines)
+│   └── interfaces.py    # Single IDatabaseManager interface
 ├── technical_analysis/   # Technical indicators
 │   ├── __init__.py
 │   ├── manager.py       # TechnicalAnalysisManager - coordinates strategies
@@ -341,20 +341,31 @@ This ensures configuration files can use any naming convention while maintaining
 
 ### Data Layer
 
-**Purpose**: Handles all data fetching and caching
+**Purpose**: Handles all data fetching and caching with high-performance time-series storage
 
-**Key Components**:
+**Simplified Architecture (3 core files)**:
 
-- **DataFetcher**: yfinance wrapper with intelligent caching
-- **DatabaseManager**: SQLite operations with schema management
-- **Cache Strategy**: Automatic data freshness management
+- **DatabaseManager**: Single consolidated class (1,766 lines) handling all database operations
+  - Connection management and pooling
+  - All CRUD operations
+  - 8 integrated analytics methods
+  - Query optimization
+  - Error handling
+- **DataFetcher**: yfinance wrapper with intelligent TimescaleDB caching
+- **IDatabaseManager**: Single interface providing unified access
 
-**Features**:
+**Consolidated Features**:
 
-- Automatic SQLite caching for all market data
-- Database migrations with Alembic
-- Multiple data sources (yfinance, Treasury rates)
-- Offline capability with cached data
+- **Single Manager Pattern**: All database operations consolidated into one class
+- **Integrated Analytics**: 8 built-in methods (moving averages, RSI, Bollinger Bands, correlation matrix, volatility
+  analysis, seasonal patterns, momentum analysis, top performers)
+- **Built-in Connection Management**: Pooling and session handling integrated
+- **TimescaleDB Integration**: High-performance time-series database with PostgreSQL reliability
+- **Hypertable Partitioning**: Automatic time-based partitioning for optimal query performance
+- **Compression Policies**: Intelligent data compression for historical data storage
+- **Retention Management**: Configurable data lifecycle and retention policies
+- **Multiple data sources**: yfinance, Treasury rates with TimescaleDB caching
+- **Offline capability**: Robust caching with TimescaleDB for offline analysis
 
 ### Analysis Modules
 
@@ -468,21 +479,27 @@ The Rich library provides enhanced user experience:
 
 ## Data Management
 
-### SQLite Database Schema
+### TimescaleDB Schema
 
-The database stores all market data for fast access:
+The database leverages TimescaleDB's time-series optimizations for financial data:
 
 ```sql
--- Core tables
+-- Core tables with TimescaleDB optimizations
 stocks              -- Stock metadata
-price_history       -- OHLCV data
-dividends          -- Dividend history
-splits             -- Stock splits
+price_history       -- OHLCV data (hypertable, partitioned by time)
+dividends          -- Dividend history (hypertable)
+splits             -- Stock splits (hypertable)
 stock_info         -- Complete yfinance data as JSON
 
 -- Options data
-options_calls      -- Call options chains
-options_puts       -- Put options chains
+options_calls      -- Call options chains (hypertable)
+options_puts       -- Put options chains (hypertable)
+
+-- TimescaleDB features
+-- Automatic partitioning by time for optimal query performance
+-- Compression policies for historical data
+-- Continuous aggregates for real-time analytics
+-- Retention policies for data lifecycle management
 ```
 
 ### Caching Strategy
@@ -496,22 +513,30 @@ Intelligent caching reduces API calls:
 
 ### Migration Management
 
-Database schema evolution with Alembic:
+TimescaleDB schema and optimization management:
 
 ```bash
-# Automatic migrations on startup
-# Manual migration commands available
-uv run python -m stockula.database.cli migrate upgrade head
+# Setup TimescaleDB with hypertables and policies
+uv run python -m stockula.database.manager setup
+
+# Monitor TimescaleDB performance and compression
+uv run python -m stockula.database.manager status
+
+# Manual hypertable and policy management
+uv run python -m stockula.database.manager optimize
 ```
 
 ## Performance Considerations
 
 ### Data Access Patterns
 
-- **Bulk Operations**: Minimize database round trips
+- **Time-Series Optimized**: Leverage TimescaleDB's time-based partitioning
+- **Bulk Operations**: Minimize database round trips with batch inserts
 - **Vectorized Calculations**: Use pandas/numpy for speed
 - **Lazy Loading**: Load data only when needed
-- **Connection Pooling**: Reuse database connections
+- **Connection Pooling**: Efficient PostgreSQL connection management
+- **Compression Aware**: Automatic handling of compressed historical data
+- **Query Optimization**: Time-series specific query patterns for performance
 
 ### Memory Management
 

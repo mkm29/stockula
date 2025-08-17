@@ -310,7 +310,7 @@ class TimescaleDBManager:
         Returns:
             Dictionary with quality metrics
         """
-        metrics = {}
+        metrics: dict[str, Any] = {}
 
         try:
             with self.engine.connect() as conn:

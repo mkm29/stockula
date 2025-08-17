@@ -10,7 +10,8 @@ from rich.console import Console
 from rich.progress import BarColumn, Progress, SpinnerColumn, TextColumn, TimeRemainingColumn
 
 from ..config import APIException, DataFetchException, NetworkException
-from ..database import DatabaseManager
+from ..config.models import TimescaleDBConfig
+from ..database.manager import DatabaseManager
 from ..interfaces import ILoggingManager
 
 console = Console()
@@ -43,7 +44,7 @@ class DataFetcher:
 
         Args:
             use_cache: Whether to use database caching
-            db_path: Path to SQLite database file
+            db_path: Legacy parameter (ignored, kept for backward compatibility)
             database_manager: Injected database manager instance
             logging_manager: Injected logging manager
         """
@@ -55,8 +56,13 @@ class DataFetcher:
         if database_manager is not None:
             self.db = database_manager if use_cache else None
         else:
-            self.db = DatabaseManager(db_path) if use_cache else None
-            self._owns_db = use_cache  # We own it if we created it
+            if use_cache:
+                # Create default TimescaleDB config (db_path parameter is legacy and ignored)
+                default_config = TimescaleDBConfig()
+                self.db = DatabaseManager(config=default_config, enable_async=True)
+                self._owns_db = True
+            else:
+                self.db = None
 
     def close(self) -> None:
         """Close the database manager if we own it."""
@@ -666,7 +672,9 @@ class DataFetcher:
             self.db.close()
 
         self.use_cache = True
-        self.db = DatabaseManager(db_path)
+        # Create default TimescaleDB config (db_path parameter is legacy and ignored)
+        default_config = TimescaleDBConfig()
+        self.db = DatabaseManager(config=default_config, enable_async=True)
         self._owns_db = True
 
     def get_treasury_rate(

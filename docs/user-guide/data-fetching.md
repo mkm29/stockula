@@ -1,17 +1,22 @@
 # Data Fetching
 
-Stockula uses an intelligent data fetching system that combines yfinance for market data with SQLite caching for optimal
-performance.
+Stockula uses an intelligent data fetching system that combines yfinance for market data with a simplified TimescaleDB
+architecture for optimal performance and time-series optimizations.
 
 ## Overview
 
-The data fetching module provides:
+The simplified data fetching module provides:
 
-- **Automatic Caching**: All market data is cached in SQLite for fast access
-- **Smart Updates**: Only fetches missing or stale data
-- **Multiple Data Sources**: Stock prices, dividends, splits, options
+- **Consolidated DatabaseManager**: Single manager (1,766 lines) handling all database operations
+- **Integrated Analytics**: 8 built-in analytics methods eliminating separate query overhead
+- **TimescaleDB Caching**: High-performance time-series database caching with automatic partitioning
+- **Hypertable Optimization**: Time-based partitioning for optimal query performance
+- **Compression & Retention**: Intelligent data lifecycle management
+- **Smart Updates**: Only fetches missing or stale data with time-series aware queries
+- **Multiple Data Sources**: Stock prices, dividends, splits, options stored in optimized hypertables
 - **Offline Support**: Works with cached data when API is unavailable
 - **Rich Progress**: Visual progress tracking for data operations
+- **Single Interface**: IDatabaseManager provides unified access to all database operations
 
 ## Data Sources
 
@@ -73,19 +78,25 @@ puts = fetcher.get_options_puts("AAPL", "2024-01-19")
 
 ## Caching System
 
-### SQLite Database Schema
+### TimescaleDB Schema
 
 ```sql
--- Core market data tables
+-- Core market data tables (TimescaleDB hypertables)
 stocks              -- Stock metadata and info
-price_history       -- OHLCV data with timestamps
-dividends          -- Dividend payment history
-splits             -- Stock split history
+price_history       -- OHLCV data (hypertable, partitioned by time)
+dividends          -- Dividend payment history (hypertable)
+splits             -- Stock split history (hypertable)
 stock_info         -- Complete yfinance info as JSON
 
--- Options data
-options_calls      -- Call options chains
-options_puts       -- Put options chains
+-- Options data (hypertables for time-series performance)
+options_calls      -- Call options chains (hypertable)
+options_puts       -- Put options chains (hypertable)
+
+-- TimescaleDB optimizations
+-- Automatic time-based partitioning (default: 7-day chunks)
+-- Compression policies for data older than 30 days
+-- Retention policies for data lifecycle management
+-- Continuous aggregates for real-time analytics
 ```
 
 ### Cache Strategy
@@ -117,7 +128,14 @@ data:
   end_date: null              # defaults to today
   interval: "1d"
   use_cache: true
-  db_path: "stockula.db"
+
+# TimescaleDB connection
+database:
+  host: "localhost"
+  port: 5432
+  name: "stockula"
+  user: "stockula_user"
+  password: "${STOCKULA_DB_PASSWORD}"
 ```
 
 ### Advanced Settings
@@ -131,9 +149,7 @@ data:
 
   # Caching settings
   use_cache: true
-  db_path: "stockula.db"
   cache_expiry_hours: 6
-  max_cache_size_mb: 500
 
   # API settings
   request_delay: 0.1          # Delay between API requests
@@ -144,6 +160,14 @@ data:
   validate_data: true
   drop_invalid_rows: true
   fill_missing_values: false
+
+# TimescaleDB-specific settings
+timescale:
+  chunk_time_interval: "7 days"     # Hypertable chunk size
+  compression_after: "30 days"      # Compress data older than 30 days
+  retention_policy: "2 years"       # Retain data for 2 years
+  connection_pool_size: 10          # Database connection pool size
+  query_timeout: 30                 # Query timeout in seconds
 ```
 
 ## Database Management
@@ -151,41 +175,59 @@ data:
 ### Command Line Interface
 
 ```bash
-# View database statistics
-uv run python -m stockula.database.cli stats
+# View TimescaleDB statistics and hypertable status
+uv run python -m stockula.database.manager status
 
 # Manually fetch data
-uv run python -m stockula.database.cli fetch AAPL MSFT GOOGL
+uv run python -m stockula.database.manager fetch AAPL MSFT GOOGL
 
-# Query cached data
-uv run python -m stockula.database.cli query AAPL --start 2023-01-01
+# Query cached data with time-series optimizations
+uv run python -m stockula.database.manager query AAPL --start 2023-01-01
 
 # Clear cache for specific symbols
-uv run python -m stockula.database.cli clear AAPL
+uv run python -m stockula.database.manager clear AAPL
 
-# Vacuum database (reclaim space)
-uv run python -m stockula.database.cli vacuum
+# Check compression status
+uv run python -m stockula.database.manager compression-status
+
+# Monitor chunk and partition health
+uv run python -m stockula.database.manager chunk-status
+
+# Optimize hypertables and update policies
+uv run python -m stockula.database.manager optimize
 ```
 
 ### Programmatic Access
 
 ```python
 from stockula.database.manager import DatabaseManager
+from stockula.database.interfaces import IDatabaseManager
 
-db = DatabaseManager("stockula.db")
+# Single manager handles all operations
+db: IDatabaseManager = DatabaseManager()
 
-# Check what data is cached
+# All database operations through unified interface
 symbols = db.get_cached_symbols()
-print(f"Cached symbols: {symbols}")
+stock_data = db.get_stock_data("AAPL")
 
-# Get cache statistics
+# Integrated analytics methods
+moving_avgs = db.calculate_moving_averages("AAPL", windows=[20, 50])
+rsi_data = db.calculate_rsi("AAPL", period=14)
+bollinger = db.calculate_bollinger_bands("AAPL", period=20)
+correlation = db.calculate_correlation_matrix(["AAPL", "GOOGL", "MSFT"])
+
+# TimescaleDB statistics and management
 stats = db.get_cache_stats()
 print(f"Database size: {stats['size_mb']:.2f} MB")
 print(f"Total records: {stats['total_records']}")
 
-# Manual cache management
+# Cache management
 db.clear_cache_for_symbol("AAPL")
-db.vacuum_database()
+
+# TimescaleDB-specific operations (all integrated)
+db.compress_chunks(older_than="30 days")
+db.update_retention_policies()
+db.refresh_continuous_aggregates()
 ```
 
 ## Performance Optimization
@@ -361,4 +403,4 @@ Multi-symbol progress tracking:
 1. **Monitor API usage**: Track requests to avoid limits
 
 The data fetching system provides a robust foundation for all Stockula analysis modules while maintaining high
-performance through intelligent caching.
+performance through TimescaleDB's time-series optimizations, automatic partitioning, and intelligent compression.

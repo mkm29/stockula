@@ -1,0 +1,335 @@
+---
+groups:
+  - name: stockula_production_alerts
+    rules:
+      # DATABASE HEALTH ALERTS
+      - alert: TimescaleDBDown
+        expr: up{job="postgres_exporter"} == 0
+        for: 5m
+        labels:
+          severity: critical
+          service: timescaledb
+        annotations:
+          summary: "TimescaleDB is down"
+          description: "TimescaleDB has been down for more than 5 minutes"
+          runbook_url: "https://docs.stockula.com/runbooks/database-down"
+
+      - alert: DatabaseConnectionsHigh
+        expr: production_health_check{metric="active_connections"} > 300
+        for: 2m
+        labels:
+          severity: warning
+          service: timescaledb
+        annotations:
+          summary: "High number of database connections"
+          description: "Active connections ({{ $value }}) exceed warning threshold"
+          runbook_url: "https://docs.stockula.com/runbooks/high-connections"
+
+      - alert: DatabaseConnectionsCritical
+        expr: production_health_check{metric="active_connections"} > 400
+        for: 1m
+        labels:
+          severity: critical
+          service: timescaledb
+        annotations:
+          summary: "Critical number of database connections"
+          description: "Active connections ({{ $value }}) exceed critical threshold"
+          runbook_url: "https://docs.stockula.com/runbooks/critical-connections"
+
+      - alert: IdleTransactionsHigh
+        expr: production_health_check{metric="idle_in_transaction"} > 25
+        for: 5m
+        labels:
+          severity: warning
+          service: timescaledb
+        annotations:
+          summary: "High number of idle transactions"
+          description: "Idle in transaction connections ({{ $value }}) may indicate application issues"
+
+      - alert: WaitingLocksHigh
+        expr: production_health_check{metric="waiting_locks"} > 5
+        for: 2m
+        labels:
+          severity: warning
+          service: timescaledb
+        annotations:
+          summary: "High number of waiting locks"
+          description: "{{ $value }} queries are waiting for locks"
+
+      - alert: WALLagHigh
+        expr: production_health_check{metric="wal_lag_mb"} > 50
+        for: 5m
+        labels:
+          severity: warning
+          service: timescaledb
+        annotations:
+          summary: "High WAL replication lag"
+          description: "WAL lag is {{ $value }}MB, may indicate replication issues"
+
+      # DATA FRESHNESS ALERTS
+      - alert: StaleStockData
+        expr: data_freshness_alerts{freshness_alert_level="1"} > 0
+        for: 10m
+        labels:
+          severity: warning
+          service: data-pipeline
+        annotations:
+          summary: "Stale stock data detected"
+          description: "Table {{ $labels.table_name }} has not been updated for {{ $value }} hours"
+          runbook_url: "https://docs.stockula.com/runbooks/stale-data"
+
+      - alert: CriticallyStaleStockData
+        expr: data_freshness_alerts{freshness_alert_level="2"} > 0
+        for: 5m
+        labels:
+          severity: critical
+          service: data-pipeline
+        annotations:
+          summary: "Critically stale stock data"
+          description: "Table {{ $labels.table_name }} has not been updated for {{ $value }} hours"
+          runbook_url: "https://docs.stockula.com/runbooks/critical-stale-data"
+
+      - alert: NoDataIngested
+        expr: data_freshness_alerts{records_today="0"} > 0
+        for: 30m
+        labels:
+          severity: critical
+          service: data-pipeline
+        annotations:
+          summary: "No data ingested today"
+          description: "Table {{ $labels.table_name }} has no records for today"
+
+      # PERFORMANCE ALERTS
+      - alert: SlowQueriesDetected
+        expr: slow_queries{mean_exec_time} > 10000  # 10 seconds
+        for: 5m
+        labels:
+          severity: warning
+          service: timescaledb
+        annotations:
+          summary: "Slow queries detected"
+          description: "Query taking {{ $value }}ms on average: {{ $labels.query_preview }}"
+
+      - alert: DatabaseSizeGrowth
+        expr: system_metrics{metric="database_size_gb"} > 500  # 500GB
+        for: 1h
+        labels:
+          severity: warning
+          service: timescaledb
+        annotations:
+          summary: "Database size growing large"
+          description: "Database size is {{ $value }}GB, consider cleanup or scaling"
+
+      - alert: TableBloatHigh
+        expr: table_bloat{bloat_percentage} > 50
+        for: 30m
+        labels:
+          severity: warning
+          service: timescaledb
+        annotations:
+          summary: "High table bloat detected"
+          description: "Table {{ $labels.tablename }} has {{ $value }}% bloat"
+          runbook_url: "https://docs.stockula.com/runbooks/table-bloat"
+
+      # BACKUP ALERTS
+      - alert: WALArchiveFailures
+        expr: backup_monitoring{metric="wal_files_archived", failures} > 0
+        for: 15m
+        labels:
+          severity: critical
+          service: backup
+        annotations:
+          summary: "WAL archive failures detected"
+          description: "{{ $value }} WAL archive failures detected"
+          runbook_url: "https://docs.stockula.com/runbooks/backup-failures"
+
+      - alert: ReplicationLagHigh
+        expr: backup_monitoring{metric="replication_lag_bytes"} > 104857600  # 100MB
+        for: 10m
+        labels:
+          severity: warning
+          service: backup
+        annotations:
+          summary: "High replication lag"
+          description: "Replication lag is {{ $value | humanize1024 }}B"
+
+      # TIMESCALE-SPECIFIC ALERTS
+      - alert: HypertableCompressionFailed
+        expr: timescaledb_background_jobs{job_type="compress_chunks", last_run_status!="Success"} > 0
+        for: 1h
+        labels:
+          severity: warning
+          service: timescaledb
+        annotations:
+          summary: "Hypertable compression job failed"
+          description: "Compression job {{ $labels.job_id }} for {{ $labels.hypertable_name }} failed"
+
+      - alert: HypertableJobStalled
+        expr: timescaledb_background_jobs{last_run_seconds_ago} > 86400  # 24 hours
+        for: 30m
+        labels:
+          severity: warning
+          service: timescaledb
+        annotations:
+          summary: "TimescaleDB background job stalled"
+          description: "Job {{ $labels.job_id }} ({{ $labels.job_type }}) hasn't run for {{ $value | humanizeDuration }}"
+
+      # DATA QUALITY ALERTS
+      - alert: HighZeroVolumeData
+        expr: market_data_quality{zero_volume_count} / market_data_quality{total_price_points} > 0.1  # 10%
+        for: 15m
+        labels:
+          severity: warning
+          service: data-quality
+        annotations:
+          summary: "High percentage of zero volume data"
+          description: "{{ $value | humanizePercentage }} of price data has zero volume for interval {{ $labels.interval }}"
+
+      - alert: MissingPriceData
+        expr: market_data_quality{missing_close_price_count} > 100
+        for: 10m
+        labels:
+          severity: warning
+          service: data-quality
+        annotations:
+          summary: "Missing price data detected"
+          description: "{{ $value }} records missing close price for interval {{ $labels.interval }}"
+
+      - alert: OptionsDataIncomplete
+        expr: options_data_metrics{symbols_count} < 50  # Expected minimum symbols
+        for: 30m
+        labels:
+          severity: warning
+          service: data-quality
+        annotations:
+          summary: "Incomplete options data"
+          description: "Only {{ $value }} symbols have {{ $labels.option_type }} options data"
+
+      # SYSTEM RESOURCE ALERTS
+      - alert: BufferCacheHitRateLow
+        expr: slow_queries{hit_percent} < 95
+        for: 15m
+        labels:
+          severity: warning
+          service: timescaledb
+        annotations:
+          summary: "Low buffer cache hit rate"
+          description: "Buffer cache hit rate is {{ $value }}% for slow queries"
+
+      # STOCK-SPECIFIC ALERTS
+      - alert: MajorStockDataMissing
+        expr: |
+          (
+            count(stock_data_freshness{symbol=~"AAPL|MSFT|GOOGL|AMZN|TSLA|META|NVDA", seconds_since_last_update} > 7200)  # 2 hours
+            /
+            count(stock_data_freshness{symbol=~"AAPL|MSFT|GOOGL|AMZN|TSLA|META|NVDA"})
+          ) > 0.2  # 20%
+        for: 30m
+        labels:
+          severity: critical
+          service: data-pipeline
+        annotations:
+          summary: "Major stocks missing recent data"
+          description: "{{ $value | humanizePercentage }} of major stocks haven't updated in 2+ hours"
+
+      # APPLICATION HEALTH
+      - alert: StockulaApplicationDown
+        expr: up{job="stockula-app"} == 0
+        for: 5m
+        labels:
+          severity: critical
+          service: stockula
+        annotations:
+          summary: "Stockula application is down"
+          description: "Main Stockula application has been down for more than 5 minutes"
+
+      - alert: PgBouncerDown
+        expr: up{job="pgbouncer"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          service: pgbouncer
+        annotations:
+          summary: "PgBouncer is down"
+          description: "PgBouncer connection pooler is not responding"
+          runbook_url: "https://docs.stockula.com/runbooks/pgbouncer-down"
+
+  - name: stockula_capacity_planning
+    rules:
+      # Growth rate calculations for capacity planning
+      - record: stockula:database_growth_rate_per_day
+        expr: |
+          (
+            system_metrics{metric="database_size_gb"} -
+            system_metrics{metric="database_size_gb"} offset 1d
+          )
+
+      - record: stockula:connection_utilization_percent
+        expr: |
+          (
+            production_health_check{metric="active_connections"} /
+            system_metrics{metric="max_connections"}
+          ) * 100
+
+      - record: stockula:data_ingestion_rate_per_hour
+        expr: |
+          rate(market_data_quality{total_price_points}[1h]) * 3600
+
+      # Alert on growth trends
+      - alert: DatabaseGrowthRateHigh
+        expr: stockula:database_growth_rate_per_day > 10  # 10GB per day
+        for: 6h
+        labels:
+          severity: warning
+          service: capacity-planning
+        annotations:
+          summary: "High database growth rate"
+          description: "Database growing at {{ $value }}GB per day"
+
+      - alert: ConnectionUtilizationHigh
+        expr: stockula:connection_utilization_percent > 80
+        for: 15m
+        labels:
+          severity: warning
+          service: capacity-planning
+        annotations:
+          summary: "High connection utilization"
+          description: "Using {{ $value }}% of available connections"
+
+  - name: stockula_sla_monitoring
+    rules:
+      # SLA metrics
+      - record: stockula:data_freshness_sla
+        expr: |
+          (
+            count(data_freshness_alerts{freshness_alert_level="0"}) /
+            count(data_freshness_alerts)
+          ) * 100
+
+      - record: stockula:uptime_percentage
+        expr: |
+          (
+            avg_over_time(up{job="postgres_exporter"}[24h]) +
+            avg_over_time(up{job="stockula-app"}[24h])
+          ) / 2 * 100
+
+      # SLA violations
+      - alert: DataFreshnessSLAViolation
+        expr: stockula:data_freshness_sla < 95  # 95% SLA
+        for: 1h
+        labels:
+          severity: warning
+          service: sla
+        annotations:
+          summary: "Data freshness SLA violation"
+          description: "Data freshness SLA is {{ $value }}%, below 95% target"
+
+      - alert: UptimeSLAViolation
+        expr: stockula:uptime_percentage < 99.5  # 99.5% uptime SLA
+        for: 1h
+        labels:
+          severity: critical
+          service: sla
+        annotations:
+          summary: "Uptime SLA violation"
+          description: "24h uptime is {{ $value }}%, below 99.5% SLA"

@@ -205,17 +205,22 @@ uv run python -m stockula
 
 ## Database Caching
 
-Stockula automatically caches all market data in a SQLite database:
+Stockula automatically caches all market data in TimescaleDB using the simplified consolidated manager:
 
 ```bash
-# View database statistics
-uv run python -m stockula.database.cli stats
+# View database statistics using consolidated manager
+uv run python -m stockula.database.manager status
+
+# Initialize database schema
+uv run python -m stockula.database.manager setup
 
 # Manually fetch and cache data
-uv run python -m stockula.database.cli fetch AAPL MSFT GOOGL
+uv run python -m stockula.database.manager fetch AAPL MSFT GOOGL
 
 # Query cached data
-uv run python -m stockula.database.cli query AAPL
+uv run python -m stockula.database.manager query AAPL
+
+# All operations use the single consolidated DatabaseManager
 ```
 
 ## Next Steps

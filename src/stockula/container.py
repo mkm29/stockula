@@ -41,10 +41,10 @@ class Container(containers.DeclarativeContainer):
         config_path=config_path,
     )
 
-    # Database manager - thread-safe singleton
+    # Database manager - pure TimescaleDB implementation - thread-safe singleton
     database_manager = providers.ThreadSafeSingleton(
-        DatabaseManager,
-        db_path=providers.Callable(lambda config: config.data.db_path, stockula_config),
+        lambda config: DatabaseManager(config=config.data.timescaledb, enable_async=True),
+        config=stockula_config,
     )
 
     # Data manager - thread-safe singleton
@@ -53,7 +53,6 @@ class Container(containers.DeclarativeContainer):
         db_manager=database_manager,
         logging_manager=logging_manager,
         use_cache=providers.Callable(lambda config: config.data.use_cache, stockula_config),
-        db_path=providers.Callable(lambda config: config.data.db_path, stockula_config),
     )
 
     # Data fetcher extracted from data manager - thread-safe singleton

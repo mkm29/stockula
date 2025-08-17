@@ -12,8 +12,10 @@ from stockula.interfaces import (
     IDataFetcher,
     IDomainFactory,
     ILoggingManager,
+    IStockDataRepository,
     IStockForecaster,
     ITechnicalIndicators,
+    ITimescaleAnalytics,
 )
 
 
@@ -78,15 +80,98 @@ class TestIDatabaseManager:
 
     def test_has_required_methods(self):
         """Test that IDatabaseManager has all required abstract methods."""
-        required_methods = ["get_price_history", "store_price_history", "has_data"]
+        # Abstract methods (must be implemented)
+        required_abstract_methods = [
+            "get_price_history",
+            "store_price_history",
+            "has_data",
+            "store_stock_info",
+            "get_stock_info",
+            "store_dividends",
+            "store_splits",
+            "get_all_symbols",
+            "get_latest_price",
+            "get_database_stats",
+            "get_session",
+            "close",
+        ]
 
-        for method in required_methods:
+        # Optional methods (have default implementations)
+        optional_methods = [
+            "get_price_history_aggregated",
+            "get_recent_price_changes",
+            "get_chunk_statistics",
+            "test_connection",
+        ]
+
+        # Check all methods exist
+        all_methods = required_abstract_methods + optional_methods
+        for method in all_methods:
             assert hasattr(IDatabaseManager, method)
 
     def test_cannot_instantiate_directly(self):
         """Test that IDatabaseManager cannot be instantiated directly."""
         try:
             IDatabaseManager()
+            raise AssertionError("Should not be able to instantiate abstract class")
+        except TypeError:
+            pass
+
+
+class TestIStockDataRepository:
+    """Test IStockDataRepository interface definition."""
+
+    def test_is_abstract_base_class(self):
+        """Test that IStockDataRepository is an abstract base class."""
+        assert issubclass(IStockDataRepository, ABC)
+
+    def test_has_required_methods(self):
+        """Test that IStockDataRepository has all required abstract methods."""
+        required_methods = [
+            "get_price_history",
+            "store_price_history",
+            "get_stock_info",
+            "store_stock_info",
+            "has_data",
+            "get_all_symbols",
+        ]
+
+        for method in required_methods:
+            assert hasattr(IStockDataRepository, method)
+
+    def test_cannot_instantiate_directly(self):
+        """Test that IStockDataRepository cannot be instantiated directly."""
+        try:
+            IStockDataRepository()
+            raise AssertionError("Should not be able to instantiate abstract class")
+        except TypeError:
+            pass
+
+
+class TestITimescaleAnalytics:
+    """Test ITimescaleAnalytics interface definition."""
+
+    def test_is_abstract_base_class(self):
+        """Test that ITimescaleAnalytics is an abstract base class."""
+        assert issubclass(ITimescaleAnalytics, ABC)
+
+    def test_has_required_methods(self):
+        """Test that ITimescaleAnalytics has all required abstract methods."""
+        required_methods = [
+            "get_volume_profile",
+            "get_correlation_matrix",
+            "get_moving_averages",
+            "get_volatility_analysis",
+            "store_price_history_async",
+        ]
+
+        for method in required_methods:
+            assert hasattr(ITimescaleAnalytics, method)
+
+    def test_cannot_instantiate_directly(self):
+        """Test that ITimescaleAnalytics cannot be instantiated directly."""
+        try:
+            ITimescaleAnalytics()
             raise AssertionError("Should not be able to instantiate abstract class")
         except TypeError:
             pass
@@ -223,19 +308,23 @@ class TestInterfaceIntegration:
             IDataFetcher,
             IDomainFactory,
             ILoggingManager,
+            IStockDataRepository,
             IStockForecaster,
             ITechnicalIndicators,
+            ITimescaleAnalytics,
         )
 
         # Just checking they exist and are classes
         for interface in [
             IDataFetcher,
             IDatabaseManager,
+            IStockDataRepository,
             IStockForecaster,
             IBacktestRunner,
             IDomainFactory,
             ILoggingManager,
             ITechnicalIndicators,
+            ITimescaleAnalytics,
         ]:
             assert inspect.isclass(interface)
             assert issubclass(interface, ABC)
@@ -245,11 +334,13 @@ class TestInterfaceIntegration:
         interfaces = [
             IDataFetcher,
             IDatabaseManager,
+            IStockDataRepository,
             IStockForecaster,
             IBacktestRunner,
             IDomainFactory,
             ILoggingManager,
             ITechnicalIndicators,
+            ITimescaleAnalytics,
         ]
 
         for interface in interfaces:
@@ -267,11 +358,13 @@ class TestInterfaceIntegration:
         interfaces = [
             IDataFetcher,
             IDatabaseManager,
+            IStockDataRepository,
             IStockForecaster,
             IBacktestRunner,
             IDomainFactory,
             ILoggingManager,
             ITechnicalIndicators,
+            ITimescaleAnalytics,
         ]
 
         for interface in interfaces:

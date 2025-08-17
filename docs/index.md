@@ -10,7 +10,8 @@ solution for quantitative trading strategy development.
   library
 - **🔄 Backtesting**: Test trading strategies on historical data with detailed performance metrics
 - **📈 Data Fetching**: Retrieve real-time and historical market data via yfinance
-- **🗄️ SQLite Database**: Automatic caching of all yfinance data with robust lookup capabilities
+- **🗄️ TimescaleDB Integration**: High-performance time-series database with simplified 3-file architecture, automatic
+  partitioning, and intelligent caching
 - **🔮 Price Forecasting**: Automated time series forecasting using AutoTS
 - **📝 Centralized Logging**: Professional logging system with configurable levels and file rotation
 - **🚀 Fast Package Management**: Uses uv for lightning-fast dependency management

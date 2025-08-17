@@ -155,10 +155,10 @@ ConnectionError: Failed to fetch data for AAPL
 
 1. Check internet connection
 
-1. Try with cached data:
+1. Try with cached data from TimescaleDB:
 
    ```bash
-   uv run python -m stockula.database.cli query AAPL
+   uv run python -m stockula.database.manager query AAPL
    ```
 
 1. Use different ticker symbols
@@ -197,52 +197,90 @@ ValueError: Start date cannot be after end date
 
 ## Database Issues
 
-### SQLite Permission Errors
+### TimescaleDB Connection Errors
 
 **Issue**:
 
 ```
-sqlite3.OperationalError: database is locked
+psycopg2.OperationalError: could not connect to server
 ```
 
 **Solutions**:
 
-1. Close other applications using the database
-
-1. Delete the database file and let it recreate:
+1. Verify TimescaleDB is running:
 
    ```bash
-   rm stockula.db
+   # Using Docker
+   docker ps | grep timescaledb
+
+   # Using systemctl (Linux)
+   sudo systemctl status postgresql
    ```
 
-1. Check file permissions:
+1. Check connection settings:
 
    ```bash
-   ls -la stockula.db
-   chmod 644 stockula.db
+   # Verify environment variables
+   echo $STOCKULA_DB_HOST
+   echo $STOCKULA_DB_PORT
+   echo $STOCKULA_DB_NAME
    ```
 
-### Database Corruption
+1. Test database connection:
+
+   ```bash
+   psql -h localhost -p 5432 -U stockula_user -d stockula
+   ```
+
+### TimescaleDB Permission Errors
 
 **Issue**:
 
 ```
-sqlite3.DatabaseError: database disk image is malformed
+psycopg2.errors.InsufficientPrivilege: permission denied
 ```
 
 **Solutions**:
 
-1. Backup and recreate database:
+1. Verify user permissions:
 
-   ```bash
-   mv stockula.db stockula.db.backup
-   uv run python -m stockula.database.cli init
+   ```sql
+   GRANT ALL PRIVILEGES ON DATABASE stockula TO stockula_user;
+   GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO stockula_user;
    ```
 
-1. Try database repair:
+1. Check TimescaleDB extension:
+
+   ```sql
+   SELECT * FROM pg_extension WHERE extname = 'timescaledb';
+   ```
+
+### Hypertable Issues
+
+**Issue**:
+
+```
+TimescaleDBError: hypertable does not exist
+```
+
+**Solutions**:
+
+1. Reinitialize database schema:
 
    ```bash
-   uv run python -m stockula.database.cli vacuum
+   uv run python -m stockula.database.manager setup
+   ```
+
+1. Verify hypertables exist:
+
+   ```sql
+   SELECT * FROM timescaledb_information.hypertables;
+   ```
+
+1. Check hypertable health:
+
+   ```bash
+   uv run python -m stockula.database.manager status
    ```
 
 ## Analysis Issues
@@ -469,11 +507,21 @@ Create a minimal example that reproduces the issue:
 
 ```python
 from stockula.data.fetcher import DataFetcher
+from stockula.database.manager import DatabaseManager
 
 # Test basic functionality
 fetcher = DataFetcher()
 data = fetcher.get_stock_data("AAPL", start_date="2024-01-01")
 print(data.head())
+
+# Test TimescaleDB connection using consolidated manager
+db_manager = DatabaseManager()
+db_status = db_manager.get_connection_status()
+print(f"TimescaleDB Status: {db_status}")
+
+# Test integrated analytics (all in one manager)
+moving_avgs = db_manager.calculate_moving_averages("AAPL", windows=[20, 50])
+print(f"Moving averages available: {len(moving_avgs)}")
 ```
 
 ### System Information
@@ -500,14 +548,20 @@ uv run python -m stockula --ticker AAPL --mode ta
 
 ### Database Diagnostics
 
-Check database health:
+Check TimescaleDB health and performance:
 
 ```bash
-# Database statistics
-uv run python -m stockula.database.cli stats
+# TimescaleDB status and statistics
+uv run python -m stockula.database.manager status
 
-# Test database connection
-uv run python -m stockula.database.cli query AAPL --limit 5
+# Test database connection and query performance
+uv run python -m stockula.database.manager query AAPL --limit 5
+
+# Check hypertable compression status
+uv run python -m stockula.database.manager compression-status
+
+# Monitor chunk and partition health
+uv run python -m stockula.database.manager chunk-status
 ```
 
 ## Testing Issues
@@ -578,7 +632,8 @@ assert stock is not None
 Use the "fast" model list and reduce forecast length for better performance.
 
 **Q: Can I use data from sources other than Yahoo Finance?** A: Currently, Stockula uses yfinance as the primary data
-source. Custom data sources can be implemented by extending the DataFetcher class.
+source. Custom data sources can be implemented by extending the DataFetcher class. All data is cached in TimescaleDB
+using the consolidated DatabaseManager for high-performance access.
 
 **Q: Why do I get different results between runs?** A: Some forecasting models include randomness. For reproducible
 results, set random seeds or use deterministic models only.
@@ -587,7 +642,11 @@ results, set random seeds or use deterministic models only.
 backtesting, 1+ years for forecasting.
 
 **Q: Can I run Stockula on a server without a display?** A: Yes, set `NO_COLOR=1` environment variable or use JSON
-output format for headless operation.
+output format for headless operation. Ensure TimescaleDB is accessible from your server environment.
+
+**Q: How do I migrate from an older SQLite-based Stockula?** A: The migration to pure TimescaleDB with consolidated
+architecture is complete. Use the single DatabaseManager for all operations. See `docs/timescaledb_migration.md` for
+architecture details and migration history.
 
 For additional help, check the [GitHub Issues](https://github.com/mkm29/stockula/issues) page or create a new issue with
 your specific problem.

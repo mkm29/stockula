@@ -223,6 +223,62 @@ class PortfolioConfig(BaseModel):
                 )
 
 
+class TimescaleDBConfig(BaseModel):
+    """Configuration for TimescaleDB connection."""
+
+    host: str = Field(default="localhost", description="Database host")
+    port: int = Field(default=5432, description="Database port")
+    database: str = Field(default="stockula", description="Database name")
+    user: str = Field(default="postgres", description="Database user")
+    password: str | None = Field(default=None, description="Database password")
+    schema: str = Field(default="public", description="Database schema")
+
+    # Connection pool settings
+    pool_size: int = Field(default=5, ge=1, le=50, description="Connection pool size")
+    max_overflow: int = Field(default=10, ge=0, le=100, description="Maximum pool overflow")
+    pool_timeout: int = Field(default=30, ge=1, description="Pool timeout in seconds")
+    pool_recycle: int = Field(default=3600, ge=60, description="Pool recycle time in seconds")
+
+    # SSL settings
+    sslmode: str = Field(default="prefer", description="SSL mode (disable, allow, prefer, require)")
+    sslcert: str | None = Field(default=None, description="SSL certificate file path")
+    sslkey: str | None = Field(default=None, description="SSL key file path")
+    sslrootcert: str | None = Field(default=None, description="SSL root certificate file path")
+
+    # TimescaleDB specific settings
+    enable_hypertables: bool = Field(default=True, description="Enable TimescaleDB hypertables")
+    time_partitioning_interval: str = Field(default="1 day", description="Time partitioning interval for hypertables")
+    compression_enabled: bool = Field(default=True, description="Enable compression for old data")
+    compression_after: str = Field(default="7 days", description="Enable compression after this interval")
+    retention_period: str | None = Field(default="5 years", description="Data retention period (None for no retention)")
+
+    def get_connection_url(self, async_driver: bool = False) -> str:
+        """Generate database connection URL."""
+        driver = "postgresql+asyncpg" if async_driver else "postgresql+psycopg2"
+
+        auth = self.user
+        if self.password:
+            auth = f"{self.user}:{self.password}"
+
+        url = f"{driver}://{auth}@{self.host}:{self.port}/{self.database}"
+
+        # Add SSL parameters if specified
+        params = []
+        if self.sslmode != "prefer":
+            params.append(f"sslmode={self.sslmode}")
+        if self.sslcert:
+            params.append(f"sslcert={self.sslcert}")
+        if self.sslkey:
+            params.append(f"sslkey={self.sslkey}")
+        if self.sslrootcert:
+            params.append(f"sslrootcert={self.sslrootcert}")
+
+        if params:
+            url += "?" + "&".join(params)
+
+        return url
+
+
 class DataConfig(BaseModel):
     """Configuration for data fetching."""
 
@@ -234,7 +290,13 @@ class DataConfig(BaseModel):
         description="Data interval (1m, 2m, 5m, 15m, 30m, 60m, 90m, 1h, 1d, 5d, 1wk, 1mo, 3mo)",
     )
     use_cache: bool = Field(default=True, description="Use database caching for fetched data")
+
+    # Database backend selection
+    db_backend: str = Field(default="sqlite", description="Database backend: 'sqlite' or 'timescaledb'")
     db_path: str = Field(default="stockula.db", description="Path to SQLite database file for caching")
+    timescaledb: TimescaleDBConfig | None = Field(
+        default=None, description="TimescaleDB configuration (required when db_backend='timescaledb')"
+    )
 
     @field_validator(
         "start_date",
@@ -251,11 +313,18 @@ class DataConfig(BaseModel):
 
     @model_validator(mode="after")
     def validate_date_ranges(self):
-        """Validate date ranges."""
+        """Validate date ranges and database configuration."""
         # Validate date range
         if self.start_date and self.end_date:
             if self.start_date >= self.end_date:
                 raise ValueError("start_date must be before end_date")
+
+        # Validate TimescaleDB configuration
+        if self.db_backend == "timescaledb" and self.timescaledb is None:
+            raise ValueError("timescaledb configuration is required when db_backend='timescaledb'")
+
+        if self.db_backend not in ["sqlite", "timescaledb"]:
+            raise ValueError("db_backend must be either 'sqlite' or 'timescaledb'")
 
         return self
 

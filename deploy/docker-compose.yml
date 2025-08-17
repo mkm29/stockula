@@ -1,0 +1,264 @@
+---
+version: '3.8'
+
+services:
+  # TimescaleDB database optimized for ETL workloads
+  timescaledb:
+    build:
+      context: ./docker/timescaledb
+      dockerfile: Dockerfile
+    container_name: stockula-timescaledb
+    environment:
+      POSTGRES_DB: stockula
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-stockula_password_change_me}
+      TIMESCALEDB_TELEMETRY: off
+      # Performance tuning
+      POSTGRES_INITDB_ARGS: "--data-checksums --encoding=UTF8 --locale=C"
+    ports:
+      - "5432:5432"
+    volumes:
+      # Persistent data storage
+      - timescaledb_data:/var/lib/postgresql/data
+      # Configuration files
+      - ./docker/timescaledb/postgresql.conf:/etc/postgresql/postgresql.conf:ro
+      - ./docker/timescaledb/pg_hba.conf:/etc/postgresql/pg_hba.conf:ro
+      # Backup directory
+      - ./backups:/var/lib/postgresql/backups
+      # Logs
+      - ./logs/timescaledb:/var/log/postgresql
+    networks:
+      - stockula-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d stockula"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    deploy:
+      resources:
+        limits:
+          memory: 8G
+          cpus: '4.0'
+        reservations:
+          memory: 4G
+          cpus: '2.0'
+    # Kernel parameters for PostgreSQL performance
+    sysctls:
+      - kernel.shmmax=68719476736  # 64GB
+      - kernel.shmall=4294967296  # 16TB
+      - net.core.somaxconn=1024
+    # Security options
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp:size=1G
+      - /var/run/postgresql:size=100M
+
+  # Redis for caching and session management
+  redis:
+    image: redis:7-alpine
+    container_name: stockula-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+      - ./docker/redis/redis.conf:/usr/local/etc/redis/redis.conf:ro
+    networks:
+      - stockula-network
+    restart: unless-stopped
+    command: redis-server /usr/local/etc/redis/redis.conf
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '1.0'
+        reservations:
+          memory: 512M
+          cpus: '0.5'
+
+  # ETL Migration Service
+  etl-migration:
+    build:
+      context: ..
+      dockerfile: deploy/docker/etl/Dockerfile
+      target: migration
+    container_name: stockula-etl-migration
+    environment:
+      STOCKULA_ETL__TIMESCALEDB__HOST: timescaledb
+      STOCKULA_ETL__TIMESCALEDB__PORT: 5432
+      STOCKULA_ETL__TIMESCALEDB__DATABASE: stockula
+      STOCKULA_ETL__TIMESCALEDB__USERNAME: stockula_etl
+      STOCKULA_ETL__TIMESCALEDB__PASSWORD: ${ETL_PASSWORD:-etl_password_change_me}
+      STOCKULA_ETL__MIGRATION__SQLITE_PATH: /data/stockula.db
+      STOCKULA_ETL__LOG_LEVEL: INFO
+    volumes:
+      - ./data:/data
+      - ./logs/etl:/app/logs
+      - ./config:/app/config
+    networks:
+      - stockula-network
+    depends_on:
+      timescaledb:
+        condition: service_healthy
+    restart: "no"  # Run once for migration
+    profiles:
+      - migration
+
+  # ETL Streaming Service
+  etl-streaming:
+    build:
+      context: ..
+      dockerfile: deploy/docker/etl/Dockerfile
+      target: streaming
+    container_name: stockula-etl-streaming
+    environment:
+      STOCKULA_ETL__TIMESCALEDB__HOST: timescaledb
+      STOCKULA_ETL__TIMESCALEDB__PORT: 5432
+      STOCKULA_ETL__TIMESCALEDB__DATABASE: stockula
+      STOCKULA_ETL__TIMESCALEDB__USERNAME: stockula_etl
+      STOCKULA_ETL__TIMESCALEDB__PASSWORD: ${ETL_PASSWORD:-etl_password_change_me}
+      STOCKULA_ETL__STREAMING__FETCH_INTERVAL: 60
+      STOCKULA_ETL__STREAMING__WORKER_COUNT: 2
+      STOCKULA_ETL__REDIS_URL: redis://redis:6379/0
+      STOCKULA_ETL__LOG_LEVEL: INFO
+    volumes:
+      - ./logs/etl:/app/logs
+      - ./config:/app/config
+    networks:
+      - stockula-network
+    depends_on:
+      timescaledb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8080/health')"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 120s
+    profiles:
+      - streaming
+
+  # ETL Monitoring Service
+  etl-monitoring:
+    build:
+      context: ..
+      dockerfile: deploy/docker/etl/Dockerfile
+      target: monitoring
+    container_name: stockula-etl-monitoring
+    environment:
+      STOCKULA_ETL__TIMESCALEDB__HOST: timescaledb
+      STOCKULA_ETL__TIMESCALEDB__PORT: 5432
+      STOCKULA_ETL__TIMESCALEDB__DATABASE: stockula
+      STOCKULA_ETL__TIMESCALEDB__USERNAME: stockula_analyst
+      STOCKULA_ETL__TIMESCALEDB__PASSWORD: ${ANALYST_PASSWORD:-analyst_password_change_me}
+      STOCKULA_ETL__LOG_LEVEL: INFO
+    ports:
+      - "8080:8080"  # Monitoring dashboard
+    volumes:
+      - ./logs/monitoring:/app/logs
+      - ./config:/app/config
+    networks:
+      - stockula-network
+    depends_on:
+      timescaledb:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    profiles:
+      - monitoring
+
+  # Grafana for visualization (optional)
+  grafana:
+    image: grafana/grafana:latest
+    container_name: stockula-grafana
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin}
+      GF_INSTALL_PLUGINS: grafana-clock-panel,grafana-simple-json-datasource
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./docker/grafana/datasources:/etc/grafana/provisioning/datasources
+      - ./docker/grafana/dashboards:/etc/grafana/provisioning/dashboards
+    networks:
+      - stockula-network
+    depends_on:
+      - timescaledb
+    restart: unless-stopped
+    profiles:
+      - monitoring
+      - dashboard
+
+  # Prometheus for metrics collection (optional)
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: stockula-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - prometheus_data:/prometheus
+      - ./docker/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    networks:
+      - stockula-network
+    restart: unless-stopped
+    profiles:
+      - monitoring
+      - metrics
+
+  # pgAdmin for database administration (optional)
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: stockula-pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@stockula.local
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:-admin}
+      PGADMIN_CONFIG_SERVER_MODE: 'False'
+    ports:
+      - "8081:80"
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+      - ./docker/pgadmin/servers.json:/pgadmin4/servers.json:ro
+    networks:
+      - stockula-network
+    depends_on:
+      - timescaledb
+    restart: unless-stopped
+    profiles:
+      - admin
+
+volumes:
+  timescaledb_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./data/timescaledb
+  redis_data:
+    driver: local
+  grafana_data:
+    driver: local
+  prometheus_data:
+    driver: local
+  pgadmin_data:
+    driver: local
+
+networks:
+  stockula-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16

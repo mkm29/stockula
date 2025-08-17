@@ -28,6 +28,7 @@ dependencies = [
     "alembic==1.16.4",
     "sqlalchemy>=2.0.41",
     "sqlmodel>=0.0.22",
+    "psycopg2-binary>=2.9.9",  # PostgreSQL adapter for Python
     "rich>=14.1.0",
     "typer>=0.16.0",
 ]
@@ -36,6 +37,11 @@ dependencies = [
 dev = [
     "ruff>=0.12.5",
     "pytest>=8.4.1",
+]
+timescaledb = [
+    # TimescaleDB extensions and utilities
+    "asyncpg>=0.29.0",  # Async PostgreSQL driver for better performance
+    "sqlalchemy-utils>=0.41.2",  # Additional SQLAlchemy utilities
 ]
 forecasting = [
     # AutoGluon requires Python < 3.13 due to Ray dependency

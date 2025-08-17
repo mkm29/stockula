@@ -1,131 +1,278 @@
-"""Database manager using SQLModel for type-safe database operations."""
+"""Pure TimescaleDB database manager with optimized interfaces.
 
+This module provides a consolidated database manager focused exclusively on TimescaleDB
+with advanced time-series capabilities, connection pooling, and performance optimizations.
+
+Key Features:
+- Pure TimescaleDB implementation
+- Enhanced interface compliance
+- Connection pooling and async operations
+- Advanced time-series queries and analytics
+- Comprehensive error handling and monitoring
+- Optimized for high-performance time-series data
+"""
+
+import asyncio
+import logging
 import os
-from collections.abc import Iterator
-from contextlib import contextmanager
-from datetime import UTC, datetime
+from collections.abc import AsyncIterator, Iterator
+from contextlib import asynccontextmanager, contextmanager
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any, cast
 
 import pandas as pd
-import sqlalchemy as sa
-from sqlalchemy import event
-from sqlmodel import Session, SQLModel, create_engine, select
+from sqlalchemy import create_engine, text
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.pool import QueuePool
+from sqlmodel import Session, SQLModel, select
 
 from alembic import command  # type: ignore[attr-defined]
 from alembic.config import Config
 
-from .models import Dividend, OptionsCall, OptionsPut, PriceHistory, Split, Stock, StockInfo
+from ..config.models import TimescaleDBConfig
+from ..interfaces import IDatabaseManager
+from .models import Dividend, OptionsCall, OptionsPut, PriceHistory, Split, Stock, StockInfo, get_timescale_setup_sql
+
+# Configure module logger
+logger = logging.getLogger(__name__)
 
 
-class DatabaseManager:
-    """Manages SQLite database using SQLModel for type-safe operations."""
+class DatabaseManager(IDatabaseManager):
+    """Pure TimescaleDB database manager with advanced time-series capabilities.
 
-    # Class-level tracking of migrations per database URL
+    Implements IDatabaseManager interface with:
+    - TimescaleDB hypertables and compression
+    - Connection pooling and async operations
+    - Advanced time-series analytics
+    - Comprehensive error handling and monitoring
+    - Optimized for high-performance financial data
+    """
+
+    # Class-level tracking of setup completion
     _migrations_run: dict[str, bool] = {}
+    _timescale_setup_run: dict[str, bool] = {}
 
-    def __init__(self, db_path: str = "stockula.db"):
-        """Initialize database manager.
+    def __init__(self, config: TimescaleDBConfig, enable_async: bool = True):
+        """Initialize TimescaleDB database manager.
 
         Args:
-            db_path: Path to SQLite database file
+            config: TimescaleDB configuration
+            enable_async: Enable async operations
+
+        Raises:
+            ValueError: If config is None
+            ConnectionError: If TimescaleDB is not available
         """
-        self.db_path = Path(db_path)
-        self.db_url = f"sqlite:///{self.db_path}"
+        if config is None:
+            raise ValueError("TimescaleDB configuration is required")
 
-        # Create engine with foreign key support
-        self.engine = create_engine(self.db_url, connect_args={"check_same_thread": False}, echo=False)
+        self.config = config
+        self.enable_async = enable_async
 
-        # Enable foreign keys for SQLite
-        @event.listens_for(self.engine, "connect")
-        def set_sqlite_pragma(dbapi_connection, connection_record):
-            cursor = dbapi_connection.cursor()
-            cursor.execute("PRAGMA foreign_keys=ON")
-            cursor.close()
+        # Setup engines and connections
+        self._setup_engines()
 
+        # Initialize database
         self._run_migrations()
-        # Create tables if they don't exist (for development)
-        # Use checkfirst=True to avoid errors if tables already exist
-        SQLModel.metadata.create_all(self.engine, checkfirst=True)
+        self._create_tables()
+        self._setup_timescale_features()
+
+    @property
+    def backend_type(self) -> str:
+        """Get the database backend type."""
+        return "timescaledb"
+
+    @property
+    def is_timescaledb(self) -> bool:
+        """Check if using TimescaleDB backend."""
+        return True
+
+    def _test_timescale_connection(self) -> None:
+        """Test TimescaleDB connection and extension availability.
+
+        Raises:
+            ConnectionError: If TimescaleDB is not available or connection fails
+        """
+        try:
+            # Test basic PostgreSQL connection
+            test_url = self.config.get_connection_url()
+            test_engine = create_engine(test_url, poolclass=QueuePool, pool_pre_ping=True)
+
+            with test_engine.connect() as conn:
+                # Test basic connectivity
+                conn.execute(text("SELECT 1"))
+
+                # Check if TimescaleDB extension is available
+                result = conn.execute(text("SELECT 1 FROM pg_extension WHERE extname = 'timescaledb'")).fetchone()
+
+                if result:
+                    logger.info("TimescaleDB extension detected and available")
+                else:
+                    error_msg = "PostgreSQL connected but TimescaleDB extension not found"
+                    logger.error(error_msg)
+                    raise ConnectionError(error_msg)
+
+            test_engine.dispose()
+
+        except Exception as e:
+            error_msg = f"TimescaleDB connection failed: {e}"
+            logger.error(error_msg)
+            raise ConnectionError(error_msg) from e
+
+    def _setup_engines(self) -> None:
+        """Setup TimescaleDB engines with connection pooling and validation."""
+        # Test TimescaleDB connection and extension availability first
+        self._test_timescale_connection()
+        # Synchronous engine
+        self.db_url = self.config.get_connection_url()
+        self.engine = create_engine(
+            self.db_url,
+            poolclass=QueuePool,
+            pool_size=self.config.pool_size,
+            max_overflow=self.config.max_overflow,
+            pool_timeout=self.config.pool_timeout,
+            pool_recycle=self.config.pool_recycle,
+            pool_pre_ping=True,
+            echo=False,
+        )
+
+        # Asynchronous engine if enabled
+        if self.enable_async:
+            self.async_db_url = self.config.get_connection_url(async_driver=True)
+            self.async_engine = create_async_engine(
+                self.async_db_url,
+                pool_size=self.config.pool_size,
+                max_overflow=self.config.max_overflow,
+                pool_timeout=self.config.pool_timeout,
+                pool_recycle=self.config.pool_recycle,
+                pool_pre_ping=True,
+                echo=False,
+            )
+            self.async_session_factory = async_sessionmaker(
+                self.async_engine, class_=AsyncSession, expire_on_commit=False
+            )
+        else:
+            self.async_engine = None
+            self.async_session_factory = None
 
     def _run_migrations(self) -> None:
         """Run Alembic migrations to ensure database schema is up to date."""
-        import logging
-        import os
-
         # Skip migrations in test environment
         if os.environ.get("PYTEST_CURRENT_TEST"):
             return
 
         # Check if migrations have already been run for this database URL
-        if self.db_url in DatabaseManager._migrations_run:
+        if self.db_url in self._migrations_run:
             return
 
-        # Find alembic.ini file relative to the project root
-        project_root = Path(__file__).parents[3]
-        alembic_ini_path = project_root / "alembic.ini"
-
-        if not alembic_ini_path.exists():
-            # Try common locations
-            possible_paths = [
-                Path.cwd() / "alembic.ini",
-                Path(__file__).parent.parent.parent / "alembic.ini",
-            ]
-            for path in possible_paths:
-                if path.exists():
-                    alembic_ini_path = path
-                    break
-            else:
-                # Skip migrations if alembic.ini not found
-                return
-
-        # Configure Alembic
-        alembic_cfg = Config(str(alembic_ini_path))
-        alembic_cfg.set_main_option("sqlalchemy.url", self.db_url)
-
-        # Check if tables already exist to avoid duplicate creation errors
-        with self.engine.connect() as conn:
-            # Check if strategies table exists
-            result = conn.execute(sa.text("SELECT name FROM sqlite_master WHERE type='table' AND name='strategies'"))
-            strategies_exists = result.fetchone() is not None
-
-            # Check if alembic_version table exists
-            result = conn.execute(
-                sa.text("SELECT name FROM sqlite_master WHERE type='table' AND name='alembic_version'")
-            )
-            alembic_exists = result.fetchone() is not None
-
-        # Run migrations
         try:
-            # Set up logging to capture warnings
-            alembic_logger = logging.getLogger("alembic")
-            original_level = alembic_logger.level
+            # Find alembic.ini file relative to the project root
+            project_root = Path(__file__).parents[3]
+            alembic_ini_path = project_root / "alembic.ini"
 
-            # If strategies table exists but alembic tracking doesn't show it,
-            # we need to stamp the database to mark migrations as applied
-            if strategies_exists and not alembic_exists:
-                # Create alembic version table and stamp to current head
-                command.stamp(alembic_cfg, "head")
-            else:
-                # Normal migration path
+            if not alembic_ini_path.exists():
+                # Try common locations
+                possible_paths = [
+                    Path.cwd() / "alembic.ini",
+                    Path(__file__).parent.parent.parent / "alembic.ini",
+                ]
+                for path in possible_paths:
+                    if path.exists():
+                        alembic_ini_path = path
+                        break
+                else:
+                    logger.warning("alembic.ini not found, skipping migrations")
+                    return
+
+            # Configure Alembic
+            alembic_cfg = Config(str(alembic_ini_path))
+            alembic_cfg.set_main_option("sqlalchemy.url", self.db_url)
+
+            # Run migrations
+            try:
+                alembic_logger = logging.getLogger("alembic")
+                original_level = alembic_logger.level
                 alembic_logger.setLevel(logging.WARNING)
                 command.upgrade(alembic_cfg, "head")
+                alembic_logger.setLevel(original_level)
+            except Exception as e:
+                if "already exists" not in str(e):
+                    logger.warning(f"TimescaleDB migration failed: {e}")
 
-            # Restore original logging level
-            alembic_logger.setLevel(original_level)
-
-            # Mark migrations as run for this database URL
-            DatabaseManager._migrations_run[self.db_url] = True
+            # Mark migrations as run
+            self._migrations_run[self.db_url] = True
+            logger.info("Migrations completed for TimescaleDB backend")
 
         except Exception as e:
-            # Only show warning if it's not about existing tables
             if "already exists" not in str(e):
-                print(f"Warning: Could not run migrations: {e}")
+                logger.warning(f"Migration error: {e}")
+
+    def _create_tables(self) -> None:
+        """Create database tables."""
+        try:
+            SQLModel.metadata.create_all(self.engine, checkfirst=True)
+            logger.info("Tables created/verified for TimescaleDB backend")
+        except Exception as e:
+            logger.error(f"Table creation failed: {e}")
+            raise
+
+    def _setup_timescale_features(self) -> None:
+        """Setup TimescaleDB-specific features like hypertables and policies."""
+        if not self.config.enable_hypertables:
+            logger.info("Hypertables disabled in configuration")
+            return
+
+        # Check if setup already completed
+        if self.db_url in self._timescale_setup_run:
+            return
+
+        try:
+            with self.get_session() as session:
+                # Verify TimescaleDB extension
+                result = session.exec(text("SELECT 1 FROM pg_extension WHERE extname = 'timescaledb'")).fetchone()
+
+                if not result:
+                    logger.warning("TimescaleDB extension not found, skipping hypertable setup")
+                    return
+
+                # Execute TimescaleDB setup commands
+                setup_commands = get_timescale_setup_sql()
+
+                for sql_command in setup_commands:
+                    try:
+                        session.exec(text(sql_command))
+                        session.commit()
+                    except Exception as e:
+                        if "already exists" not in str(e).lower():
+                            logger.warning(f"TimescaleDB setup command failed: {e}")
+                        session.rollback()
+
+                self._timescale_setup_run[self.db_url] = True
+                logger.info("TimescaleDB features setup completed")
+
+        except Exception as e:
+            logger.error(f"TimescaleDB feature setup failed: {e}")
 
     def close(self) -> None:
-        """Close the database engine and dispose of all connections."""
-        if hasattr(self, "engine") and self.engine:
-            self.engine.dispose()
+        """Close database engines and dispose of all connections."""
+        try:
+            if hasattr(self, "engine") and self.engine:
+                self.engine.dispose()
+
+            if hasattr(self, "async_engine") and self.async_engine:
+                # Schedule async engine disposal
+                try:
+                    if asyncio.get_event_loop().is_running():
+                        asyncio.create_task(self.async_engine.adispose())
+                    else:
+                        asyncio.run(self.async_engine.adispose())
+                except Exception as e:
+                    logger.warning(f"Async engine disposal failed: {e}")
+
+            logger.info("TimescaleDB database connections closed")
+        except Exception as e:
+            logger.error(f"Error closing database connections: {e}")
 
     def __del__(self) -> None:
         """Ensure database connections are closed when object is destroyed."""
@@ -137,47 +284,71 @@ class DatabaseManager:
 
     @contextmanager
     def get_session(self) -> Iterator[Session]:
-        """Get a database session as context manager."""
+        """Get a synchronous database session as context manager."""
         with Session(self.engine) as session:
             yield session
 
+    @asynccontextmanager
+    async def get_async_session(self) -> AsyncIterator[AsyncSession]:
+        """Get an asynchronous database session as context manager.
+
+        Raises:
+            RuntimeError: If async operations not enabled
+        """
+        if not self.async_session_factory:
+            raise RuntimeError("Async operations not enabled. Initialize with enable_async=True.")
+
+        async with self.async_session_factory() as session:
+            yield session
+
+    # ========================================
+    # IDatabaseManager Interface Implementation
+    # ========================================
+
     def store_stock_info(self, symbol: str, info: dict[str, Any]) -> None:
-        """Store basic stock information.
+        """Store comprehensive stock information.
 
         Args:
             symbol: Stock ticker symbol
             info: Stock information dictionary from yfinance
         """
-        with self.get_session() as session:
-            # Create or update stock
-            stock = session.get(Stock, symbol)
-            if not stock:
-                stock = Stock(symbol=symbol)
+        try:
+            with self.get_session() as session:
+                # Create or update stock
+                stock = session.get(Stock, symbol)
+                if not stock:
+                    stock = Stock(symbol=symbol)
 
-            # Update fields
-            stock.name = info.get("longName") or info.get("shortName", "")
-            stock.sector = info.get("sector", "")
-            stock.industry = info.get("industry", "")
-            stock.market_cap = info.get("marketCap")
-            stock.exchange = info.get("exchange", "")
-            stock.currency = info.get("currency", "")
-            stock.updated_at = datetime.now(UTC)
+                # Update stock metadata
+                stock.name = info.get("longName") or info.get("shortName", "")
+                stock.sector = info.get("sector", "")
+                stock.industry = info.get("industry", "")
+                stock.market_cap = info.get("marketCap")
+                stock.exchange = info.get("exchange", "")
+                stock.currency = info.get("currency", "USD")
+                stock.updated_at = datetime.now(UTC)
 
-            session.add(stock)
+                session.add(stock)
 
-            # Store full info as JSON
-            stock_info = session.get(StockInfo, symbol)
-            if not stock_info:
-                stock_info = StockInfo(symbol=symbol)
+                # Store comprehensive info as JSONB
+                stock_info = session.get(StockInfo, symbol)
+                if not stock_info:
+                    stock_info = StockInfo(symbol=symbol)
 
-            stock_info.set_info(info)
-            stock_info.updated_at = datetime.now(UTC)
+                stock_info.set_info(info)
+                stock_info.updated_at = datetime.now(UTC)
 
-            session.add(stock_info)
-            session.commit()
+                session.add(stock_info)
+                session.commit()
+
+                logger.debug(f"Stored stock info for {symbol} using TimescaleDB")
+
+        except Exception as e:
+            logger.error(f"Failed to store stock info for {symbol}: {e}")
+            raise
 
     def store_price_history(self, symbol: str, data: pd.DataFrame, interval: str = "1d") -> None:
-        """Store historical price data.
+        """Store historical price data with TimescaleDB optimizations.
 
         Args:
             symbol: Stock ticker symbol
@@ -185,37 +356,75 @@ class DatabaseManager:
             interval: Data interval (1d, 1h, etc.)
         """
         if data.empty:
+            logger.warning(f"Empty DataFrame provided for {symbol}")
             return
 
-        with self.get_session() as session:
-            # Ensure stock exists
-            stock = session.get(Stock, symbol)
-            if not stock:
-                stock = Stock(symbol=symbol)
-                session.add(stock)
+        try:
+            with self.get_session() as session:
+                # Ensure stock exists
+                stock = session.get(Stock, symbol)
+                if not stock:
+                    stock = Stock(symbol=symbol)
+                    session.add(stock)
 
-            for date, row in data.iterrows():
-                # Check if record exists
-                stmt = select(PriceHistory).where(
-                    PriceHistory.symbol == symbol,
-                    PriceHistory.date == date.date(),
-                    PriceHistory.interval == interval,
+                stored_count = 0
+                updated_count = 0
+
+                for timestamp, row in data.iterrows():
+                    # Convert to timezone-aware datetime for TimescaleDB
+                    if hasattr(timestamp, "tz_localize"):
+                        if timestamp.tz is None:
+                            timestamp = timestamp.tz_localize(UTC)
+                        else:
+                            timestamp = timestamp.tz_convert(UTC)
+                    elif isinstance(timestamp, datetime) and timestamp.tzinfo is None:
+                        timestamp = timestamp.replace(tzinfo=UTC)
+
+                    # Use timestamp for TimescaleDB hypertable
+                    stmt = select(PriceHistory).where(
+                        PriceHistory.symbol == symbol,
+                        PriceHistory.timestamp == timestamp,
+                        PriceHistory.interval == interval,
+                    )
+                    price_history = session.exec(stmt).first()
+
+                    if not price_history:
+                        price_history = PriceHistory(symbol=symbol, timestamp=timestamp, interval=interval)
+                        stored_count += 1
+                    else:
+                        updated_count += 1
+
+                    # Set computed date for backward compatibility
+                    price_history.date = timestamp.date()
+
+                    # Update OHLCV values
+                    price_history.open_price = row.get("Open")
+                    price_history.high_price = row.get("High")
+                    price_history.low_price = row.get("Low")
+                    price_history.close_price = row.get("Close")
+                    price_history.volume = row.get("Volume")
+
+                    # Calculate additional fields for TimescaleDB
+                    if all([price_history.high_price, price_history.low_price, price_history.close_price]):
+                        price_history.typical_price = (
+                            price_history.high_price + price_history.low_price + price_history.close_price
+                        ) / 3
+
+                    # Set adjusted close if available
+                    price_history.adjusted_close = row.get("Adj Close")
+
+                    session.add(price_history)
+
+                session.commit()
+
+                logger.info(
+                    f"Stored price history for {symbol}: {stored_count} new, "
+                    f"{updated_count} updated records using TimescaleDB"
                 )
-                price_history = session.exec(stmt).first()
 
-                if not price_history:
-                    price_history = PriceHistory(symbol=symbol, date=date.date(), interval=interval)
-
-                # Update values
-                price_history.open_price = row.get("Open")
-                price_history.high_price = row.get("High")
-                price_history.low_price = row.get("Low")
-                price_history.close_price = row.get("Close")
-                price_history.volume = row.get("Volume")
-
-                session.add(price_history)
-
-            session.commit()
+        except Exception as e:
+            logger.error(f"Failed to store price history for {symbol}: {e}")
+            raise
 
     def store_dividends(self, symbol: str, dividends: pd.Series) -> None:
         """Store dividend data.
@@ -280,7 +489,7 @@ class DatabaseManager:
             session.commit()
 
     def store_options_chain(self, symbol: str, calls: pd.DataFrame, puts: pd.DataFrame, expiration_date: str) -> None:
-        """Store options chain data.
+        """Store options chain data with TimescaleDB optimizations.
 
         Args:
             symbol: Stock ticker symbol
@@ -288,78 +497,117 @@ class DatabaseManager:
             puts: DataFrame with put options
             expiration_date: Options expiration date
         """
-        expiry_date = datetime.strptime(expiration_date, "%Y-%m-%d").date()
+        try:
+            # Convert to timezone-aware datetime for TimescaleDB
+            expiry_datetime = datetime.strptime(expiration_date, "%Y-%m-%d").replace(tzinfo=UTC)
+            data_timestamp = datetime.now(UTC)  # When the data was recorded
 
-        with self.get_session() as session:
-            # Ensure stock exists
-            stock = session.get(Stock, symbol)
-            if not stock:
-                stock = Stock(symbol=symbol)
-                session.add(stock)
+            with self.get_session() as session:
+                # Ensure stock exists
+                stock = session.get(Stock, symbol)
+                if not stock:
+                    stock = Stock(symbol=symbol)
+                    session.add(stock)
 
-            # Store calls
-            if not calls.empty:
-                for _, row in calls.iterrows():
-                    # Check if record exists
-                    stmt = select(OptionsCall).where(
-                        OptionsCall.symbol == symbol,
-                        OptionsCall.expiration_date == expiry_date,
-                        OptionsCall.strike == row.get("strike"),
-                        OptionsCall.contract_symbol == row.get("contractSymbol"),
-                    )
-                    option = session.exec(stmt).first()
+                calls_stored = 0
+                puts_stored = 0
 
-                    if not option:
-                        option = OptionsCall(
-                            symbol=symbol,
-                            expiration_date=expiry_date,
-                            strike=row.get("strike"),
+                # Store calls
+                if not calls.empty:
+                    for _, row in calls.iterrows():
+                        # TimescaleDB uses timestamp-based unique constraints
+                        stmt = select(OptionsCall).where(
+                            OptionsCall.symbol == symbol,
+                            OptionsCall.expiration_timestamp == expiry_datetime,
+                            OptionsCall.strike == row.get("strike"),
+                            OptionsCall.contract_symbol == row.get("contractSymbol"),
+                            OptionsCall.data_timestamp == data_timestamp,
                         )
+                        option = session.exec(stmt).first()
 
-                    # Update values
-                    option.last_price = row.get("lastPrice")
-                    option.bid = row.get("bid")
-                    option.ask = row.get("ask")
-                    option.volume = row.get("volume")
-                    option.open_interest = row.get("openInterest")
-                    option.implied_volatility = row.get("impliedVolatility")
-                    option.in_the_money = row.get("inTheMoney")
-                    option.contract_symbol = row.get("contractSymbol")
+                        if not option:
+                            option = OptionsCall(
+                                symbol=symbol,
+                                expiration_timestamp=expiry_datetime,
+                                data_timestamp=data_timestamp,
+                                strike=row.get("strike"),
+                            )
+                            option.expiration_date = expiry_datetime.date()  # Backward compatibility
 
-                    session.add(option)
+                        # Update common values
+                        option.last_price = row.get("lastPrice")
+                        option.bid = row.get("bid")
+                        option.ask = row.get("ask")
+                        option.volume = row.get("volume")
+                        option.open_interest = row.get("openInterest")
+                        option.implied_volatility = row.get("impliedVolatility")
+                        option.in_the_money = row.get("inTheMoney")
+                        option.contract_symbol = row.get("contractSymbol")
 
-            # Store puts
-            if not puts.empty:
-                for _, row in puts.iterrows():
-                    # Check if record exists
-                    stmt_put = select(OptionsPut).where(
-                        OptionsPut.symbol == symbol,
-                        OptionsPut.expiration_date == expiry_date,
-                        OptionsPut.strike == row.get("strike"),
-                        OptionsPut.contract_symbol == row.get("contractSymbol"),
-                    )
-                    option_put = session.exec(stmt_put).first()
+                        # Store Greeks (TimescaleDB specific fields)
+                        option.delta = row.get("delta")
+                        option.gamma = row.get("gamma")
+                        option.theta = row.get("theta")
+                        option.vega = row.get("vega")
+                        option.intrinsic_value = row.get("intrinsicValue")
+                        option.time_value = row.get("timeValue")
 
-                    if not option_put:
-                        option_put = OptionsPut(
-                            symbol=symbol,
-                            expiration_date=expiry_date,
-                            strike=row.get("strike"),
+                        session.add(option)
+                        calls_stored += 1
+
+                # Store puts
+                if not puts.empty:
+                    for _, row in puts.iterrows():
+                        # TimescaleDB uses timestamp-based unique constraints
+                        stmt_put = select(OptionsPut).where(
+                            OptionsPut.symbol == symbol,
+                            OptionsPut.expiration_timestamp == expiry_datetime,
+                            OptionsPut.strike == row.get("strike"),
+                            OptionsPut.contract_symbol == row.get("contractSymbol"),
+                            OptionsPut.data_timestamp == data_timestamp,
                         )
+                        option_put = session.exec(stmt_put).first()
 
-                    # Update values
-                    option_put.last_price = row.get("lastPrice")
-                    option_put.bid = row.get("bid")
-                    option_put.ask = row.get("ask")
-                    option_put.volume = row.get("volume")
-                    option_put.open_interest = row.get("openInterest")
-                    option_put.implied_volatility = row.get("impliedVolatility")
-                    option_put.in_the_money = row.get("inTheMoney")
-                    option_put.contract_symbol = row.get("contractSymbol")
+                        if not option_put:
+                            option_put = OptionsPut(
+                                symbol=symbol,
+                                expiration_timestamp=expiry_datetime,
+                                data_timestamp=data_timestamp,
+                                strike=row.get("strike"),
+                            )
+                            option_put.expiration_date = expiry_datetime.date()  # Backward compatibility
 
-                    session.add(option_put)
+                        # Update common values
+                        option_put.last_price = row.get("lastPrice")
+                        option_put.bid = row.get("bid")
+                        option_put.ask = row.get("ask")
+                        option_put.volume = row.get("volume")
+                        option_put.open_interest = row.get("openInterest")
+                        option_put.implied_volatility = row.get("impliedVolatility")
+                        option_put.in_the_money = row.get("inTheMoney")
+                        option_put.contract_symbol = row.get("contractSymbol")
 
-            session.commit()
+                        # Store Greeks (TimescaleDB specific fields)
+                        option_put.delta = row.get("delta")
+                        option_put.gamma = row.get("gamma")
+                        option_put.theta = row.get("theta")
+                        option_put.vega = row.get("vega")
+                        option_put.intrinsic_value = row.get("intrinsicValue")
+                        option_put.time_value = row.get("timeValue")
+
+                        session.add(option_put)
+                        puts_stored += 1
+
+                session.commit()
+
+                logger.info(
+                    f"Stored options chain for {symbol} expiring {expiration_date}: "
+                    f"{calls_stored} calls, {puts_stored} puts using TimescaleDB"
+                )
+
+        except Exception as e:
+            logger.error(f"Failed to store options chain for {symbol}: {e}")
+            raise
 
     def get_price_history(
         self,
@@ -383,13 +631,13 @@ class DatabaseManager:
             stmt = select(PriceHistory).where(PriceHistory.symbol == symbol, PriceHistory.interval == interval)
 
             if start_date:
-                start = datetime.strptime(start_date, "%Y-%m-%d").date()
-                stmt = stmt.where(PriceHistory.date >= start)
+                start = datetime.strptime(start_date, "%Y-%m-%d").replace(tzinfo=UTC)
+                stmt = stmt.where(PriceHistory.timestamp >= start)
             if end_date:
-                end = datetime.strptime(end_date, "%Y-%m-%d").date()
-                stmt = stmt.where(PriceHistory.date <= end)
+                end = datetime.strptime(end_date, "%Y-%m-%d").replace(tzinfo=UTC)
+                stmt = stmt.where(PriceHistory.timestamp <= end)
 
-            stmt = stmt.order_by(PriceHistory.date)  # type: ignore[arg-type]
+            stmt = stmt.order_by(PriceHistory.timestamp)  # type: ignore[arg-type]
 
             results = session.exec(stmt).all()
 
@@ -401,7 +649,7 @@ class DatabaseManager:
             for row in results:
                 data.append(
                     {
-                        "date": row.date,
+                        "timestamp": row.timestamp,
                         "Open": row.open_price,
                         "High": row.high_price,
                         "Low": row.low_price,
@@ -411,8 +659,8 @@ class DatabaseManager:
                 )
 
             df = pd.DataFrame(data)
-            df["date"] = pd.to_datetime(df["date"])
-            df = df.set_index("date")
+            df["timestamp"] = pd.to_datetime(df["timestamp"])
+            df = df.set_index("timestamp")
             return df
 
     def get_stock_info(self, symbol: str) -> dict[str, Any] | None:
@@ -436,7 +684,7 @@ class DatabaseManager:
         start_date: str | None = None,
         end_date: str | None = None,
     ) -> pd.Series:
-        """Retrieve dividend data.
+        """Retrieve dividend data with TimescaleDB optimizations.
 
         Args:
             symbol: Stock ticker symbol
@@ -446,26 +694,33 @@ class DatabaseManager:
         Returns:
             Series with dividend data
         """
-        with self.get_session() as session:
-            stmt = select(Dividend).where(Dividend.symbol == symbol)
+        try:
+            with self.get_session() as session:
+                stmt = select(Dividend).where(Dividend.symbol == symbol)
 
-            if start_date:
-                start = datetime.strptime(start_date, "%Y-%m-%d").date()
-                stmt = stmt.where(Dividend.date >= start)
-            if end_date:
-                end = datetime.strptime(end_date, "%Y-%m-%d").date()
-                stmt = stmt.where(Dividend.date <= end)
+                # Use timestamp-based queries for TimescaleDB
+                if start_date:
+                    start = datetime.strptime(start_date, "%Y-%m-%d").replace(tzinfo=UTC)
+                    stmt = stmt.where(Dividend.timestamp >= start)
+                if end_date:
+                    end = datetime.strptime(end_date, "%Y-%m-%d").replace(tzinfo=UTC)
+                    stmt = stmt.where(Dividend.timestamp <= end)
 
-            stmt = stmt.order_by(Dividend.date)  # type: ignore[arg-type]
+                stmt = stmt.order_by(Dividend.timestamp)
+                results = session.exec(stmt).all()
 
-            results = session.exec(stmt).all()
+                if not results:
+                    return pd.Series(dtype=float)
 
-            if not results:
-                return pd.Series(dtype=float)
+                # Convert to Series using timestamp
+                data = {row.timestamp: row.amount for row in results}
 
-            # Convert to Series
-            data = {pd.to_datetime(row.date): row.amount for row in results}
-            return pd.Series(data)
+                logger.debug(f"Retrieved {len(data)} dividend records for {symbol}")
+                return pd.Series(data)
+
+        except Exception as e:
+            logger.error(f"Failed to retrieve dividends for {symbol}: {e}")
+            return pd.Series(dtype=float)
 
     def get_splits(
         self,
@@ -473,7 +728,7 @@ class DatabaseManager:
         start_date: str | None = None,
         end_date: str | None = None,
     ) -> pd.Series:
-        """Retrieve stock split data.
+        """Retrieve stock split data with TimescaleDB optimizations.
 
         Args:
             symbol: Stock ticker symbol
@@ -483,29 +738,36 @@ class DatabaseManager:
         Returns:
             Series with split data
         """
-        with self.get_session() as session:
-            stmt = select(Split).where(Split.symbol == symbol)
+        try:
+            with self.get_session() as session:
+                stmt = select(Split).where(Split.symbol == symbol)
 
-            if start_date:
-                start = datetime.strptime(start_date, "%Y-%m-%d").date()
-                stmt = stmt.where(Split.date >= start)
-            if end_date:
-                end = datetime.strptime(end_date, "%Y-%m-%d").date()
-                stmt = stmt.where(Split.date <= end)
+                # Use timestamp-based queries for TimescaleDB
+                if start_date:
+                    start = datetime.strptime(start_date, "%Y-%m-%d").replace(tzinfo=UTC)
+                    stmt = stmt.where(Split.timestamp >= start)
+                if end_date:
+                    end = datetime.strptime(end_date, "%Y-%m-%d").replace(tzinfo=UTC)
+                    stmt = stmt.where(Split.timestamp <= end)
 
-            stmt = stmt.order_by(Split.date)  # type: ignore[arg-type]
+                stmt = stmt.order_by(Split.timestamp)
+                results = session.exec(stmt).all()
 
-            results = session.exec(stmt).all()
+                if not results:
+                    return pd.Series(dtype=float)
 
-            if not results:
-                return pd.Series(dtype=float)
+                # Convert to Series using timestamp
+                data = {row.timestamp: row.ratio for row in results}
 
-            # Convert to Series
-            data = {pd.to_datetime(row.date): row.ratio for row in results}
-            return pd.Series(data)
+                logger.debug(f"Retrieved {len(data)} split records for {symbol}")
+                return pd.Series(data)
+
+        except Exception as e:
+            logger.error(f"Failed to retrieve splits for {symbol}: {e}")
+            return pd.Series(dtype=float)
 
     def get_options_chain(self, symbol: str, expiration_date: str) -> tuple[pd.DataFrame, pd.DataFrame]:
-        """Retrieve options chain data.
+        """Retrieve options chain data with TimescaleDB optimizations.
 
         Args:
             symbol: Stock ticker symbol
@@ -514,38 +776,39 @@ class DatabaseManager:
         Returns:
             Tuple of (calls DataFrame, puts DataFrame)
         """
-        expiry_date = datetime.strptime(expiration_date, "%Y-%m-%d").date()
+        try:
+            # Convert to timezone-aware datetime for TimescaleDB
+            expiry_datetime = datetime.strptime(expiration_date, "%Y-%m-%d").replace(tzinfo=UTC)
 
-        with self.get_session() as session:
-            # Get calls
-            stmt = (
-                select(OptionsCall)
-                .where(
-                    OptionsCall.symbol == symbol,
-                    OptionsCall.expiration_date == expiry_date,
+            with self.get_session() as session:
+                # Get calls
+                stmt = (
+                    select(OptionsCall)
+                    .where(
+                        OptionsCall.symbol == symbol,
+                        OptionsCall.expiration_timestamp == expiry_datetime,
+                    )
+                    .order_by(OptionsCall.strike)
                 )
-                .order_by(OptionsCall.strike)  # type: ignore[arg-type]
-            )
 
-            calls = session.exec(stmt).all()
+                calls = session.exec(stmt).all()
 
-            # Get puts
-            stmt_puts = (
-                select(OptionsPut)
-                .where(
-                    OptionsPut.symbol == symbol,
-                    OptionsPut.expiration_date == expiry_date,
+                # Get puts
+                stmt_puts = (
+                    select(OptionsPut)
+                    .where(
+                        OptionsPut.symbol == symbol,
+                        OptionsPut.expiration_timestamp == expiry_datetime,
+                    )
+                    .order_by(OptionsPut.strike)
                 )
-                .order_by(OptionsPut.strike)  # type: ignore[arg-type]
-            )
 
-            puts = session.exec(stmt_puts).all()
+                puts = session.exec(stmt_puts).all()
 
-            # Convert to DataFrames
-            calls_data = []
-            for row in calls:
-                calls_data.append(
-                    {
+                # Convert to DataFrames with enhanced data for TimescaleDB
+                calls_data = []
+                for row in calls:
+                    record = {
                         "strike": row.strike,
                         "lastPrice": row.last_price,
                         "bid": row.bid,
@@ -555,13 +818,19 @@ class DatabaseManager:
                         "impliedVolatility": row.implied_volatility,
                         "inTheMoney": row.in_the_money,
                         "contractSymbol": row.contract_symbol,
+                        # Add Greeks and advanced fields for TimescaleDB
+                        "delta": row.delta,
+                        "gamma": row.gamma,
+                        "theta": row.theta,
+                        "vega": row.vega,
+                        "intrinsicValue": row.intrinsic_value,
+                        "timeValue": row.time_value,
                     }
-                )
+                    calls_data.append(record)
 
-            puts_data = []
-            for put_row in puts:
-                puts_data.append(
-                    {
+                puts_data = []
+                for put_row in puts:
+                    record = {
                         "strike": put_row.strike,
                         "lastPrice": put_row.last_price,
                         "bid": put_row.bid,
@@ -571,10 +840,25 @@ class DatabaseManager:
                         "impliedVolatility": put_row.implied_volatility,
                         "inTheMoney": put_row.in_the_money,
                         "contractSymbol": put_row.contract_symbol,
+                        # Add Greeks and advanced fields for TimescaleDB
+                        "delta": put_row.delta,
+                        "gamma": put_row.gamma,
+                        "theta": put_row.theta,
+                        "vega": put_row.vega,
+                        "intrinsicValue": put_row.intrinsic_value,
+                        "timeValue": put_row.time_value,
                     }
-                )
+                    puts_data.append(record)
 
-            return pd.DataFrame(calls_data), pd.DataFrame(puts_data)
+                logger.debug(
+                    f"Retrieved options chain for {symbol} expiring {expiration_date}: "
+                    f"{len(calls_data)} calls, {len(puts_data)} puts"
+                )
+                return pd.DataFrame(calls_data), pd.DataFrame(puts_data)
+
+        except Exception as e:
+            logger.error(f"Failed to retrieve options chain for {symbol}: {e}")
+            return pd.DataFrame(), pd.DataFrame()
 
     def get_all_symbols(self) -> list[str]:
         """Get all symbols in the database.
@@ -599,7 +883,12 @@ class DatabaseManager:
         with self.get_session() as session:
             from sqlalchemy import desc
 
-            stmt = select(PriceHistory).where(PriceHistory.symbol == symbol).order_by(desc(PriceHistory.date)).limit(1)  # type: ignore[arg-type]
+            stmt = (
+                select(PriceHistory)
+                .where(PriceHistory.symbol == symbol)
+                .order_by(desc(PriceHistory.timestamp))  # type: ignore[arg-type]
+                .limit(1)
+            )
 
             result = session.exec(stmt).first()
             if result:
@@ -607,7 +896,7 @@ class DatabaseManager:
             return None
 
     def has_data(self, symbol: str, start_date: str, end_date: str) -> bool:
-        """Check if we have data for a symbol in the given date range.
+        """Check if data exists for symbol in date range.
 
         Args:
             symbol: Stock ticker symbol
@@ -615,24 +904,29 @@ class DatabaseManager:
             end_date: End date (YYYY-MM-DD)
 
         Returns:
-            True if we have data in the date range
+            True if data exists in the date range
         """
-        start = datetime.strptime(start_date, "%Y-%m-%d").date()
-        end = datetime.strptime(end_date, "%Y-%m-%d").date()
+        try:
+            # Use timestamp-based query for TimescaleDB
+            start = datetime.strptime(start_date, "%Y-%m-%d").replace(tzinfo=UTC)
+            end = datetime.strptime(end_date, "%Y-%m-%d").replace(tzinfo=UTC)
 
-        with self.get_session() as session:
-            stmt = (
-                select(PriceHistory)
-                .where(
-                    PriceHistory.symbol == symbol,
-                    PriceHistory.date >= start,
-                    PriceHistory.date <= end,
+            with self.get_session() as session:
+                stmt = (
+                    select(PriceHistory)
+                    .where(
+                        PriceHistory.symbol == symbol,
+                        PriceHistory.timestamp >= start,
+                        PriceHistory.timestamp <= end,
+                    )
+                    .limit(1)
                 )
-                .limit(1)
-            )
+                result = session.exec(stmt).first()
+                return result is not None
 
-            result = session.exec(stmt).first()
-            return result is not None
+        except Exception as e:
+            logger.error(f"Error checking data for {symbol}: {e}")
+            return False
 
     def get_database_stats(self) -> dict[str, int]:
         """Get database statistics.
@@ -654,168 +948,836 @@ class DatabaseManager:
 
     def get_latest_price_date(self, symbol: str) -> datetime | None:
         """Get latest price date for a symbol."""
-        with self.get_session() as session:
-            from sqlalchemy import desc
+        try:
+            with self.get_session() as session:
+                from sqlalchemy import desc
 
-            stmt = (
-                select(PriceHistory.date)  # type: ignore[call-overload]
-                .where(PriceHistory.symbol == symbol)
-                .order_by(desc(PriceHistory.date))  # type: ignore[arg-type]
-                .limit(1)
-            )
-
-            result = session.exec(stmt).first()
-            if result:
-                return datetime.combine(result, datetime.min.time())
+                stmt = (
+                    select(PriceHistory.timestamp)
+                    .where(PriceHistory.symbol == symbol)
+                    .order_by(desc(PriceHistory.timestamp))
+                    .limit(1)
+                )
+                result = session.exec(stmt).first()
+                return result if result is None else cast(datetime, result)
+        except Exception as e:
+            logger.error(f"Failed to get latest price date for {symbol}: {e}")
             return None
 
     def cleanup_old_data(self, days_to_keep: int = 365) -> int:
-        """Clean up old data from database."""
-        from datetime import timedelta
+        """Clean up old data from database with TimescaleDB optimizations."""
+        try:
+            cutoff_datetime = datetime.now(UTC) - timedelta(days=days_to_keep)
 
-        cutoff_date = (datetime.now() - timedelta(days=days_to_keep)).date()
+            with self.get_session() as session:
+                deleted_count = 0
+
+                # Use TimescaleDB-optimized cleanup with timestamp
+                # Delete old price history
+                stmt = select(PriceHistory).where(PriceHistory.timestamp < cutoff_datetime)
+                old_prices = session.exec(stmt).all()
+                deleted_count += len(old_prices)
+
+                for price in old_prices:
+                    session.delete(price)
+
+                # Delete old options with expiration_timestamp
+                stmt_calls = select(OptionsCall).where(OptionsCall.expiration_timestamp < cutoff_datetime)
+                old_calls = session.exec(stmt_calls).all()
+                for call in old_calls:
+                    session.delete(call)
+
+                stmt_puts = select(OptionsPut).where(OptionsPut.expiration_timestamp < cutoff_datetime)
+                old_puts = session.exec(stmt_puts).all()
+                for put in old_puts:
+                    session.delete(put)
+
+                deleted_count += len(old_calls) + len(old_puts)
+
+                session.commit()
+
+                logger.info(f"Cleaned up {deleted_count} old records using TimescaleDB")
+                return deleted_count
+
+        except Exception as e:
+            logger.error(f"Failed to cleanup old data: {e}")
+            return 0
+
+    def test_connection(self) -> dict[str, Any]:
+        """Test TimescaleDB connection and return health information.
+
+        Returns:
+            Dictionary with connection status and health information
+        """
+        info = {
+            "backend": "timescaledb",
+            "url": self.config.get_connection_url().replace(self.config.password or "", "***"),
+            "timescale_available": True,
+            "hypertables_enabled": self.config.enable_hypertables,
+            "connection_pool": True,
+            "pool_size": self.config.pool_size,
+            "max_overflow": self.config.max_overflow,
+        }
+
+        try:
+            # Test actual connectivity
+            with self.get_session() as session:
+                result = session.exec(text("SELECT version()")).fetchone()
+                if result:
+                    info["database_version"] = str(result[0])
+
+                # Check TimescaleDB version
+                try:
+                    ts_result = session.exec(
+                        text("SELECT extversion FROM pg_extension WHERE extname = 'timescaledb'")
+                    ).fetchone()
+                    if ts_result:
+                        info["timescaledb_version"] = str(ts_result[0])
+                except Exception:
+                    pass
+
+        except Exception as e:
+            info["error"] = str(e)
+
+        return info
+
+    # ========================================
+    # TimescaleDB Analytics Methods
+    # ========================================
+
+    def get_moving_averages(
+        self,
+        symbol: str,
+        periods: list[int] | None = None,
+        start_date: str | None = None,
+        end_date: str | None = None,
+    ) -> pd.DataFrame:
+        """Calculate moving averages using TimescaleDB window functions.
+
+        Args:
+            symbol: Stock ticker symbol
+            periods: List of periods for moving averages
+            start_date: Start date (YYYY-MM-DD)
+            end_date: End date (YYYY-MM-DD)
+
+        Returns:
+            DataFrame with moving averages
+        """
+        if periods is None:
+            periods = [20, 50, 200]
+        # Build window function clauses for each period
+        ma_clauses = []
+        for period in periods:
+            ma_clauses.append(f"""
+                AVG(close_price) OVER (
+                    PARTITION BY symbol
+                    ORDER BY timestamp
+                    ROWS BETWEEN {period - 1} PRECEDING AND CURRENT ROW
+                ) AS ma_{period}
+            """)
+
+        query = f"""
+        SELECT
+            timestamp,
+            symbol,
+            close_price,
+            {", ".join(ma_clauses)}
+        FROM price_history
+        WHERE symbol = :symbol
+        """
+
+        params: dict[str, Any] = {"symbol": symbol}
+
+        if start_date:
+            query += " AND timestamp >= :start_date"
+            params["start_date"] = datetime.strptime(start_date, "%Y-%m-%d")
+        if end_date:
+            query += " AND timestamp <= :end_date"
+            params["end_date"] = datetime.strptime(end_date, "%Y-%m-%d")
+
+        query += " ORDER BY timestamp"
 
         with self.get_session() as session:
-            # Delete old price history
-            stmt = select(PriceHistory).where(PriceHistory.date < cutoff_date)
-            old_prices = session.exec(stmt).all()
-            deleted_count = len(old_prices)
+            result = session.exec(text(query), params).fetchall()
 
-            for price in old_prices:
-                session.delete(price)
+            if not result:
+                return pd.DataFrame()
 
-            # Delete old options calls
-            stmt_calls = select(OptionsCall).where(OptionsCall.expiration_date < cutoff_date)
-            old_calls = session.exec(stmt_calls).all()
-            for call in old_calls:
-                session.delete(call)
+            columns = ["timestamp", "symbol", "close_price"] + [f"ma_{p}" for p in periods]
+            df = pd.DataFrame(result, columns=columns)
+            df = df.set_index("timestamp")
+            return df
 
-            # Delete old options puts
-            stmt_puts = select(OptionsPut).where(OptionsPut.expiration_date < cutoff_date)
-            old_puts = session.exec(stmt_puts).all()
-            for put in old_puts:
-                session.delete(put)
-
-            session.commit()
-
-            # VACUUM the database (SQLite specific)
-            # Skip VACUUM for in-memory databases or during testing
-            if self.db_path != ":memory:" and not os.environ.get("PYTEST_CURRENT_TEST"):
-                from sqlalchemy import text
-
-                try:
-                    # Need to close all connections first for VACUUM to work
-                    self.engine.dispose()
-                    with self.engine.connect() as conn:
-                        conn.execute(text("VACUUM"))
-                        conn.commit()
-                except Exception as e:
-                    # VACUUM can fail if there are concurrent connections
-                    # This is not critical, so we just log and continue
-                    print(f"Warning: VACUUM failed: {e}")
-
-            return deleted_count
-
-    # Backward compatibility methods
-    def add_stock(self, symbol: str, name: str, sector: str = "", market_cap: float | None = None):
-        """Add stock to database (backward compatibility)."""
-        self.store_stock_info(symbol, {"longName": name, "sector": sector, "marketCap": market_cap})
-
-    def add_price_data(
+    def get_bollinger_bands(
         self,
         symbol: str,
-        date,
-        open_price: float,
-        high: float,
-        low: float,
-        close: float,
-        volume: int,
-        interval: str = "1d",
-    ):
-        """Add single price data point (backward compatibility)."""
-        df = pd.DataFrame(
-            [
-                {
-                    "Open": open_price,
-                    "High": high,
-                    "Low": low,
-                    "Close": close,
-                    "Volume": volume,
-                }
-            ],
-            index=[pd.to_datetime(date)],
-        )
-        self.store_price_history(symbol, df, interval)
+        period: int = 20,
+        std_dev: float = 2.0,
+        start_date: str | None = None,
+        end_date: str | None = None,
+    ) -> pd.DataFrame:
+        """Calculate Bollinger Bands using TimescaleDB window functions.
 
-    def bulk_add_price_data(self, price_data_list):
-        """Bulk add price data (backward compatibility)."""
-        # Group by symbol for efficiency
-        from collections import defaultdict
+        Args:
+            symbol: Stock ticker symbol
+            period: Period for moving average and standard deviation
+            std_dev: Standard deviation multiplier
+            start_date: Start date (YYYY-MM-DD)
+            end_date: End date (YYYY-MM-DD)
 
-        grouped_data = defaultdict(list)
+        Returns:
+            DataFrame with Bollinger Bands
+        """
+        query = f"""
+        SELECT
+            timestamp,
+            symbol,
+            close_price,
+            AVG(close_price) OVER (
+                PARTITION BY symbol
+                ORDER BY timestamp
+                ROWS BETWEEN {period - 1} PRECEDING AND CURRENT ROW
+            ) AS bb_middle,
+            AVG(close_price) OVER (
+                PARTITION BY symbol
+                ORDER BY timestamp
+                ROWS BETWEEN {period - 1} PRECEDING AND CURRENT ROW
+            ) + ({std_dev} * STDDEV(close_price) OVER (
+                PARTITION BY symbol
+                ORDER BY timestamp
+                ROWS BETWEEN {period - 1} PRECEDING AND CURRENT ROW
+            )) AS bb_upper,
+            AVG(close_price) OVER (
+                PARTITION BY symbol
+                ORDER BY timestamp
+                ROWS BETWEEN {period - 1} PRECEDING AND CURRENT ROW
+            ) - ({std_dev} * STDDEV(close_price) OVER (
+                PARTITION BY symbol
+                ORDER BY timestamp
+                ROWS BETWEEN {period - 1} PRECEDING AND CURRENT ROW
+            )) AS bb_lower,
+            STDDEV(close_price) OVER (
+                PARTITION BY symbol
+                ORDER BY timestamp
+                ROWS BETWEEN {period - 1} PRECEDING AND CURRENT ROW
+            ) AS price_volatility
+        FROM price_history
+        WHERE symbol = :symbol
+        """
 
-        for row in price_data_list:
-            symbol, date, open_p, high, low, close, volume, interval = row
-            grouped_data[(symbol, interval)].append(
-                {
-                    "date": pd.to_datetime(date),
-                    "Open": open_p,
-                    "High": high,
-                    "Low": low,
-                    "Close": close,
-                    "Volume": volume,
-                }
+        params: dict[str, Any] = {"symbol": symbol}
+
+        if start_date:
+            query += " AND timestamp >= :start_date"
+            params["start_date"] = datetime.strptime(start_date, "%Y-%m-%d")
+        if end_date:
+            query += " AND timestamp <= :end_date"
+            params["end_date"] = datetime.strptime(end_date, "%Y-%m-%d")
+
+        query += " ORDER BY timestamp"
+
+        with self.get_session() as session:
+            result = session.exec(text(query), params).fetchall()
+
+            if not result:
+                return pd.DataFrame()
+
+            df = pd.DataFrame(
+                result,
+                columns=["timestamp", "symbol", "close_price", "bb_middle", "bb_upper", "bb_lower", "price_volatility"],
             )
+            df = df.set_index("timestamp")
+            return df
 
-        # Store each group
-        for (symbol, interval), data_list in grouped_data.items():
-            df = pd.DataFrame(data_list)
-            df = df.set_index("date")
-            self.store_price_history(symbol, df, interval)
-
-    # Context manager support for backward compatibility
-    @contextmanager
-    def get_connection(self):
-        """Get a database connection (returns raw SQLite connection for compatibility)."""
-        pool_conn = self.engine.raw_connection()
-        try:
-            # Get the underlying SQLite connection
-            sqlite_conn = pool_conn.driver_connection
-            yield sqlite_conn
-        finally:
-            pool_conn.close()
-
-    @property
-    def conn(self):
-        """Get database connection (deprecated)."""
-        import warnings
-
-        warnings.warn(
-            "The 'conn' property is deprecated. Use 'get_session()' context manager instead.",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        # Return the raw SQLite connection
-        return self.engine.raw_connection().driver_connection
-
-    def add_stock_info(self, symbol: str, info: dict):
-        """Add stock info to database (backward compatibility)."""
-        self.store_stock_info(symbol, info)
-
-    def add_dividends(self, symbol: str, dividends_data: pd.Series):
-        """Add dividends data (backward compatibility)."""
-        self.store_dividends(symbol, dividends_data)
-
-    def add_splits(self, symbol: str, splits_data: pd.Series):
-        """Add splits data (backward compatibility)."""
-        self.store_splits(symbol, splits_data)
-
-    def add_options_data(
+    def get_rsi(
         self,
         symbol: str,
-        expiration: str,
-        calls_df: pd.DataFrame,
-        puts_df: pd.DataFrame,
-    ):
-        """Add options data (backward compatibility)."""
-        self.store_options_chain(symbol, expiration, calls_df, puts_df)
+        period: int = 14,
+        start_date: str | None = None,
+        end_date: str | None = None,
+    ) -> pd.DataFrame:
+        """Calculate RSI using TimescaleDB window functions.
+
+        Args:
+            symbol: Stock ticker symbol
+            period: RSI period
+            start_date: Start date (YYYY-MM-DD)
+            end_date: End date (YYYY-MM-DD)
+
+        Returns:
+            DataFrame with RSI values
+        """
+        query = f"""
+        WITH price_changes AS (
+            SELECT
+                timestamp,
+                symbol,
+                close_price,
+                close_price - LAG(close_price) OVER (
+                    PARTITION BY symbol
+                    ORDER BY timestamp
+                ) AS price_change
+            FROM price_history
+            WHERE symbol = :symbol
+        ),
+        gains_losses AS (
+            SELECT
+                timestamp,
+                symbol,
+                close_price,
+                price_change,
+                CASE WHEN price_change > 0 THEN price_change ELSE 0 END AS gain,
+                CASE WHEN price_change < 0 THEN ABS(price_change) ELSE 0 END AS loss
+            FROM price_changes
+            WHERE price_change IS NOT NULL
+        ),
+        rsi_calc AS (
+            SELECT
+                timestamp,
+                symbol,
+                close_price,
+                price_change,
+                gain,
+                loss,
+                AVG(gain) OVER (
+                    PARTITION BY symbol
+                    ORDER BY timestamp
+                    ROWS BETWEEN {period - 1} PRECEDING AND CURRENT ROW
+                ) AS avg_gain,
+                AVG(loss) OVER (
+                    PARTITION BY symbol
+                    ORDER BY timestamp
+                    ROWS BETWEEN {period - 1} PRECEDING AND CURRENT ROW
+                ) AS avg_loss
+            FROM gains_losses
+        )
+        SELECT
+            timestamp,
+            symbol,
+            close_price,
+            price_change,
+            avg_gain,
+            avg_loss,
+            CASE
+                WHEN avg_loss = 0 THEN 100
+                ELSE 100 - (100 / (1 + (avg_gain / avg_loss)))
+            END AS rsi
+        FROM rsi_calc
+        """
+
+        params: dict[str, Any] = {"symbol": symbol}
+
+        if start_date:
+            query = query.replace("WHERE symbol = :symbol", "WHERE symbol = :symbol AND timestamp >= :start_date")
+            params["start_date"] = datetime.strptime(start_date, "%Y-%m-%d")
+        if end_date:
+            # Add to the innermost WHERE clause
+            if start_date:
+                query = query.replace(
+                    "AND timestamp >= :start_date", "AND timestamp >= :start_date AND timestamp <= :end_date"
+                )
+            else:
+                query = query.replace("WHERE symbol = :symbol", "WHERE symbol = :symbol AND timestamp <= :end_date")
+            params["end_date"] = datetime.strptime(end_date, "%Y-%m-%d")
+
+        query += " ORDER BY timestamp"
+
+        with self.get_session() as session:
+            result = session.exec(text(query), params).fetchall()
+
+            if not result:
+                return pd.DataFrame()
+
+            df = pd.DataFrame(
+                result, columns=["timestamp", "symbol", "close_price", "price_change", "avg_gain", "avg_loss", "rsi"]
+            )
+            df = df.set_index("timestamp")
+            return df
+
+    def get_price_momentum(
+        self,
+        symbols: list[str] | None = None,
+        lookback_days: int = 30,
+        time_bucket: str = "1 day",
+    ) -> pd.DataFrame:
+        """Calculate price momentum across multiple timeframes.
+
+        Args:
+            symbols: List of symbols to analyze (None for all)
+            lookback_days: Number of days to look back
+            time_bucket: Time aggregation bucket
+
+        Returns:
+            DataFrame with momentum analysis
+        """
+        cutoff_date = datetime.now() - timedelta(days=lookback_days)
+
+        query = f"""
+        WITH bucketed_prices AS (
+            SELECT
+                symbol,
+                time_bucket('{time_bucket}', timestamp) AS bucket,
+                first(close_price, timestamp) AS open_price,
+                last(close_price, timestamp) AS close_price,
+                max(high_price) AS high_price,
+                min(low_price) AS low_price,
+                sum(volume) AS volume
+            FROM price_history
+            WHERE timestamp >= :cutoff_date
+        """
+
+        params: dict[str, Any] = {"cutoff_date": cutoff_date}
+
+        if symbols:
+            placeholders = ",".join([f":symbol_{i}" for i in range(len(symbols))])
+            query += f" AND symbol IN ({placeholders})"
+            for i, symbol in enumerate(symbols):
+                params[f"symbol_{i}"] = symbol
+
+        query += """
+            GROUP BY symbol, bucket
+            ORDER BY symbol, bucket
+        ),
+        momentum_calc AS (
+            SELECT
+                symbol,
+                bucket,
+                open_price,
+                close_price,
+                high_price,
+                low_price,
+                volume,
+                LAG(close_price, 1) OVER (PARTITION BY symbol ORDER BY bucket) AS prev_close_1d,
+                LAG(close_price, 7) OVER (PARTITION BY symbol ORDER BY bucket) AS prev_close_7d,
+                LAG(close_price, 30) OVER (PARTITION BY symbol ORDER BY bucket) AS prev_close_30d
+            FROM bucketed_prices
+        )
+        SELECT
+            symbol,
+            bucket,
+            close_price,
+            volume,
+            CASE
+                WHEN prev_close_1d IS NOT NULL
+                THEN ((close_price - prev_close_1d) / prev_close_1d) * 100
+                ELSE NULL
+            END AS momentum_1d,
+            CASE
+                WHEN prev_close_7d IS NOT NULL
+                THEN ((close_price - prev_close_7d) / prev_close_7d) * 100
+                ELSE NULL
+            END AS momentum_7d,
+            CASE
+                WHEN prev_close_30d IS NOT NULL
+                THEN ((close_price - prev_close_30d) / prev_close_30d) * 100
+                ELSE NULL
+            END AS momentum_30d,
+            (high_price - low_price) / open_price * 100 AS daily_range_pct
+        FROM momentum_calc
+        WHERE bucket >= :cutoff_date
+        ORDER BY symbol, bucket
+        """
+
+        with self.get_session() as session:
+            result = session.exec(text(query), params).fetchall()
+
+            if not result:
+                return pd.DataFrame()
+
+            df = pd.DataFrame(
+                result,
+                columns=[
+                    "symbol",
+                    "timestamp",
+                    "close_price",
+                    "volume",
+                    "momentum_1d",
+                    "momentum_7d",
+                    "momentum_30d",
+                    "daily_range_pct",
+                ],
+            )
+            return df
+
+    def get_correlation_matrix(
+        self,
+        symbols: list[str],
+        start_date: str | None = None,
+        end_date: str | None = None,
+        time_bucket: str = "1 day",
+    ) -> pd.DataFrame:
+        """Calculate correlation matrix between symbols using TimescaleDB.
+
+        Args:
+            symbols: List of symbols to analyze
+            start_date: Start date (YYYY-MM-DD)
+            end_date: End date (YYYY-MM-DD)
+            time_bucket: Time aggregation bucket
+
+        Returns:
+            DataFrame with correlation matrix
+        """
+        if len(symbols) < 2:
+            raise ValueError("At least 2 symbols required for correlation analysis")
+
+        # Create symbol placeholders
+        symbol_placeholders = ",".join([f":symbol_{i}" for i in range(len(symbols))])
+        params: dict[str, Any] = {f"symbol_{i}": symbol for i, symbol in enumerate(symbols)}
+
+        query = f"""
+        WITH bucketed_prices AS (
+            SELECT
+                symbol,
+                time_bucket('{time_bucket}', timestamp) AS bucket,
+                last(close_price, timestamp) AS close_price
+            FROM price_history
+            WHERE symbol IN ({symbol_placeholders})
+        """
+
+        if start_date:
+            query += " AND timestamp >= :start_date"
+            params["start_date"] = datetime.strptime(start_date, "%Y-%m-%d")
+        if end_date:
+            query += " AND timestamp <= :end_date"
+            params["end_date"] = datetime.strptime(end_date, "%Y-%m-%d")
+
+        query += """
+            GROUP BY symbol, bucket
+            HAVING last(close_price, timestamp) IS NOT NULL
+        ),
+        price_returns AS (
+            SELECT
+                symbol,
+                bucket,
+                close_price,
+                (close_price - LAG(close_price) OVER (
+                    PARTITION BY symbol ORDER BY bucket
+                )) / LAG(close_price) OVER (
+                    PARTITION BY symbol ORDER BY bucket
+                ) AS daily_return
+            FROM bucketed_prices
+        )
+        SELECT
+            s1.symbol AS symbol1,
+            s2.symbol AS symbol2,
+            CORR(s1.daily_return, s2.daily_return) AS correlation
+        FROM price_returns s1
+        JOIN price_returns s2 ON s1.bucket = s2.bucket
+        WHERE s1.daily_return IS NOT NULL
+            AND s2.daily_return IS NOT NULL
+        GROUP BY s1.symbol, s2.symbol
+        ORDER BY s1.symbol, s2.symbol
+        """
+
+        with self.get_session() as session:
+            result = session.exec(text(query), params).fetchall()
+
+            if not result:
+                return pd.DataFrame()
+
+            # Convert to correlation matrix format
+            correlation_data = []
+            for row in result:
+                correlation_data.append({"symbol1": row[0], "symbol2": row[1], "correlation": row[2]})
+
+            df = pd.DataFrame(correlation_data)
+
+            # Pivot to create correlation matrix
+            correlation_matrix = df.pivot(index="symbol1", columns="symbol2", values="correlation")
+
+            return correlation_matrix
+
+    def get_volatility_analysis(
+        self,
+        symbols: list[str] | None = None,
+        lookback_days: int = 30,
+        time_bucket: str = "1 day",
+    ) -> pd.DataFrame:
+        """Calculate volatility metrics using TimescaleDB statistical functions.
+
+        Args:
+            symbols: List of symbols to analyze (None for all)
+            lookback_days: Number of days to analyze
+            time_bucket: Time aggregation bucket
+
+        Returns:
+            DataFrame with volatility analysis
+        """
+        cutoff_date = datetime.now() - timedelta(days=lookback_days)
+
+        query = f"""
+        WITH bucketed_prices AS (
+            SELECT
+                symbol,
+                time_bucket('{time_bucket}', timestamp) AS bucket,
+                first(close_price, timestamp) AS open_price,
+                last(close_price, timestamp) AS close_price,
+                max(high_price) AS high_price,
+                min(low_price) AS low_price
+            FROM price_history
+            WHERE timestamp >= :cutoff_date
+        """
+
+        params: dict[str, Any] = {"cutoff_date": cutoff_date}
+
+        if symbols:
+            placeholders = ",".join([f":symbol_{i}" for i in range(len(symbols))])
+            query += f" AND symbol IN ({placeholders})"
+            for i, symbol in enumerate(symbols):
+                params[f"symbol_{i}"] = symbol
+
+        query += """
+            GROUP BY symbol, bucket
+        ),
+        daily_returns AS (
+            SELECT
+                symbol,
+                bucket,
+                close_price,
+                (close_price - LAG(close_price) OVER (
+                    PARTITION BY symbol ORDER BY bucket
+                )) / LAG(close_price) OVER (
+                    PARTITION BY symbol ORDER BY bucket
+                ) AS daily_return,
+                (high_price - low_price) / open_price AS daily_range
+            FROM bucketed_prices
+        )
+        SELECT
+            symbol,
+            COUNT(*) AS data_points,
+            AVG(daily_return) * 100 AS avg_daily_return_pct,
+            STDDEV(daily_return) * 100 AS daily_volatility_pct,
+            STDDEV(daily_return) * SQRT(252) * 100 AS annualized_volatility_pct,
+            MIN(daily_return) * 100 AS min_daily_return_pct,
+            MAX(daily_return) * 100 AS max_daily_return_pct,
+            AVG(daily_range) * 100 AS avg_daily_range_pct,
+            STDDEV(daily_range) * 100 AS range_volatility_pct
+        FROM daily_returns
+        WHERE daily_return IS NOT NULL
+        GROUP BY symbol
+        ORDER BY annualized_volatility_pct DESC
+        """
+
+        with self.get_session() as session:
+            result = session.exec(text(query), params).fetchall()
+
+            if not result:
+                return pd.DataFrame()
+
+            df = pd.DataFrame(
+                result,
+                columns=[
+                    "symbol",
+                    "data_points",
+                    "avg_daily_return_pct",
+                    "daily_volatility_pct",
+                    "annualized_volatility_pct",
+                    "min_daily_return_pct",
+                    "max_daily_return_pct",
+                    "avg_daily_range_pct",
+                    "range_volatility_pct",
+                ],
+            )
+            return df
+
+    def get_seasonal_patterns(
+        self,
+        symbol: str,
+        start_date: str | None = None,
+        end_date: str | None = None,
+    ) -> pd.DataFrame:
+        """Analyze seasonal patterns in stock price movements.
+
+        Args:
+            symbol: Stock ticker symbol
+            start_date: Start date (YYYY-MM-DD)
+            end_date: End date (YYYY-MM-DD)
+
+        Returns:
+            DataFrame with seasonal pattern analysis
+        """
+        query = """
+        WITH daily_returns AS (
+            SELECT
+                timestamp,
+                symbol,
+                close_price,
+                (close_price - LAG(close_price) OVER (
+                    PARTITION BY symbol ORDER BY timestamp
+                )) / LAG(close_price) OVER (
+                    PARTITION BY symbol ORDER BY timestamp
+                ) AS daily_return,
+                EXTRACT(DOW FROM timestamp) AS day_of_week,
+                EXTRACT(MONTH FROM timestamp) AS month,
+                EXTRACT(QUARTER FROM timestamp) AS quarter,
+                EXTRACT(DAY FROM timestamp) AS day_of_month
+            FROM price_history
+            WHERE symbol = :symbol
+        """
+
+        params: dict[str, Any] = {"symbol": symbol}
+
+        if start_date:
+            query += " AND timestamp >= :start_date"
+            params["start_date"] = datetime.strptime(start_date, "%Y-%m-%d")
+        if end_date:
+            query += " AND timestamp <= :end_date"
+            params["end_date"] = datetime.strptime(end_date, "%Y-%m-%d")
+
+        query += """
+        )
+        SELECT
+            'day_of_week' AS pattern_type,
+            day_of_week::text AS pattern_value,
+            COUNT(*) AS occurrences,
+            AVG(daily_return) * 100 AS avg_return_pct,
+            STDDEV(daily_return) * 100 AS volatility_pct,
+            MIN(daily_return) * 100 AS min_return_pct,
+            MAX(daily_return) * 100 AS max_return_pct
+        FROM daily_returns
+        WHERE daily_return IS NOT NULL
+        GROUP BY day_of_week
+
+        UNION ALL
+
+        SELECT
+            'month' AS pattern_type,
+            month::text AS pattern_value,
+            COUNT(*) AS occurrences,
+            AVG(daily_return) * 100 AS avg_return_pct,
+            STDDEV(daily_return) * 100 AS volatility_pct,
+            MIN(daily_return) * 100 AS min_return_pct,
+            MAX(daily_return) * 100 AS max_return_pct
+        FROM daily_returns
+        WHERE daily_return IS NOT NULL
+        GROUP BY month
+
+        UNION ALL
+
+        SELECT
+            'quarter' AS pattern_type,
+            quarter::text AS pattern_value,
+            COUNT(*) AS occurrences,
+            AVG(daily_return) * 100 AS avg_return_pct,
+            STDDEV(daily_return) * 100 AS volatility_pct,
+            MIN(daily_return) * 100 AS min_return_pct,
+            MAX(daily_return) * 100 AS max_return_pct
+        FROM daily_returns
+        WHERE daily_return IS NOT NULL
+        GROUP BY quarter
+
+        ORDER BY pattern_type, pattern_value::integer
+        """
+
+        with self.get_session() as session:
+            result = session.exec(text(query), params).fetchall()
+
+            if not result:
+                return pd.DataFrame()
+
+            df = pd.DataFrame(
+                result,
+                columns=[
+                    "pattern_type",
+                    "pattern_value",
+                    "occurrences",
+                    "avg_return_pct",
+                    "volatility_pct",
+                    "min_return_pct",
+                    "max_return_pct",
+                ],
+            )
+            return df
+
+    def get_top_performers(
+        self,
+        timeframe_days: int = 30,
+        limit: int = 10,
+    ) -> pd.DataFrame:
+        """Get top performing stocks over a specified timeframe.
+
+        Args:
+            timeframe_days: Number of days to analyze
+            limit: Number of top performers to return
+
+        Returns:
+            DataFrame with top performers
+        """
+        cutoff_date = datetime.now() - timedelta(days=timeframe_days)
+
+        query = """
+        WITH period_performance AS (
+            SELECT
+                symbol,
+                first(close_price, timestamp) AS start_price,
+                last(close_price, timestamp) AS end_price,
+                max(high_price) AS period_high,
+                min(low_price) AS period_low,
+                sum(volume) AS total_volume,
+                count(*) AS trading_days
+            FROM price_history
+            WHERE timestamp >= :cutoff_date
+            GROUP BY symbol
+            HAVING count(*) >= :min_trading_days
+        )
+        SELECT
+            symbol,
+            start_price,
+            end_price,
+            ((end_price - start_price) / start_price) * 100 AS total_return_pct,
+            ((period_high - start_price) / start_price) * 100 AS max_gain_pct,
+            ((period_low - start_price) / start_price) * 100 AS max_loss_pct,
+            total_volume,
+            trading_days
+        FROM period_performance
+        WHERE start_price > 0 AND end_price > 0
+        ORDER BY total_return_pct DESC
+        LIMIT :limit
+        """
+
+        params: dict[str, Any] = {
+            "cutoff_date": cutoff_date,
+            "min_trading_days": max(1, timeframe_days * 0.7),  # Require at least 70% trading days
+            "limit": limit,
+        }
+
+        with self.get_session() as session:
+            result = session.exec(text(query), params).fetchall()
+
+            if not result:
+                return pd.DataFrame()
+
+            df = pd.DataFrame(
+                result,
+                columns=[
+                    "symbol",
+                    "start_price",
+                    "end_price",
+                    "total_return_pct",
+                    "max_gain_pct",
+                    "max_loss_pct",
+                    "total_volume",
+                    "trading_days",
+                ],
+            )
+            return df
+
+    # ========================================
+    # Context Manager Support
+    # ========================================
+
+    def __enter__(self):
+        """Context manager entry."""
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """Context manager exit."""
+        # Parameters are required by context manager protocol
+        _ = exc_type, exc_val, exc_tb  # Mark as used
+        self.close()
+        return None
+
+
+# ========================================
+# Factory Functions
+# ========================================

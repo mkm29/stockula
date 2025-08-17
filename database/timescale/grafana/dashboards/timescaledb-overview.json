@@ -1,0 +1,131 @@
+{
+  "dashboard": {
+    "id": null,
+    "title": "TimescaleDB Financial Data Overview",
+    "tags": ["timescaledb", "stockula", "financial"],
+    "timezone": "utc",
+    "time": {
+      "from": "now-24h",
+      "to": "now"
+    },
+    "refresh": "30s",
+    "panels": [
+      {
+        "id": 1,
+        "title": "Database Overview",
+        "type": "stat",
+        "targets": [
+          {
+            "refId": "A",
+            "rawSql": "SELECT COUNT(*) as total_stocks FROM stocks",
+            "format": "table"
+          },
+          {
+            "refId": "B",
+            "rawSql": "SELECT COUNT(*) as price_points_today FROM price_history WHERE time::date = CURRENT_DATE",
+            "format": "table"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "palette-classic"
+            },
+            "unit": "short"
+          }
+        },
+        "gridPos": {
+          "h": 6,
+          "w": 12,
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "id": 2,
+        "title": "Price Data Ingestion Rate",
+        "type": "timeseries",
+        "targets": [
+          {
+            "refId": "A",
+            "rawSql": "SELECT time_bucket('5m', time) as time, COUNT(*) as data_points FROM price_history WHERE time > NOW() - INTERVAL '24 hours' GROUP BY 1 ORDER BY 1",
+            "format": "time_series"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "palette-classic"
+            },
+            "unit": "short"
+          }
+        },
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 12,
+          "y": 0
+        }
+      },
+      {
+        "id": 3,
+        "title": "Hypertable Compression Status",
+        "type": "table",
+        "targets": [
+          {
+            "refId": "A",
+            "rawSql": "SELECT hypertable_name, num_chunks, total_size_pretty, compression_enabled FROM timescaledb_information.hypertables",
+            "format": "table"
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 24,
+          "x": 0,
+          "y": 8
+        }
+      },
+      {
+        "id": 4,
+        "title": "Top Traded Stocks by Volume",
+        "type": "barchart",
+        "targets": [
+          {
+            "refId": "A",
+            "rawSql": "SELECT symbol, SUM(volume) as total_volume FROM price_history WHERE time::date = CURRENT_DATE GROUP BY symbol ORDER BY total_volume DESC LIMIT 10",
+            "format": "table"
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 0,
+          "y": 16
+        }
+      },
+      {
+        "id": 5,
+        "title": "Options Activity",
+        "type": "stat",
+        "targets": [
+          {
+            "refId": "A",
+            "rawSql": "SELECT SUM(volume) as call_volume FROM options_calls WHERE time::date = CURRENT_DATE",
+            "format": "table"
+          },
+          {
+            "refId": "B",
+            "rawSql": "SELECT SUM(volume) as put_volume FROM options_puts WHERE time::date = CURRENT_DATE",
+            "format": "table"
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 12,
+          "y": 16
+        }
+      }
+    ]
+  }
+}

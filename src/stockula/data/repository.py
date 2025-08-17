@@ -9,7 +9,7 @@ T = TypeVar("T")
 class Repository(Generic[T], ABC):
     """Abstract base class for repositories."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize the repository."""
         self._items: dict[str, T] = {}
 

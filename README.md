@@ -42,7 +42,7 @@ a complete solution for quantitative trading strategy development.
 
 - **📊 Technical Analysis**: 40+ indicators (SMA, EMA, RSI, MACD, Bollinger Bands, etc.)
 - **🔄 Backtesting**: Test trading strategies with realistic broker costs and commission structures
-- **📈 Data Fetching**: Real-time and historical market data via yfinance with intelligent SQLite caching
+- **📈 Data Fetching**: Real-time and historical market data via yfinance with intelligent TimescaleDB caching
 - **🔮 Price Forecasting**: Automated time series forecasting with multiple backends:
   - **AutoGluon TimeSeries**: Automated ML for accurate predictions (Python < 3.13)
   - **AutoGluon**: Modern AutoML with deep learning models (DeepAR, Temporal Fusion Transformer)
@@ -57,7 +57,8 @@ a complete solution for quantitative trading strategy development.
   - Save and reuse optimized configurations
   - Export results in JSON, YAML, or CSV formats
 - **🎨 Rich CLI Interface**: Beautiful progress bars, tables, and colored output
-- **🗄️ Database Caching**: Automatic SQLite caching for offline analysis and fast data access
+- **🗄️ TimescaleDB Integration**: High-performance time-series database with simplified 3-file architecture, automatic
+  partitioning, compression, and retention policies for optimal data storage and retrieval
 - **🚀 Modern Python**: Built with uv for fast package management and Pydantic for configuration
 
 ## 🚀 Quick Start
@@ -96,12 +97,31 @@ docker run -v $(pwd)/.stockula.yaml:/app/.stockula.yaml ghcr.io/mkm29/stockula:l
    curl -LsSf https://astral.sh/uv/install.sh | sh
    ```
 
+1. **Setup TimescaleDB**:
+
+   ```bash
+   # Using Docker (recommended)
+   docker run -d --name stockula-timescaledb \
+     -e POSTGRES_USER=stockula_user \
+     -e POSTGRES_PASSWORD=stockula_password \
+     -e POSTGRES_DB=stockula \
+     -p 5432:5432 \
+     timescale/timescaledb:latest-pg16
+   ```
+
 1. **Clone and install**:
 
    ```bash
    git clone https://github.com/mkm29/stockula.git
    cd stockula
    uv sync
+
+   # Set TimescaleDB connection
+   export STOCKULA_DB_HOST=localhost
+   export STOCKULA_DB_PASSWORD=stockula_password
+
+   # Initialize database schema with simplified manager
+   uv run python -m stockula.database.manager setup
    ```
 
 1. **For GPU support** (optional):
@@ -446,7 +466,7 @@ graph TB
 
     subgraph "Data Layer"
         Fetcher["Data Fetcher<br/>yfinance wrapper"]
-        DB[("SQLite Database<br/>stockula.db")]
+        DB[("TimescaleDB<br/>PostgreSQL + TimescaleDB")]
     end
 
     subgraph "Analysis Modules"
@@ -481,6 +501,37 @@ graph TB
     style Config fill:#4CAF50,stroke:#388E3C,color:#fff
     style DB fill:#FF9800,stroke:#F57C00,color:#fff
 ```
+
+### Database Layer Architecture
+
+Stockula uses a **consolidated repository pattern** with TimescaleDB for optimal time-series performance and clean
+separation of concerns:
+
+#### Simplified Database Layer (3 Core Files)
+
+- **`models.py`**: SQLModel definitions with TimescaleDB hypertables for time-series optimization
+- **`manager.py`**: Unified DatabaseManager (1,784 lines) consolidating all database operations, connection management,
+  and analytics
+- **`interfaces.py`**: Single IDatabaseManager interface providing clean API boundaries
+
+#### Repository Pattern Benefits
+
+- **Clean Separation**: Repository layer handles data access, manager layer orchestrates business operations
+- **Enhanced Testability**: Interface-based design with easy dependency injection and mocking
+- **Performance Optimization**: Connection pooling, batch operations, and TimescaleDB-specific optimizations
+- **Error Resilience**: Standardized error handling with automatic recovery and graceful degradation
+
+#### Time-Series Optimizations
+
+- **Hypertables**: Automatic time-based partitioning (1-month chunks for price data)
+- **Compression**: 90% storage reduction for data older than 7 days
+- **Continuous Aggregates**: Pre-computed OHLCV statistics for faster queries
+- **Connection Pooling**: Efficient resource utilization with configurable pool sizes
+
+The consolidated approach reduces complexity from 8 database files to 3 core files while maintaining excellent
+performance and clean architecture principles. All database operations flow through the single DatabaseManager, which
+implements the repository pattern internally for different data types (stocks, price history, dividends, splits,
+options).
 
 ## 📋 Requirements
 

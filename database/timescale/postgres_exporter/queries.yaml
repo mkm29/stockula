@@ -1,0 +1,562 @@
+---
+# PRODUCTION PostgreSQL Monitoring Queries for Stockula Financial Data
+# Critical metrics for immediate production deployment and alerting
+
+# TimescaleDB hypertable metrics
+timescaledb_hypertables:
+  query: |
+    SELECT
+      hypertable_name,
+      num_chunks,
+      total_size_bytes,
+      compressed_size_bytes,
+      COALESCE(compressed_size_bytes::float / NULLIF(total_size_bytes, 0), 0) as compression_ratio
+    FROM timescaledb_information.hypertables h
+    LEFT JOIN (
+      SELECT
+        hypertable_name,
+        sum(total_size_bytes) as total_size_bytes,
+        sum(compressed_size_bytes) as compressed_size_bytes
+      FROM timescaledb_information.chunks
+      GROUP BY hypertable_name
+    ) c ON h.hypertable_name = c.hypertable_name
+  metrics:
+    - hypertable_name:
+        usage: "LABEL"
+        description: "Name of the hypertable"
+    - num_chunks:
+        usage: "GAUGE"
+        description: "Number of chunks in the hypertable"
+    - total_size_bytes:
+        usage: "GAUGE"
+        description: "Total size of hypertable in bytes"
+    - compressed_size_bytes:
+        usage: "GAUGE"
+        description: "Compressed size of hypertable in bytes"
+    - compression_ratio:
+        usage: "GAUGE"
+        description: "Compression ratio of the hypertable"
+
+# TimescaleDB background jobs
+timescaledb_background_jobs:
+  query: |
+    SELECT
+      job_id,
+      job_type,
+      hypertable_name,
+      config,
+      last_run_status,
+      EXTRACT(EPOCH FROM (now() - last_run_started_at)) as last_run_seconds_ago,
+      EXTRACT(EPOCH FROM last_run_duration) as last_run_duration_seconds,
+      total_runs,
+      total_successes,
+      total_failures
+    FROM timescaledb_information.jobs j
+    LEFT JOIN timescaledb_information.job_stats js ON j.job_id = js.job_id
+  metrics:
+    - job_id:
+        usage: "LABEL"
+        description: "Job ID"
+    - job_type:
+        usage: "LABEL"
+        description: "Type of background job"
+    - hypertable_name:
+        usage: "LABEL"
+        description: "Associated hypertable name"
+    - last_run_status:
+        usage: "LABEL"
+        description: "Status of last job run"
+    - last_run_seconds_ago:
+        usage: "GAUGE"
+        description: "Seconds since last job run started"
+    - last_run_duration_seconds:
+        usage: "GAUGE"
+        description: "Duration of last job run in seconds"
+    - total_runs:
+        usage: "COUNTER"
+        description: "Total number of job runs"
+    - total_successes:
+        usage: "COUNTER"
+        description: "Total number of successful job runs"
+    - total_failures:
+        usage: "COUNTER"
+        description: "Total number of failed job runs"
+
+# Stock data freshness
+stock_data_freshness:
+  query: |
+    SELECT
+      s.symbol,
+      s.sector,
+      s.exchange,
+      EXTRACT(EPOCH FROM (now() - MAX(ph.time))) as seconds_since_last_update,
+      COUNT(ph.id) as price_points_today
+    FROM stocks s
+    LEFT JOIN price_history ph ON s.symbol = ph.symbol
+      AND ph.time::date = CURRENT_DATE
+    GROUP BY s.symbol, s.sector, s.exchange
+  metrics:
+    - symbol:
+        usage: "LABEL"
+        description: "Stock symbol"
+    - sector:
+        usage: "LABEL"
+        description: "Stock sector"
+    - exchange:
+        usage: "LABEL"
+        description: "Stock exchange"
+    - seconds_since_last_update:
+        usage: "GAUGE"
+        description: "Seconds since last price update"
+    - price_points_today:
+        usage: "GAUGE"
+        description: "Number of price points received today"
+
+# Database performance metrics
+database_performance:
+  query: |
+    SELECT
+      schemaname,
+      tablename,
+      n_tup_ins,
+      n_tup_upd,
+      n_tup_del,
+      n_live_tup,
+      n_dead_tup,
+      COALESCE(n_dead_tup::float / NULLIF(n_live_tup + n_dead_tup, 0), 0) as dead_tuple_ratio,
+      EXTRACT(EPOCH FROM (now() - last_vacuum)) as seconds_since_vacuum,
+      EXTRACT(EPOCH FROM (now() - last_analyze)) as seconds_since_analyze
+    FROM pg_stat_user_tables
+    WHERE schemaname = 'public'
+  metrics:
+    - schemaname:
+        usage: "LABEL"
+        description: "Schema name"
+    - tablename:
+        usage: "LABEL"
+        description: "Table name"
+    - n_tup_ins:
+        usage: "COUNTER"
+        description: "Number of tuples inserted"
+    - n_tup_upd:
+        usage: "COUNTER"
+        description: "Number of tuples updated"
+    - n_tup_del:
+        usage: "COUNTER"
+        description: "Number of tuples deleted"
+    - n_live_tup:
+        usage: "GAUGE"
+        description: "Number of live tuples"
+    - n_dead_tup:
+        usage: "GAUGE"
+        description: "Number of dead tuples"
+    - dead_tuple_ratio:
+        usage: "GAUGE"
+        description: "Ratio of dead to total tuples"
+    - seconds_since_vacuum:
+        usage: "GAUGE"
+        description: "Seconds since last vacuum"
+    - seconds_since_analyze:
+        usage: "GAUGE"
+        description: "Seconds since last analyze"
+
+# Table sizes
+table_sizes:
+  query: |
+    SELECT
+      schemaname,
+      tablename,
+      pg_total_relation_size(schemaname||'.'||tablename) as total_size_bytes,
+      pg_relation_size(schemaname||'.'||tablename) as table_size_bytes,
+      pg_indexes_size(schemaname||'.'||tablename) as index_size_bytes
+    FROM pg_tables
+    WHERE schemaname = 'public'
+  metrics:
+    - schemaname:
+        usage: "LABEL"
+        description: "Schema name"
+    - tablename:
+        usage: "LABEL"
+        description: "Table name"
+    - total_size_bytes:
+        usage: "GAUGE"
+        description: "Total size including indexes in bytes"
+    - table_size_bytes:
+        usage: "GAUGE"
+        description: "Table size in bytes"
+    - index_size_bytes:
+        usage: "GAUGE"
+        description: "Index size in bytes"
+
+# Connection stats by application
+connection_stats:
+  query: |
+    SELECT
+      application_name,
+      state,
+      COUNT(*) as connection_count,
+      AVG(EXTRACT(EPOCH FROM (now() - query_start))) as avg_query_duration_seconds
+    FROM pg_stat_activity
+    WHERE datname = current_database()
+    GROUP BY application_name, state
+  metrics:
+    - application_name:
+        usage: "LABEL"
+        description: "Application name"
+    - state:
+        usage: "LABEL"
+        description: "Connection state"
+    - connection_count:
+        usage: "GAUGE"
+        description: "Number of connections"
+    - avg_query_duration_seconds:
+        usage: "GAUGE"
+        description: "Average query duration in seconds"
+
+# Index usage statistics
+index_usage:
+  query: |
+    SELECT
+      schemaname,
+      tablename,
+      indexname,
+      idx_tup_read,
+      idx_tup_fetch,
+      COALESCE(idx_tup_read::float / NULLIF(pg_stat_user_tables.seq_tup_read + idx_tup_read, 0), 0) as index_usage_ratio
+    FROM pg_stat_user_indexes
+    JOIN pg_stat_user_tables ON pg_stat_user_indexes.relid = pg_stat_user_tables.relid
+    WHERE pg_stat_user_indexes.schemaname = 'public'
+  metrics:
+    - schemaname:
+        usage: "LABEL"
+        description: "Schema name"
+    - tablename:
+        usage: "LABEL"
+        description: "Table name"
+    - indexname:
+        usage: "LABEL"
+        description: "Index name"
+    - idx_tup_read:
+        usage: "COUNTER"
+        description: "Number of index entries returned by scans"
+    - idx_tup_fetch:
+        usage: "COUNTER"
+        description: "Number of table rows fetched by index scans"
+    - index_usage_ratio:
+        usage: "GAUGE"
+        description: "Ratio of index usage vs sequential scans"
+
+# Stock market data quality metrics
+market_data_quality:
+  query: |
+    SELECT
+      interval,
+      COUNT(DISTINCT symbol) as symbols_with_data,
+      COUNT(*) as total_price_points,
+      AVG(volume) as avg_volume,
+      COUNT(*) FILTER (WHERE volume = 0 OR volume IS NULL) as zero_volume_count,
+      COUNT(*) FILTER (WHERE close_price IS NULL) as missing_close_price_count
+    FROM price_history
+    WHERE time >= CURRENT_DATE - INTERVAL '1 day'
+    GROUP BY interval
+  metrics:
+    - interval:
+        usage: "LABEL"
+        description: "Price data interval"
+    - symbols_with_data:
+        usage: "GAUGE"
+        description: "Number of symbols with price data"
+    - total_price_points:
+        usage: "GAUGE"
+        description: "Total number of price points"
+    - avg_volume:
+        usage: "GAUGE"
+        description: "Average trading volume"
+    - zero_volume_count:
+        usage: "GAUGE"
+        description: "Number of zero volume data points"
+    - missing_close_price_count:
+        usage: "GAUGE"
+        description: "Number of missing close prices"
+
+# Options data metrics
+options_data_metrics:
+  query: |
+    SELECT
+      'calls' as option_type,
+      COUNT(*) as total_contracts,
+      COUNT(DISTINCT symbol) as symbols_count,
+      COUNT(DISTINCT expiration_date) as expiration_dates_count,
+      AVG(implied_volatility) as avg_implied_volatility,
+      SUM(volume) as total_volume,
+      SUM(open_interest) as total_open_interest
+    FROM options_calls
+    WHERE time >= CURRENT_DATE - INTERVAL '1 day'
+    UNION ALL
+    SELECT
+      'puts' as option_type,
+      COUNT(*) as total_contracts,
+      COUNT(DISTINCT symbol) as symbols_count,
+      COUNT(DISTINCT expiration_date) as expiration_dates_count,
+      AVG(implied_volatility) as avg_implied_volatility,
+      SUM(volume) as total_volume,
+      SUM(open_interest) as total_open_interest
+    FROM options_puts
+    WHERE time >= CURRENT_DATE - INTERVAL '1 day'
+  metrics:
+    - option_type:
+        usage: "LABEL"
+        description: "Type of option (calls/puts)"
+    - total_contracts:
+        usage: "GAUGE"
+        description: "Total number of option contracts"
+    - symbols_count:
+        usage: "GAUGE"
+        description: "Number of symbols with options data"
+    - expiration_dates_count:
+        usage: "GAUGE"
+        description: "Number of unique expiration dates"
+    - avg_implied_volatility:
+        usage: "GAUGE"
+        description: "Average implied volatility"
+    - total_volume:
+        usage: "GAUGE"
+        description: "Total options volume"
+    - total_open_interest:
+        usage: "GAUGE"
+        description: "Total options open interest"
+
+# PRODUCTION CRITICAL MONITORING QUERIES
+
+# Production health check
+production_health_check:
+  query: |
+    WITH health_metrics AS (
+      SELECT
+        'active_connections' as metric,
+        COUNT(*) as value,
+        400 as critical_threshold,
+        300 as warning_threshold
+      FROM pg_stat_activity
+      WHERE state = 'active'
+      UNION ALL
+      SELECT
+        'idle_in_transaction' as metric,
+        COUNT(*) as value,
+        50 as critical_threshold,
+        25 as warning_threshold
+      FROM pg_stat_activity
+      WHERE state = 'idle in transaction'
+        AND now() - state_change > interval '5 minutes'
+      UNION ALL
+      SELECT
+        'waiting_locks' as metric,
+        COUNT(*) as value,
+        10 as critical_threshold,
+        5 as warning_threshold
+      FROM pg_locks
+      WHERE NOT granted
+      UNION ALL
+      SELECT
+        'wal_lag_mb' as metric,
+        COALESCE(pg_wal_lsn_diff(pg_current_wal_lsn(), flush_lsn) / 1024 / 1024, 0) as value,
+        100 as critical_threshold,
+        50 as warning_threshold
+      FROM pg_stat_replication
+      LIMIT 1
+    )
+    SELECT
+      metric,
+      value,
+      critical_threshold,
+      warning_threshold,
+      CASE
+        WHEN value >= critical_threshold THEN 2
+        WHEN value >= warning_threshold THEN 1
+        ELSE 0
+      END as alert_level
+    FROM health_metrics
+  metrics:
+    - metric:
+        usage: "LABEL"
+        description: "Health metric name"
+    - value:
+        usage: "GAUGE"
+        description: "Current metric value"
+    - critical_threshold:
+        usage: "GAUGE"
+        description: "Critical alert threshold"
+    - warning_threshold:
+        usage: "GAUGE"
+        description: "Warning alert threshold"
+    - alert_level:
+        usage: "GAUGE"
+        description: "Alert level (0=OK, 1=WARNING, 2=CRITICAL)"
+
+# Slow query monitoring
+slow_queries:
+  query: |
+    SELECT
+      LEFT(query, 100) as query_preview,
+      calls,
+      mean_exec_time,
+      total_exec_time,
+      rows,
+      100.0 * shared_blks_hit / nullif(shared_blks_hit + shared_blks_read, 0) AS hit_percent
+    FROM pg_stat_statements
+    WHERE mean_exec_time > 1000  -- queries taking more than 1 second
+    ORDER BY mean_exec_time DESC
+    LIMIT 20
+  metrics:
+    - query_preview:
+        usage: "LABEL"
+        description: "First 100 chars of query"
+    - calls:
+        usage: "COUNTER"
+        description: "Number of times executed"
+    - mean_exec_time:
+        usage: "GAUGE"
+        description: "Mean execution time in milliseconds"
+    - total_exec_time:
+        usage: "COUNTER"
+        description: "Total execution time in milliseconds"
+    - rows:
+        usage: "COUNTER"
+        description: "Total rows retrieved or affected"
+    - hit_percent:
+        usage: "GAUGE"
+        description: "Buffer cache hit percentage"
+
+# Data freshness alerts
+data_freshness_alerts:
+  query: |
+    WITH freshness_check AS (
+      SELECT
+        'price_history' as table_name,
+        EXTRACT(EPOCH FROM (now() - max(time))) / 3600 as hours_since_update,
+        count(*) as records_today
+      FROM price_history
+      WHERE time >= CURRENT_DATE
+      UNION ALL
+      SELECT
+        'options_calls' as table_name,
+        EXTRACT(EPOCH FROM (now() - max(time))) / 3600 as hours_since_update,
+        count(*) as records_today
+      FROM options_calls
+      WHERE time >= CURRENT_DATE
+      UNION ALL
+      SELECT
+        'options_puts' as table_name,
+        EXTRACT(EPOCH FROM (now() - max(time))) / 3600 as hours_since_update,
+        count(*) as records_today
+      FROM options_puts
+      WHERE time >= CURRENT_DATE
+    )
+    SELECT
+      table_name,
+      hours_since_update,
+      records_today,
+      CASE
+        WHEN hours_since_update > 48 THEN 2  -- Critical: >2 days
+        WHEN hours_since_update > 24 THEN 1  -- Warning: >1 day
+        ELSE 0  -- OK
+      END as freshness_alert_level
+    FROM freshness_check
+  metrics:
+    - table_name:
+        usage: "LABEL"
+        description: "Table name"
+    - hours_since_update:
+        usage: "GAUGE"
+        description: "Hours since last data update"
+    - records_today:
+        usage: "GAUGE"
+        description: "Records inserted today"
+    - freshness_alert_level:
+        usage: "GAUGE"
+        description: "Freshness alert level (0=OK, 1=WARNING, 2=CRITICAL)"
+
+# Backup monitoring
+backup_monitoring:
+  query: |
+    SELECT
+      'wal_files_archived' as metric,
+      archived_count as value,
+      failed_count as failures
+    FROM pg_stat_archiver
+    UNION ALL
+    SELECT
+      'replication_lag_bytes' as metric,
+      COALESCE(pg_wal_lsn_diff(pg_current_wal_lsn(), flush_lsn), 0) as value,
+      0 as failures
+    FROM pg_stat_replication
+  metrics:
+    - metric:
+        usage: "LABEL"
+        description: "Backup metric name"
+    - value:
+        usage: "GAUGE"
+        description: "Metric value"
+    - failures:
+        usage: "COUNTER"
+        description: "Number of failures"
+
+# Table bloat monitoring
+table_bloat:
+  query: |
+    SELECT
+      schemaname,
+      tablename,
+      n_live_tup,
+      n_dead_tup,
+      CASE
+        WHEN n_live_tup > 0 THEN (n_dead_tup::float / n_live_tup) * 100
+        ELSE 0
+      END as bloat_percentage,
+      pg_size_pretty(pg_total_relation_size(schemaname||'.'||tablename)) as total_size
+    FROM pg_stat_user_tables
+    WHERE schemaname = 'public'
+      AND n_live_tup > 1000  -- Only tables with significant data
+    ORDER BY n_dead_tup DESC
+  metrics:
+    - schemaname:
+        usage: "LABEL"
+        description: "Schema name"
+    - tablename:
+        usage: "LABEL"
+        description: "Table name"
+    - n_live_tup:
+        usage: "GAUGE"
+        description: "Number of live tuples"
+    - n_dead_tup:
+        usage: "GAUGE"
+        description: "Number of dead tuples"
+    - bloat_percentage:
+        usage: "GAUGE"
+        description: "Table bloat percentage"
+
+# Critical system metrics
+system_metrics:
+  query: |
+    SELECT
+      'database_size_gb' as metric,
+      pg_database_size(current_database()) / 1024 / 1024 / 1024 as value
+    UNION ALL
+    SELECT
+      'max_connections' as metric,
+      setting::numeric as value
+    FROM pg_settings
+    WHERE name = 'max_connections'
+    UNION ALL
+    SELECT
+      'shared_buffers_mb' as metric,
+      (setting::numeric * 8192) / 1024 / 1024 as value
+    FROM pg_settings
+    WHERE name = 'shared_buffers'
+  metrics:
+    - metric:
+        usage: "LABEL"
+        description: "System metric name"
+    - value:
+        usage: "GAUGE"
+        description: "Metric value"

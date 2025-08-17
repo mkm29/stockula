@@ -14,7 +14,7 @@ class Registry:
     various repositories in the application.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize the registry."""
         self._repositories: dict[str, Repository[Any]] = {}
 

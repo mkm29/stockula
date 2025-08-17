@@ -14,6 +14,14 @@ data:
   end_date: null  # defaults to today
   interval: "1d"
 
+# TimescaleDB connection (required)
+database:
+  host: "localhost"
+  port: 5432
+  name: "stockula"
+  user: "stockula_user"
+  password: "${STOCKULA_DB_PASSWORD}"
+
 # Portfolio management settings
 portfolio:
   initial_capital: 100000
@@ -74,8 +82,21 @@ data:
   start_date: "2023-01-01"      # YYYY-MM-DD format
   end_date: "2024-01-01"        # null for today
   interval: "1d"                # 1m, 5m, 15m, 30m, 1h, 1d, 1wk, 1mo
-  use_cache: true               # Use SQLite database caching
-  db_path: "stockula.db"        # Database file path
+  use_cache: true               # Use TimescaleDB caching
+
+# TimescaleDB connection configuration
+database:
+  host: "localhost"             # TimescaleDB host
+  port: 5432                    # TimescaleDB port
+  name: "stockula"              # Database name
+  user: "stockula_user"         # Database user
+  password: "${STOCKULA_DB_PASSWORD}"  # Use environment variable
+
+# TimescaleDB-specific optimizations
+timescale:
+  chunk_time_interval: "7 days"     # Hypertable chunk interval
+  compression_after: "30 days"      # Compress data older than 30 days
+  retention_policy: "2 years"       # Retain data for 2 years
 ```
 
 ### Supported Intervals
@@ -386,9 +407,17 @@ output:
 Override configuration with environment variables:
 
 ```bash
+# Configuration and debugging
 export STOCKULA_CONFIG_FILE=my_.stockula.yaml
 export STOCKULA_DEBUG=true
 export STOCKULA_LOG_LEVEL=DEBUG
+
+# TimescaleDB connection
+export STOCKULA_DB_HOST=localhost
+export STOCKULA_DB_PORT=5432
+export STOCKULA_DB_NAME=stockula
+export STOCKULA_DB_USER=stockula_user
+export STOCKULA_DB_PASSWORD=your_secure_password
 ```
 
 ## Validation

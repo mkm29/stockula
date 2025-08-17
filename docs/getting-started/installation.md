@@ -11,6 +11,7 @@ development setups.
 - **Operating System**: macOS, Linux, or Windows
 - **Memory**: Minimum 8GB RAM recommended (16GB+ for GPU operations)
 - **Storage**: 100MB free space (more if caching extensive historical data)
+- **Database**: TimescaleDB (PostgreSQL with TimescaleDB extension)
 - **GPU** (optional): NVIDIA GPU with CUDA 11.8+ for acceleration
 
 ### Install uv
@@ -36,16 +37,51 @@ powershell -c "irm https://astral.sh/uv/install.ps1 | iex"
    cd stockula
    ```
 
+1. **Setup TimescaleDB**:
+
+   ```bash
+   # Using Docker (recommended)
+   docker run -d --name stockula-timescaledb \
+     -e POSTGRES_USER=stockula_user \
+     -e POSTGRES_PASSWORD=stockula_password \
+     -e POSTGRES_DB=stockula \
+     -p 5432:5432 \
+     timescale/timescaledb:latest-pg16
+
+   # Or follow the detailed setup guide
+   # See TIMESCALEDB_QUICKSTART.md for complete instructions
+   ```
+
+1. **Configure environment**:
+
+   ```bash
+   # Set TimescaleDB connection details
+   export STOCKULA_DB_HOST=localhost
+   export STOCKULA_DB_PORT=5432
+   export STOCKULA_DB_NAME=stockula
+   export STOCKULA_DB_USER=stockula_user
+   export STOCKULA_DB_PASSWORD=stockula_password
+   ```
+
 1. **Install dependencies**:
 
    ```bash
    uv sync
    ```
 
+1. **Initialize database schema with simplified manager**:
+
+   ```bash
+   # Single consolidated manager handles all setup
+   uv run python -m stockula.database.manager setup
+   ```
+
 1. **Verify installation**:
 
    ```bash
    uv run python -m stockula --help
+   # Check the consolidated manager status
+   uv run python -m stockula.database.manager status
    ```
 
 ## Development Installation
@@ -64,22 +100,35 @@ uv sync --all-extras
 uv run pre-commit install
 ```
 
-## Docker Installation (Recommended for GPU)
+## Docker Installation (Recommended)
 
-Docker provides the easiest way to get started, especially for GPU acceleration:
+Docker provides the easiest way to get started with both the application and TimescaleDB:
 
-### CPU Version
+### Quick Start with Docker Compose
+
+```bash
+# Start both Stockula and TimescaleDB
+docker compose -f docker-compose.timescale.yml up -d
+
+# Run analysis with integrated setup
+docker compose exec stockula python -m stockula --ticker AAPL
+
+# Check TimescaleDB status using consolidated manager
+docker compose exec stockula python -m stockula.database.manager status
+```
+
+### Standalone CPU Version
 
 ```bash
 # Pull the latest image
 docker pull ghcr.io/mkm29/stockula:latest
 
-# Run a simple analysis
-docker run ghcr.io/mkm29/stockula:latest -m stockula --ticker AAPL
-
-# Run with persistent data
-docker run -v $(pwd)/data:/app/data ghcr.io/mkm29/stockula:latest \
-    -m stockula --ticker NVDA --mode forecast
+# Run with external TimescaleDB
+docker run --network host \
+  -e STOCKULA_DB_HOST=localhost \
+  -e STOCKULA_DB_PASSWORD=your_password \
+  ghcr.io/mkm29/stockula:latest \
+  -m stockula --ticker AAPL
 ```
 
 ### GPU-Accelerated Version
@@ -90,8 +139,11 @@ Based on PyTorch 2.8.0 with Python 3.11 and advanced time series models:
 # Pull the GPU image
 docker pull ghcr.io/mkm29/stockula-gpu:latest
 
-# Run with GPU support
-docker run --gpus all ghcr.io/mkm29/stockula-gpu:latest \
+# Run with GPU support and TimescaleDB
+docker run --gpus all --network host \
+    -e STOCKULA_DB_HOST=localhost \
+    -e STOCKULA_DB_PASSWORD=your_password \
+    ghcr.io/mkm29/stockula-gpu:latest \
     -m stockula --ticker AAPL --mode forecast --days 30
 
 # Check GPU availability
@@ -105,6 +157,7 @@ docker run --gpus all ghcr.io/mkm29/stockula-gpu:latest \
 - Chronos for zero-shot forecasting
 - GluonTS for probabilistic models
 - AutoGluon TimeSeries with full GPU support
+- TimescaleDB connectivity for high-performance data storage
 - Runs as non-root user `stockula` (UID 1000)
 
 ## Troubleshooting
@@ -115,6 +168,12 @@ docker run --gpus all ghcr.io/mkm29/stockula-gpu:latest \
 
 - Ensure you're running commands with `uv run` prefix
 - Verify installation with `uv sync`
+
+**TimescaleDB connection errors**
+
+- Verify TimescaleDB is running: `docker ps | grep timescaledb`
+- Check connection settings: `echo $STOCKULA_DB_HOST`
+- Test connection: `psql -h localhost -p 5432 -U stockula_user -d stockula`
 
 **Permission denied errors**
 
@@ -140,9 +199,10 @@ compiled dependencies
 
 After installation, check out:
 
-- [Quick Start Guide](../getting-started/quick-start.md)
-- [Configuration Options](../getting-started/configuration.md)
-- [Architecture Overview](../user-guide/architecture.md)
+- [TimescaleDB Quick Start](../../TIMESCALEDB_QUICKSTART.md) - Database setup guide
+- [Quick Start Guide](../getting-started/quick-start.md) - Application usage
+- [Configuration Options](../getting-started/configuration.md) - Full configuration reference
+- [Architecture Overview](../user-guide/architecture.md) - System architecture
 
 ## Runtime Setup Note
 

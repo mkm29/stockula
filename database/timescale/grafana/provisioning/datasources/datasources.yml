@@ -1,0 +1,42 @@
+---
+# Grafana datasource configuration for TimescaleDB monitoring
+apiVersion: 1
+
+datasources:
+  # TimescaleDB/PostgreSQL datasource
+  - name: TimescaleDB
+    type: postgres
+    access: proxy
+    url: timescaledb:5432
+    database: stockula
+    user: stockula
+    secureJsonData:
+      password: SuperSecret12
+    jsonData:
+      sslmode: disable
+      postgresVersion: 1600
+      timescaledb: true
+    isDefault: true
+    editable: true
+
+  # Prometheus datasource for metrics
+  - name: Prometheus
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: false
+    editable: true
+    jsonData:
+      timeInterval: 15s
+      queryTimeout: 60s
+      httpMethod: POST
+
+  # Redis datasource (if using redis exporter)
+  - name: Redis
+    type: redis-datasource
+    access: proxy
+    url: redis://redis:6379
+    isDefault: false
+    editable: true
+    jsonData:
+      client: standalone
