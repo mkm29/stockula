@@ -113,6 +113,7 @@ class BaseAllocator(ABC):
     def _fetch_extended_or_current_price(self, symbol: str, target_date: str) -> float | None:
         """Try to fetch price from an extended date range or fallback to current price."""
         from datetime import timedelta
+
         import pandas as pd
 
         target_dt = pd.to_datetime(target_date)
@@ -129,9 +130,7 @@ class BaseAllocator(ABC):
 
         current_prices = self.fetcher.get_current_prices([symbol])
         if symbol in current_prices:
-            self.logger.warning(
-                f"Using current price for {symbol} (no historical data available)"
-            )
+            self.logger.warning(f"Using current price for {symbol} (no historical data available)")
             return current_prices[symbol]
         return None
 

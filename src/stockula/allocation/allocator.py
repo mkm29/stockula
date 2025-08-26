@@ -199,9 +199,7 @@ class Allocator(BaseAllocator):
             calculated_quantities[ticker_config.symbol] = quantity
             cost = quantity * price
             allocated += cost
-            self.logger.debug(
-                f"  {ticker_config.symbol}: {quantity:.4f} shares × ${price:.2f} = ${cost:.2f}"
-            )
+            self.logger.debug(f"  {ticker_config.symbol}: {quantity:.4f} shares × ${price:.2f} = ${cost:.2f}")
         unused = 0.0
         return allocated, unused
 

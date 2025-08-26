@@ -210,18 +210,32 @@ class BacktestingManager:
         self.logger.info("Completed comprehensive backtest")
         return all_results
 
-    def _get_train_test_dates(self, config: Optional["StockulaConfig"]) -> tuple[Optional[str], Optional[str], Optional[str], Optional[str]]:
+    def _get_train_test_dates(
+        self, config: Optional["StockulaConfig"]
+    ) -> tuple[str | None, str | None, str | None, str | None]:
         """Extract train/test split dates from config."""
         train_start_date = train_end_date = test_start_date = test_end_date = None
         if config and hasattr(config, "forecast"):
             forecast = config.forecast
-            train_start_date = str(getattr(forecast, "train_start_date", None)) if getattr(forecast, "train_start_date", None) else None
-            train_end_date = str(getattr(forecast, "train_end_date", None)) if getattr(forecast, "train_end_date", None) else None
-            test_start_date = str(getattr(forecast, "test_start_date", None)) if getattr(forecast, "test_start_date", None) else None
-            test_end_date = str(getattr(forecast, "test_end_date", None)) if getattr(forecast, "test_end_date", None) else None
+            train_start_date = (
+                str(getattr(forecast, "train_start_date", None))
+                if getattr(forecast, "train_start_date", None)
+                else None
+            )
+            train_end_date = (
+                str(getattr(forecast, "train_end_date", None)) if getattr(forecast, "train_end_date", None) else None
+            )
+            test_start_date = (
+                str(getattr(forecast, "test_start_date", None)) if getattr(forecast, "test_start_date", None) else None
+            )
+            test_end_date = (
+                str(getattr(forecast, "test_end_date", None)) if getattr(forecast, "test_end_date", None) else None
+            )
         return train_start_date, train_end_date, test_start_date, test_end_date
 
-    def _get_strategy_class_and_params(self, strategy_name: str, strategy_params: dict[str, Any] | None) -> tuple[Any, dict[str, Any]]:
+    def _get_strategy_class_and_params(
+        self, strategy_name: str, strategy_params: dict[str, Any] | None
+    ) -> tuple[Any, dict[str, Any]]:
         """Get strategy class and parameters, raise ValueError if not found."""
         params = strategy_params or self.strategy_registry.get_strategy_preset(strategy_name)
         strategy_class = self.strategy_registry.get_strategy_class(strategy_name)

@@ -261,7 +261,12 @@ class AutoGluonBackend(ForecastBackend):
             except Exception:
                 freq_to_use = "D"
         freq_map = {
-            "D": "D", "B": "B", "W": "W", "M": "M", "Q": "Q", "H": "H",
+            "D": "D",
+            "B": "B",
+            "W": "W",
+            "M": "M",
+            "Q": "Q",
+            "H": "H",
         }
         return freq_map.get(freq_to_use, "D")
 
@@ -366,6 +371,7 @@ class AutoGluonBackend(ForecastBackend):
             freq = getattr(getattr(self.predictor, "_learner", object()), "freq", "D")
             train_data = getattr(getattr(self.predictor, "_learner", object()), "train_data", None)
             import pandas as pd
+
             if train_data is not None:
                 last_timestamp = train_data.index.get_level_values("timestamp").max()
             else:
@@ -402,13 +408,16 @@ class AutoGluonBackend(ForecastBackend):
         alpha = (1.0 - float(self.prediction_interval)) / 2.0
         low_target, high_target = alpha, 1.0 - alpha
         qcols = [c for c in pred_df.columns if isinstance(c, str) and c.replace(".", "", 1).isdigit()]
+
         def _closest(col_target: float) -> str | None:
             if not qcols:
                 return None
             import numpy as np
+
             arr = np.array([float(c) for c in qcols])
             idx = int(np.argmin(np.abs(arr - col_target)))
             return qcols[idx]
+
         return _closest(low_target), _closest(high_target)
 
     def _get_forecast_bounds(
@@ -424,9 +433,7 @@ class AutoGluonBackend(ForecastBackend):
             upper_bound = forecast_values * 1.1
         return forecast_values, lower_bound, upper_bound
 
-    def _apply_non_negative(
-        self, forecast_values: Any, lower_bound: Any, upper_bound: Any
-    ) -> tuple[Any, Any, Any]:
+    def _apply_non_negative(self, forecast_values: Any, lower_bound: Any, upper_bound: Any) -> tuple[Any, Any, Any]:
         """Apply non-negative constraint if needed."""
         if self.no_negatives:
             forecast_values = forecast_values.clip(min=0)
@@ -434,11 +441,10 @@ class AutoGluonBackend(ForecastBackend):
             upper_bound = upper_bound.clip(min=0)
         return forecast_values, lower_bound, upper_bound
 
-    def _build_result_df(
-        self, forecast_values: Any, lower_bound: Any, upper_bound: Any
-    ) -> pd.DataFrame:
+    def _build_result_df(self, forecast_values: Any, lower_bound: Any, upper_bound: Any) -> pd.DataFrame:
         """Create result DataFrame with proper index."""
         import pandas as pd
+
         last_date = pd.Timestamp.now()
         freq = self.predictor._learner.freq if hasattr(self.predictor, "_learner") else "D"
         future_dates = pd.date_range(start=last_date, periods=len(forecast_values) + 1, freq=freq)[1:]

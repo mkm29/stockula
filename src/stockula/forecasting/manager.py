@@ -89,6 +89,7 @@ class ForecastingManager:
         self.logger.info(f"Forecast completed for {symbol} using {model_info['model_name']}")
 
         from datetime import datetime, timedelta
+
         today = datetime.now().date()
         forecast_start = today + timedelta(days=1)
         forecast_days = config.forecast.forecast_length if config.forecast.forecast_length is not None else 7
@@ -128,6 +129,7 @@ class ForecastingManager:
             fallback_label = self._get_backend_label(fallback_backend)
             if fallback_label == backend_label:
                 from .backends import SimpleForecastBackend
+
                 fallback_backend = SimpleForecastBackend(
                     forecast_length=(
                         config.forecast.forecast_length if config.forecast.forecast_length is not None else 7

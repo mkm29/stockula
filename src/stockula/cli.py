@@ -123,6 +123,7 @@ def _load_config_with_validation(container, config):
 def _setup_logging(stockula_config, container):
     from .interfaces import ILoggingManager
     from .main import setup_logging
+
     setup_logging(stockula_config, logging_manager=cast(ILoggingManager, container.logging_manager()))
 
 
@@ -433,10 +434,14 @@ def parse_test_args():
     kwargs = {}
 
     arg_map = {
-        "--config": "config", "-c": "config",
-        "--ticker": "ticker", "-t": "ticker",
-        "--mode": "mode", "-m": "mode",
-        "--output": "output", "-o": "output",
+        "--config": "config",
+        "-c": "config",
+        "--ticker": "ticker",
+        "-t": "ticker",
+        "--mode": "mode",
+        "-m": "mode",
+        "--output": "output",
+        "-o": "output",
         "--save-config": "save_config_path",
         "--save-optimized-config": "save_optimized_config",
         "--train-start": "train_start",

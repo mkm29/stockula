@@ -81,6 +81,7 @@ class ChronosBackend(ForecastBackend):
     def _import_chronos_pipeline(self):
         try:
             from chronos import BaseChronosPipeline
+
             self._BaseChronosPipeline = BaseChronosPipeline
         except Exception as e:  # pragma: no cover - import error path
             raise ImportError(
@@ -92,6 +93,7 @@ class ChronosBackend(ForecastBackend):
         torch_dtype = self.torch_dtype
         try:
             import torch
+
             if device_map is None:
                 device_map = "cuda" if torch.cuda.is_available() else "cpu"
             if torch_dtype is None:

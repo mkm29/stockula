@@ -106,20 +106,20 @@ class BacktestRunner:
 
     @staticmethod
     def _percentage_commission(broker_config, trade_value: float) -> float:
-        if isinstance(broker_config.commission_value, (int, float)):
+        if isinstance(broker_config.commission_value, int | float):
             return trade_value * broker_config.commission_value
         return 0.0
 
     @staticmethod
     def _fixed_commission(broker_config) -> float:
-        if isinstance(broker_config.commission_value, (int, float)):
+        if isinstance(broker_config.commission_value, int | float):
             return broker_config.commission_value
         return 0.0
 
     @staticmethod
     def _per_share_commission(broker_config, quantity: float) -> float:
         per_share = broker_config.per_share_commission
-        if per_share is None and isinstance(broker_config.commission_value, (int, float)):
+        if per_share is None and isinstance(broker_config.commission_value, int | float):
             per_share = broker_config.commission_value
         if per_share is not None:
             return abs(quantity) * per_share
@@ -342,9 +342,7 @@ class BacktestRunner:
             if not treasury_rates.empty:
                 self.risk_free_rate = treasury_rates
 
-    def _init_train_test_results(
-        self, symbol, strategy, train_data, test_data
-    ) -> dict[str, Any]:
+    def _init_train_test_results(self, symbol, strategy, train_data, test_data) -> dict[str, Any]:
         return {
             "symbol": symbol,
             "strategy": strategy.__name__,
@@ -417,9 +415,7 @@ class BacktestRunner:
         if train_results["return_pct"] != 0:
             return {
                 "return_pct": (
-                    (test_results["return_pct"] - train_results["return_pct"])
-                    / abs(train_results["return_pct"])
-                    * 100
+                    (test_results["return_pct"] - train_results["return_pct"]) / abs(train_results["return_pct"]) * 100
                 ),
                 "sharpe_ratio": (
                     (test_results["sharpe_ratio"] - train_results["sharpe_ratio"])
@@ -577,10 +573,7 @@ class BacktestRunner:
         try:
             return pd.Series(list(equity_curve), index=treasury_rates.index[: len(equity_curve)])
         except Exception as e:
-            print(
-                f"Warning: Could not convert equity curve to pandas Series. "
-                f"Type: {type(equity_curve)}, Error: {e}"
-            )
+            print(f"Warning: Could not convert equity curve to pandas Series. Type: {type(equity_curve)}, Error: {e}")
             return None
 
     def run_with_dynamic_risk_free_rate(

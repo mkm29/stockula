@@ -302,9 +302,7 @@ class BacktestOptimizedAllocator(BaseAllocator):
 
         return test_performances
 
-    def _run_forecasts(
-        self, symbols: list[str], opt_config: BacktestOptimizationConfig
-    ) -> dict[str, float]:
+    def _run_forecasts(self, symbols: list[str], opt_config: BacktestOptimizationConfig) -> dict[str, float]:
         """Run forecasts for each symbol and calculate forecast scores.
 
         Args:

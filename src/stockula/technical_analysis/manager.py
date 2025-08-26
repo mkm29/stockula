@@ -94,7 +94,9 @@ class TechnicalAnalysisManager:
             self.logger.error(f"Error analyzing {symbol}: {str(e)}")
             return {"ticker": symbol, "error": str(e)}
 
-    def _fetch_data(self, symbol: str, config: StockulaConfig, start_date: str | None, end_date: str | None) -> pd.DataFrame:
+    def _fetch_data(
+        self, symbol: str, config: StockulaConfig, start_date: str | None, end_date: str | None
+    ) -> pd.DataFrame:
         start = start_date or config.data.start_date
         end = end_date or config.data.end_date
         if hasattr(start, "strftime"):
@@ -308,7 +310,9 @@ class TechnicalAnalysisManager:
             results = {"ticker": symbol, "current_price": data["Close"].iloc[-1], "indicators": {}}
 
             for indicator_name, params in indicators.items():
-                results["indicators"][indicator_name] = self._calculate_single_custom_indicator(ta, indicator_name, params)
+                results["indicators"][indicator_name] = self._calculate_single_custom_indicator(
+                    ta, indicator_name, params
+                )
 
             return results
 
@@ -316,7 +320,9 @@ class TechnicalAnalysisManager:
             self.logger.error(f"Error calculating custom indicators for {symbol}: {str(e)}")
             return {"ticker": symbol, "error": str(e)}
 
-    def _calculate_single_custom_indicator(self, ta: TechnicalIndicators, indicator_name: str, params: dict[str, Any]) -> dict[str, Any]:
+    def _calculate_single_custom_indicator(
+        self, ta: TechnicalIndicators, indicator_name: str, params: dict[str, Any]
+    ) -> dict[str, Any]:
         """Helper to calculate a single custom indicator."""
         if not hasattr(ta, indicator_name):
             return {"error": f"Unknown indicator: {indicator_name}"}

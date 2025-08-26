@@ -254,9 +254,7 @@ class StockulaManager:
 
         custom_indicators = self._get_custom_indicators(ta_config)
 
-        result = self._analyze_symbol_with_progress(
-            ta_manager, ticker, custom_indicators, show_progress
-        )
+        result = self._analyze_symbol_with_progress(ta_manager, ticker, custom_indicators, show_progress)
 
         if "indicators" in result and not result.get("error"):
             self._add_period_specific_calculations(result, ticker, ta_config)
@@ -266,8 +264,18 @@ class StockulaManager:
     def _get_custom_indicators(self, ta_config: Any) -> list[str]:
         """Return a list of custom indicators based on config."""
         indicator_list = [
-            "sma", "ema", "rsi", "macd", "bbands", "atr", "adx",
-            "stoch", "williams_r", "cci", "obv", "ichimoku"
+            "sma",
+            "ema",
+            "rsi",
+            "macd",
+            "bbands",
+            "atr",
+            "adx",
+            "stoch",
+            "williams_r",
+            "cci",
+            "obv",
+            "ichimoku",
         ]
         return [ind for ind in indicator_list if ind in ta_config.indicators]
 
@@ -400,6 +408,7 @@ class StockulaManager:
         ticker: str | None,
     ) -> None:
         """Compute period-based indicators (SMA / EMA)."""
+
         def _maybe_update(description: str) -> None:
             if progress and task:
                 progress.update(task, description=description)
@@ -430,6 +439,7 @@ class StockulaManager:
         ticker: str | None,
     ) -> None:
         """Compute single-shot indicators (RSI, MACD, BBands, ATR, ADX)."""
+
         def _maybe_update(description: str) -> None:
             if progress and task:
                 progress.update(task, description=description)
@@ -447,12 +457,20 @@ class StockulaManager:
 
         if "macd" in ta_config.indicators:
             single_ops.append(
-                ("MACD", lambda: ta.macd(**ta_config.macd_params).iloc[-1].to_dict(), f"[cyan]Computing MACD for {ticker}...")
+                (
+                    "MACD",
+                    lambda: ta.macd(**ta_config.macd_params).iloc[-1].to_dict(),
+                    f"[cyan]Computing MACD for {ticker}...",
+                )
             )
 
         if "bbands" in ta_config.indicators:
             single_ops.append(
-                ("BBands", lambda: ta.bbands(**ta_config.bbands_params).iloc[-1].to_dict(), f"[cyan]Computing Bollinger Bands for {ticker}...")
+                (
+                    "BBands",
+                    lambda: ta.bbands(**ta_config.bbands_params).iloc[-1].to_dict(),
+                    f"[cyan]Computing Bollinger Bands for {ticker}...",
+                )
             )
 
         if "atr" in ta_config.indicators:
@@ -461,9 +479,7 @@ class StockulaManager:
             )
 
         if "adx" in ta_config.indicators:
-            single_ops.append(
-                ("ADX", lambda: ta.adx(14).iloc[-1], f"[cyan]Computing ADX for {ticker}...")
-            )
+            single_ops.append(("ADX", lambda: ta.adx(14).iloc[-1], f"[cyan]Computing ADX for {ticker}..."))
 
         for key, fn, desc in single_ops:
             _maybe_update(desc)
@@ -990,6 +1006,7 @@ class StockulaManager:
         Returns:
             Tuple of (start_date, end_date) as strings
         """
+
         def _format_date(value: Any) -> str | None:
             if value is None:
                 return None
@@ -1200,7 +1217,9 @@ class StockulaManager:
         for ticker in ticker_symbols:
             self.log_manager.debug(f"\nProcessing {ticker}...")
             if mode in ["all", "ta"]:
-                results.setdefault("technical_analysis", []).append(self.run_technical_analysis(ticker, show_progress=True))
+                results.setdefault("technical_analysis", []).append(
+                    self.run_technical_analysis(ticker, show_progress=True)
+                )
 
     # Helper methods extracted from run_main_processing to reduce cognitive complexity.
 

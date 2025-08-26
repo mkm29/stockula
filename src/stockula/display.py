@@ -85,10 +85,10 @@ class ResultsDisplay:
         rows = []
         if isinstance(value, dict):
             for k, v in value.items():
-                formatted_value = f"{v:.2f}" if isinstance(v, (int, float)) else str(v)
+                formatted_value = f"{v:.2f}" if isinstance(v, int | float) else str(v)
                 rows.append((f"{indicator} - {k}", formatted_value))
         else:
-            formatted_value = f"{value:.2f}" if isinstance(value, (int, float)) else str(value)
+            formatted_value = f"{value:.2f}" if isinstance(value, int | float) else str(value)
             rows.append((indicator, formatted_value))
         return rows
 
@@ -286,9 +286,7 @@ class ResultsDisplay:
     def _create_holding_row(self, asset, mode, prices):
         symbol = getattr(asset, "symbol", "N/A")
         category = getattr(asset, "category", "N/A")
-        category_name = (
-            str(category.name) if category is not None and hasattr(category, "name") else str(category)
-        )
+        category_name = str(category.name) if category is not None and hasattr(category, "name") else str(category)
 
         quantity_val = 0.0
         quantity_str = "N/A"
@@ -651,13 +649,15 @@ class ResultsDisplay:
 
         if has_actual_prices:
             row_data.extend(self._actual_price_row(forecast, quantity, forecast_price))
-        row_data.extend([
-            forecast_str,
-            forecast_value_str,
-            return_str,
-            f"${forecast['lower_bound']:.2f} - ${forecast['upper_bound']:.2f}",
-            forecast["best_model"],
-        ])
+        row_data.extend(
+            [
+                forecast_str,
+                forecast_value_str,
+                return_str,
+                f"${forecast['lower_bound']:.2f} - ${forecast['upper_bound']:.2f}",
+                forecast["best_model"],
+            ]
+        )
         return row_data
 
     def _get_asset_quantity(self, portfolio, ticker):
@@ -677,13 +677,15 @@ class ResultsDisplay:
         ]
         if has_actual_prices:
             row_data.extend(["[red]Error[/red]", "[red]Error[/red]"])
-        row_data.extend([
-            "[red]Error[/red]",
-            "[red]Error[/red]",
-            "[red]Error[/red]",
-            "[red]Error[/red]",
-            f"[red]{forecast['error']}[/red]",
-        ])
+        row_data.extend(
+            [
+                "[red]Error[/red]",
+                "[red]Error[/red]",
+                "[red]Error[/red]",
+                "[red]Error[/red]",
+                f"[red]{forecast['error']}[/red]",
+            ]
+        )
         return row_data
 
     def _get_forecast_color(self, forecast_price, current_price):
@@ -837,7 +839,12 @@ class ResultsDisplay:
         return current_portfolio_value
 
     def _calculate_forecasted_values(
-        self, config: StockulaConfig, portfolio, results: dict[str, Any], current_portfolio_value: float, test_start: str
+        self,
+        config: StockulaConfig,
+        portfolio,
+        results: dict[str, Any],
+        current_portfolio_value: float,
+        test_start: str,
     ):
         forecasted_value = 0.0
         total_accuracy = 0
@@ -857,7 +864,11 @@ class ResultsDisplay:
                         valid_forecasts += 1
 
         test_end = self._get_forecast_end_date(config, results)
-        portfolio_return = ((forecasted_value - current_portfolio_value) / current_portfolio_value) * 100 if current_portfolio_value > 0 else 0.0
+        portfolio_return = (
+            ((forecasted_value - current_portfolio_value) / current_portfolio_value) * 100
+            if current_portfolio_value > 0
+            else 0.0
+        )
         avg_accuracy = (total_accuracy / valid_forecasts) if is_evaluation_mode and valid_forecasts > 0 else None
         return forecasted_value, avg_accuracy, test_end, portfolio_return
 
@@ -870,6 +881,7 @@ class ResultsDisplay:
             )
         elif config.forecast.forecast_length:
             from datetime import timedelta
+
             future_date = datetime.now() + timedelta(days=config.forecast.forecast_length)
             return future_date.strftime("%Y-%m-%d") if isinstance(future_date, date) else str(future_date)
         else:
@@ -877,6 +889,7 @@ class ResultsDisplay:
                 if "error" not in forecast and "end_date" in forecast:
                     return forecast["end_date"]
             from datetime import timedelta
+
             future_date = datetime.now() + timedelta(days=14)
             return future_date.strftime("%Y-%m-%d") if isinstance(future_date, date) else str(future_date)
 
@@ -1026,19 +1039,12 @@ Detailed report saved to: {
         Returns:
             Tuple of (start_date, end_date) as strings
         """
+
         def _select_date(primary, secondary, fallback):
             if primary:
-                return (
-                    primary.strftime("%Y-%m-%d")
-                    if isinstance(primary, date)
-                    else str(primary)
-                )
+                return primary.strftime("%Y-%m-%d") if isinstance(primary, date) else str(primary)
             elif secondary:
-                return (
-                    secondary.strftime("%Y-%m-%d")
-                    if isinstance(secondary, date)
-                    else str(secondary)
-                )
+                return secondary.strftime("%Y-%m-%d") if isinstance(secondary, date) else str(secondary)
             elif fallback:
                 return fallback
             return "N/A"
@@ -1046,12 +1052,16 @@ Detailed report saved to: {
         start_date = _select_date(
             getattr(config.backtest, "start_date", None),
             getattr(config.data, "start_date", None),
-            portfolio_backtest_results.date_range.get("start") if getattr(portfolio_backtest_results, "date_range", None) else None,
+            portfolio_backtest_results.date_range.get("start")
+            if getattr(portfolio_backtest_results, "date_range", None)
+            else None,
         )
         end_date = _select_date(
             getattr(config.backtest, "end_date", None),
             getattr(config.data, "end_date", None),
-            portfolio_backtest_results.date_range.get("end") if getattr(portfolio_backtest_results, "date_range", None) else None,
+            portfolio_backtest_results.date_range.get("end")
+            if getattr(portfolio_backtest_results, "date_range", None)
+            else None,
         )
 
         return start_date, end_date
