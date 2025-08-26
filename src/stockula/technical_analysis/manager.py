@@ -71,89 +71,93 @@ class TechnicalAnalysisManager:
         start_date: str | None = None,
         end_date: str | None = None,
     ) -> dict[str, Any]:
-        """Analyze a single symbol with specified indicators.
-
-        Args:
-            symbol: Stock symbol to analyze
-            config: Configuration object
-            analysis_type: Type of analysis ('basic', 'momentum', 'trend', 'volatility', 'volume', 'comprehensive')
-            custom_indicators: Custom list of indicators to calculate
-            start_date: Optional start date for data
-            end_date: Optional end date for data
-
-        Returns:
-            Dictionary with analysis results
-        """
+        """Analyze a single symbol with specified indicators."""
         try:
-            # Fetch data
-            # Convert date to string if needed
-            start = start_date or config.data.start_date
-            end = end_date or config.data.end_date
-            if hasattr(start, "strftime"):
-                start = start.strftime("%Y-%m-%d")  # type: ignore[union-attr]
-            if hasattr(end, "strftime"):
-                end = end.strftime("%Y-%m-%d")  # type: ignore[union-attr]
-            data = self.data_fetcher.get_stock_data(symbol, start=start, end=end)
-
+            data = self._fetch_data(symbol, config, start_date, end_date)
             if data.empty:
                 return {"ticker": symbol, "error": "No data available"}
 
-            # Create TechnicalIndicators instance
             ta = TechnicalIndicators(data)
-
-            # Determine which indicators to calculate
-            if custom_indicators:
-                indicators = custom_indicators
-            else:
-                indicators = self.indicator_groups.get(analysis_type, self.indicator_groups["comprehensive"])
-
-            # Calculate indicators based on configuration
+            indicators = self._select_indicators(analysis_type, custom_indicators)
             ta_config = config.technical_analysis
+
             results = {
                 "ticker": symbol,
                 "current_price": data["Close"].iloc[-1],
                 "analysis_type": analysis_type,
-                "indicators": {},
+                "indicators": self._calculate_indicators(ta, indicators, ta_config, symbol),
             }
-
-            # Calculate each indicator
-            for indicator in indicators:
-                if indicator == "volume":
-                    results["indicators"]["volume"] = {
-                        "current": data["Volume"].iloc[-1],
-                        "average": data["Volume"].mean(),
-                        "ratio": data["Volume"].iloc[-1] / data["Volume"].mean(),
-                    }
-                elif hasattr(ta, indicator):
-                    try:
-                        # Get parameters from config or use defaults
-                        params = self._get_indicator_params(indicator, ta_config)
-                        indicator_func = getattr(ta, indicator)
-                        result = indicator_func(**params)
-
-                        # Format result based on type
-                        if isinstance(result, pd.Series):
-                            results["indicators"][indicator] = {
-                                "current": result.iloc[-1] if not result.empty else None,
-                                "values": result.to_dict() if len(result) <= 10 else None,
-                            }
-                        elif isinstance(result, pd.DataFrame):
-                            results["indicators"][indicator] = {
-                                "current": {col: result[col].iloc[-1] for col in result.columns if not result.empty},
-                                "values": result.to_dict() if len(result) <= 10 else None,
-                            }
-                    except Exception as e:
-                        self.logger.warning(f"Failed to calculate {indicator} for {symbol}: {str(e)}")
-                        results["indicators"][indicator] = {"error": str(e)}
-
-            # Add analysis summary
             results["summary"] = self._generate_analysis_summary(results["indicators"], data)
-
             return results
 
         except Exception as e:
             self.logger.error(f"Error analyzing {symbol}: {str(e)}")
             return {"ticker": symbol, "error": str(e)}
+
+    def _fetch_data(self, symbol: str, config: StockulaConfig, start_date: str | None, end_date: str | None) -> pd.DataFrame:
+        start = start_date or config.data.start_date
+        end = end_date or config.data.end_date
+        if hasattr(start, "strftime"):
+            start = start.strftime("%Y-%m-%d")  # type: ignore[union-attr]
+        if hasattr(end, "strftime"):
+            end = end.strftime("%Y-%m-%d")  # type: ignore[union-attr]
+        return self.data_fetcher.get_stock_data(symbol, start=start, end=end)
+
+    def _select_indicators(self, analysis_type: str, custom_indicators: list[str] | None) -> list[str]:
+        if custom_indicators:
+            return custom_indicators
+        return self.indicator_groups.get(analysis_type, self.indicator_groups["comprehensive"])
+
+    def _calculate_indicators(
+        self,
+        ta: TechnicalIndicators,
+        indicators: list[str],
+        ta_config: Any,
+        symbol: str,
+    ) -> dict[str, Any]:
+        results = {}
+        for indicator in indicators:
+            if indicator == "volume":
+                results["volume"] = self._format_volume(ta.data)
+            elif hasattr(ta, indicator):
+                results[indicator] = self._safe_calculate_indicator(ta, indicator, ta_config, symbol)
+        return results
+
+    def _format_volume(self, data: pd.DataFrame) -> dict[str, Any]:
+        return {
+            "current": data["Volume"].iloc[-1],
+            "average": data["Volume"].mean(),
+            "ratio": data["Volume"].iloc[-1] / data["Volume"].mean(),
+        }
+
+    def _safe_calculate_indicator(
+        self,
+        ta: TechnicalIndicators,
+        indicator: str,
+        ta_config: Any,
+        symbol: str,
+    ) -> dict[str, Any]:
+        try:
+            params = self._get_indicator_params(indicator, ta_config)
+            indicator_func = getattr(ta, indicator)
+            result = indicator_func(**params)
+            return self._format_indicator_result(result)
+        except Exception as e:
+            self.logger.warning(f"Failed to calculate {indicator} for {symbol}: {str(e)}")
+            return {"error": str(e)}
+
+    def _format_indicator_result(self, result: Any) -> dict[str, Any]:
+        if isinstance(result, pd.Series):
+            return {
+                "current": result.iloc[-1] if not result.empty else None,
+                "values": result.to_dict() if len(result) <= 10 else None,
+            }
+        elif isinstance(result, pd.DataFrame):
+            return {
+                "current": {col: result[col].iloc[-1] for col in result.columns if not result.empty},
+                "values": result.to_dict() if len(result) <= 10 else None,
+            }
+        return {"value": result}
 
     def analyze_multiple_symbols(
         self,
@@ -304,31 +308,35 @@ class TechnicalAnalysisManager:
             results = {"ticker": symbol, "current_price": data["Close"].iloc[-1], "indicators": {}}
 
             for indicator_name, params in indicators.items():
-                if hasattr(ta, indicator_name):
-                    try:
-                        indicator_func = getattr(ta, indicator_name)
-                        result = indicator_func(**params)
-
-                        if isinstance(result, pd.Series):
-                            results["indicators"][indicator_name] = {
-                                "current": result.iloc[-1] if not result.empty else None,
-                                "params": params,
-                            }
-                        elif isinstance(result, pd.DataFrame):
-                            results["indicators"][indicator_name] = {
-                                "current": {col: result[col].iloc[-1] for col in result.columns if not result.empty},
-                                "params": params,
-                            }
-                    except Exception as e:
-                        results["indicators"][indicator_name] = {"error": str(e), "params": params}
-                else:
-                    results["indicators"][indicator_name] = {"error": f"Unknown indicator: {indicator_name}"}
+                results["indicators"][indicator_name] = self._calculate_single_custom_indicator(ta, indicator_name, params)
 
             return results
 
         except Exception as e:
             self.logger.error(f"Error calculating custom indicators for {symbol}: {str(e)}")
             return {"ticker": symbol, "error": str(e)}
+
+    def _calculate_single_custom_indicator(self, ta: TechnicalIndicators, indicator_name: str, params: dict[str, Any]) -> dict[str, Any]:
+        """Helper to calculate a single custom indicator."""
+        if not hasattr(ta, indicator_name):
+            return {"error": f"Unknown indicator: {indicator_name}"}
+        try:
+            indicator_func = getattr(ta, indicator_name)
+            result = indicator_func(**params)
+            if isinstance(result, pd.Series):
+                return {
+                    "current": result.iloc[-1] if not result.empty else None,
+                    "params": params,
+                }
+            elif isinstance(result, pd.DataFrame):
+                return {
+                    "current": {col: result[col].iloc[-1] for col in result.columns if not result.empty},
+                    "params": params,
+                }
+            else:
+                return {"value": result, "params": params}
+        except Exception as e:
+            return {"error": str(e), "params": params}
 
     def _get_indicator_params(self, indicator: str, ta_config: Any) -> dict[str, Any]:
         """Get parameters for an indicator from config or defaults.
@@ -361,46 +369,59 @@ class TechnicalAnalysisManager:
         """
         summary: dict[str, Any] = {"signals": [], "strength": "neutral"}
 
-        # Check RSI for overbought/oversold
-        if "rsi" in indicators and indicators["rsi"].get("current"):
-            rsi_value = indicators["rsi"]["current"]
-            if rsi_value > 70:
-                summary["signals"].append("RSI Overbought")
-            elif rsi_value < 30:
-                summary["signals"].append("RSI Oversold")
+        summary["signals"].extend(self._rsi_signals(indicators))
+        summary["signals"].extend(self._macd_signals(indicators))
+        summary["signals"].extend(self._price_vs_sma_signals(indicators, data))
 
-        # Check MACD for crossovers
-        if "macd" in indicators and indicators["macd"].get("current"):
-            macd_current = indicators["macd"]["current"]
-            if "MACD" in macd_current and "MACD_SIGNAL" in macd_current:
-                if macd_current["MACD"] > macd_current["MACD_SIGNAL"]:
-                    summary["signals"].append("MACD Bullish")
+        summary["strength"] = self._determine_strength(summary["signals"])
+        return summary
+
+    def _rsi_signals(self, indicators: dict[str, Any]) -> list[str]:
+        signals = []
+        rsi = indicators.get("rsi", {}).get("current")
+        if rsi is not None:
+            if rsi > 70:
+                signals.append("RSI Overbought")
+            elif rsi < 30:
+                signals.append("RSI Oversold")
+        return signals
+
+    def _macd_signals(self, indicators: dict[str, Any]) -> list[str]:
+        signals = []
+        macd = indicators.get("macd", {}).get("current")
+        if isinstance(macd, dict):
+            macd_val = macd.get("MACD")
+            macd_signal = macd.get("MACD_SIGNAL")
+            if macd_val is not None and macd_signal is not None:
+                if macd_val > macd_signal:
+                    signals.append("MACD Bullish")
                 else:
-                    summary["signals"].append("MACD Bearish")
+                    signals.append("MACD Bearish")
+        return signals
 
-        # Check price vs moving averages
+    def _price_vs_sma_signals(self, indicators: dict[str, Any], data: pd.DataFrame) -> list[str]:
+        signals = []
         current_price = data["Close"].iloc[-1]
-        if "sma" in indicators and indicators["sma"].get("current"):
-            sma_value = indicators["sma"]["current"]
-            if current_price > sma_value:
-                summary["signals"].append("Price above SMA")
+        sma = indicators.get("sma", {}).get("current")
+        if sma is not None:
+            if current_price > sma:
+                signals.append("Price above SMA")
             else:
-                summary["signals"].append("Price below SMA")
+                signals.append("Price below SMA")
+        return signals
 
-        # Determine overall strength
+    def _determine_strength(self, signals: list[str]) -> str:
         bullish_signals = sum(
-            1 for signal in summary["signals"] if "Bullish" in signal or "above" in signal or "Oversold" in signal
+            1 for signal in signals if "Bullish" in signal or "above" in signal or "Oversold" in signal
         )
         bearish_signals = sum(
-            1 for signal in summary["signals"] if "Bearish" in signal or "below" in signal or "Overbought" in signal
+            1 for signal in signals if "Bearish" in signal or "below" in signal or "Overbought" in signal
         )
-
         if bullish_signals > bearish_signals:
-            summary["strength"] = "bullish"
+            return "bullish"
         elif bearish_signals > bullish_signals:
-            summary["strength"] = "bearish"
-
-        return summary
+            return "bearish"
+        return "neutral"
 
     def _determine_trend(self, data: pd.DataFrame, sma: pd.Series, ema: pd.Series) -> str:
         """Determine the current trend.

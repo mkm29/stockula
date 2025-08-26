@@ -163,7 +163,6 @@ class StockulaPipeline:
         self,
         config: StockulaConfig | None = None,
         use_optimized: bool = True,
-        **backtest_params: Any,
     ) -> dict[str, Any]:
         """Run backtest with either provided or optimized configuration.
 
@@ -282,28 +281,28 @@ class StockulaPipeline:
 
         self.console.print(f"[green]✓[/green] Saved optimized configuration to {path}")
 
-    def save_results(self, path: str | Path, format: str = "json") -> None:
+    def save_results(self, path: str | Path, fmt: str = "json") -> None:
         """Save pipeline results to file.
 
         Args:
             path: Path to save results
-            format: Output format ('json', 'yaml', or 'csv')
+            fmt: Output format ('json', 'yaml', or 'csv')
         """
         path = Path(path)
         combined_results = self._combine_results()
 
-        if format == "json":
+        if fmt == "json":
             with open(path, "w") as f:
                 json.dump(combined_results, f, indent=2, default=str)
-        elif format == "yaml":
+        elif fmt == "yaml":
             with open(path, "w") as f:
                 yaml.dump(combined_results, f, default_flow_style=False)
-        elif format == "csv":
+        elif fmt == "csv":
             # Convert to DataFrame for CSV export
             df = pd.DataFrame(combined_results.get("backtest", {}).get("results", []))
             df.to_csv(path, index=False)
         else:
-            raise ValueError(f"Unsupported format: {format}")
+            raise ValueError(f"Unsupported format: {fmt}")
 
         self.console.print(f"[green]✓[/green] Saved results to {path}")
 
@@ -478,11 +477,11 @@ def run_pipeline(
     )
 
     if output:
-        format = "json"
+        fmt = "json"
         if output.endswith(".yaml") or output.endswith(".yml"):
-            format = "yaml"
+            fmt = "yaml"
         elif output.endswith(".csv"):
-            format = "csv"
-        pipeline.save_results(output, format=format)
+            fmt = "csv"
+        pipeline.save_results(output, fmt=fmt)
 
     return results

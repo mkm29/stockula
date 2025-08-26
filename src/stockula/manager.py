@@ -116,22 +116,7 @@ class StockulaManager:
             )
 
             # Update the config with optimized quantities (even if not saving to file)
-            for ticker_config in self.config.portfolio.tickers:
-                if ticker_config.symbol in optimized_quantities:
-                    # Convert numpy types to native Python types
-                    quantity = optimized_quantities[ticker_config.symbol]
-                    if hasattr(quantity, "item"):
-                        # Convert numpy scalar to Python type
-                        ticker_config.quantity = float(quantity.item())
-                    else:
-                        # Keep as integer if it's already an integer (from backtest_optimized)
-                        if isinstance(quantity, int):
-                            ticker_config.quantity = float(quantity)
-                        else:
-                            ticker_config.quantity = float(quantity)
-                    # Clear allocation_pct and allocation_amount since we now have quantities
-                    ticker_config.allocation_pct = None
-                    ticker_config.allocation_amount = None
+            self._update_config_quantities(optimized_quantities)
 
             # Save optimized config if requested
             if save_path:
@@ -143,6 +128,35 @@ class StockulaManager:
             self.console.print(f"[red]Error during optimization: {e}[/red]")
             self.log_manager.error(f"Optimization error: {e}", exc_info=True)
             return 1
+
+    def _update_config_quantities(self, optimized_quantities: dict[str, float]) -> None:
+        """Update configuration with optimized quantities.
+
+        Args:
+            optimized_quantities: Dictionary of symbol to quantity
+        """
+        for ticker_config in self.config.portfolio.tickers:
+            if ticker_config.symbol in optimized_quantities:
+                # Convert numpy types to native Python types
+                quantity = optimized_quantities[ticker_config.symbol]
+                ticker_config.quantity = self._convert_to_python_float(quantity)
+                # Clear allocation_pct and allocation_amount since we now have quantities
+                ticker_config.allocation_pct = None
+                ticker_config.allocation_amount = None
+
+    def _convert_to_python_float(self, value: Any) -> float:
+        """Convert numpy or other numeric types to Python float.
+
+        Args:
+            value: Numeric value to convert
+
+        Returns:
+            Python float value
+        """
+        if hasattr(value, "item"):
+            # Convert numpy scalar to Python type
+            return float(value.item())
+        return float(value)
 
     def _normalize_strategy_name(self, strategy_name: str) -> str:
         """Normalize strategy name to snake_case format.
@@ -163,22 +177,7 @@ class StockulaManager:
             optimized_quantities: Dictionary of symbol to quantity
         """
         # Update the config with optimized quantities
-        for ticker_config in self.config.portfolio.tickers:
-            if ticker_config.symbol in optimized_quantities:
-                # Convert numpy types to native Python types
-                quantity = optimized_quantities[ticker_config.symbol]
-                if hasattr(quantity, "item"):
-                    # Convert numpy scalar to Python type
-                    ticker_config.quantity = float(quantity.item())
-                else:
-                    # Keep as integer if it's already an integer (from backtest_optimized)
-                    if isinstance(quantity, int):
-                        ticker_config.quantity = float(quantity)
-                    else:
-                        ticker_config.quantity = float(quantity)
-                # Clear allocation_pct and allocation_amount since we now have quantities
-                ticker_config.allocation_pct = None
-                ticker_config.allocation_amount = None
+        self._update_config_quantities(optimized_quantities)
 
         # Change allocation method to custom since we now have fixed quantities
         self.config.portfolio.allocation_method = "custom"
@@ -250,40 +249,35 @@ class StockulaManager:
         Returns:
             Dictionary with indicator results
         """
-        # Get the technical analysis manager
         ta_manager = self.container.technical_analysis_manager()
-
-        # Determine which indicators to use based on configuration
         ta_config = self.config.technical_analysis
-        custom_indicators = []
 
-        # Build custom indicators list based on config
-        if "sma" in ta_config.indicators:
-            custom_indicators.append("sma")
-        if "ema" in ta_config.indicators:
-            custom_indicators.append("ema")
-        if "rsi" in ta_config.indicators:
-            custom_indicators.append("rsi")
-        if "macd" in ta_config.indicators:
-            custom_indicators.append("macd")
-        if "bbands" in ta_config.indicators:
-            custom_indicators.append("bbands")
-        if "atr" in ta_config.indicators:
-            custom_indicators.append("atr")
-        if "adx" in ta_config.indicators:
-            custom_indicators.append("adx")
-        if "stoch" in ta_config.indicators:
-            custom_indicators.append("stoch")
-        if "williams_r" in ta_config.indicators:
-            custom_indicators.append("williams_r")
-        if "cci" in ta_config.indicators:
-            custom_indicators.append("cci")
-        if "obv" in ta_config.indicators:
-            custom_indicators.append("obv")
-        if "ichimoku" in ta_config.indicators:
-            custom_indicators.append("ichimoku")
+        custom_indicators = self._get_custom_indicators(ta_config)
 
-        # Use the manager to analyze the symbol
+        result = self._analyze_symbol_with_progress(
+            ta_manager, ticker, custom_indicators, show_progress
+        )
+
+        if "indicators" in result and not result.get("error"):
+            self._add_period_specific_calculations(result, ticker, ta_config)
+
+        return cast(dict[str, Any], result)
+
+    def _get_custom_indicators(self, ta_config: Any) -> list[str]:
+        """Return a list of custom indicators based on config."""
+        indicator_list = [
+            "sma", "ema", "rsi", "macd", "bbands", "atr", "adx",
+            "stoch", "williams_r", "cci", "obv", "ichimoku"
+        ]
+        return [ind for ind in indicator_list if ind in ta_config.indicators]
+
+    def _analyze_symbol_with_progress(
+        self, ta_manager, ticker: str, custom_indicators: list[str], show_progress: bool
+    ) -> dict[str, Any]:
+        """Analyze symbol with or without progress bar."""
+        analysis_type = "custom" if custom_indicators else "comprehensive"
+        custom_inds = custom_indicators if custom_indicators else None
+
         if show_progress:
             with Progress(
                 SpinnerColumn(),
@@ -298,66 +292,77 @@ class StockulaManager:
                     f"[cyan]Analyzing technical indicators for {ticker}...",
                     total=1,
                 )
-
                 result = ta_manager.analyze_symbol(
                     ticker,
                     self.config,
-                    analysis_type="custom" if custom_indicators else "comprehensive",
-                    custom_indicators=custom_indicators if custom_indicators else None,
+                    analysis_type=analysis_type,
+                    custom_indicators=custom_inds,
                 )
-
                 progress.advance(task)
         else:
             result = ta_manager.analyze_symbol(
                 ticker,
                 self.config,
-                analysis_type="custom" if custom_indicators else "comprehensive",
-                custom_indicators=custom_indicators if custom_indicators else None,
+                analysis_type=analysis_type,
+                custom_indicators=custom_inds,
             )
+        return result
 
-        # If we need to maintain backward compatibility with the old format,
-        # we can still compute the specific period values
-        if "indicators" in result and not result.get("error"):
-            # Get the data for period-specific calculations
-            data_fetcher = self.container.data_fetcher()
-            data = data_fetcher.get_stock_data(
-                ticker,
-                start=self.date_to_string(self.config.data.start_date),
-                end=self.date_to_string(self.config.data.end_date),
-                interval=self.config.data.interval,
-            )
+    def _add_period_specific_calculations(self, result: dict[str, Any], ticker: str, ta_config: Any) -> None:
+        """Add period-specific calculations and backward compatibility values."""
+        data_fetcher = self.container.data_fetcher()
+        data = data_fetcher.get_stock_data(
+            ticker,
+            start=self.date_to_string(self.config.data.start_date),
+            end=self.date_to_string(self.config.data.end_date),
+            interval=self.config.data.interval,
+        )
 
-            if not data.empty:
-                ta = TechnicalIndicators(data)
+        if data.empty:
+            return
 
-                # Add period-specific calculations if needed
-                if "sma" in ta_config.indicators and "sma" in result["indicators"]:
-                    for period in ta_config.sma_periods:
-                        result["indicators"][f"SMA_{period}"] = ta.sma(period).iloc[-1]
+        ta = TechnicalIndicators(data)
+        indicators = result["indicators"]
 
-                if "ema" in ta_config.indicators and "ema" in result["indicators"]:
-                    for period in ta_config.ema_periods:
-                        result["indicators"][f"EMA_{period}"] = ta.ema(period).iloc[-1]
+        self._add_sma_values(indicators, ta, ta_config)
+        self._add_ema_values(indicators, ta, ta_config)
+        self._add_rsi_value(indicators, ta_config)
+        self._add_macd_value(indicators, ta_config)
+        self._add_bbands_value(indicators, ta_config)
+        self._add_atr_value(indicators, ta_config)
+        self._add_adx_value(indicators, ta_config)
 
-                # Add simple indicator values for backward compatibility
-                if "rsi" in ta_config.indicators and "rsi" in result["indicators"]:
-                    result["indicators"]["RSI"] = result["indicators"]["rsi"]["current"]
+    def _add_sma_values(self, indicators: dict, ta: TechnicalIndicators, ta_config: Any) -> None:
+        if "sma" in ta_config.indicators and "sma" in indicators:
+            for period in ta_config.sma_periods:
+                indicators[f"SMA_{period}"] = ta.sma(period).iloc[-1]
 
-                if "macd" in ta_config.indicators and "macd" in result["indicators"]:
-                    macd_data = result["indicators"]["macd"]["current"]
-                    if isinstance(macd_data, dict):
-                        result["indicators"]["MACD"] = macd_data.get("MACD")
+    def _add_ema_values(self, indicators: dict, ta: TechnicalIndicators, ta_config: Any) -> None:
+        if "ema" in ta_config.indicators and "ema" in indicators:
+            for period in ta_config.ema_periods:
+                indicators[f"EMA_{period}"] = ta.ema(period).iloc[-1]
 
-                if "bbands" in ta_config.indicators and "bbands" in result["indicators"]:
-                    result["indicators"]["BBands"] = result["indicators"]["bbands"]["current"]
+    def _add_rsi_value(self, indicators: dict, ta_config: Any) -> None:
+        if "rsi" in ta_config.indicators and "rsi" in indicators:
+            indicators["RSI"] = indicators["rsi"]["current"]
 
-                if "atr" in ta_config.indicators and "atr" in result["indicators"]:
-                    result["indicators"]["ATR"] = result["indicators"]["atr"]["current"]
+    def _add_macd_value(self, indicators: dict, ta_config: Any) -> None:
+        if "macd" in ta_config.indicators and "macd" in indicators:
+            macd_data = indicators["macd"]["current"]
+            if isinstance(macd_data, dict):
+                indicators["MACD"] = macd_data.get("MACD")
 
-                if "adx" in ta_config.indicators and "adx" in result["indicators"]:
-                    result["indicators"]["ADX"] = result["indicators"]["adx"]["current"]
+    def _add_bbands_value(self, indicators: dict, ta_config: Any) -> None:
+        if "bbands" in ta_config.indicators and "bbands" in indicators:
+            indicators["BBands"] = indicators["bbands"]["current"]
 
-        return cast(dict[str, Any], result)
+    def _add_atr_value(self, indicators: dict, ta_config: Any) -> None:
+        if "atr" in ta_config.indicators and "atr" in indicators:
+            indicators["ATR"] = indicators["atr"]["current"]
+
+    def _add_adx_value(self, indicators: dict, ta_config: Any) -> None:
+        if "adx" in ta_config.indicators and "adx" in indicators:
+            indicators["ADX"] = indicators["adx"]["current"]
 
     def _compute_indicators(
         self,
@@ -381,64 +386,94 @@ class StockulaManager:
         indicators_dict = results["indicators"]
         assert isinstance(indicators_dict, dict)
 
+        # Delegate to smaller helpers to reduce cognitive complexity
+        self._compute_period_indicators(indicators_dict, ta, ta_config, progress, task, ticker)
+        self._compute_single_indicators(indicators_dict, ta, ta_config, progress, task, ticker)
+
+    def _compute_period_indicators(
+        self,
+        indicators_dict: dict,
+        ta: TechnicalIndicators,
+        ta_config: Any,
+        progress: Progress | None,
+        task: Any | None,
+        ticker: str | None,
+    ) -> None:
+        """Compute period-based indicators (SMA / EMA)."""
+        def _maybe_update(description: str) -> None:
+            if progress and task:
+                progress.update(task, description=description)
+
+        def _maybe_advance() -> None:
+            if progress and task:
+                progress.advance(task)
+
         if "sma" in ta_config.indicators:
             for period in ta_config.sma_periods:
-                if progress and task:
-                    progress.update(
-                        task,
-                        description=f"[cyan]Computing SMA({period}) for {ticker}...",
-                    )
+                _maybe_update(f"[cyan]Computing SMA({period}) for {ticker}...")
                 indicators_dict[f"SMA_{period}"] = ta.sma(period).iloc[-1]
-                if progress and task:
-                    progress.advance(task)
+                _maybe_advance()
 
         if "ema" in ta_config.indicators:
             for period in ta_config.ema_periods:
-                if progress and task:
-                    progress.update(
-                        task,
-                        description=f"[cyan]Computing EMA({period}) for {ticker}...",
-                    )
+                _maybe_update(f"[cyan]Computing EMA({period}) for {ticker}...")
                 indicators_dict[f"EMA_{period}"] = ta.ema(period).iloc[-1]
-                if progress and task:
-                    progress.advance(task)
+                _maybe_advance()
+
+    def _compute_single_indicators(
+        self,
+        indicators_dict: dict,
+        ta: TechnicalIndicators,
+        ta_config: Any,
+        progress: Progress | None,
+        task: Any | None,
+        ticker: str | None,
+    ) -> None:
+        """Compute single-shot indicators (RSI, MACD, BBands, ATR, ADX)."""
+        def _maybe_update(description: str) -> None:
+            if progress and task:
+                progress.update(task, description=description)
+
+        def _maybe_advance() -> None:
+            if progress and task:
+                progress.advance(task)
+
+        single_ops: list[tuple[str, callable, str]] = []
 
         if "rsi" in ta_config.indicators:
-            if progress and task:
-                progress.update(task, description=f"[cyan]Computing RSI for {ticker}...")
-            indicators_dict["RSI"] = ta.rsi(ta_config.rsi_period).iloc[-1]
-            if progress and task:
-                progress.advance(task)
+            single_ops.append(
+                ("RSI", lambda: ta.rsi(ta_config.rsi_period).iloc[-1], f"[cyan]Computing RSI for {ticker}...")
+            )
 
         if "macd" in ta_config.indicators:
-            if progress and task:
-                progress.update(task, description=f"[cyan]Computing MACD for {ticker}...")
-            macd_data = ta.macd(**ta_config.macd_params)
-            indicators_dict["MACD"] = macd_data.iloc[-1].to_dict()
-            if progress and task:
-                progress.advance(task)
+            single_ops.append(
+                ("MACD", lambda: ta.macd(**ta_config.macd_params).iloc[-1].to_dict(), f"[cyan]Computing MACD for {ticker}...")
+            )
 
         if "bbands" in ta_config.indicators:
-            if progress and task:
-                progress.update(task, description=f"[cyan]Computing Bollinger Bands for {ticker}...")
-            bbands_data = ta.bbands(**ta_config.bbands_params)
-            indicators_dict["BBands"] = bbands_data.iloc[-1].to_dict()
-            if progress and task:
-                progress.advance(task)
+            single_ops.append(
+                ("BBands", lambda: ta.bbands(**ta_config.bbands_params).iloc[-1].to_dict(), f"[cyan]Computing Bollinger Bands for {ticker}...")
+            )
 
         if "atr" in ta_config.indicators:
-            if progress and task:
-                progress.update(task, description=f"[cyan]Computing ATR for {ticker}...")
-            indicators_dict["ATR"] = ta.atr(ta_config.atr_period).iloc[-1]
-            if progress and task:
-                progress.advance(task)
+            single_ops.append(
+                ("ATR", lambda: ta.atr(ta_config.atr_period).iloc[-1], f"[cyan]Computing ATR for {ticker}...")
+            )
 
         if "adx" in ta_config.indicators:
-            if progress and task:
-                progress.update(task, description=f"[cyan]Computing ADX for {ticker}...")
-            indicators_dict["ADX"] = ta.adx(14).iloc[-1]
-            if progress and task:
-                progress.advance(task)
+            single_ops.append(
+                ("ADX", lambda: ta.adx(14).iloc[-1], f"[cyan]Computing ADX for {ticker}...")
+            )
+
+        for key, fn, desc in single_ops:
+            _maybe_update(desc)
+            try:
+                indicators_dict[key] = fn()
+            except Exception:
+                # Gracefully handle any indicator compute error and continue
+                indicators_dict[key] = None
+                self.log_manager.debug(f"Failed to compute {key} for {ticker}", exc_info=True)
+            _maybe_advance()
 
     def run_backtest(self, ticker: str) -> list[dict[str, Any]]:
         """Run backtesting for a ticker using BacktestingManager.
@@ -455,7 +490,7 @@ class StockulaManager:
         # Set the runner in the manager
         backtesting_manager.set_runner(runner)
 
-        results = []
+        results: list[dict[str, Any]] = []
 
         # Check if we should use train/test split for backtesting
         use_train_test_split = (
@@ -467,59 +502,68 @@ class StockulaManager:
 
         for strategy_config in self.config.backtest.strategies:
             try:
-                if use_train_test_split:
-                    # Calculate train ratio from dates
-                    train_ratio = 0.7  # Default fallback
+                strategy_entries = self._run_strategy_backtest(
+                    ticker=ticker,
+                    strategy_config=strategy_config,
+                    backtesting_manager=backtesting_manager,
+                    use_train_test_split=use_train_test_split,
+                )
 
-                    # Run with train/test split using BacktestingManager
-                    backtest_result = backtesting_manager.run_with_train_test_split(
-                        ticker=ticker,
-                        strategy_name=strategy_config.name,
-                        train_ratio=train_ratio,
-                        config=self.config,
-                        strategy_params=strategy_config.parameters,
-                        optimize_on_train=self.config.backtest.optimize,
-                        param_ranges=self.config.backtest.optimization_params
-                        if self.config.backtest.optimize and self.config.backtest.optimization_params
-                        else None,
-                    )
-
-                    # Check if there was an error
-                    if "error" in backtest_result:
-                        # Log the error and skip this strategy
-                        self.log_manager.error(
-                            f"Error backtesting {strategy_config.name} on {ticker}: {backtest_result.get('error')}"
-                        )
-                        continue
-
-                    # Create result entry with train/test results
-                    result_entry: dict[str, Any] | None = self._create_train_test_result(
-                        ticker, strategy_config, backtest_result
-                    )
-
-                else:
-                    # Run traditional backtest without train/test split
-                    backtest_start, backtest_end = self._get_backtest_dates()
-
-                    # Use BacktestingManager for single strategy backtest
-                    backtest_result = backtesting_manager.run_single_strategy(
-                        ticker=ticker,
-                        strategy_name=strategy_config.name,
-                        config=self.config,
-                        strategy_params=strategy_config.parameters,
-                        start_date=backtest_start,
-                        end_date=backtest_end,
-                    )
-
-                    result_entry = self._create_standard_result(ticker, strategy_config, backtest_result)  # type: ignore[no-redef]
-
-                # Only append if result_entry is not None (i.e., backtest succeeded)
-                if result_entry is not None:
-                    results.append(result_entry)
+                if strategy_entries:
+                    results.extend(strategy_entries)
             except Exception as e:
                 self.console.print(f"[red]Error backtesting {strategy_config.name} on {ticker}: {e}[/red]")
 
         return results
+
+    def _run_strategy_backtest(
+        self,
+        ticker: str,
+        strategy_config: Any,
+        backtesting_manager,
+        use_train_test_split: bool,
+    ) -> list[dict[str, Any]] | None:
+        """Run backtest for a single strategy and return list of result entries or None."""
+        if use_train_test_split:
+            # Default fallback train ratio (kept for compatibility)
+            train_ratio = 0.7
+
+            backtest_result = backtesting_manager.run_with_train_test_split(
+                ticker=ticker,
+                strategy_name=strategy_config.name,
+                train_ratio=train_ratio,
+                config=self.config,
+                strategy_params=strategy_config.parameters,
+                optimize_on_train=self.config.backtest.optimize,
+                param_ranges=self.config.backtest.optimization_params
+                if self.config.backtest.optimize and self.config.backtest.optimization_params
+                else None,
+            )
+
+            if "error" in backtest_result:
+                # Log the error and skip this strategy
+                self.log_manager.error(
+                    f"Error backtesting {strategy_config.name} on {ticker}: {backtest_result.get('error')}"
+                )
+                return None
+
+            result_entry = self._create_train_test_result(ticker, strategy_config, backtest_result)
+            return [result_entry] if result_entry is not None else None
+
+        # Standard (single run) backtest path
+        backtest_start, backtest_end = self._get_backtest_dates()
+
+        backtest_result = backtesting_manager.run_single_strategy(
+            ticker=ticker,
+            strategy_name=strategy_config.name,
+            config=self.config,
+            strategy_params=strategy_config.parameters,
+            start_date=backtest_start,
+            end_date=backtest_end,
+        )
+
+        result_entry = self._create_standard_result(ticker, strategy_config, backtest_result)
+        return [result_entry] if result_entry is not None else None
 
     def _get_backtest_dates(self) -> tuple[str | None, str | None]:
         """Get backtest date range from configuration.
@@ -919,6 +963,24 @@ class StockulaManager:
                 "exchange_fees": 0,
             }
 
+    def _extract_dates_from_backtesting(self, results: dict[str, Any]) -> tuple[str | None, str | None]:
+        """Extract start/end dates from backtesting results, returning None when not found."""
+        backtests = results.get("backtesting")
+        if not backtests:
+            return None, None
+
+        start_date = None
+        end_date = None
+        for backtest_result in backtests:
+            if start_date is None and backtest_result.get("start_date"):
+                start_date = backtest_result.get("start_date")
+            if end_date is None and backtest_result.get("end_date"):
+                end_date = backtest_result.get("end_date")
+            if start_date is not None and end_date is not None:
+                break
+
+        return start_date, end_date
+
     def _get_date_range(self, results: dict[str, Any]) -> tuple[str, str]:
         """Get date range from configuration or results.
 
@@ -928,43 +990,38 @@ class StockulaManager:
         Returns:
             Tuple of (start_date, end_date) as strings
         """
-        date_start: str = "N/A"
-        date_end: str = "N/A"
+        def _format_date(value: Any) -> str | None:
+            if value is None:
+                return None
+            return self.date_to_string(value)
 
-        # First try backtest dates, then data dates
-        if self.config.backtest.start_date:
-            date_start_val = self.date_to_string(self.config.backtest.start_date)
-            if date_start_val is not None:
-                date_start = date_start_val
-        elif self.config.data.start_date:
-            date_start_val = self.date_to_string(self.config.data.start_date)
-            if date_start_val is not None:
-                date_start = date_start_val
+        def _choose_date(primary: str | None, fallback: str | None, extracted: str | None) -> str:
+            if primary:
+                return primary
+            if fallback:
+                return fallback
+            if extracted:
+                return extracted
+            return "N/A"
 
-        if self.config.backtest.end_date:
-            date_end_val = self.date_to_string(self.config.backtest.end_date)
-            if date_end_val is not None:
-                date_end = date_end_val
-        elif self.config.data.end_date:
-            date_end_val = self.date_to_string(self.config.data.end_date)
-            if date_end_val is not None:
-                date_end = date_end_val
+        # Prefer backtest config dates, fall back to general data dates
+        bs = getattr(self.config.backtest, "start_date", None)
+        be = getattr(self.config.backtest, "end_date", None)
+        ds = getattr(self.config.data, "start_date", None)
+        de = getattr(self.config.data, "end_date", None)
 
-        # If dates not in config, try to get from backtest results
-        if (
-            (date_start == "N/A" or date_end == "N/A")
-            and results.get("backtesting")
-            and len(results["backtesting"]) > 0
-        ):
-            # Look through all results to find one with dates
-            for backtest_result in results["backtesting"]:
-                if date_start == "N/A" and "start_date" in backtest_result:
-                    date_start = backtest_result["start_date"]
-                if date_end == "N/A" and "end_date" in backtest_result:
-                    date_end = backtest_result["end_date"]
-                # Stop if we found both dates
-                if date_start != "N/A" and date_end != "N/A":
-                    break
+        p_start = _format_date(bs)
+        p_end = _format_date(be)
+        f_start = _format_date(ds)
+        f_end = _format_date(de)
+
+        # Only attempt to extract from backtesting results if either start or end is still missing
+        extracted_start = extracted_end = None
+        if not p_start and not f_start or not p_end and not f_end:
+            extracted_start, extracted_end = self._extract_dates_from_backtesting(results)
+
+        date_start = _choose_date(p_start, f_start, extracted_start)
+        date_end = _choose_date(p_end, f_end, extracted_end)
 
         return date_start, date_end
 
@@ -1048,119 +1105,143 @@ class StockulaManager:
         portfolio,
         show_forecast_warning: bool = True,
     ) -> dict[str, Any]:
-        """Run the main processing loop for ticker analysis.
-
-        Args:
-            mode: Processing mode ('all', 'ta', 'backtest', 'forecast')
-            portfolio: Portfolio instance
-            show_forecast_warning: Whether to show forecast warning
-
-        Returns:
-            Dictionary containing all results
-        """
-        from rich.progress import BarColumn, Progress, SpinnerColumn, TextColumn, TimeRemainingColumn
-
-        # Get portfolio value at start of backtest period
+        """Run the main processing loop for ticker analysis with reduced cognitive complexity."""
+        # Prepare initial values and logs
         start_date_str = self.date_to_string(self.config.data.start_date) if mode in ["all", "backtest"] else None
         initial_portfolio_value, _ = self.get_portfolio_value_at_date(portfolio, start_date_str)
 
-        # Calculate returns
         initial_return = initial_portfolio_value - portfolio.initial_capital
         initial_return_pct = (initial_return / portfolio.initial_capital) * 100
 
         self.log_manager.info(f"Initial Capital: ${portfolio.initial_capital:,.2f}")
         self.log_manager.info(f"Return Since Inception: ${initial_return:,.2f} ({initial_return_pct:+.2f}%)")
 
-        # Initialize results
-        results = {
+        results: dict[str, Any] = {
             "initial_portfolio_value": initial_portfolio_value,
             "initial_capital": portfolio.initial_capital,
         }
 
-        # Categorize assets
         all_assets = portfolio.get_all_assets()
-        tradeable_assets, hold_only_assets, hold_only_categories = self.categorize_assets(portfolio)
-
-        # Get ticker symbols for processing
+        _, _, hold_only_categories = self.categorize_assets(portfolio)
         ticker_symbols = [asset.symbol for asset in all_assets]
 
-        # Determine what operations will be performed
         will_backtest = mode in ["all", "backtest"]
         will_forecast = mode in ["all", "forecast"]
 
-        # Create appropriate progress display
+        # Delegate the actual processing to smaller helpers for clarity
         if will_backtest or will_forecast:
-            with Progress(
-                SpinnerColumn(),
-                TextColumn("[progress.description]{task.description}"),
-                BarColumn(),
-                TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
-                TimeRemainingColumn(),
-                console=self.console,
-            ) as progress:
-                # Show forecast warning if needed
-                if will_forecast and show_forecast_warning:
-                    from .display import ResultsDisplay
-
-                    display = ResultsDisplay(self.console)
-                    display.show_forecast_warning(self.config)
-
-                # Create progress tasks
-                backtest_task = None
-                if will_backtest:
-                    # Count tradeable assets for backtesting
-                    tradeable_count = len([a for a in all_assets if a.category not in hold_only_categories])
-                    if tradeable_count > 0:
-                        num_strategies = len(self.config.backtest.strategies)
-                        backtest_task = progress.add_task(
-                            f"[green]Backtesting {num_strategies} strategies across {tradeable_count} stocks...",
-                            total=tradeable_count * num_strategies,
-                        )
-
-                # Process each ticker with progress tracking
-                for ticker in ticker_symbols:
-                    self.log_manager.debug(f"\nProcessing {ticker}...")
-
-                    # Get the asset to check its category
-                    asset = next((a for a in all_assets if a.symbol == ticker), None)
-                    is_hold_only = asset and asset.category in hold_only_categories
-
-                    if mode in ["all", "ta"]:
-                        if "technical_analysis" not in results:
-                            results["technical_analysis"] = []
-                        # Show progress for TA when it's the only operation
-                        show_ta_progress = mode == "ta" or not will_backtest and not will_forecast
-                        results["technical_analysis"].append(self.run_technical_analysis(ticker, show_ta_progress))
-
-                    if will_backtest and not is_hold_only:
-                        if "backtesting" not in results:
-                            results["backtesting"] = []
-
-                        # Run backtest and update progress
-                        backtest_results = self.run_backtest(ticker)
-                        results["backtesting"].extend(backtest_results)
-
-                        # Update progress
-                        if backtest_task is not None:
-                            for _ in backtest_results:
-                                progress.advance(backtest_task)
-
-                # Run sequential forecasting if needed
-                if will_forecast and ticker_symbols:
-                    forecasting_manager = self.container.forecasting_manager()
-                    forecast_results = forecasting_manager.forecast_multiple_symbols_with_progress(
-                        ticker_symbols, self.config, self.console
-                    )
-                    results["forecasting"] = forecast_results
+            self._process_with_progress_results(
+                results=results,
+                mode=mode,
+                portfolio=portfolio,
+                all_assets=all_assets,
+                ticker_symbols=ticker_symbols,
+                hold_only_categories=hold_only_categories,
+                will_backtest=will_backtest,
+                will_forecast=will_forecast,
+                show_forecast_warning=show_forecast_warning,
+            )
         else:
-            # No progress bars needed for TA only
+            self._process_ta_only_results(results, mode, ticker_symbols)
+
+        return results
+
+    def _process_with_progress_results(
+        self,
+        results: dict[str, Any],
+        mode: str,
+        all_assets: list[Any],
+        ticker_symbols: list[str],
+        hold_only_categories: set[Category],
+        will_backtest: bool,
+        will_forecast: bool,
+        show_forecast_warning: bool,
+    ) -> None:
+        """Process tickers with a progress bar, handling TA, backtest and forecast as needed."""
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            BarColumn(),
+            TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
+            TimeRemainingColumn(),
+            console=self.console,
+        ) as progress:
+            if will_forecast and show_forecast_warning:
+                self._show_forecast_warning()
+
+            backtest_task = self._create_backtest_task(progress, will_backtest, all_assets, hold_only_categories)
+
             for ticker in ticker_symbols:
                 self.log_manager.debug(f"\nProcessing {ticker}...")
 
-                if mode in ["all", "ta"]:
-                    if "technical_analysis" not in results:
-                        results["technical_analysis"] = []
-                    # Always show progress for standalone TA mode
-                    results["technical_analysis"].append(self.run_technical_analysis(ticker, show_progress=True))
+                asset = next((a for a in all_assets if a.symbol == ticker), None)
+                is_hold_only = asset and asset.category in hold_only_categories
 
-        return results
+                # Technical analysis when required (appends results internally)
+                self._process_technical_if_needed(results, mode, ticker, will_backtest, will_forecast)
+
+                # Backtesting when required and asset is tradeable
+                if will_backtest and not is_hold_only:
+                    backtest_results = self.run_backtest(ticker)
+                    results.setdefault("backtesting", []).extend(backtest_results)
+                    if backtest_task is not None and backtest_results:
+                        progress.advance(backtest_task, advance=len(backtest_results))
+
+            # Forecasting (runs after per-ticker processing)
+            if will_forecast and ticker_symbols:
+                forecasting_manager = self.container.forecasting_manager()
+                forecast_results = forecasting_manager.forecast_multiple_symbols_with_progress(
+                    ticker_symbols, self.config, self.console
+                )
+                results["forecasting"] = forecast_results
+
+    def _process_ta_only_results(self, results: dict[str, Any], mode: str, ticker_symbols: list[str]) -> None:
+        """Process technical analysis only (no progress bar)."""
+        for ticker in ticker_symbols:
+            self.log_manager.debug(f"\nProcessing {ticker}...")
+            if mode in ["all", "ta"]:
+                results.setdefault("technical_analysis", []).append(self.run_technical_analysis(ticker, show_progress=True))
+
+    # Helper methods extracted from run_main_processing to reduce cognitive complexity.
+
+    def _show_forecast_warning(self) -> None:
+        """Display forecast warning using ResultsDisplay."""
+        from .display import ResultsDisplay
+
+        display = ResultsDisplay(self.console)
+        display.show_forecast_warning(self.config)
+
+    def _create_backtest_task(
+        self,
+        progress: Progress,
+        will_backtest: bool,
+        all_assets: list[Any],
+        hold_only_categories: set[Category],
+    ):
+        """Create and return a backtest progress task or None."""
+        if not will_backtest:
+            return None
+        tradeable_count = len([a for a in all_assets if a.category not in hold_only_categories])
+        if tradeable_count == 0:
+            return None
+        num_strategies = len(self.config.backtest.strategies)
+        return progress.add_task(
+            f"[green]Backtesting {num_strategies} strategies across {tradeable_count} stocks...",
+            total=tradeable_count * num_strategies,
+        )
+
+    def _process_technical_if_needed(
+        self,
+        results: dict[str, Any],
+        mode: str,
+        ticker: str,
+        will_backtest: bool,
+        will_forecast: bool,
+    ) -> None:
+        """Run technical analysis for a ticker when required and append to results."""
+        if mode not in ["all", "ta"]:
+            return
+
+        # Determine whether to show TA progress (when TA is standalone)
+        show_ta_progress = mode == "ta" or (not will_backtest and not will_forecast)
+        results.setdefault("technical_analysis", []).append(self.run_technical_analysis(ticker, show_ta_progress))

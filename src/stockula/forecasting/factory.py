@@ -23,99 +23,109 @@ def create_forecast_backend(
     config: "ForecastConfig",
     logging_manager: ILoggingManager = Provide["logging_manager"],
 ) -> ForecastBackend:
-    """Create forecasting backend (AutoGluon if available, otherwise Simple).
+    """Create forecasting backend (AutoGluon if available, otherwise Simple)."""
 
-    Args:
-        config: Forecast configuration
-        logging_manager: Injected logging manager
-
-    Returns:
-        Configured forecasting backend
-    """
-    # Use default forecast_length of 7 if not specified
     forecast_length = config.forecast_length if config.forecast_length is not None else 7
-
-    # Prefer AutoGluon+Chronos integration when explicitly requested via models setting
-    # Accept models="zero_shot" or models list containing "Chronos"
     requested_models = getattr(config, "models", None)
-    is_chronos_requested = (isinstance(requested_models, str) and requested_models.lower() == "zero_shot") or (
-        isinstance(requested_models, list) and any(str(m).lower() == "chronos" for m in requested_models)
-    )
+    is_chronos_requested = _is_chronos_requested(requested_models)
 
     if is_chronos_requested and AUTOGLUON_AVAILABLE:
-        # Use AutoGluon with Chronos model to leverage covariates/ensembling
-        return cast(
-            ForecastBackend,
-            AutoGluonBackend(
-                forecast_length=forecast_length,
-                frequency=config.frequency,
-                prediction_interval=config.prediction_interval,
-                preset=config.preset,
-                models=requested_models if requested_models is not None else "zero_shot",
-                time_limit=config.time_limit,
-                eval_metric=config.eval_metric,
-                no_negatives=config.no_negatives,
-                use_calendar_covariates=getattr(config, "use_calendar_covariates", True),
-                past_covariate_columns=getattr(config, "past_covariate_columns", None),
-            ),
-        )
+        return _create_autogluon_chronos_backend(config, forecast_length, requested_models)
 
-    if is_chronos_requested and CHRONOS_AVAILABLE:
-        # Ensure runtime prerequisites are present (chronos + torch) for direct Chronos
-        try:
-            import importlib
-
-            importlib.import_module("chronos")
-            importlib.import_module("torch")
-            chronos_ready = True
-        except Exception:
-            chronos_ready = False
-
-        if chronos_ready:
-            return ChronosBackend(
-                forecast_length=forecast_length,
-                frequency=config.frequency,
-                prediction_interval=config.prediction_interval,
-                no_negatives=config.no_negatives,
-                model_name=next(
-                    (
-                        m
-                        for m in (requested_models if isinstance(requested_models, list) else [])
-                        if isinstance(m, str) and m.startswith("amazon/chronos-")
-                    ),
-                    None,
-                ),
-            )
+    if is_chronos_requested and CHRONOS_AVAILABLE and _is_chronos_runtime_ready():
+        return _create_chronos_backend(config, forecast_length, requested_models)
 
     if AUTOGLUON_AVAILABLE:
-        return cast(
-            ForecastBackend,
-            AutoGluonBackend(
-                forecast_length=forecast_length,
-                frequency=config.frequency,
-                prediction_interval=config.prediction_interval,
-                preset=config.preset,
-                models=requested_models,
-                time_limit=config.time_limit,
-                eval_metric=config.eval_metric,
-                no_negatives=config.no_negatives,
-                use_calendar_covariates=getattr(config, "use_calendar_covariates", True),
-                past_covariate_columns=getattr(config, "past_covariate_columns", None),
-            ),
-        )
-    else:
-        # Fall back to simple backend if AutoGluon is not available
-        # Check if logging_manager is a Provide object (happens in tests with unmocked DI)
-        if hasattr(logging_manager, "__class__") and logging_manager.__class__.__name__ == "Provide":
-            # Skip logging when in test context with unmocked DI
-            pass
-        else:
-            logging_manager.warning(
-                "AutoGluon not available (requires Python < 3.13). Using simple linear regression for forecasting."
-            )
-        return SimpleForecastBackend(
+        return _create_autogluon_backend(config, forecast_length, requested_models)
+
+    _warn_if_no_autogluon(logging_manager)
+    return _create_simple_backend(config, forecast_length)
+
+
+def _is_chronos_requested(requested_models):
+    if isinstance(requested_models, str):
+        return requested_models.lower() == "zero_shot"
+    if isinstance(requested_models, list):
+        return any(str(m).lower() == "chronos" for m in requested_models)
+    return False
+
+
+def _is_chronos_runtime_ready():
+    try:
+        import importlib
+        importlib.import_module("chronos")
+        importlib.import_module("torch")
+        return True
+    except Exception:
+        return False
+
+
+def _create_autogluon_chronos_backend(config, forecast_length, requested_models):
+    return cast(
+        ForecastBackend,
+        AutoGluonBackend(
             forecast_length=forecast_length,
             frequency=config.frequency,
             prediction_interval=config.prediction_interval,
+            preset=config.preset,
+            models=requested_models if requested_models is not None else "zero_shot",
+            time_limit=config.time_limit,
+            eval_metric=config.eval_metric,
             no_negatives=config.no_negatives,
-        )
+            use_calendar_covariates=getattr(config, "use_calendar_covariates", True),
+            past_covariate_columns=getattr(config, "past_covariate_columns", None),
+        ),
+    )
+
+
+def _create_chronos_backend(config, forecast_length, requested_models):
+    model_name = next(
+        (
+            m
+            for m in (requested_models if isinstance(requested_models, list) else [])
+            if isinstance(m, str) and m.startswith("amazon/chronos-")
+        ),
+        None,
+    )
+    return ChronosBackend(
+        forecast_length=forecast_length,
+        frequency=config.frequency,
+        prediction_interval=config.prediction_interval,
+        no_negatives=config.no_negatives,
+        model_name=model_name,
+    )
+
+
+def _create_autogluon_backend(config, forecast_length, requested_models):
+    return cast(
+        ForecastBackend,
+        AutoGluonBackend(
+            forecast_length=forecast_length,
+            frequency=config.frequency,
+            prediction_interval=config.prediction_interval,
+            preset=config.preset,
+            models=requested_models,
+            time_limit=config.time_limit,
+            eval_metric=config.eval_metric,
+            no_negatives=config.no_negatives,
+            use_calendar_covariates=getattr(config, "use_calendar_covariates", True),
+            past_covariate_columns=getattr(config, "past_covariate_columns", None),
+        ),
+    )
+
+
+def _warn_if_no_autogluon(logging_manager):
+    if hasattr(logging_manager, "__class__") and logging_manager.__class__.__name__ == "Provide":
+        return
+    logging_manager.warning(
+        "AutoGluon not available (requires Python < 3.13). Using simple linear regression for forecasting."
+    )
+
+
+def _create_simple_backend(config, forecast_length):
+    return SimpleForecastBackend(
+        forecast_length=forecast_length,
+        frequency=config.frequency,
+        prediction_interval=config.prediction_interval,
+        no_negatives=config.no_negatives,
+    )

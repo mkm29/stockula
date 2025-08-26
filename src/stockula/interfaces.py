@@ -96,23 +96,38 @@ class ILoggingManager(ABC):
         pass
 
     @abstractmethod
-    def isEnabledFor(self, level: int) -> bool:
+    def is_enabled_for(self, level: int) -> bool:
         """Check if logging is enabled for given level."""
         pass
 
     @abstractmethod
     def error(self, message: str, exc_info: bool = False) -> None:
-        """Log error message."""
+        """Log error message.
+
+        Args:
+            message: Error message to log
+            exc_info: If True, include exception traceback information
+        """
         pass
 
     @abstractmethod
     def critical(self, message: str, exc_info: bool = False) -> None:
-        """Log critical message."""
+        """Log critical message.
+
+        Args:
+            message: Critical message to log
+            exc_info: If True, include exception traceback information
+        """
         pass
 
     @abstractmethod
     def set_module_level(self, module_name: str, level: str) -> None:
-        """Set the logging level for a specific module."""
+        """Set the logging level for a specific module.
+
+        Args:
+            module_name: Name of the module to configure
+            level: Logging level (e.g., 'DEBUG', 'INFO', 'WARNING', 'ERROR')
+        """
         pass
 
 

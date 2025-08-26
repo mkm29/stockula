@@ -16,7 +16,8 @@ warnings.filterwarnings("ignore", category=UserWarning, module="autogluon")
 warnings.filterwarnings("ignore", category=FutureWarning, module="autogluon")
 
 if TYPE_CHECKING:
-    pass
+    # Place any type-only imports here if needed in the future
+    ...
 
 
 class AutoGluonBackend(ForecastBackend):
@@ -225,60 +226,33 @@ class AutoGluonBackend(ForecastBackend):
         time_limit: int | None = None,
         **kwargs,
     ) -> "AutoGluonBackend":
-        """Fit the AutoGluon model on historical data.
-
-        Args:
-            data: DataFrame with time series data (index should be DatetimeIndex)
-            target_column: Column to forecast
-            show_progress: Whether to show progress bar
-            preset: Override default preset
-            models: Override default models
-            time_limit: Override default time limit
-            **kwargs: Additional parameters
-
-        Returns:
-            Self for chaining
-        """
-        # Validate input
+        """Fit the AutoGluon model on historical data."""
         self.validate_input(data, target_column)
-
-        # Use provided parameters or defaults
         preset = preset or self.preset
         models_to_use = models if models is not None else self.models
         time_limit = time_limit or self.time_limit
-
-        # Get actual model list
         model_list = self._get_models(models_to_use)
-
-        # Prepare data
         ts_data = self._prepare_data(data, target_column)
+        past_cov_ts = self._get_past_covariates(data, target_column)
+        ag_freq = self._infer_ag_freq(data)
+        self._init_predictor(ag_freq, show_progress)
+        known_cov_train_ts = self._get_known_covariates(ts_data) if not show_progress else None
+        self._fit_predictor(ts_data, preset, model_list, time_limit, known_cov_train_ts, past_cov_ts, show_progress)
+        self.is_fitted = True
+        self._best_model_name = self.predictor.get_model_best()
+        self.logger.debug(f"AutoGluon model fitting completed. Best model: {self._best_model_name}")
+        return self
 
-        # Build covariates
-        # Past covariates from observed series (if available)
+    def _get_past_covariates(self, data: pd.DataFrame, target_column: str) -> Any | None:
         if self.past_covariate_columns is None:
             candidate_past_cols = [
                 c for c in ["Open", "High", "Low", "Adj Close", "Volume"] if c in data.columns and c != target_column
             ]
         else:
             candidate_past_cols = [c for c in self.past_covariate_columns if c in data.columns and c != target_column]
+        return self._prepare_past_covariates(data, candidate_past_cols) if candidate_past_cols else None
 
-        past_cov_ts = self._prepare_past_covariates(data, candidate_past_cols) if candidate_past_cols else None
-
-        self.logger.debug(f"Fitting AutoGluon model on {len(data)} data points")
-        self.logger.debug(f"Date range: {data.index.min()} to {data.index.max()}")
-
-        try:
-            from autogluon.timeseries import TimeSeriesPredictor
-        except ImportError:
-            raise ImportError(
-                "AutoGluon TimeSeries not installed. Install with: pip install autogluon.timeseries"
-            ) from None
-
-        # Determine prediction length
-        if self.forecast_length is None:
-            self.forecast_length = 14  # Default
-
-        # Infer frequency if needed
+    def _infer_ag_freq(self, data: pd.DataFrame) -> str:
         freq_to_use = self.frequency
         if self.frequency == "infer":
             try:
@@ -286,19 +260,58 @@ class AutoGluonBackend(ForecastBackend):
                 freq_to_use = inferred_freq if inferred_freq else "D"
             except Exception:
                 freq_to_use = "D"
-
-        # Map pandas frequency to AutoGluon frequency
         freq_map = {
-            "D": "D",  # Daily
-            "B": "B",  # Business day
-            "W": "W",  # Weekly
-            "M": "M",  # Monthly
-            "Q": "Q",  # Quarterly
-            "H": "H",  # Hourly
+            "D": "D", "B": "B", "W": "W", "M": "M", "Q": "Q", "H": "H",
         }
-        ag_freq = freq_map.get(freq_to_use, "D")
+        return freq_map.get(freq_to_use, "D")
 
-        if show_progress:
+    def _init_predictor(self, ag_freq: str, show_progress: bool):
+        try:
+            from autogluon.timeseries import TimeSeriesPredictor
+        except ImportError:
+            raise ImportError(
+                "AutoGluon TimeSeries not installed. Install with: pip install autogluon.timeseries"
+            ) from None
+        if self.forecast_length is None:
+            self.forecast_length = 14
+        self.logger.info(f"Using evaluation metric: {self.eval_metric}")
+        quantiles = [0.05, 0.5, 0.95] if self.prediction_interval == 0.9 else None
+        verbosity = 0 if show_progress else (2 if self.logger.is_enabled_for(10) else 0)
+        self.predictor = TimeSeriesPredictor(
+            prediction_length=self.forecast_length,
+            freq=ag_freq,
+            eval_metric=self.eval_metric,
+            quantile_levels=quantiles,
+            verbosity=verbosity,
+        )
+
+    def _get_known_covariates(self, ts_data: Any) -> Any | None:
+        if self.use_calendar_covariates:
+            return self._prepare_known_covariates(ts_data.index.get_level_values("timestamp").unique())
+        return None
+
+    def _fit_predictor(
+        self,
+        ts_data: Any,
+        preset: str,
+        model_list: list[str] | None,
+        time_limit: int | None,
+        known_cov_train_ts: Any | None,
+        past_cov_ts: Any | None,
+        show_progress: bool,
+    ):
+        fit_kwargs = {
+            "train_data": ts_data,
+            "presets": preset,
+            "hyperparameters": {"model": model_list} if model_list else None,
+            "time_limit": time_limit,
+        }
+        if not show_progress:
+            fit_kwargs["known_covariates"] = known_cov_train_ts
+            fit_kwargs["past_covariates"] = past_cov_ts
+            assert self.predictor is not None
+            self.predictor.fit(**fit_kwargs)
+        else:
             with Progress(
                 SpinnerColumn(),
                 TextColumn("[progress.description]{task.description}"),
@@ -306,173 +319,27 @@ class AutoGluonBackend(ForecastBackend):
                 transient=True,
             ) as progress:
                 task = progress.add_task("[cyan]Training AutoGluon models on historical data...", total=None)
-
-                # Log the evaluation metric being used
-                self.logger.info(f"Using evaluation metric: {self.eval_metric}")
-
-                # Create predictor with explicit eval_metric
-                self.predictor = TimeSeriesPredictor(
-                    prediction_length=self.forecast_length,
-                    freq=ag_freq,
-                    eval_metric=self.eval_metric,
-                    quantile_levels=[0.05, 0.5, 0.95] if self.prediction_interval == 0.9 else None,
-                    verbosity=0,  # Suppress output in progress mode
-                )
-
-                # Fit the model
                 assert self.predictor is not None
-                self.predictor.fit(
-                    train_data=ts_data,
-                    presets=preset,
-                    hyperparameters={"model": model_list} if model_list else None,
-                    time_limit=time_limit,
-                )
-
+                self.predictor.fit(**fit_kwargs)
                 progress.update(task, description="[green]✓ AutoGluon model training completed")
-        else:
-            # Log the evaluation metric being used
-            self.logger.info(f"Using evaluation metric: {self.eval_metric}")
-
-            # Create predictor with explicit eval_metric
-            self.predictor = TimeSeriesPredictor(
-                prediction_length=self.forecast_length,
-                freq=ag_freq,
-                eval_metric=self.eval_metric,
-                quantile_levels=[0.05, 0.5, 0.95] if self.prediction_interval == 0.9 else None,
-                verbosity=2 if self.logger.isEnabledFor(10) else 0,
-            )
-
-            # Fit the model
-            # Known covariates for training portion: generate calendar features for training index
-            known_cov_train_ts = (
-                self._prepare_known_covariates(ts_data.index.get_level_values("timestamp").unique())
-                if self.use_calendar_covariates
-                else None
-            )
-
-            assert self.predictor is not None
-            self.predictor.fit(
-                train_data=ts_data,
-                presets=preset,
-                hyperparameters={"model": model_list} if model_list else None,
-                time_limit=time_limit,
-                known_covariates=known_cov_train_ts,
-                past_covariates=past_cov_ts,
-            )
-
-        self.is_fitted = True
-        assert self.predictor is not None
-        self._best_model_name = self.predictor.get_model_best()
-        self.logger.debug(f"AutoGluon model fitting completed. Best model: {self._best_model_name}")
-
-        return self
 
     def predict(self, **kwargs) -> ForecastResult:
-        """Generate predictions using fitted AutoGluon model.
-
-        Returns:
-            ForecastResult with predictions and metadata
-        """
+        """Generate predictions using fitted AutoGluon model."""
         if not self.is_fitted or self.predictor is None:
             raise ValueError("Model not fitted. Call fit() first.")
 
         self.logger.debug("Generating AutoGluon predictions...")
 
-        # Generate predictions with known covariates for the forecast horizon
-        known_cov_future_ts = None
-        if self.use_calendar_covariates:
-            # Let the predictor infer future timestamps; provide calendar features if possible
-            try:
-                # Best effort to derive future timestamps: use training freq and last timestamp
-                freq = getattr(getattr(self.predictor, "_learner", object()), "freq", "D")
-                train_data = getattr(getattr(self.predictor, "_learner", object()), "train_data", None)
-                import pandas as pd
-
-                if train_data is not None:
-                    last_timestamp = train_data.index.get_level_values("timestamp").max()
-                else:
-                    last_timestamp = pd.Timestamp.now().normalize()
-
-                future_index = pd.date_range(
-                    start=last_timestamp + pd.tseries.frequencies.to_offset(freq),
-                    periods=self.forecast_length,
-                    freq=freq,
-                )
-                known_cov_future_ts = self._prepare_known_covariates(future_index)
-            except Exception:
-                known_cov_future_ts = None
-
+        known_cov_future_ts = self._prepare_future_covariates() if self.use_calendar_covariates else None
         predictions = self.predictor.predict(known_covariates=known_cov_future_ts)
-
-        # Normalize predictions to a DataFrame with timestamp index for item_id 'stock'
-        pred_df = predictions.reset_index()
-        if "item_id" in pred_df.columns:
-            pred_df = pred_df[pred_df["item_id"] == "stock"]
-        if "timestamp" in pred_df.columns:
-            pred_df = pred_df.set_index("timestamp")
-
-        # Choose central tendency column
-        median_col = "mean" if "mean" in pred_df.columns else ("0.5" if "0.5" in pred_df.columns else None)
-        if median_col is None:
-            # Fallback: last numeric column
-            numeric_cols = [c for c in pred_df.columns if pd.api.types.is_numeric_dtype(pred_df[c])]
-            median_col = numeric_cols[-1] if numeric_cols else pred_df.columns[-1]
-
-        # Determine interval columns closest to requested interval
-        alpha = (1.0 - float(self.prediction_interval)) / 2.0
-        low_target, high_target = alpha, 1.0 - alpha
-        # Available quantile columns look like '0.05', '0.5', '0.95'
-        qcols = [c for c in pred_df.columns if isinstance(c, str) and c.replace(".", "", 1).isdigit()]
-
-        def _closest(col_target: float) -> str | None:
-            if not qcols:
-                return None
-            import numpy as np
-
-            arr = np.array([float(c) for c in qcols])
-            idx = int(np.argmin(np.abs(arr - col_target)))
-            return qcols[idx]
-
-        low_col = _closest(low_target)
-        high_col = _closest(high_target)
-
-        forecast_values = pred_df[median_col].to_numpy()
-        if low_col and high_col and low_col in pred_df.columns and high_col in pred_df.columns:
-            lower_bound = pred_df[low_col].to_numpy()
-            upper_bound = pred_df[high_col].to_numpy()
-        else:
-            lower_bound = forecast_values * 0.9
-            upper_bound = forecast_values * 1.1
-
-        # Apply non-negative constraint if needed
-        if self.no_negatives:
-            forecast_values = forecast_values.clip(min=0)
-            lower_bound = lower_bound.clip(min=0)
-            upper_bound = upper_bound.clip(min=0)
-
-        # Create result DataFrame with proper index
-        # We need to generate future dates
-        import pandas as pd
-
-        last_date = pd.Timestamp.now()
-        freq = self.predictor._learner.freq if hasattr(self.predictor, "_learner") else "D"
-        future_dates = pd.date_range(start=last_date, periods=len(forecast_values) + 1, freq=freq)[1:]
-
-        result_df = pd.DataFrame(
-            {
-                "forecast": forecast_values,
-                "lower_bound": lower_bound,
-                "upper_bound": upper_bound,
-            },
-            index=future_dates,
-        )
-
+        pred_df = self._normalize_predictions(predictions)
+        median_col = self._get_median_col(pred_df)
+        low_col, high_col = self._get_quantile_cols(pred_df)
+        forecast_values, lower_bound, upper_bound = self._get_forecast_bounds(pred_df, median_col, low_col, high_col)
+        forecast_values, lower_bound, upper_bound = self._apply_non_negative(forecast_values, lower_bound, upper_bound)
+        result_df = self._build_result_df(forecast_values, lower_bound, upper_bound)
         self.logger.debug(f"Generated {len(result_df)} forecast points")
-
-        # Get model info
         model_info = self.get_model_info()
-
-        # Get leaderboard for additional metrics
         leaderboard = self.predictor.leaderboard(silent=True)
         best_model_metrics = leaderboard.iloc[0].to_dict() if not leaderboard.empty else {}
 
@@ -482,7 +349,7 @@ class AutoGluonBackend(ForecastBackend):
             model_params=model_info.get("model_params", {}),
             metrics={
                 "score": float(best_model_metrics.get("score", 0.0)),
-                "eval_metric": self.eval_metric,  # type: ignore[dict-item]
+                "eval_metric": self.eval_metric,
                 "pred_time": float(best_model_metrics.get("pred_time", 0.0)),
                 "fit_time": float(best_model_metrics.get("fit_time", 0.0)),
             },
@@ -491,6 +358,97 @@ class AutoGluonBackend(ForecastBackend):
                 "models_trained": len(leaderboard) if leaderboard is not None else 1,
                 "evaluation_metric": self.eval_metric,
             },
+        )
+
+    def _prepare_future_covariates(self) -> Any | None:
+        """Prepare known covariates for the forecast horizon."""
+        try:
+            freq = getattr(getattr(self.predictor, "_learner", object()), "freq", "D")
+            train_data = getattr(getattr(self.predictor, "_learner", object()), "train_data", None)
+            import pandas as pd
+            if train_data is not None:
+                last_timestamp = train_data.index.get_level_values("timestamp").max()
+            else:
+                last_timestamp = pd.Timestamp.now().normalize()
+            future_index = pd.date_range(
+                start=last_timestamp + pd.tseries.frequencies.to_offset(freq),
+                periods=self.forecast_length,
+                freq=freq,
+            )
+            return self._prepare_known_covariates(future_index)
+        except Exception:
+            return None
+
+    def _normalize_predictions(self, predictions: Any) -> pd.DataFrame:
+        """Normalize predictions to a DataFrame with timestamp index for item_id 'stock'."""
+        pred_df = predictions.reset_index()
+        if "item_id" in pred_df.columns:
+            pred_df = pred_df[pred_df["item_id"] == "stock"]
+        if "timestamp" in pred_df.columns:
+            pred_df = pred_df.set_index("timestamp")
+        return pred_df
+
+    def _get_median_col(self, pred_df: pd.DataFrame) -> str:
+        """Choose central tendency column."""
+        if "mean" in pred_df.columns:
+            return "mean"
+        if "0.5" in pred_df.columns:
+            return "0.5"
+        numeric_cols = [c for c in pred_df.columns if pd.api.types.is_numeric_dtype(pred_df[c])]
+        return numeric_cols[-1] if numeric_cols else pred_df.columns[-1]
+
+    def _get_quantile_cols(self, pred_df: pd.DataFrame) -> tuple[str | None, str | None]:
+        """Determine interval columns closest to requested interval."""
+        alpha = (1.0 - float(self.prediction_interval)) / 2.0
+        low_target, high_target = alpha, 1.0 - alpha
+        qcols = [c for c in pred_df.columns if isinstance(c, str) and c.replace(".", "", 1).isdigit()]
+        def _closest(col_target: float) -> str | None:
+            if not qcols:
+                return None
+            import numpy as np
+            arr = np.array([float(c) for c in qcols])
+            idx = int(np.argmin(np.abs(arr - col_target)))
+            return qcols[idx]
+        return _closest(low_target), _closest(high_target)
+
+    def _get_forecast_bounds(
+        self, pred_df: pd.DataFrame, median_col: str, low_col: str | None, high_col: str | None
+    ) -> tuple[Any, Any, Any]:
+        """Get forecast, lower, and upper bounds."""
+        forecast_values = pred_df[median_col].to_numpy()
+        if low_col and high_col and low_col in pred_df.columns and high_col in pred_df.columns:
+            lower_bound = pred_df[low_col].to_numpy()
+            upper_bound = pred_df[high_col].to_numpy()
+        else:
+            lower_bound = forecast_values * 0.9
+            upper_bound = forecast_values * 1.1
+        return forecast_values, lower_bound, upper_bound
+
+    def _apply_non_negative(
+        self, forecast_values: Any, lower_bound: Any, upper_bound: Any
+    ) -> tuple[Any, Any, Any]:
+        """Apply non-negative constraint if needed."""
+        if self.no_negatives:
+            forecast_values = forecast_values.clip(min=0)
+            lower_bound = lower_bound.clip(min=0)
+            upper_bound = upper_bound.clip(min=0)
+        return forecast_values, lower_bound, upper_bound
+
+    def _build_result_df(
+        self, forecast_values: Any, lower_bound: Any, upper_bound: Any
+    ) -> pd.DataFrame:
+        """Create result DataFrame with proper index."""
+        import pandas as pd
+        last_date = pd.Timestamp.now()
+        freq = self.predictor._learner.freq if hasattr(self.predictor, "_learner") else "D"
+        future_dates = pd.date_range(start=last_date, periods=len(forecast_values) + 1, freq=freq)[1:]
+        return pd.DataFrame(
+            {
+                "forecast": forecast_values,
+                "lower_bound": lower_bound,
+                "upper_bound": upper_bound,
+            },
+            index=future_dates,
         )
 
     def get_model_info(self) -> dict[str, Any]:

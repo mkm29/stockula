@@ -47,7 +47,6 @@ class BacktestingManager:
         self,
         ticker: str,
         strategy_name: str,
-        config: Optional["StockulaConfig"] = None,
         strategy_params: dict[str, Any] | None = None,
         start_date: str | None = None,
         end_date: str | None = None,
@@ -129,7 +128,6 @@ class BacktestingManager:
             result = self.run_single_strategy(
                 ticker=ticker,
                 strategy_name=strategy_name,
-                config=config,
                 start_date=start_date,
                 end_date=end_date,
             )
@@ -167,7 +165,6 @@ class BacktestingManager:
             result = self.run_single_strategy(
                 ticker=ticker,
                 strategy_name=strategy_name,
-                config=config,
                 strategy_params=strategy_params,
                 start_date=start_date,
                 end_date=end_date,
@@ -213,11 +210,30 @@ class BacktestingManager:
         self.logger.info("Completed comprehensive backtest")
         return all_results
 
+    def _get_train_test_dates(self, config: Optional["StockulaConfig"]) -> tuple[Optional[str], Optional[str], Optional[str], Optional[str]]:
+        """Extract train/test split dates from config."""
+        train_start_date = train_end_date = test_start_date = test_end_date = None
+        if config and hasattr(config, "forecast"):
+            forecast = config.forecast
+            train_start_date = str(getattr(forecast, "train_start_date", None)) if getattr(forecast, "train_start_date", None) else None
+            train_end_date = str(getattr(forecast, "train_end_date", None)) if getattr(forecast, "train_end_date", None) else None
+            test_start_date = str(getattr(forecast, "test_start_date", None)) if getattr(forecast, "test_start_date", None) else None
+            test_end_date = str(getattr(forecast, "test_end_date", None)) if getattr(forecast, "test_end_date", None) else None
+        return train_start_date, train_end_date, test_start_date, test_end_date
+
+    def _get_strategy_class_and_params(self, strategy_name: str, strategy_params: dict[str, Any] | None) -> tuple[Any, dict[str, Any]]:
+        """Get strategy class and parameters, raise ValueError if not found."""
+        params = strategy_params or self.strategy_registry.get_strategy_preset(strategy_name)
+        strategy_class = self.strategy_registry.get_strategy_class(strategy_name)
+        if not strategy_class:
+            available_strategies = self.strategy_registry.get_available_strategy_names()
+            raise ValueError(f"Unknown strategy: {strategy_name}. Available: {available_strategies}")
+        return strategy_class, params
+
     def run_with_train_test_split(
         self,
         ticker: str,
         strategy_name: str,
-        train_ratio: float = 0.7,
         config: Optional["StockulaConfig"] = None,
         strategy_params: dict[str, Any] | None = None,
         optimize_on_train: bool = True,
@@ -240,45 +256,16 @@ class BacktestingManager:
         if not self._runner:
             raise ValueError("BacktestRunner not initialized. Call set_runner() first.")
 
+        self.logger.info(f"Running train/test split backtest for {ticker} with {strategy_name}")
+
         try:
-            self.logger.info(f"Running train/test split backtest for {ticker} with {strategy_name}")
+            strategy_class, params = self._get_strategy_class_and_params(strategy_name, strategy_params)
+            train_start_date, train_end_date, test_start_date, test_end_date = self._get_train_test_dates(config)
 
-            # Use provided parameters or fall back to presets
-            params = strategy_params or self.strategy_registry.get_strategy_preset(strategy_name)
-
-            # Get the strategy class using the registry
-            strategy_class = self.strategy_registry.get_strategy_class(strategy_name)
-            if not strategy_class:
-                available_strategies = self.strategy_registry.get_available_strategy_names()
-                raise ValueError(f"Unknown strategy: {strategy_name}. Available: {available_strategies}")
-
-            # Get date ranges from config if available
-            train_start_date = None
-            train_end_date = None
-            test_start_date = None
-            test_end_date = None
-
-            if config and hasattr(config, "forecast"):
-                # Use forecast dates for train/test split
-                if hasattr(config.forecast, "train_start_date"):
-                    train_start_date = (
-                        str(config.forecast.train_start_date) if config.forecast.train_start_date else None
-                    )
-                if hasattr(config.forecast, "train_end_date"):
-                    train_end_date = str(config.forecast.train_end_date) if config.forecast.train_end_date else None
-                if hasattr(config.forecast, "test_start_date"):
-                    test_start_date = str(config.forecast.test_start_date) if config.forecast.test_start_date else None
-                if hasattr(config.forecast, "test_end_date"):
-                    test_end_date = str(config.forecast.test_end_date) if config.forecast.test_end_date else None
-
-            # Prepare kwargs for the runner
             run_kwargs = dict(params) if params else {}
-
-            # Add param_ranges to kwargs if optimization is enabled
             if optimize_on_train and param_ranges:
                 run_kwargs["param_ranges"] = param_ranges
 
-            # Run train/test split backtest using the runner
             result = self._runner.run_with_train_test_split(
                 symbol=ticker,
                 strategy=strategy_class,
@@ -318,7 +305,6 @@ class BacktestingManager:
         result = self.run_single_strategy(
             ticker=ticker,
             strategy_name=strategy_name,
-            config=config,
         )
 
         # Extract essential metrics for quick overview

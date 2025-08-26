@@ -97,31 +97,48 @@ class DataFetcher:
         if end is None:
             end = datetime.now().strftime("%Y-%m-%d")
 
-        # Try to get data from cache first
+        data = self._get_stock_data_from_cache(symbol, start, end, interval, force_refresh)
+        if data is not None:
+            return data
+
+        data = self._get_stock_data_from_yfinance(symbol, start, end, interval)
+        if self.use_cache and not data.empty and self.db is not None:
+            self.db.store_price_history(symbol, data, interval)
+        return data
+
+    def _get_stock_data_from_cache(
+        self,
+        symbol: str,
+        start: str,
+        end: str,
+        interval: str,
+        force_refresh: bool,
+    ) -> pd.DataFrame | None:
         if self.use_cache and not force_refresh and self.db is not None:
             try:
                 cached_data = self.db.get_price_history(symbol, start, end, interval)
-                if not cached_data.empty:
-                    # Check if we have complete data for the requested range
-                    if self.db.has_data(symbol, start, end):
-                        return cached_data
+                if not cached_data.empty and self.db.has_data(symbol, start, end):
+                    return cached_data
             except Exception as e:
-                # If database fails, fall back to yfinance
                 self.logger.warning(f"Database error, falling back to yfinance: {e}")
+        return None
 
-        # Fetch from yfinance
+    def _get_stock_data_from_yfinance(
+        self,
+        symbol: str,
+        start: str,
+        end: str,
+        interval: str,
+    ) -> pd.DataFrame:
         try:
             ticker = yf.Ticker(symbol)
             data = ticker.history(start=start, end=end, interval=interval)
         except Exception as e:
-            # Wrap network and API errors in appropriate custom exceptions
             if "Connection" in str(e) or "Network" in str(e) or "Timeout" in str(e):
                 raise NetworkException(symbol=symbol, cause=e) from e
             else:
                 raise APIException(symbol=symbol, cause=e) from e
 
-        # Ensure consistent column naming for backtesting compatibility
-        # The backtesting library expects capitalized column names
         column_mapping = {
             "Open": "Open",
             "High": "High",
@@ -131,20 +148,10 @@ class DataFetcher:
             "Dividends": "Dividends",
             "Stock Splits": "Stock Splits",
         }
-
-        # Rename columns to ensure consistency
         data = data.rename(columns=column_mapping)
-
-        # Keep only the required columns if they exist
         required_cols = ["Open", "High", "Low", "Close", "Volume"]
         available_cols = [col for col in required_cols if col in data.columns]
-        data = data[available_cols]
-
-        # Store in database if caching is enabled
-        if self.use_cache and not data.empty and self.db is not None:
-            self.db.store_price_history(symbol, data, interval)
-
-        return data
+        return data[available_cols]
 
     def get_multiple_stocks(
         self,
@@ -187,70 +194,66 @@ class DataFetcher:
         Returns:
             Dictionary mapping symbols to their current prices
         """
-        # Handle single symbol case
         if isinstance(symbols, str):
             symbols = [symbols]
 
-        prices = {}
+        return self._get_prices(symbols, show_progress)
 
-        # Show progress bar only for multiple symbols
+    def _fetch_single_price(self, symbol: str) -> float | None:
+        """Fetch the current price for a single symbol."""
+        try:
+            ticker = yf.Ticker(symbol)
+            history = ticker.history(period="1d")
+            if not history.empty:
+                return history["Close"].iloc[-1]
+            info = ticker.info
+            return info.get("currentPrice") or info.get("regularMarketPrice")
+        except Exception as e:
+            self.logger.error(f"Error fetching price for {symbol}: {e}")
+        return None
+
+    def _get_prices(self, symbols: list[str], show_progress: bool) -> dict[str, float]:
+        """Helper to fetch prices with or without progress bar."""
         if show_progress and len(symbols) > 1:
-            with Progress(
-                SpinnerColumn(),
-                TextColumn("[progress.description]{task.description}"),
-                BarColumn(),
-                TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
-                TimeRemainingColumn(),
-                console=console,
-                transient=True,
-            ) as progress:
-                task = progress.add_task(
-                    f"[magenta]Fetching current prices for {len(symbols)} symbols...",
-                    total=len(symbols),
-                )
-
-                for symbol in symbols:
-                    progress.update(task, description=f"[magenta]Fetching price for {symbol}...")
-                    try:
-                        ticker = yf.Ticker(symbol)
-                        # Get the most recent price
-                        history = ticker.history(period="1d")
-                        if not history.empty:
-                            prices[symbol] = history["Close"].iloc[-1]
-                        else:
-                            # Fallback to info if history is not available
-                            info = ticker.info
-                            if "currentPrice" in info:
-                                prices[symbol] = info["currentPrice"]
-                            elif "regularMarketPrice" in info:
-                                prices[symbol] = info["regularMarketPrice"]
-                            else:
-                                console.print(f"[yellow]Warning: Could not get current price for {symbol}[/yellow]")
-                    except Exception as e:
-                        self.logger.error(f"Error fetching price for {symbol}: {e}")
-
-                    progress.advance(task)
+            return self._fetch_prices_with_progress(symbols)
         else:
-            # No progress bar for single symbol or when disabled
-            for symbol in symbols:
-                try:
-                    ticker = yf.Ticker(symbol)
-                    # Get the most recent price
-                    history = ticker.history(period="1d")
-                    if not history.empty:
-                        prices[symbol] = history["Close"].iloc[-1]
-                    else:
-                        # Fallback to info if history is not available
-                        info = ticker.info
-                        if "currentPrice" in info:
-                            prices[symbol] = info["currentPrice"]
-                        elif "regularMarketPrice" in info:
-                            prices[symbol] = info["regularMarketPrice"]
-                        else:
-                            console.print(f"[yellow]Warning: Could not get current price for {symbol}[/yellow]")
-                except Exception as e:
-                    self.logger.error(f"Error fetching price for {symbol}: {e}")
+            return self._fetch_prices_no_progress(symbols)
 
+    def _fetch_prices_with_progress(self, symbols: list[str]) -> dict[str, float]:
+        """Fetch prices with progress bar."""
+        prices = {}
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            BarColumn(),
+            TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
+            TimeRemainingColumn(),
+            console=console,
+            transient=True,
+        ) as progress:
+            task = progress.add_task(
+                f"[magenta]Fetching current prices for {len(symbols)} symbols...",
+                total=len(symbols),
+            )
+            for symbol in symbols:
+                progress.update(task, description=f"[magenta]Fetching price for {symbol}...")
+                price = self._fetch_single_price(symbol)
+                if price is not None:
+                    prices[symbol] = price
+                else:
+                    console.print(f"[yellow]Warning: Could not get current price for {symbol}[/yellow]")
+                progress.advance(task)
+        return prices
+
+    def _fetch_prices_no_progress(self, symbols: list[str]) -> dict[str, float]:
+        """Fetch prices without progress bar."""
+        prices = {}
+        for symbol in symbols:
+            price = self._fetch_single_price(symbol)
+            if price is not None:
+                prices[symbol] = price
+            else:
+                console.print(f"[yellow]Warning: Could not get current price for {symbol}[/yellow]")
         return prices
 
     def get_info(self, symbol: str, force_refresh: bool = False) -> dict[str, Any]:
@@ -451,10 +454,28 @@ class DataFetcher:
             Dictionary mapping symbols to their DataFrames
         """
         results: dict[str, pd.DataFrame] = {}
-
-        # Check cache first for each symbol using the standard path, which
-        # will consult the database when caching is enabled.
         symbols_to_fetch: list[str] = []
+
+        self._check_cache_for_symbols(symbols, start_date, end_date, interval, results, symbols_to_fetch)
+        if symbols_to_fetch:
+            batch_results = self._batch_download_symbols(symbols_to_fetch, start_date, end_date, interval)
+            results.update(batch_results)
+            missing_symbols = [s for s in symbols_to_fetch if s not in batch_results]
+            if missing_symbols:
+                fallback_results = self._fallback_individual_download(missing_symbols, start_date, end_date, interval)
+                results.update(fallback_results)
+
+        return results
+
+    def _check_cache_for_symbols(
+        self,
+        symbols: list[str],
+        start_date: str | None,
+        end_date: str | None,
+        interval: str,
+        results: dict[str, pd.DataFrame],
+        symbols_to_fetch: list[str],
+    ) -> None:
         for symbol in symbols:
             try:
                 cached_data = self.get_stock_data(symbol, start_date, end_date, interval)
@@ -463,60 +484,90 @@ class DataFetcher:
                 else:
                     symbols_to_fetch.append(symbol)
             except Exception:
-                # On any error, mark for batch fetch
                 symbols_to_fetch.append(symbol)
 
-        # Batch download remaining symbols
-        if symbols_to_fetch:
+    def _batch_download_symbols(
+        self,
+        symbols_to_fetch: list[str],
+        start_date: str | None,
+        end_date: str | None,
+        interval: str,
+    ) -> dict[str, pd.DataFrame]:
+        batch_results: dict[str, pd.DataFrame] = {}
+        try:
+            batch_str = " ".join(symbols_to_fetch)
+            data = yf.download(
+                batch_str,
+                start=start_date,
+                end=end_date,
+                interval=interval,
+                group_by="ticker" if len(symbols_to_fetch) > 1 else None,
+                auto_adjust=True,
+                prepost=False,
+                threads=True,
+                progress=False,
+            )
+            if len(symbols_to_fetch) == 1:
+                self._handle_single_symbol_download(symbols_to_fetch[0], data, batch_results, interval)
+            else:
+                self._handle_multiple_symbol_download(symbols_to_fetch, data, batch_results, interval)
+        except Exception as e:
+            self.logger.error(f"Error in batch download: {e}")
+        return batch_results
+
+    def _handle_single_symbol_download(
+        self,
+        symbol: str,
+        data: pd.DataFrame,
+        batch_results: dict[str, pd.DataFrame],
+        interval: str,
+    ) -> None:
+        if not data.empty:
+            batch_results[symbol] = data
+            self._store_price_history_if_needed(symbol, data, interval)
+
+    def _handle_multiple_symbol_download(
+        self,
+        symbols_to_fetch: list[str],
+        data: Any,
+        batch_results: dict[str, pd.DataFrame],
+        interval: str,
+    ) -> None:
+        for symbol in symbols_to_fetch:
             try:
-                # yfinance supports space-separated symbols for batch download
-                batch_str = " ".join(symbols_to_fetch)
-                data = yf.download(
-                    batch_str,
-                    start=start_date,
-                    end=end_date,
-                    interval=interval,
-                    group_by="ticker" if len(symbols_to_fetch) > 1 else None,
-                    auto_adjust=True,
-                    prepost=False,
-                    threads=True,
-                    progress=False,
-                )
+                symbol_data = data[symbol]
+                if not symbol_data.empty and not symbol_data.isna().all().all():
+                    symbol_data = symbol_data.dropna(how="all")
+                    batch_results[symbol] = symbol_data
+                    self._store_price_history_if_needed(symbol, symbol_data, interval)
+            except KeyError:
+                self.logger.warning(f"No data returned for {symbol}")
 
-                # Handle single vs multiple symbols
-                if len(symbols_to_fetch) == 1:
-                    symbol = symbols_to_fetch[0]
-                    if not data.empty:
-                        results[symbol] = data
-                        # Store in cache
-                        if self.use_cache and self.db is not None:
-                            self.db.store_price_history(symbol, data, interval)
-                else:
-                    # Multiple symbols returns multi-level columns
-                    for symbol in symbols_to_fetch:
-                        try:
-                            symbol_data = data[symbol]
-                            if not symbol_data.empty and not symbol_data.isna().all().all():
-                                symbol_data = symbol_data.dropna(how="all")
-                                results[symbol] = symbol_data
-                                # Store in cache
-                                if self.use_cache and self.db is not None:
-                                    self.db.store_price_history(symbol, symbol_data, interval)
-                        except KeyError:
-                            self.logger.warning(f"No data returned for {symbol}")
+    def _store_price_history_if_needed(
+        self,
+        symbol: str,
+        data: pd.DataFrame,
+        interval: str,
+    ) -> None:
+        if self.use_cache and self.db is not None:
+            self.db.store_price_history(symbol, data, interval)
 
+    def _fallback_individual_download(
+        self,
+        symbols: list[str],
+        start_date: str | None,
+        end_date: str | None,
+        interval: str,
+    ) -> dict[str, pd.DataFrame]:
+        fallback_results: dict[str, pd.DataFrame] = {}
+        for symbol in symbols:
+            try:
+                df = self.get_stock_data(symbol, start_date, end_date, interval)
+                if not df.empty:
+                    fallback_results[symbol] = df
             except Exception as e:
-                self.logger.error(f"Error in batch download: {e}")
-                # Fall back to individual downloads
-                for symbol in symbols_to_fetch:
-                    try:
-                        df = self.get_stock_data(symbol, start_date, end_date, interval)
-                        if not df.empty:
-                            results[symbol] = df
-                    except Exception as e:
-                        self.logger.error(f"Error fetching {symbol}: {e}")
-
-        return results
+                self.logger.error(f"Error fetching {symbol}: {e}")
+        return fallback_results
 
     def get_current_prices_batch(self, symbols: list[str]) -> dict[str, float]:
         """Get current prices for multiple symbols efficiently.
@@ -528,34 +579,41 @@ class DataFetcher:
             Dictionary mapping symbols to their current prices
         """
         prices = {}
-
-        # Use Tickers class for batch operations
         tickers = yf.Tickers(" ".join(symbols))
 
         for symbol in symbols:
-            try:
-                ticker = tickers.tickers[symbol]
-                # Try fast info first
-                fast_info = ticker.fast_info
-                if hasattr(fast_info, "last_price") and fast_info.last_price:
-                    prices[symbol] = float(fast_info.last_price)
-                else:
-                    # Fallback to regular info
-                    info = ticker.info
-                    price = info.get("regularMarketPrice") or info.get("previousClose")
-                    if price:
-                        prices[symbol] = float(price)
-            except Exception as e:
-                self.logger.error(f"Error getting price for {symbol}: {e}")
-                # Try individual fetch as fallback
-                try:
-                    individual_prices = self.get_current_prices(symbol, show_progress=False)
-                    if symbol in individual_prices:
-                        prices[symbol] = individual_prices[symbol]
-                except Exception:
-                    pass
+            price = self._get_price_from_ticker(tickers, symbol)
+            if price is not None:
+                prices[symbol] = price
+            else:
+                fallback_price = self._get_price_fallback(symbol)
+                if fallback_price is not None:
+                    prices[symbol] = fallback_price
 
         return prices
+
+    def _get_price_from_ticker(self, tickers: yf.Tickers, symbol: str) -> float | None:
+        """Try to get price from batch ticker fast_info or info."""
+        try:
+            ticker = tickers.tickers[symbol]
+            fast_info = getattr(ticker, "fast_info", None)
+            if fast_info and hasattr(fast_info, "last_price") and fast_info.last_price:
+                return float(fast_info.last_price)
+            info = getattr(ticker, "info", {})
+            price = info.get("regularMarketPrice") or info.get("previousClose")
+            if price:
+                return float(price)
+        except Exception as e:
+            self.logger.error(f"Error getting price for {symbol}: {e}")
+        return None
+
+    def _get_price_fallback(self, symbol: str) -> float | None:
+        """Fallback to individual price fetch."""
+        try:
+            individual_prices = self.get_current_prices(symbol, show_progress=False)
+            return individual_prices.get(symbol)
+        except Exception:
+            return None
 
     def fetch_and_store_all_data(self, symbol: str, start: str | None = None, end: str | None = None) -> None:
         """Fetch and store all available data for a symbol.

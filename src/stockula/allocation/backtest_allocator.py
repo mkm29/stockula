@@ -92,67 +92,14 @@ class BacktestOptimizedAllocator(BaseAllocator):
     ) -> dict[str, float]:
         """Calculate quantities using backtest optimization.
 
-        Args:
-            config: Stockula configuration
-            tickers_to_add: List of ticker configurations
-            train_start_date: Start date for training period (YYYY-MM-DD), overrides config
-            train_end_date: End date for training period (YYYY-MM-DD), overrides config
-            test_start_date: Start date for testing period (YYYY-MM-DD), overrides config
-            test_end_date: End date for testing period (YYYY-MM-DD), overrides config
-            initial_allocation_pct: Initial allocation percentage per asset, overrides config
-
-        Returns:
-            Dictionary mapping ticker symbols to calculated quantities
+        Refactored to delegate parsing and optional forecast combination to helpers to reduce complexity.
         """
         self._validate_fetcher()
 
-        # Get configuration from config file or use defaults
-        opt_config = config.backtest_optimization
-        if opt_config:
-            # Use config values if not overridden by parameters
-            train_start = train_start_date or (
-                opt_config.train_start_date.strftime("%Y-%m-%d")
-                if isinstance(opt_config.train_start_date, date)
-                else str(opt_config.train_start_date)
-                if opt_config.train_start_date
-                else None
-            )
-            train_end = train_end_date or (
-                opt_config.train_end_date.strftime("%Y-%m-%d")
-                if isinstance(opt_config.train_end_date, date)
-                else str(opt_config.train_end_date)
-                if opt_config.train_end_date
-                else None
-            )
-            test_start = test_start_date or (
-                opt_config.test_start_date.strftime("%Y-%m-%d")
-                if isinstance(opt_config.test_start_date, date)
-                else str(opt_config.test_start_date)
-                if opt_config.test_start_date
-                else None
-            )
-            test_end = test_end_date or (
-                opt_config.test_end_date.strftime("%Y-%m-%d")
-                if isinstance(opt_config.test_end_date, date)
-                else str(opt_config.test_end_date)
-                if opt_config.test_end_date
-                else None
-            )
-            # Note: initial_allocation_pct is stored in config but not used in current implementation
-            # It could be used for setting initial cash per asset in backtesting
-            self.ranking_metric = opt_config.ranking_metric
-            self.min_allocation_pct = opt_config.min_allocation_pct
-            self.max_allocation_pct = opt_config.max_allocation_pct
-        else:
-            # Use parameters or defaults
-            train_start = train_start_date
-            train_end = train_end_date
-            test_start = test_start_date
-            test_end = test_end_date
-            # Note: initial_allocation_pct is not used in current implementation
-            self.ranking_metric = self.DEFAULT_RANKING_METRIC
-            self.min_allocation_pct = self.DEFAULT_MIN_ALLOCATION_PCT
-            self.max_allocation_pct = self.DEFAULT_MAX_ALLOCATION_PCT
+        # Parse configuration and dates and set allocator attributes
+        train_start, train_end, test_start, test_end, opt_config = self._extract_opt_dates_and_bounds(
+            config, train_start_date, train_end_date, test_start_date, test_end_date, initial_allocation_pct
+        )
 
         # Validate dates are provided
         if not all([train_start, train_end, test_start, test_end]):
@@ -173,12 +120,8 @@ class BacktestOptimizedAllocator(BaseAllocator):
             symbols, best_strategies, str(test_start) if test_start else "", str(test_end) if test_end else ""
         )  # type: ignore[arg-type]
 
-        # Step 2.5 (Optional): Run forecasts if enabled
-        combined_scores = test_performances.copy()
-        if opt_config and opt_config.use_forecast and self.forecast_manager:
-            self.logger.info("Step 2.5: Running forecasts for forward-looking optimization...")
-            forecast_scores = self._run_forecasts(config, symbols, opt_config)
-            combined_scores = self._combine_scores(test_performances, forecast_scores, opt_config.forecast_weight)
+        # Step 2.5 (Optional): Combine with forecasts if configured
+        combined_scores = self._maybe_combine_with_forecast(config, symbols, opt_config, test_performances)
 
         # Step 3: Calculate allocations based on performance
         self.logger.info("Step 3: Calculating allocations based on combined performance scores...")
@@ -199,6 +142,61 @@ class BacktestOptimizedAllocator(BaseAllocator):
 
         return calculated_quantities
 
+    def _extract_opt_dates_and_bounds(
+        self,
+        config: StockulaConfig,
+        train_start_date: str | None,
+        train_end_date: str | None,
+        test_start_date: str | None,
+        test_end_date: str | None,
+    ) -> tuple[str | None, str | None, str | None, str | None, BacktestOptimizationConfig | None]:
+        """Extract dates and bounds from config or parameters and set allocator attributes."""
+
+        def _parse_date(date_value):
+            if date_value is None:
+                return None
+            if isinstance(date_value, date):
+                return date_value.strftime("%Y-%m-%d")
+            return str(date_value)
+
+        opt_config = config.backtest_optimization
+
+        if opt_config:
+            train_start = train_start_date or _parse_date(opt_config.train_start_date)
+            train_end = train_end_date or _parse_date(opt_config.train_end_date)
+            test_start = test_start_date or _parse_date(opt_config.test_start_date)
+            test_end = test_end_date or _parse_date(opt_config.test_end_date)
+
+            self.ranking_metric = getattr(opt_config, "ranking_metric", self.DEFAULT_RANKING_METRIC)
+            self.min_allocation_pct = getattr(opt_config, "min_allocation_pct", self.DEFAULT_MIN_ALLOCATION_PCT)
+            self.max_allocation_pct = getattr(opt_config, "max_allocation_pct", self.DEFAULT_MAX_ALLOCATION_PCT)
+        else:
+            train_start = train_start_date
+            train_end = train_end_date
+            test_start = test_start_date
+            test_end = test_end_date
+
+            self.ranking_metric = self.DEFAULT_RANKING_METRIC
+            self.min_allocation_pct = self.DEFAULT_MIN_ALLOCATION_PCT
+            self.max_allocation_pct = self.DEFAULT_MAX_ALLOCATION_PCT
+
+        return train_start, train_end, test_start, test_end, opt_config
+
+    def _maybe_combine_with_forecast(
+        self,
+        config: StockulaConfig,
+        symbols: list[str],
+        opt_config: BacktestOptimizationConfig | None,
+        test_performances: dict[str, float],
+    ) -> dict[str, float]:
+        """Return combined scores, optionally mixing in forecasts according to opt_config."""
+        combined_scores = test_performances.copy()
+        if opt_config and getattr(opt_config, "use_forecast", False) and self.forecast_manager:
+            self.logger.info("Step 2.5: Running forecasts for forward-looking optimization...")
+            forecast_scores = self._run_forecasts(config, symbols, opt_config)
+            combined_scores = self._combine_scores(test_performances, forecast_scores, opt_config.forecast_weight)
+        return combined_scores
+
     def _find_best_strategies(
         self, symbols: list[str], start_date: str, end_date: str
     ) -> dict[str, type[BaseStrategy]]:
@@ -216,54 +214,45 @@ class BacktestOptimizedAllocator(BaseAllocator):
 
         for symbol in symbols:
             self.logger.debug(f"\nTesting strategies for {symbol}...")
-            best_strategy = None
-            best_metric = float("-inf")
-
-            # Fetch data once for this symbol
-            try:
-                data = self.fetcher.get_stock_data(symbol, start_date, end_date)
-                if data.empty:
-                    self.logger.warning(f"No data available for {symbol} in training period")
-                    best_strategies[symbol] = SMACrossStrategy  # Default strategy
-                    continue
-
-            except Exception as e:
-                self.logger.error(f"Error fetching data for {symbol}: {e}")
-                best_strategies[symbol] = SMACrossStrategy  # Default strategy
-                continue
-
-            # Test each strategy
-            for strategy_class in self.AVAILABLE_STRATEGIES:
-                try:
-                    # Run backtest
-                    results = self.backtest_runner.run(data, strategy_class)
-
-                    # Get the ranking metric
-                    metric_value = results.get(self.ranking_metric, float("-inf"))
-
-                    self.logger.debug(f"  {strategy_class.__name__}: {self.ranking_metric} = {metric_value:.4f}")
-
-                    # Update best if this is better
-                    if metric_value > best_metric:
-                        best_metric = metric_value
-                        best_strategy = strategy_class
-
-                except Exception as e:
-                    self.logger.debug(f"  {strategy_class.__name__}: Failed - {e}")
-                    continue
-
-            # Store the best strategy
+            best_strategy, best_metric = self._test_strategies_for_symbol(symbol, start_date, end_date)
             if best_strategy:
                 best_strategies[symbol] = best_strategy
                 self.logger.info(
                     f"{symbol}: Best strategy = {best_strategy.__name__} ({self.ranking_metric} = {best_metric:.4f})"
                 )
             else:
-                # Fallback to default strategy
                 best_strategies[symbol] = SMACrossStrategy
                 self.logger.warning(f"{symbol}: No successful strategy, using default SMACrossStrategy")
 
         return best_strategies
+
+    def _test_strategies_for_symbol(
+        self, symbol: str, start_date: str, end_date: str
+    ) -> tuple[type[BaseStrategy] | None, float]:
+        """Helper to test all strategies for a symbol and return the best one."""
+        try:
+            data = self.fetcher.get_stock_data(symbol, start_date, end_date)
+            if data.empty:
+                self.logger.warning(f"No data available for {symbol} in training period")
+                return None, float("-inf")
+        except Exception as e:
+            self.logger.error(f"Error fetching data for {symbol}: {e}")
+            return None, float("-inf")
+
+        best_strategy = None
+        best_metric = float("-inf")
+        for strategy_class in self.AVAILABLE_STRATEGIES:
+            try:
+                results = self.backtest_runner.run(data, strategy_class)
+                metric_value = results.get(self.ranking_metric, float("-inf"))
+                self.logger.debug(f"  {strategy_class.__name__}: {self.ranking_metric} = {metric_value:.4f}")
+                if metric_value > best_metric:
+                    best_metric = metric_value
+                    best_strategy = strategy_class
+            except Exception as e:
+                self.logger.debug(f"  {strategy_class.__name__}: Failed - {e}")
+                continue
+        return best_strategy, best_metric
 
     def _evaluate_test_performance(
         self,
@@ -314,7 +303,7 @@ class BacktestOptimizedAllocator(BaseAllocator):
         return test_performances
 
     def _run_forecasts(
-        self, config: StockulaConfig, symbols: list[str], opt_config: BacktestOptimizationConfig
+        self, symbols: list[str], opt_config: BacktestOptimizationConfig
     ) -> dict[str, float]:
         """Run forecasts for each symbol and calculate forecast scores.
 

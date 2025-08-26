@@ -15,6 +15,8 @@ if TYPE_CHECKING:
 class BacktestRunner:
     """Runner for executing backtests."""
 
+    DATA_FETCHER_NOT_CONFIGURED_MSG = "Data fetcher not configured. Ensure DI container is properly set up."
+
     def __init__(
         self,
         cash: float = 10000,
@@ -58,77 +60,78 @@ class BacktestRunner:
             self.commission = commission
 
     def _create_commission_func(self, broker_config: "BrokerConfig") -> Callable:
-        """Create commission function based on broker configuration.
+        """Create commission function based on broker configuration."""
 
-        Args:
-            broker_config: Broker configuration with fee structure
+        def _get_commission(trade_value: float, quantity: float) -> float:
+            commission_type = broker_config.commission_type
+            if commission_type == "percentage":
+                return self._percentage_commission(broker_config, trade_value)
+            elif commission_type == "fixed":
+                return self._fixed_commission(broker_config)
+            elif commission_type == "per_share":
+                return self._per_share_commission(broker_config, quantity)
+            elif commission_type == "tiered":
+                return self._tiered_commission(broker_config, quantity)
+            return 0.0
 
-        Returns:
-            Commission function for backtesting.py
-        """
+        def _apply_min_max_commission(commission: float) -> float:
+            min_comm = broker_config.min_commission
+            max_comm = broker_config.max_commission
+            if min_comm is not None:
+                commission = max(commission, min_comm)
+            if max_comm is not None:
+                commission = min(commission, max_comm)
+            return commission
+
+        def _regulatory_fee(trade_value: float) -> float:
+            return trade_value * broker_config.regulatory_fees
+
+        def _exchange_fee(quantity: float) -> float:
+            if broker_config.name == "robinhood" and broker_config.exchange_fees > 0:
+                if abs(quantity) > 50:
+                    fee = abs(quantity) * broker_config.exchange_fees
+                    return min(fee, 8.30)
+                return 0.0
+            return broker_config.exchange_fees
 
         def commission_func(quantity: float, price: float) -> float:
-            """Calculate commission for a trade.
-
-            Args:
-                quantity: Number of shares
-                price: Price per share
-
-            Returns:
-                Total commission for the trade
-            """
             trade_value = abs(quantity * price)
-            commission = 0.0
-
-            # Calculate base commission based on type
-            if broker_config.commission_type == "percentage":
-                if isinstance(broker_config.commission_value, int | float):
-                    commission = trade_value * broker_config.commission_value
-            elif broker_config.commission_type == "fixed":
-                if isinstance(broker_config.commission_value, int | float):
-                    commission = broker_config.commission_value
-            elif broker_config.commission_type == "per_share":
-                per_share = broker_config.per_share_commission
-                if per_share is None and isinstance(broker_config.commission_value, int | float):
-                    per_share = broker_config.commission_value
-                if per_share is not None:
-                    commission = abs(quantity) * per_share
-            elif broker_config.commission_type == "tiered":
-                # For tiered commissions, we need to track total volume
-                # For simplicity, using the lowest tier rate
-                if isinstance(broker_config.commission_value, dict):
-                    tiers = sorted([(int(k), v) for k, v in broker_config.commission_value.items()])
-                    # Use first tier rate (could be enhanced to track monthly volume)
-                    commission = abs(quantity) * tiers[0][1]
-
-            # Apply min/max constraints
-            if broker_config.min_commission is not None:
-                commission = max(commission, broker_config.min_commission)
-            if broker_config.max_commission is not None:
-                commission = min(commission, broker_config.max_commission)
-
-            # Add regulatory and exchange fees
-            regulatory_fee = trade_value * broker_config.regulatory_fees
-
-            # Handle exchange fees (e.g., TAF for Robinhood)
-            if broker_config.name == "robinhood" and broker_config.exchange_fees > 0:
-                # Robinhood TAF: only on sells, waived for 50 shares or less
-                # For backtesting, we'll apply it to all trades but waive for small trades
-                if abs(quantity) > 50:
-                    exchange_fee = abs(quantity) * broker_config.exchange_fees
-                    # TAF maximum is $8.30 per trade
-                    exchange_fee = min(exchange_fee, 8.30)
-                else:
-                    exchange_fee = 0.0
-            else:
-                # For other brokers, simple exchange fee calculation
-                exchange_fee = broker_config.exchange_fees
-
-            total_fee = commission + regulatory_fee + exchange_fee
-
-            return total_fee
+            commission = _get_commission(trade_value, quantity)
+            commission = _apply_min_max_commission(commission)
+            regulatory_fee = _regulatory_fee(trade_value)
+            exchange_fee = _exchange_fee(quantity)
+            return commission + regulatory_fee + exchange_fee
 
         return commission_func
+
+    @staticmethod
+    def _percentage_commission(broker_config, trade_value: float) -> float:
+        if isinstance(broker_config.commission_value, (int, float)):
+            return trade_value * broker_config.commission_value
+        return 0.0
+
+    @staticmethod
+    def _fixed_commission(broker_config) -> float:
+        if isinstance(broker_config.commission_value, (int, float)):
+            return broker_config.commission_value
+        return 0.0
+
+    @staticmethod
+    def _per_share_commission(broker_config, quantity: float) -> float:
+        per_share = broker_config.per_share_commission
+        if per_share is None and isinstance(broker_config.commission_value, (int, float)):
+            per_share = broker_config.commission_value
+        if per_share is not None:
+            return abs(quantity) * per_share
+        return 0.0
+
+    @staticmethod
+    def _tiered_commission(broker_config, quantity: float) -> float:
+        if isinstance(broker_config.commission_value, dict):
+            tiers = sorted([(int(k), v) for k, v in broker_config.commission_value.items()])
+            if tiers:
+                return abs(quantity) * tiers[0][1]
+        return 0.0
 
     def run(self, data: pd.DataFrame, strategy: type, **kwargs) -> dict[str, Any]:
         """Run backtest with given data and strategy.
@@ -141,18 +144,7 @@ class BacktestRunner:
         Returns:
             Backtest results dictionary with enhanced metrics if dynamic rates provided
         """
-        # Validate data sufficiency for strategies with period requirements
-        if hasattr(strategy, "slow_period") and hasattr(strategy, "min_trading_days_buffer"):
-            total_days = len(data)
-            required_days = strategy.slow_period + getattr(strategy, "min_trading_days_buffer", 20)
-
-            if total_days < required_days:
-                print(
-                    f"Warning: {strategy.__name__} requires at least {required_days} days of data "
-                    f"({strategy.slow_period} for indicators + "
-                    f"{getattr(strategy, 'min_trading_days_buffer', 20)} buffer), "
-                    f"but only {total_days} days available."
-                )
+        self._check_strategy_data_sufficiency(data, strategy)
 
         # Store treasury rates if dynamic rates provided
         if isinstance(self.risk_free_rate, pd.Series):
@@ -168,64 +160,62 @@ class BacktestRunner:
             exclusive_orders=self.exclusive_orders,
         )
 
-        # Run backtest with static risk-free rate
         # Suppress progress output by redirecting stderr
         import os
         import sys
 
-        # Save current stderr
         old_stderr = sys.stderr
         try:
-            # Redirect stderr to devnull to suppress progress bars
             sys.stderr = open(os.devnull, "w")
             self.results = bt.run(**kwargs)
         finally:
-            # Restore stderr
             sys.stderr.close()
             sys.stderr = old_stderr
 
-        # Store equity curve for dynamic metrics calculation
-        # The results object has an _equity_curve attribute
         self._equity_curve = getattr(self.results, "_equity_curve", None)
 
-        # Add portfolio information to results (only if results is a dict, not a mock)
         if hasattr(self.results, "__setitem__"):
             self.results["Initial Cash"] = self.cash
+            self._extract_and_set_dates(data)
 
-            # Safely extract dates from index
-            if len(data) > 0:
-                try:
-                    # Check if index has datetime-like objects with strftime method
-                    if hasattr(data.index[0], "strftime"):
-                        self.results["Start Date"] = data.index[0].strftime("%Y-%m-%d")
-                        self.results["End Date"] = data.index[-1].strftime("%Y-%m-%d")
-
-                        # Calculate trading period in days
-                        trading_days = len(data)
-                        calendar_days = (data.index[-1] - data.index[0]).days
-                        self.results["Trading Days"] = trading_days
-                        self.results["Calendar Days"] = calendar_days
-                    elif hasattr(data.index[0], "date"):
-                        # Pandas datetime index
-                        self.results["Start Date"] = data.index[0].date().strftime("%Y-%m-%d")
-                        self.results["End Date"] = data.index[-1].date().strftime("%Y-%m-%d")
-
-                        # Calculate trading period in days
-                        trading_days = len(data)
-                        calendar_days = (data.index[-1] - data.index[0]).days
-                        self.results["Trading Days"] = trading_days
-                        self.results["Calendar Days"] = calendar_days
-                except (AttributeError, TypeError):
-                    # If date extraction fails, just set trading days
-                    self.results["Trading Days"] = len(data)
-
-        # If dynamic rates provided, enhance results with dynamic metrics
         if isinstance(self.risk_free_rate, pd.Series) and self._equity_curve is not None:
             self._enhance_results_with_dynamic_metrics()
 
-        # Return the results as-is (pd.Series from backtesting library)
-        # The type annotation says dict but backtesting returns pd.Series which is dict-like
         return cast(dict[str, Any], self.results)  # type: ignore[arg-type]
+
+    def _check_strategy_data_sufficiency(self, data: pd.DataFrame, strategy: type):
+        """Check if the data is sufficient for the strategy's requirements."""
+        if hasattr(strategy, "slow_period") and hasattr(strategy, "min_trading_days_buffer"):
+            total_days = len(data)
+            required_days = strategy.slow_period + getattr(strategy, "min_trading_days_buffer", 20)
+            if total_days < required_days:
+                print(
+                    f"Warning: {strategy.__name__} requires at least {required_days} days of data "
+                    f"({strategy.slow_period} for indicators + "
+                    f"{getattr(strategy, 'min_trading_days_buffer', 20)} buffer), "
+                    f"but only {total_days} days available."
+                )
+
+    def _extract_and_set_dates(self, data: pd.DataFrame):
+        """Safely extract and set date-related results."""
+        if len(data) > 0:
+            try:
+                idx0 = data.index[0]
+                idxN = data.index[-1]
+                if hasattr(idx0, "strftime"):
+                    self.results["Start Date"] = idx0.strftime("%Y-%m-%d")
+                    self.results["End Date"] = idxN.strftime("%Y-%m-%d")
+                    self.results["Trading Days"] = len(data)
+                    self.results["Calendar Days"] = (idxN - idx0).days
+                elif hasattr(idx0, "date"):
+                    self.results["Start Date"] = idx0.date().strftime("%Y-%m-%d")
+                    self.results["End Date"] = idxN.date().strftime("%Y-%m-%d")
+                    self.results["Trading Days"] = len(data)
+                    self.results["Calendar Days"] = (idxN - idx0).days
+                else:
+                    self.results["Trading Days"] = len(data)
+            except (AttributeError, TypeError):
+                self.results["Trading Days"] = len(data)
 
     def optimize(self, data: pd.DataFrame, strategy: type, **param_ranges) -> dict[str, Any]:
         """Optimize strategy parameters.
@@ -278,33 +268,49 @@ class BacktestRunner:
         use_dynamic_risk_free_rate: bool = True,
         **kwargs,
     ) -> dict[str, Any]:
-        """Run backtest with train/test split for out-of-sample validation.
-
-        Args:
-            symbol: Stock symbol to test
-            strategy: Strategy class to test
-            train_start_date: Start date for training data (YYYY-MM-DD)
-            train_end_date: End date for training data (YYYY-MM-DD)
-            test_start_date: Start date for testing data (YYYY-MM-DD)
-            test_end_date: End date for testing data (YYYY-MM-DD)
-            optimize_on_train: Whether to optimize parameters on training data
-            treasury_duration: Treasury duration to use ('3_month', '13_week', etc.)
-            use_dynamic_risk_free_rate: Whether to automatically fetch dynamic T-bill rates
-            **kwargs: Additional parameters for the strategy or optimization
-
-        Returns:
-            Dictionary with both training and testing results
-        """
         if not self.data_fetcher:
-            raise ValueError("Data fetcher not configured. Ensure DI container is properly set up.")
+            raise ValueError(self.DATA_FETCHER_NOT_CONFIGURED_MSG)
 
-        # Fetch data for the entire period
         all_start_date = train_start_date or test_start_date
         all_end_date = test_end_date or train_end_date
-
         all_data = self.data_fetcher.get_stock_data(symbol, all_start_date, all_end_date)
 
-        # Split data into train and test sets
+        train_data, test_data = self._split_train_test_data(
+            all_data, train_start_date, train_end_date, test_start_date, test_end_date
+        )
+
+        if use_dynamic_risk_free_rate and not isinstance(self.risk_free_rate, pd.Series):
+            self._fetch_and_set_treasury_rates(all_start_date, all_end_date, treasury_duration)
+
+        results = self._init_train_test_results(symbol, strategy, train_data, test_data)
+
+        if optimize_on_train and "param_ranges" in kwargs:
+            param_ranges = kwargs.pop("param_ranges")
+            optimized_params = self._optimize_on_train(train_data, strategy, param_ranges)
+            results["optimized_parameters"] = optimized_params
+            self._set_strategy_params(strategy, optimized_params)
+            train_result = self.run(train_data, strategy, **kwargs)
+        else:
+            train_result = self.run(train_data, strategy, **kwargs)
+            results["optimized_parameters"] = kwargs
+
+        results["train_results"] = self._extract_key_metrics(train_result)
+        test_result = self.run(test_data, strategy, **kwargs)
+        results["test_results"] = self._extract_key_metrics(test_result)
+        results["performance_degradation"] = self._calculate_performance_degradation(
+            results["train_results"], results["test_results"]
+        )
+
+        return results
+
+    def _split_train_test_data(
+        self,
+        all_data: pd.DataFrame,
+        train_start_date: str | None,
+        train_end_date: str | None,
+        test_start_date: str | None,
+        test_end_date: str | None,
+    ) -> tuple[pd.DataFrame, pd.DataFrame]:
         train_data = None
         test_data = None
 
@@ -320,23 +326,26 @@ class BacktestRunner:
             )
             test_data = all_data[test_mask]
 
-        # If no explicit split provided, use the entire dataset
         if train_data is None and test_data is None:
             train_data = all_data
             test_data = all_data
         elif train_data is None:
-            train_data = test_data  # Use test data for both if no train data
+            train_data = test_data
         elif test_data is None:
-            test_data = train_data  # Use train data for both if no test data
+            test_data = train_data
 
-        # Fetch Treasury rates if requested
-        if use_dynamic_risk_free_rate and not isinstance(self.risk_free_rate, pd.Series):
-            if all_start_date and all_end_date:
-                treasury_rates = self.data_fetcher.get_treasury_rates(all_start_date, all_end_date, treasury_duration)
-                if not treasury_rates.empty:
-                    self.risk_free_rate = treasury_rates
+        return train_data, test_data
 
-        results: dict[str, Any] = {
+    def _fetch_and_set_treasury_rates(self, start_date, end_date, treasury_duration):
+        if start_date and end_date:
+            treasury_rates = self.data_fetcher.get_treasury_rates(start_date, end_date, treasury_duration)
+            if not treasury_rates.empty:
+                self.risk_free_rate = treasury_rates
+
+    def _init_train_test_results(
+        self, symbol, strategy, train_data, test_data
+    ) -> dict[str, Any]:
+        return {
             "symbol": symbol,
             "strategy": strategy.__name__,
             "train_period": {
@@ -359,91 +368,69 @@ class BacktestRunner:
             },
         }
 
-        # Run on training data
-        if optimize_on_train and "param_ranges" in kwargs:
-            # Optimize parameters on training data
-            param_ranges = kwargs.pop("param_ranges")
-            print(f"Optimizing {strategy.__name__} parameters on training data...")
-            optimized_result = self.optimize(train_data, strategy, **param_ranges)
+    def _optimize_on_train(self, train_data, strategy, param_ranges):
+        print(f"Optimizing {strategy.__name__} parameters on training data...")
+        optimized_result = self.optimize(train_data, strategy, **param_ranges)
+        if hasattr(optimized_result, "items"):
+            return {
+                k: v
+                for k, v in optimized_result.items()
+                if k
+                not in [
+                    "Start",
+                    "End",
+                    "Duration",
+                    "Exposure Time [%]",
+                    "Equity Final [$]",
+                    "Equity Peak [$]",
+                    "Return [%]",
+                    "Buy & Hold Return [%]",
+                    "Max. Drawdown [%]",
+                    "Avg. Drawdown [%]",
+                    "Max. Drawdown Duration",
+                    "Avg. Drawdown Duration",
+                    "# Trades",
+                    "Win Rate [%]",
+                    "Best Trade [%]",
+                    "Worst Trade [%]",
+                    "Avg. Trade [%]",
+                    "Max. Trade Duration",
+                    "Avg. Trade Duration",
+                    "Profit Factor",
+                    "Expectancy [%]",
+                    "SQN",
+                    "Sharpe Ratio",
+                    "Sortino Ratio",
+                    "Calmar Ratio",
+                    "_strategy",
+                    "_equity_curve",
+                    "_trades",
+                ]
+            }
+        return {}
 
-            # Extract optimized parameters
-            if hasattr(optimized_result, "items"):
-                optimized_params = {
-                    k: v
-                    for k, v in optimized_result.items()
-                    if k
-                    not in [
-                        "Start",
-                        "End",
-                        "Duration",
-                        "Exposure Time [%]",
-                        "Equity Final [$]",
-                        "Equity Peak [$]",
-                        "Return [%]",
-                        "Buy & Hold Return [%]",
-                        "Max. Drawdown [%]",
-                        "Avg. Drawdown [%]",
-                        "Max. Drawdown Duration",
-                        "Avg. Drawdown Duration",
-                        "# Trades",
-                        "Win Rate [%]",
-                        "Best Trade [%]",
-                        "Worst Trade [%]",
-                        "Avg. Trade [%]",
-                        "Max. Trade Duration",
-                        "Avg. Trade Duration",
-                        "Profit Factor",
-                        "Expectancy [%]",
-                        "SQN",
-                        "Sharpe Ratio",
-                        "Sortino Ratio",
-                        "Calmar Ratio",
-                        "_strategy",
-                        "_equity_curve",
-                        "_trades",
-                    ]
-                }
-            else:
-                optimized_params = {}
+    def _set_strategy_params(self, strategy, optimized_params):
+        for param_name, param_value in optimized_params.items():
+            setattr(strategy, param_name, param_value)
 
-            results["optimized_parameters"] = optimized_params
-
-            # Run backtest on training data with optimized parameters
-            for param_name, param_value in optimized_params.items():
-                setattr(strategy, param_name, param_value)
-
-            train_result = self.run(train_data, strategy, **kwargs)
-            results["train_results"] = self._extract_key_metrics(train_result)
-        else:
-            # Run backtest on training data without optimization
-            train_result = self.run(train_data, strategy, **kwargs)
-            results["train_results"] = self._extract_key_metrics(train_result)
-            results["optimized_parameters"] = kwargs
-
-        # Run backtest on test data with same parameters
-        test_result = self.run(test_data, strategy, **kwargs)
-        results["test_results"] = self._extract_key_metrics(test_result)
-
-        # Calculate performance degradation
-        if results["train_results"]["return_pct"] != 0:
-            results["performance_degradation"] = {
+    def _calculate_performance_degradation(self, train_results, test_results):
+        if train_results["return_pct"] != 0:
+            return {
                 "return_pct": (
-                    (results["test_results"]["return_pct"] - results["train_results"]["return_pct"])
-                    / abs(results["train_results"]["return_pct"])
+                    (test_results["return_pct"] - train_results["return_pct"])
+                    / abs(train_results["return_pct"])
                     * 100
                 ),
                 "sharpe_ratio": (
-                    (results["test_results"]["sharpe_ratio"] - results["train_results"]["sharpe_ratio"])
-                    / abs(results["train_results"]["sharpe_ratio"])
+                    (test_results["sharpe_ratio"] - train_results["sharpe_ratio"])
+                    / abs(train_results["sharpe_ratio"])
                     * 100
-                    if results["train_results"]["sharpe_ratio"] != 0
+                    if train_results["sharpe_ratio"] != 0
                     else 0
                 ),
             }
         else:
-            results["performance_degradation"] = {"return_pct": 0, "sharpe_ratio": 0}
-
-        return results
+            return {"return_pct": 0, "sharpe_ratio": 0}
 
     def _extract_key_metrics(self, backtest_result: dict[str, Any]) -> dict[str, Any]:
         """Extract key metrics from backtest results.
@@ -540,72 +527,61 @@ class BacktestRunner:
         if self._equity_curve is None or self._treasury_rates is None:
             return
 
-        # Get the equity curve as a Series with appropriate index
-        if isinstance(self._equity_curve, np.ndarray):
-            # Handle multi-dimensional arrays - extract the equity values
-            if self._equity_curve.ndim > 1:
-                # For multi-dimensional arrays, take the first column (equity values)
-                equity_values = (
-                    self._equity_curve[:, 0] if self._equity_curve.shape[1] > 0 else self._equity_curve.flatten()
-                )
-            else:
-                equity_values = self._equity_curve
+        equity_series = self._convert_equity_curve_to_series(self._equity_curve, self._treasury_rates)
 
-            # Create date index based on treasury rates index
-            equity_series = pd.Series(
-                equity_values,
-                index=self._treasury_rates.index[: len(equity_values)],
-            )
-        else:
-            # Convert whatever type to pandas Series
-            if isinstance(self._equity_curve, pd.DataFrame):
-                # It's a DataFrame - extract the first column (equity values)
-                equity_series = pd.Series(self._equity_curve.iloc[:, 0], index=self._equity_curve.index)
-            elif isinstance(self._equity_curve, pd.Series):
-                # It's already a Series
-                equity_series = self._equity_curve
-            elif hasattr(self._equity_curve, "values") and hasattr(self._equity_curve, "index"):
-                # It's some other pandas object - try to convert
-                if hasattr(self._equity_curve, "iloc"):
-                    # Has iloc, probably DataFrame-like
-                    equity_series = pd.Series(self._equity_curve.iloc[:, 0], index=self._equity_curve.index)
-                else:
-                    # Try direct conversion
-                    equity_series = pd.Series(self._equity_curve.values, index=self._equity_curve.index)
-            elif hasattr(self._equity_curve, "__len__"):
-                # It's array-like, convert to Series with treasury rates index
-                try:
-                    equity_series = pd.Series(
-                        list(self._equity_curve),
-                        index=self._treasury_rates.index[: len(self._equity_curve)],
-                    )
-                except Exception as e:
-                    print(
-                        f"Warning: Could not convert equity curve to pandas Series. "
-                        f"Type: {type(self._equity_curve)}, Error: {e}"
-                    )
-                    return
-            else:
-                # Unknown type, skip dynamic metrics
-                print(f"Warning: Unknown equity curve type: {type(self._equity_curve)}")
-                return
-
-        # Ensure it's definitely a pandas Series
-        if not isinstance(equity_series, pd.Series):
+        if equity_series is None or not isinstance(equity_series, pd.Series):
             print(f"Warning: Could not convert equity curve to pandas Series. Type: {type(equity_series)}")
             return
 
-        # Enhance results with dynamic metrics
         try:
             enhanced_stats = enhance_backtest_metrics(self.results, equity_series, self._treasury_rates)
         except Exception as e:
             print(f"Warning: Could not calculate dynamic metrics: {e}")
             return
 
-        # Update results with enhanced metrics
         for key, value in enhanced_stats.items():
             if key not in self.results:
                 self.results[key] = value
+
+    def _convert_equity_curve_to_series(self, equity_curve, treasury_rates):
+        """Convert various equity curve types to pandas Series."""
+        if isinstance(equity_curve, np.ndarray):
+            return self._convert_ndarray_equity_curve(equity_curve, treasury_rates)
+        if isinstance(equity_curve, pd.DataFrame):
+            return self._convert_dataframe_equity_curve(equity_curve)
+        if isinstance(equity_curve, pd.Series):
+            return equity_curve
+        if hasattr(equity_curve, "values") and hasattr(equity_curve, "index"):
+            return self._convert_indexed_equity_curve(equity_curve)
+        if hasattr(equity_curve, "__len__"):
+            return self._convert_iterable_equity_curve(equity_curve, treasury_rates)
+        print(f"Warning: Unknown equity curve type: {type(equity_curve)}")
+        return None
+
+    def _convert_ndarray_equity_curve(self, equity_curve, treasury_rates):
+        if equity_curve.ndim > 1:
+            equity_values = equity_curve[:, 0] if equity_curve.shape[1] > 0 else equity_curve.flatten()
+        else:
+            equity_values = equity_curve
+        return pd.Series(equity_values, index=treasury_rates.index[: len(equity_values)])
+
+    def _convert_dataframe_equity_curve(self, equity_curve):
+        return pd.Series(equity_curve.iloc[:, 0], index=equity_curve.index)
+
+    def _convert_indexed_equity_curve(self, equity_curve):
+        if hasattr(equity_curve, "iloc"):
+            return pd.Series(equity_curve.iloc[:, 0], index=equity_curve.index)
+        return pd.Series(equity_curve.values, index=equity_curve.index)
+
+    def _convert_iterable_equity_curve(self, equity_curve, treasury_rates):
+        try:
+            return pd.Series(list(equity_curve), index=treasury_rates.index[: len(equity_curve)])
+        except Exception as e:
+            print(
+                f"Warning: Could not convert equity curve to pandas Series. "
+                f"Type: {type(equity_curve)}, Error: {e}"
+            )
+            return None
 
     def run_with_dynamic_risk_free_rate(
         self,

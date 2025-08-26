@@ -42,7 +42,7 @@ class TestForecastingManager:
         mock.error = MagicMock()
         mock.warning = MagicMock()
         mock.debug = MagicMock()
-        mock.isEnabledFor = MagicMock(return_value=False)
+        mock.is_enabled_for = MagicMock(return_value=False)
         return mock
 
     @pytest.fixture

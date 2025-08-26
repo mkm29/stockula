@@ -142,7 +142,7 @@ class DataManager:
         self._fetcher.db = db_manager
 
         # Update all repositories that support database persistence
-        for _name, repo in self._registry.repositories.items():
+        for _, repo in self._registry.repositories.items():
             if hasattr(repo, "db_manager"):
                 repo.db_manager = db_manager
                 if db_manager is not None and hasattr(repo, "sync_to_database"):

@@ -399,7 +399,7 @@ class TestAutoGluonBackend:
         logger.info = Mock()
         logger.warning = Mock()
         logger.error = Mock()
-        logger.isEnabledFor = Mock(return_value=False)
+        logger.is_enabled_for = Mock(return_value=False)
         return logger
 
     @pytest.fixture

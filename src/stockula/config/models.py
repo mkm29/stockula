@@ -9,27 +9,27 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 class BacktestResult(BaseModel):
     """Individual backtest result for a single asset."""
 
-    ticker: str = Field(description="Asset ticker symbol")
-    strategy: str = Field(description="Strategy name")
+    ticker: str = Field(description="Asset ticker symbol", min_length=1, max_length=10)
+    strategy: str = Field(description="Strategy name", min_length=1)
     parameters: dict[str, Any] = Field(default_factory=dict, description="Strategy parameters used")
     return_pct: float = Field(description="Return percentage")
     sharpe_ratio: float = Field(description="Sharpe ratio")
-    max_drawdown_pct: float = Field(description="Maximum drawdown percentage")
-    num_trades: int = Field(description="Number of trades executed")
-    win_rate: float | None = Field(default=None, description="Win rate percentage")
+    max_drawdown_pct: float = Field(description="Maximum drawdown percentage", le=0)
+    num_trades: int = Field(description="Number of trades executed", ge=0)
+    win_rate: float | None = Field(default=None, description="Win rate percentage", ge=0, le=100)
 
 
 class StrategyBacktestSummary(BaseModel):
     """Summary of backtest results for a single strategy across all assets."""
 
-    strategy_name: str = Field(description="Strategy name")
+    strategy_name: str = Field(description="Strategy name", min_length=1)
     parameters: dict[str, Any] = Field(default_factory=dict, description="Strategy parameters")
-    initial_portfolio_value: float = Field(description="Initial portfolio value")
-    final_portfolio_value: float = Field(description="Final portfolio value after backtest")
+    initial_portfolio_value: float = Field(description="Initial portfolio value", gt=0)
+    final_portfolio_value: float = Field(description="Final portfolio value after backtest", ge=0)
     total_return_pct: float = Field(description="Total portfolio return percentage")
-    total_trades: int = Field(description="Total trades across all assets")
-    winning_stocks: int = Field(description="Number of stocks with positive returns")
-    losing_stocks: int = Field(description="Number of stocks with negative returns")
+    total_trades: int = Field(description="Total trades across all assets", ge=0)
+    winning_stocks: int = Field(description="Number of stocks with positive returns", ge=0)
+    losing_stocks: int = Field(description="Number of stocks with negative returns", ge=0)
     average_return_pct: float = Field(description="Average return across all assets")
     average_sharpe_ratio: float = Field(description="Average Sharpe ratio")
     detailed_results: list[BacktestResult] = Field(default_factory=list, description="Per-asset results")
@@ -51,7 +51,7 @@ class PortfolioBacktestResults(BaseModel):
 class TickerConfig(BaseModel):
     """Configuration for individual ticker/asset."""
 
-    symbol: str = Field(description="Stock ticker symbol (e.g., AAPL)")
+    symbol: str = Field(description="Stock ticker symbol (e.g., AAPL)", min_length=1, max_length=10)
     quantity: float | None = Field(
         default=None,
         gt=0,

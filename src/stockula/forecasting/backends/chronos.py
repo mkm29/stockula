@@ -70,46 +70,53 @@ class ChronosBackend(ForecastBackend):
         self.is_fitted = False
 
     def _load_pipeline(self):
-        if self._pipeline is None:
-            try:
-                from chronos import BaseChronosPipeline
-            except Exception as e:  # pragma: no cover - import error path
-                raise ImportError(
-                    "chronos-forecasting not installed or import failed. Install with: pip install chronos-forecasting"
-                ) from e
+        if self._pipeline is not None:
+            return
 
-            # Determine sensible defaults for device and dtype
-            device_map = self.device_map
-            torch_dtype = self.torch_dtype
-            try:
-                import torch
+        self._import_chronos_pipeline()
+        device_map, torch_dtype = self._select_device_and_dtype()
 
-                if device_map is None:
-                    # BaseChronosPipeline expects explicit device string: "cuda" or "cpu"
-                    device_map = "cuda" if torch.cuda.is_available() else "cpu"
-                if torch_dtype is None:
-                    # Prefer bfloat16 where available, otherwise float16; fall back to float32
-                    if hasattr(torch, "bfloat16"):
-                        torch_dtype = torch.bfloat16
-                    elif hasattr(torch, "float16"):
-                        torch_dtype = torch.float16
-            except Exception:
-                # Torch may not be available; fall back to CPU and default dtype
-                if device_map is None:
-                    device_map = "cpu"
-                if torch_dtype is None:
-                    torch_dtype = None
+        self._instantiate_pipeline(device_map, torch_dtype)
 
-            try:
-                self._pipeline = BaseChronosPipeline.from_pretrained(
-                    self.model_name,
-                    device_map=device_map,
-                    torch_dtype=torch_dtype,
-                )
-            except Exception as e:  # Wrap with a clearer message
-                raise RuntimeError(
-                    f"Failed to load Chronos model '{self.model_name}'. Ensure PyTorch is installed and compatible."
-                ) from e
+    def _import_chronos_pipeline(self):
+        try:
+            from chronos import BaseChronosPipeline
+            self._BaseChronosPipeline = BaseChronosPipeline
+        except Exception as e:  # pragma: no cover - import error path
+            raise ImportError(
+                "chronos-forecasting not installed or import failed. Install with: pip install chronos-forecasting"
+            ) from e
+
+    def _select_device_and_dtype(self):
+        device_map = self.device_map
+        torch_dtype = self.torch_dtype
+        try:
+            import torch
+            if device_map is None:
+                device_map = "cuda" if torch.cuda.is_available() else "cpu"
+            if torch_dtype is None:
+                if hasattr(torch, "bfloat16"):
+                    torch_dtype = torch.bfloat16
+                elif hasattr(torch, "float16"):
+                    torch_dtype = torch.float16
+        except Exception:
+            if device_map is None:
+                device_map = "cpu"
+            if torch_dtype is None:
+                torch_dtype = None
+        return device_map, torch_dtype
+
+    def _instantiate_pipeline(self, device_map, torch_dtype):
+        try:
+            self._pipeline = self._BaseChronosPipeline.from_pretrained(
+                self.model_name,
+                device_map=device_map,
+                torch_dtype=torch_dtype,
+            )
+        except Exception as e:
+            raise RuntimeError(
+                f"Failed to load Chronos model '{self.model_name}'. Ensure PyTorch is installed and compatible."
+            ) from e
 
     def _prepare_context(self, data: pd.DataFrame, target_column: str) -> np.ndarray:
         # Extract numeric series and cast to float32 for Chronos

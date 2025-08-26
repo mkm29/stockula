@@ -44,7 +44,13 @@ class OutputFormat(str, Enum):
     JSON = "json"
 
 
-def print_results(results: dict[str, Any], output_format: str = "console", config=None, container=None, portfolio=None):
+def print_results(
+    results: dict[str, Any],
+    output_format: str = "console",
+    config: Any | None = None,
+    container: Any | None = None,
+    portfolio: Any | None = None,
+) -> None:
     """Print results in specified format using ResultsDisplay.
 
     Args:
@@ -71,34 +77,62 @@ def run_stockula(
     test_end: str | None = None,
 ):
     """Core logic for running Stockula."""
-    # Initialize DI container first
     container = create_container(config)
+    stockula_config = _load_config_with_validation(container, config)
+    _setup_logging(stockula_config, container)
 
-    # Load configuration - the container will handle this
+    _override_config(stockula_config, ticker, train_start, train_end, test_start, test_end)
+
+    manager = StockulaManager(stockula_config, container, console)
+
+    if mode == "optimize-allocation":
+        save_path = save_optimized_config or save_config_path
+        return manager.run_optimize_allocation(save_path)
+
+    if save_config_path and mode != "optimize-allocation":
+        save_config(stockula_config, save_config_path)
+        print(f"Configuration saved to {save_config_path}")
+        return
+
+    portfolio = _create_portfolio_with_error_handling(manager)
+
+    _display_portfolio(portfolio, mode, container)
+
+    results = _run_main_processing_with_error_handling(manager, mode, portfolio)
+
+    if mode == "forecast":
+        display = ResultsDisplay(cli_manager.get_console())
+        display.show_portfolio_forecast_value(stockula_config, portfolio, results)
+
+    output_format = output or stockula_config.output.get("format", "console")
+    print_results(results, output_format, stockula_config, container, portfolio)
+
+    if mode in ["all", "backtest"] and "backtesting" in results:
+        display = ResultsDisplay(cli_manager.get_console())
+        display.show_strategy_summaries(manager, stockula_config, results)
+
+
+def _load_config_with_validation(container, config):
     try:
-        stockula_config = container.stockula_config()
+        return container.stockula_config()
     except ValidationError as e:
-        # Use the provided config path or default
         config_path = config or ".stockula.yaml"
         handle_validation_error(e, config_path)
 
-    # Set up logging based on configuration
+
+def _setup_logging(stockula_config, container):
     from .interfaces import ILoggingManager
     from .main import setup_logging
-
     setup_logging(stockula_config, logging_manager=cast(ILoggingManager, container.logging_manager()))
 
-    # Override ticker if provided
+
+def _override_config(stockula_config, ticker, train_start, train_end, test_start, test_end):
     if ticker:
         stockula_config.portfolio.tickers = [TickerConfig(symbol=ticker, quantity=1.0)]
-        # Disable auto-allocation for single ticker mode since we don't have categories
         stockula_config.portfolio.auto_allocate = False
         stockula_config.portfolio.dynamic_allocation = False
         stockula_config.portfolio.allocation_method = "equal_weight"
-        # Allow 100% position for single ticker mode
         stockula_config.portfolio.max_position_size = 100.0
-
-    # Override date ranges if provided
     if train_start:
         stockula_config.forecast.train_start_date = datetime.strptime(train_start, "%Y-%m-%d").date()
     if train_end:
@@ -108,25 +142,11 @@ def run_stockula(
     if test_end:
         stockula_config.forecast.test_end_date = datetime.strptime(test_end, "%Y-%m-%d").date()
 
-    # Create manager instance
-    manager = StockulaManager(stockula_config, container, console)
 
-    # Handle optimize-allocation mode early (before portfolio creation)
-    if mode == "optimize-allocation":
-        save_path = save_optimized_config or save_config_path
-        return manager.run_optimize_allocation(save_path)
-
-    # Save configuration if requested (for non-optimize-allocation modes)
-    if save_config_path and mode != "optimize-allocation":
-        save_config(stockula_config, save_config_path)
-        print(f"Configuration saved to {save_config_path}")
-        return
-
-    # Create portfolio
+def _create_portfolio_with_error_handling(manager):
     try:
-        portfolio = manager.create_portfolio()
+        return manager.create_portfolio()
     except ValueError as e:
-        # Handle portfolio validation errors (e.g., insufficient capital)
         error_msg = str(e)
         if "insufficient" in error_msg.lower() and "capital" in error_msg.lower():
             console.print("\n[bold red]❌ Portfolio Configuration Error[/bold red]\n")
@@ -139,16 +159,17 @@ def run_stockula(
             console.print(f"\n[bold red]❌ Portfolio Error:[/bold red] [red]{error_msg}[/red]\n")
         raise typer.Exit(1) from None
 
-    # Display portfolio summary and holdings via display layer
+
+def _display_portfolio(portfolio, mode, container):
     display = ResultsDisplay(cli_manager.get_console())
     display.show_portfolio_summary(portfolio)
     display.show_portfolio_holdings(portfolio, mode=mode, data_fetcher=container.data_fetcher())
 
-    # Run main processing through StockulaManager
+
+def _run_main_processing_with_error_handling(manager, mode, portfolio):
     try:
-        results = manager.run_main_processing(mode, portfolio)
+        return manager.run_main_processing(mode, portfolio)
     except Exception as e:
-        # Handle processing errors with clean output
         error_msg = str(e)
         if "insufficient" in error_msg.lower() and "data" in error_msg.lower():
             console.print(f"\n[bold red]❌ Data Error:[/bold red] [red]{error_msg}[/red]")
@@ -159,20 +180,6 @@ def run_stockula(
         else:
             console.print(f"\n[bold red]❌ Processing Error:[/bold red] [red]{error_msg}[/red]\n")
         raise typer.Exit(1) from None
-
-    # Show current portfolio value for forecast mode
-    if mode == "forecast":
-        display = ResultsDisplay(cli_manager.get_console())
-        display.show_portfolio_forecast_value(stockula_config, portfolio, results)
-
-    # Output results
-    output_format = output or stockula_config.output.get("format", "console")
-    print_results(results, output_format, stockula_config, container, portfolio)
-
-    # Show strategy-specific summaries after backtesting
-    if mode in ["all", "backtest"] and "backtesting" in results:
-        display = ResultsDisplay(cli_manager.get_console())
-        display.show_strategy_summaries(manager, stockula_config, results)
 
 
 @app.callback(invoke_without_command=True)
@@ -297,46 +304,15 @@ def pipeline_command(
     console = Console()
 
     try:
-        # Create pipeline instance
-        pipeline = StockulaPipeline(
-            base_config_path=base_config,
+        _run_pipeline_logic(
+            base_config=base_config,
+            optimized_config=optimized_config,
+            output=output,
+            skip_optimization=skip_optimization,
+            skip_backtest=skip_backtest,
             verbose=verbose,
             console=console,
         )
-
-        if skip_optimization and skip_backtest:
-            console.print("[red]Error: Cannot skip both optimization and backtesting[/red]")
-            raise typer.Exit(1)
-
-        # Run based on options
-        if not skip_optimization and not skip_backtest:
-            # Run full pipeline
-            results = pipeline.run_full_pipeline(
-                optimized_config_path=optimized_config,
-            )
-        elif skip_optimization:
-            # Just run backtest with existing config
-            config = pipeline.load_configuration(base_config)
-            results = pipeline.run_backtest(config=config, use_optimized=False)
-        else:  # skip_backtest
-            # Just run optimization
-            config = pipeline.load_configuration(base_config)
-            _, results = pipeline.run_optimization(
-                config=config,
-                save_config_path=optimized_config,
-            )
-
-        # Save results if output path provided
-        if output:
-            format = "json"
-            if output.endswith(".yaml") or output.endswith(".yml"):
-                format = "yaml"
-            elif output.endswith(".csv"):
-                format = "csv"
-            pipeline.save_results(output, format=format)
-
-        console.print("\n[bold green]✨ Pipeline completed successfully![/bold green]")
-
     except FileNotFoundError as e:
         console.print(f"[red]Error: {e}[/red]")
         raise typer.Exit(1) from None
@@ -353,6 +329,50 @@ def pipeline_command(
 
             console.print(traceback.format_exc())
         raise typer.Exit(1) from None
+
+
+def _run_pipeline_logic(
+    base_config,
+    optimized_config,
+    output,
+    skip_optimization,
+    skip_backtest,
+    verbose,
+    console,
+):
+    pipeline = StockulaPipeline(
+        base_config_path=base_config,
+        verbose=verbose,
+        console=console,
+    )
+
+    if skip_optimization and skip_backtest:
+        console.print("[red]Error: Cannot skip both optimization and backtesting[/red]")
+        raise typer.Exit(1)
+
+    if not skip_optimization and not skip_backtest:
+        pipeline.run_full_pipeline(
+            optimized_config_path=optimized_config,
+        )
+    elif skip_optimization:
+        config = pipeline.load_configuration(base_config)
+        pipeline.run_backtest(config=config, use_optimized=False)
+    else:  # skip_backtest
+        config = pipeline.load_configuration(base_config)
+        pipeline.run_optimization(
+            config=config,
+            save_config_path=optimized_config,
+        )
+
+    if output:
+        output_format = "json"
+        if output.endswith(".yaml") or output.endswith(".yml"):
+            output_format = "yaml"
+        elif output.endswith(".csv"):
+            output_format = "csv"
+        pipeline.save_results(output, format=output_format)
+
+    console.print("\n[bold green]✨ Pipeline completed successfully![/bold green]")
 
 
 def handle_validation_error(error: ValidationError, config_path: str) -> None:
@@ -412,39 +432,25 @@ def parse_test_args():
     args = sys.argv[1:]  # Skip program name
     kwargs = {}
 
-    # Parse arguments
+    arg_map = {
+        "--config": "config", "-c": "config",
+        "--ticker": "ticker", "-t": "ticker",
+        "--mode": "mode", "-m": "mode",
+        "--output": "output", "-o": "output",
+        "--save-config": "save_config_path",
+        "--save-optimized-config": "save_optimized_config",
+        "--train-start": "train_start",
+        "--train-end": "train_end",
+        "--test-start": "test_start",
+        "--test-end": "test_end",
+    }
+
     i = 0
     while i < len(args):
-        arg = args[i]
-        if arg == "--config" or arg == "-c":
-            kwargs["config"] = args[i + 1]
-            i += 2
-        elif arg == "--ticker" or arg == "-t":
-            kwargs["ticker"] = args[i + 1]
-            i += 2
-        elif arg == "--mode" or arg == "-m":
-            kwargs["mode"] = args[i + 1]
-            i += 2
-        elif arg == "--output" or arg == "-o":
-            kwargs["output"] = args[i + 1]
-            i += 2
-        elif arg == "--save-config":
-            kwargs["save_config_path"] = args[i + 1]
-            i += 2
-        elif arg == "--save-optimized-config":
-            kwargs["save_optimized_config"] = args[i + 1]
-            i += 2
-        elif arg == "--train-start":
-            kwargs["train_start"] = args[i + 1]
-            i += 2
-        elif arg == "--train-end":
-            kwargs["train_end"] = args[i + 1]
-            i += 2
-        elif arg == "--test-start":
-            kwargs["test_start"] = args[i + 1]
-            i += 2
-        elif arg == "--test-end":
-            kwargs["test_end"] = args[i + 1]
+        key = arg_map.get(args[i])
+        if key:
+            if i + 1 < len(args):
+                kwargs[key] = args[i + 1]
             i += 2
         else:
             i += 1

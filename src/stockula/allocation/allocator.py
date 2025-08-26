@@ -84,20 +84,69 @@ class Allocator(BaseAllocator):
         """Calculate quantities using auto-allocation based on category ratios and capital utilization target.
 
         This method optimizes for maximum capital utilization while respecting category allocation ratios.
-
-        Args:
-            config: Stockula configuration
-            tickers_to_add: List of ticker configurations (should only have category specified)
-
-        Returns:
-            Dictionary mapping ticker symbols to calculated quantities
+        The implementation delegates steps to helpers to keep cognitive complexity low.
         """
         self._validate_fetcher()
 
         symbols = [ticker.symbol for ticker in tickers_to_add]
         calculation_prices = self._get_calculation_prices(config, symbols)
 
-        # Group tickers by category
+        # Basic validation and grouping
+        tickers_by_category = self._group_tickers_by_category(tickers_to_add, calculation_prices)
+
+        if config.portfolio.category_ratios is None:
+            raise ValueError("Category ratios must be specified for auto-allocation")
+
+        target_capital = config.portfolio.initial_capital * config.portfolio.capital_utilization_target
+        calculated_quantities: dict[str, float] = {t.symbol: 0.0 for t in tickers_to_add}
+
+        self.logger.debug(
+            f"Auto-allocation target capital: ${target_capital:,.2f} "
+            f"({config.portfolio.capital_utilization_target:.1%} of ${config.portfolio.initial_capital:,.2f})"
+        )
+
+        # Prepare category allocations
+        category_allocations = self._init_category_allocations(config, tickers_by_category, target_capital)
+
+        total_allocated = 0.0
+        category_unused: dict[str, float] = {}
+
+        # Allocate per category using the appropriate method
+        for category, allocation_info in category_allocations.items():
+            if config.portfolio.allow_fractional_shares:
+                allocated, unused = self._allocate_category_fractional(
+                    allocation_info, calculation_prices, calculated_quantities
+                )
+            else:
+                allocated, unused = self._allocate_category_integer(
+                    allocation_info, calculation_prices, calculated_quantities
+                )
+
+            total_allocated += allocated
+            category_unused[category] = unused
+            self.logger.debug(f"  Unused capital in {category}: ${unused:.2f}")
+
+        # Redistribute unused capital if needed (only for integer shares)
+        remaining_capital = sum(category_unused.values())
+        if remaining_capital > 0 and not config.portfolio.allow_fractional_shares:
+            self.logger.debug(f"\nRedistributing unused capital: ${remaining_capital:.2f}")
+            redistributed, remaining_capital = self._redistribute_unused_capital(
+                calculated_quantities, calculation_prices, remaining_capital, config
+            )
+            total_allocated += redistributed
+            self.logger.debug(f"Final unused capital: ${remaining_capital:.2f}")
+
+        # Final stats
+        actual_utilization = total_allocated / config.portfolio.initial_capital
+        self.logger.info(f"\nTotal portfolio cost: ${total_allocated:,.2f}")
+        self.logger.info(f"Capital utilization: {actual_utilization:.1%}")
+        self.logger.info(f"Remaining cash: ${config.portfolio.initial_capital - total_allocated:,.2f}")
+
+        return calculated_quantities
+
+    def _group_tickers_by_category(
+        self, tickers_to_add: list[TickerConfig], calculation_prices: dict[str, float]
+    ) -> dict[str, list[TickerConfig]]:
         tickers_by_category: dict[str, list[TickerConfig]] = {}
         for ticker_config in tickers_to_add:
             if ticker_config.symbol not in calculation_prices:
@@ -107,34 +156,19 @@ class Allocator(BaseAllocator):
                 raise ValueError(f"Ticker {ticker_config.symbol} must have category specified for auto-allocation")
 
             category = ticker_config.category.upper()
-            if category not in tickers_by_category:
-                tickers_by_category[category] = []
-            tickers_by_category[category].append(ticker_config)
+            tickers_by_category.setdefault(category, []).append(ticker_config)
+        return tickers_by_category
 
-        # Calculate target capital per category
-        target_capital = config.portfolio.initial_capital * config.portfolio.capital_utilization_target
-        calculated_quantities: dict[str, float] = {}
-
-        # Initialize all tickers with 0 quantity
-        for ticker_config in tickers_to_add:
-            calculated_quantities[ticker_config.symbol] = 0.0
-
-        self.logger.debug(
-            f"Auto-allocation target capital: ${target_capital:,.2f} "
-            f"({config.portfolio.capital_utilization_target:.1%} of ${config.portfolio.initial_capital:,.2f})"
-        )
-
-        # First pass: Calculate basic allocations per category
-        category_allocations = {}
-        if config.portfolio.category_ratios is None:
-            raise ValueError("Category ratios must be specified for auto-allocation")
+    def _init_category_allocations(
+        self, config: StockulaConfig, tickers_by_category: dict[str, list[TickerConfig]], target_capital: float
+    ) -> dict[str, dict]:
+        category_allocations: dict[str, dict] = {}
         for category, ratio in config.portfolio.category_ratios.items():
             category_upper = category.upper()
             if category_upper not in tickers_by_category:
                 self.logger.warning(f"No tickers found for category {category}")
                 continue
 
-            # Skip categories with 0% allocation
             if ratio == 0:
                 self.logger.debug(f"Skipping {category} - 0% allocation")
                 continue
@@ -144,168 +178,215 @@ class Allocator(BaseAllocator):
             category_allocations[category] = {
                 "capital": category_capital,
                 "tickers": category_tickers,
-                "quantities": {},
             }
 
             self.logger.debug(
                 f"\n{category} allocation: ${category_capital:,.2f} ({ratio:.1%}) "
                 f"across {len(category_tickers)} tickers"
             )
+        return category_allocations
 
-        # Aggressive allocation algorithm to maximize capital utilization
-        total_allocated = 0.0
-        category_unused: dict[str, float] = {}
+    def _allocate_category_fractional(
+        self, allocation_info: dict, calculation_prices: dict[str, float], calculated_quantities: dict[str, float]
+    ) -> tuple[float, float]:
+        cat_capital: float = allocation_info["capital"]
+        cat_tickers: list[TickerConfig] = allocation_info["tickers"]
+        capital_per_ticker = cat_capital / len(cat_tickers)
+        allocated = 0.0
+        for ticker_config in cat_tickers:
+            price = calculation_prices[ticker_config.symbol]
+            quantity = capital_per_ticker / price
+            calculated_quantities[ticker_config.symbol] = quantity
+            cost = quantity * price
+            allocated += cost
+            self.logger.debug(
+                f"  {ticker_config.symbol}: {quantity:.4f} shares × ${price:.2f} = ${cost:.2f}"
+            )
+        unused = 0.0
+        return allocated, unused
 
-        # First pass: Allocate within each category
-        for category, allocation_info in category_allocations.items():
-            cat_capital: float = allocation_info["capital"]  # type: ignore[assignment]
-            cat_tickers: list[TickerConfig] = allocation_info["tickers"]  # type: ignore[assignment]
+    def _allocate_category_integer(
+        self, allocation_info: dict, calculation_prices: dict[str, float], calculated_quantities: dict[str, float]
+    ) -> tuple[float, float]:
+        cat_capital: float = allocation_info["capital"]
+        cat_tickers: list[TickerConfig] = allocation_info["tickers"]
+        remaining_capital = cat_capital
+        allocated = 0.0
 
-            if config.portfolio.allow_fractional_shares:
-                # Simple equal allocation for fractional shares
-                capital_per_ticker = cat_capital / len(cat_tickers)
-                for ticker_config in cat_tickers:
-                    price = calculation_prices[ticker_config.symbol]
-                    quantity = capital_per_ticker / price
-                    calculated_quantities[ticker_config.symbol] = quantity
-                    actual_cost = quantity * price
-                    total_allocated += actual_cost
-                    self.logger.debug(
-                        f"  {ticker_config.symbol}: {quantity:.4f} shares × ${price:.2f} = ${actual_cost:.2f}"
-                    )
-                category_unused[category] = 0  # No unused capital with fractional shares
+        target_value_per_ticker = cat_capital / len(cat_tickers)
+        sorted_tickers = sorted(
+            cat_tickers,
+            key=lambda t: calculation_prices[t.symbol],
+            reverse=True,
+        )
+
+        ticker_quantities: dict[str, int] = {}
+        for ticker_config in sorted_tickers:
+            price = calculation_prices[ticker_config.symbol]
+
+            if price > remaining_capital:
+                ticker_quantities[ticker_config.symbol] = 0
+                continue
+
+            ideal_quantity = target_value_per_ticker / price
+            quantity = max(1, int(ideal_quantity))
+
+            while quantity * price > remaining_capital and quantity > 0:
+                quantity -= 1
+
+            if quantity > 0:
+                ticker_quantities[ticker_config.symbol] = quantity
+                cost = quantity * price
+                remaining_capital -= cost
+                allocated += cost
+                self.logger.debug(
+                    f"  {ticker_config.symbol}: {quantity} shares × ${price:.2f} = ${cost:.2f} "
+                    f"(target: ${target_value_per_ticker:.2f})"
+                )
             else:
-                # Integer shares: optimize allocation for balanced portfolio
-                remaining_capital = cat_capital
-                ticker_quantities = {}
+                ticker_quantities[ticker_config.symbol] = 0
 
-                # Calculate target value per ticker for balanced allocation
-                target_value_per_ticker = cat_capital / len(cat_tickers)
+        for symbol, qty in ticker_quantities.items():
+            calculated_quantities[symbol] = qty
 
-                # Sort tickers by price to allocate more expensive ones first
-                sorted_tickers = sorted(
-                    cat_tickers,
-                    key=lambda t: calculation_prices[t.symbol],
-                    reverse=True,
+        return allocated, remaining_capital
+
+    def _redistribute_unused_capital(
+        self,
+        calculated_quantities: dict[str, float],
+        calculation_prices: dict[str, float],
+        remaining_capital: float,
+    ) -> tuple[float, float]:
+        # Prepare current position values and accumulation
+        ticker_values = self._prepare_ticker_values_for_redistribution(calculated_quantities, calculation_prices)
+        redistributed = 0.0
+
+        avg_position_value = self._average_ticker_value(ticker_values)
+        max_iterations = 100
+        iteration = 0
+
+        while remaining_capital > 0 and iteration < max_iterations:
+            iteration += 1
+
+            # Try allocating to underweight positions first; if that fails, try the smallest affordable position.
+            allocated, cost = self._try_allocate_underweights_for_redistribution(
+                calculated_quantities, ticker_values, calculation_prices, avg_position_value, remaining_capital
+            )
+            if not allocated:
+                allocated, cost = self._try_allocate_smallest_for_redistribution(
+                    calculated_quantities, ticker_values, calculation_prices, remaining_capital
                 )
 
-                # First pass: Try to get each ticker close to its target value
-                for ticker_config in sorted_tickers:
-                    price = calculation_prices[ticker_config.symbol]
+            if not allocated:
+                break
 
-                    # Skip if we can't afford even one share
-                    if price > remaining_capital:
-                        ticker_quantities[ticker_config.symbol] = 0
-                        continue
+            remaining_capital -= cost
+            redistributed += cost
 
-                    # Calculate ideal quantity based on target value
-                    ideal_quantity = target_value_per_ticker / price
-                    quantity = max(1, int(ideal_quantity))
+            # Recalculate average after changes
+            avg_position_value = self._average_ticker_value(ticker_values)
 
-                    # Ensure we don't exceed remaining capital
-                    while quantity * price > remaining_capital and quantity > 0:
-                        quantity -= 1
+        return redistributed, remaining_capital
 
-                    if quantity > 0:
-                        ticker_quantities[ticker_config.symbol] = quantity
-                        cost = quantity * price
-                        remaining_capital -= cost
-                        total_allocated += cost
-                        self.logger.debug(
-                            f"  {ticker_config.symbol}: {quantity} shares × ${price:.2f} = ${cost:.2f} "
-                            f"(target: ${target_value_per_ticker:.2f})"
-                        )
-                    else:
-                        ticker_quantities[ticker_config.symbol] = 0
+    def _try_allocate_underweights_for_redistribution(
+        self,
+        calculated_quantities: dict[str, float],
+        ticker_values: dict[str, float],
+        calculation_prices: dict[str, float],
+        avg_position_value: float,
+        avail_cash: float,
+    ) -> tuple[bool, float]:
+        """Attempt to allocate one share to the largest underweight position that is affordable.
 
-                # Update calculated quantities
-                for symbol, quantity in ticker_quantities.items():
-                    calculated_quantities[symbol] = quantity
+        Returns (allocated_flag, cost) where cost is 0.0 if nothing was allocated.
+        """
+        underweights = self._find_underweight_positions_for_redistribution(
+            calculated_quantities, ticker_values, calculation_prices, avg_position_value, avail_cash
+        )
+        if not underweights:
+            return False, 0.0
 
-                category_unused[category] = remaining_capital
-                self.logger.debug(f"  Unused capital in {category}: ${remaining_capital:.2f}")
+        for symbol, _dist, price in underweights:
+            if price <= avail_cash:
+                cost = self._allocate_one_share_for_redistribution(calculated_quantities, ticker_values, symbol, price)
+                self.logger.debug(f"  Balanced redistribution: +1 {symbol} share (${price:.2f})")
+                return True, cost
 
-        # Second pass: Aggressive redistribution of all unused capital
-        remaining_capital = sum(category_unused.values())
-        if remaining_capital > 0 and not config.portfolio.allow_fractional_shares:
-            self.logger.debug(f"\nRedistributing unused capital: ${remaining_capital:.2f}")
+        return False, 0.0
 
-            # Calculate position values for balancing
-            ticker_values = {}
-            for symbol, quantity in calculated_quantities.items():
-                if quantity > 0:
-                    ticker_values[symbol] = quantity * calculation_prices[symbol]
+    def _try_allocate_smallest_for_redistribution(
+        self,
+        calculated_quantities: dict[str, float],
+        ticker_values: dict[str, float],
+        calculation_prices: dict[str, float],
+        avail_cash: float,
+    ) -> tuple[bool, float]:
+        """Attempt to allocate one share to the smallest affordable position.
 
-            # Calculate average position value for balance targeting
-            if ticker_values:
-                avg_position_value = sum(ticker_values.values()) / len(ticker_values)
-            else:
-                avg_position_value = 0
+        Returns (allocated_flag, cost) where cost is 0.0 if nothing was allocated.
+        """
+        smallest = self._find_affordable_smallest_for_redistribution(
+            calculated_quantities, ticker_values, calculation_prices, avail_cash
+        )
+        if not smallest:
+            return False, 0.0
 
-            # Redistribute to positions below average
-            max_iterations = 100  # Prevent infinite loops
-            iteration = 0
-            while remaining_capital > 0 and iteration < max_iterations:
-                iteration += 1
-                any_allocation = False
+        symbol, _current_value, price = smallest[0]
+        cost = self._allocate_one_share_for_redistribution(calculated_quantities, ticker_values, symbol, price)
+        self.logger.debug(f"  Final redistribution: +1 {symbol} share (${price:.2f})")
+        return True, cost
 
-                # Find positions below average that we can add to
-                underweight_positions = []
-                for symbol, quantity in calculated_quantities.items():
-                    if quantity > 0:  # Only consider positions we already have
-                        current_value = ticker_values.get(symbol, 0)
-                        price = calculation_prices[symbol]
+    def _prepare_ticker_values_for_redistribution(
+        self, calculated_quantities: dict[str, float], calculation_prices: dict[str, float]
+    ) -> dict[str, float]:
+        return {s: q * calculation_prices[s] for s, q in calculated_quantities.items() if q > 0}
 
-                        # Check if below average and we can afford more
-                        if current_value < avg_position_value * 0.9 and price <= remaining_capital:
-                            distance_from_avg = avg_position_value - current_value
-                            underweight_positions.append((symbol, distance_from_avg, price))
+    def _average_ticker_value(self, ticker_values: dict[str, float]) -> float:
+        return (sum(ticker_values.values()) / len(ticker_values)) if ticker_values else 0.0
 
-                # Sort by distance from average (most underweight first)
-                underweight_positions.sort(key=lambda x: x[1], reverse=True)
+    def _find_underweight_positions_for_redistribution(
+        self,
+        calculated_quantities: dict[str, float],
+        ticker_values: dict[str, float],
+        calculation_prices: dict[str, float],
+        avg_val: float,
+        avail_cash: float,
+    ) -> list[tuple[str, float, float]]:
+        positions: list[tuple[str, float, float]] = []
+        for symbol, qty in calculated_quantities.items():
+            if qty <= 0:
+                continue
+            current_value = ticker_values.get(symbol, 0.0)
+            price = calculation_prices[symbol]
+            if current_value < avg_val * 0.9 and price <= avail_cash:
+                positions.append((symbol, avg_val - current_value, price))
+        return sorted(positions, key=lambda x: x[1], reverse=True)
 
-                # Add shares to most underweight positions
-                for symbol, _distance, price in underweight_positions:
-                    if price <= remaining_capital:
-                        calculated_quantities[symbol] += 1
-                        remaining_capital -= price
-                        total_allocated += price
-                        ticker_values[symbol] += price
-                        any_allocation = True
-                        self.logger.debug(f"  Balanced redistribution: +1 {symbol} share (${price:.2f})")
-                        break  # Recalculate after each addition
+    def _find_affordable_smallest_for_redistribution(
+        self,
+        calculated_quantities: dict[str, float],
+        ticker_values: dict[str, float],
+        calculation_prices: dict[str, float],
+        avail_cash: float,
+    ) -> list[tuple[str, float, float]]:
+        items = [
+            (s, ticker_values.get(s, 0.0), calculation_prices[s])
+            for s in calculated_quantities.keys()
+            if calculated_quantities[s] > 0 and calculation_prices[s] <= avail_cash
+        ]
+        return sorted(items, key=lambda x: x[1])
 
-                if not any_allocation:
-                    # If no underweight positions, add to smallest positions
-                    smallest_positions = sorted(
-                        [
-                            (s, ticker_values.get(s, 0), calculation_prices[s])
-                            for s in calculated_quantities.keys()
-                            if calculated_quantities[s] > 0 and calculation_prices[s] <= remaining_capital
-                        ],
-                        key=lambda x: x[1],
-                    )
-
-                    if smallest_positions:
-                        symbol, current_value, price = smallest_positions[0]
-                        calculated_quantities[symbol] += 1
-                        remaining_capital -= price
-                        total_allocated += price
-                        ticker_values[symbol] = current_value + price
-                        self.logger.debug(f"  Final redistribution: +1 {symbol} share (${price:.2f})")
-                    else:
-                        break  # Can't afford any more shares
-
-            self.logger.debug(f"Final unused capital: ${remaining_capital:.2f}")
-
-        # Calculate final utilization statistics
-        actual_utilization = total_allocated / config.portfolio.initial_capital
-
-        self.logger.info(f"\nTotal portfolio cost: ${total_allocated:,.2f}")
-        self.logger.info(f"Capital utilization: {actual_utilization:.1%}")
-        self.logger.info(f"Remaining cash: ${config.portfolio.initial_capital - total_allocated:,.2f}")
-
-        return calculated_quantities
+    def _allocate_one_share_for_redistribution(
+        self,
+        calculated_quantities: dict[str, float],
+        ticker_values: dict[str, float],
+        symbol: str,
+        price: float,
+    ) -> float:
+        # allocate one share and return the cost (so caller updates remaining_capital and redistributed)
+        calculated_quantities[symbol] += 1
+        ticker_values[symbol] = ticker_values.get(symbol, 0.0) + price
+        return price
 
     def calculate_equal_weight_quantities(
         self, config: StockulaConfig, tickers: list[TickerConfig]
@@ -358,52 +439,22 @@ class Allocator(BaseAllocator):
 
         symbols = [ticker.symbol for ticker in tickers]
 
-        # Get stock info to fetch market caps
-        market_caps = {}
-        total_market_cap = 0
-
-        for symbol in symbols:
-            try:
-                info = self.fetcher.get_info(symbol)
-                if info and "marketCap" in info and info["marketCap"]:
-                    market_caps[symbol] = info["marketCap"]
-                    total_market_cap += info["marketCap"]
-                else:
-                    self.logger.warning(f"Could not fetch market cap for {symbol}, using equal weight")
-                    market_caps[symbol] = None
-            except Exception as e:
-                self.logger.error(f"Error fetching market cap for {symbol}: {e}")
-                market_caps[symbol] = None
-
-        # If no market caps available, fall back to equal weight
+        market_caps, total_market_cap = self._fetch_market_caps(symbols)
         if total_market_cap == 0:
             self.logger.warning("No market cap data available, falling back to equal weight allocation")
             return self.calculate_equal_weight_quantities(config, tickers)
 
-        # Calculate weights based on market cap
-        weights = {}
-        for symbol, market_cap in market_caps.items():
-            if market_cap is not None:
-                weights[symbol] = market_cap / total_market_cap
-            else:
-                # For missing market caps, use average weight
-                weights[symbol] = 1.0 / len(symbols)
+        weights = self._compute_market_cap_weights(symbols, market_caps, total_market_cap)
 
-        # Normalize weights to sum to 1
-        total_weight = sum(weights.values())
-        if total_weight > 0:
-            weights = {symbol: weight / total_weight for symbol, weight in weights.items()}
-
-        # Get prices and calculate quantities
         calculation_prices = self._get_calculation_prices(config, symbols)
-        calculated_quantities = {}
+        calculated_quantities: dict[str, float] = {}
 
         for ticker_config in tickers:
             if ticker_config.symbol not in calculation_prices:
                 raise ValueError(f"Could not fetch price for {ticker_config.symbol}")
 
             price = calculation_prices[ticker_config.symbol]
-            weight = weights.get(ticker_config.symbol, 0)
+            weight = weights.get(ticker_config.symbol, 0.0)
             allocation_amount = config.portfolio.initial_capital * weight
 
             quantity = self._calculate_quantity_for_allocation(
@@ -412,6 +463,49 @@ class Allocator(BaseAllocator):
             calculated_quantities[ticker_config.symbol] = quantity
 
         return calculated_quantities
+
+    def _fetch_market_caps(self, symbols: list[str]) -> tuple[dict[str, float | None], float]:
+        """Fetch market caps for symbols; return dict and total market cap."""
+        market_caps: dict[str, float | None] = {}
+        total_market_cap = 0.0
+
+        for symbol in symbols:
+            try:
+                info = self.fetcher.get_info(symbol)
+                if info and "marketCap" in info and info["marketCap"]:
+                    market_cap = info["marketCap"]
+                    market_caps[symbol] = market_cap
+                    total_market_cap += market_cap
+                else:
+                    self.logger.warning(f"Could not fetch market cap for {symbol}, using placeholder")
+                    market_caps[symbol] = None
+            except Exception as e:
+                self.logger.error(f"Error fetching market cap for {symbol}: {e}")
+                market_caps[symbol] = None
+
+        return market_caps, total_market_cap
+
+    def _compute_market_cap_weights(
+        self, symbols: list[str], market_caps: dict[str, float | None], total_market_cap: float
+    ) -> dict[str, float]:
+        """Compute normalized weights from market caps, using average weight for missing data."""
+        if total_market_cap <= 0:
+            # Defensive: return equal weights if nothing available
+            return {s: 1.0 / len(symbols) for s in symbols}
+
+        weights: dict[str, float] = {}
+        for symbol in symbols:
+            mc = market_caps.get(symbol)
+            if mc is not None:
+                weights[symbol] = mc / total_market_cap
+            else:
+                weights[symbol] = 1.0 / len(symbols)
+
+        total_weight = sum(weights.values())
+        if total_weight > 0:
+            weights = {symbol: weight / total_weight for symbol, weight in weights.items()}
+
+        return weights
 
     def calculate_quantities(
         self,

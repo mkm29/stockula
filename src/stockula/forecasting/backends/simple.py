@@ -105,10 +105,10 @@ class SimpleForecastBackend(ForecastBackend):
 
         # Generate forecast points
         n_historical = len(self.last_values)
-        future_X = np.arange(n_historical, n_historical + self.forecast_length).reshape(-1, 1)
+        future_x = np.arange(n_historical, n_historical + self.forecast_length).reshape(-1, 1)
 
         # Make predictions
-        forecast_values = self.model.predict(future_X)
+        forecast_values = self.model.predict(future_x)
 
         # Apply non-negative constraint if requested
         if self.no_negatives:

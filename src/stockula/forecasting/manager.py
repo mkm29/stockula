@@ -58,85 +58,39 @@ class ForecastingManager:
         self,
         symbol: str,
         config: "StockulaConfig",
-        use_evaluation: bool = False,
     ) -> dict[str, Any]:
         """Forecast a single symbol using AutoGluon.
 
         Args:
             symbol: Stock symbol to forecast
             config: Stockula configuration
-            use_evaluation: Whether to use train/test evaluation mode (currently ignored, for compatibility)
 
         Returns:
             Dictionary with forecast results
         """
-        # Create backend based on configuration
         backend = self.create_backend(config.forecast)
-
-        # Get historical data
         start_date = self._date_to_string(config.data.start_date)
         end_date = self._date_to_string(config.data.end_date)
-
-        backend_cls = backend.__class__.__name__.lower()
-        backend_label = (
-            "chronos" if "chronos" in backend_cls else ("autogluon" if "autogluon" in backend_cls else "autogluon")
-        )
+        backend_label = self._get_backend_label(backend)
         self.logger.info(f"Forecasting {symbol} using {backend_label} backend...")
 
-        # Fetch data
         data = self.data_fetcher.get_stock_data(symbol, start_date, end_date)
-
         if data.empty:
             raise ValueError(f"No data available for symbol {symbol}")
 
-        # Fit and predict with graceful fallback if the selected backend fails
         try:
             result = backend.fit_predict(data, target_column="Close", show_progress=True)
             model_info = backend.get_model_info()
         except Exception as e:
-            err_msg = str(e) or e.__class__.__name__
-            self.logger.warning(
-                f"{backend_label.capitalize()} backend failed for {symbol} ({err_msg}). Attempting fallback."
+            result, model_info, backend_label = self._forecast_with_fallback(
+                symbol, config, data, backend_label, str(e)
             )
-            try:
-                # Remove specific model request to allow factory to choose next available backend
-                fallback_cfg = config.forecast.model_copy(update={"models": None})
-                fallback_backend = create_forecast_backend(fallback_cfg)
-                fallback_label = (
-                    "chronos"
-                    if "chronos" in fallback_backend.__class__.__name__.lower()
-                    else ("autogluon" if "autogluon" in fallback_backend.__class__.__name__.lower() else "simple")
-                )
-                # Avoid looping back into the same failing backend
-                if fallback_label == backend_label:
-                    from .backends import SimpleForecastBackend
-
-                    fallback_backend = SimpleForecastBackend(
-                        forecast_length=(
-                            config.forecast.forecast_length if config.forecast.forecast_length is not None else 7
-                        ),
-                        frequency=config.forecast.frequency,
-                        prediction_interval=config.forecast.prediction_interval,
-                        no_negatives=config.forecast.no_negatives,
-                    )
-                    fallback_label = "simple"
-
-                result = fallback_backend.fit_predict(data, target_column="Close", show_progress=True)
-                model_info = fallback_backend.get_model_info()
-                backend_label = fallback_label
-            except Exception as e2:
-                raise RuntimeError(
-                    f"Forecasting and fallback failed for {symbol}: {err_msg} / {e2.__class__.__name__}"
-                ) from e2
 
         self.logger.info(f"Forecast completed for {symbol} using {model_info['model_name']}")
 
-        # Calculate proper forecast dates
         from datetime import datetime, timedelta
-
         today = datetime.now().date()
         forecast_start = today + timedelta(days=1)
-        # Use actual forecast_length from config, or default to 7 if not specified
         forecast_days = config.forecast.forecast_length if config.forecast.forecast_length is not None else 7
         forecast_end = forecast_start + timedelta(days=forecast_days - 1)
 
@@ -154,6 +108,42 @@ class ForecastingManager:
             "start_date": forecast_start.strftime("%Y-%m-%d"),
             "end_date": forecast_end.strftime("%Y-%m-%d"),
         }
+
+    def _get_backend_label(self, backend) -> str:
+        backend_cls = backend.__class__.__name__.lower()
+        if "chronos" in backend_cls:
+            return "chronos"
+        elif "autogluon" in backend_cls:
+            return "autogluon"
+        else:
+            return "simple"
+
+    def _forecast_with_fallback(self, symbol, config, data, backend_label, err_msg):
+        self.logger.warning(
+            f"{backend_label.capitalize()} backend failed for {symbol} ({err_msg}). Attempting fallback."
+        )
+        try:
+            fallback_cfg = config.forecast.model_copy(update={"models": None})
+            fallback_backend = create_forecast_backend(fallback_cfg)
+            fallback_label = self._get_backend_label(fallback_backend)
+            if fallback_label == backend_label:
+                from .backends import SimpleForecastBackend
+                fallback_backend = SimpleForecastBackend(
+                    forecast_length=(
+                        config.forecast.forecast_length if config.forecast.forecast_length is not None else 7
+                    ),
+                    frequency=config.forecast.frequency,
+                    prediction_interval=config.forecast.prediction_interval,
+                    no_negatives=config.forecast.no_negatives,
+                )
+                fallback_label = "simple"
+            result = fallback_backend.fit_predict(data, target_column="Close", show_progress=True)
+            model_info = fallback_backend.get_model_info()
+            return result, model_info, fallback_label
+        except Exception as e2:
+            raise RuntimeError(
+                f"Forecasting and fallback failed for {symbol}: {err_msg} / {e2.__class__.__name__}"
+            ) from e2
 
     def forecast_multiple_symbols(
         self,

@@ -27,8 +27,13 @@ class ResultsDisplay:
         self.console = console or Console()
 
     def print_results(
-        self, results: dict[str, Any], output_format: str = "console", config=None, container=None, portfolio=None
-    ):
+        self,
+        results: dict[str, Any],
+        output_format: str = "console",
+        config: StockulaConfig | None = None,
+        container: Container | None = None,
+        portfolio: Any | None = None,
+    ) -> None:
         """Print results in specified format.
 
         Args:
@@ -60,20 +65,32 @@ class ResultsDisplay:
         self.console.print("\n[bold blue]Technical Analysis Results[/bold blue]", style="bold")
 
         for ta_result in ta_results:
-            table = Table(title=f"Technical Analysis - {ta_result['ticker']}")
-            table.add_column("Indicator", style="cyan", no_wrap=True)
-            table.add_column("Value", style="magenta")
-
-            for indicator, value in ta_result["indicators"].items():
-                if isinstance(value, dict):
-                    for k, v in value.items():
-                        formatted_value = f"{v:.2f}" if isinstance(v, int | float) else str(v)
-                        table.add_row(f"{indicator} - {k}", formatted_value)
-                else:
-                    formatted_value = f"{value:.2f}" if isinstance(value, int | float) else str(value)
-                    table.add_row(indicator, formatted_value)
-
+            table = self._create_technical_analysis_table(ta_result)
             self.console.print(table)
+
+    def _create_technical_analysis_table(self, ta_result: dict[str, Any]) -> Table:
+        """Create a Rich Table for technical analysis results of a single ticker."""
+        table = Table(title=f"Technical Analysis - {ta_result['ticker']}")
+        table.add_column("Indicator", style="cyan", no_wrap=True)
+        table.add_column("Value", style="magenta")
+
+        for indicator, value in ta_result.get("indicators", {}).items():
+            rows = self._format_indicator_rows(indicator, value)
+            for indicator_name, formatted_value in rows:
+                table.add_row(indicator_name, formatted_value)
+        return table
+
+    def _format_indicator_rows(self, indicator: str, value: Any) -> list[tuple[str, str]]:
+        """Format indicator rows for technical analysis table."""
+        rows = []
+        if isinstance(value, dict):
+            for k, v in value.items():
+                formatted_value = f"{v:.2f}" if isinstance(v, (int, float)) else str(v)
+                rows.append((f"{indicator} - {k}", formatted_value))
+        else:
+            formatted_value = f"{value:.2f}" if isinstance(value, (int, float)) else str(value)
+            rows.append((indicator, formatted_value))
+        return rows
 
     def _display_backtesting_results(
         self, results: dict[str, Any], config: StockulaConfig | None, container: Container | None
@@ -85,50 +102,59 @@ class ResultsDisplay:
             config: Optional configuration object
             container: Optional DI container
         """
-        # Display general portfolio information
         self.console.print("\n[bold green]=== Backtesting Results ===[/bold green]")
 
-        # Create portfolio information panel
-        portfolio_info = []
+        portfolio_info = self._extract_portfolio_info(results)
+        self._display_portfolio_info(portfolio_info)
 
-        # Extract portfolio info from results metadata
-        if "portfolio" in results:
-            portfolio_data = results["portfolio"]
-            if "initial_capital" in portfolio_data:
-                portfolio_info.append(f"[cyan]Initial Capital:[/cyan] ${portfolio_data['initial_capital']:,.2f}")
-            if "start" in portfolio_data and portfolio_data["start"]:
-                portfolio_info.append(f"[cyan]Start Date:[/cyan] {portfolio_data['start']}")
-            if "end" in portfolio_data and portfolio_data["end"]:
-                portfolio_info.append(f"[cyan]End Date:[/cyan] {portfolio_data['end']}")
+        if config and container:
+            self._display_portfolio_composition(config, container)
 
-        # If portfolio info not in metadata, try to extract from backtest results
+        backtesting = results.get("backtesting", [])
+        self._display_backtest_ticker_results(backtesting)
+        self._display_strategy_average_returns(backtesting)
+
+    def _extract_portfolio_info(self, results: dict[str, Any]) -> list[str]:
+        """Extract portfolio information from results."""
+        portfolio_info = self._extract_info_from_portfolio(results)
         if not portfolio_info and results.get("backtesting"):
-            # Get portfolio information from the first backtest result
-            first_backtest = results["backtesting"][0] if results["backtesting"] else {}
+            portfolio_info = self._extract_info_from_backtesting(results)
+        return portfolio_info
 
+    def _extract_info_from_portfolio(self, results: dict[str, Any]) -> list[str]:
+        """Extract portfolio info from the 'portfolio' key in results."""
+        info = []
+        portfolio_data = results.get("portfolio", {})
+        if portfolio_data:
+            if "initial_capital" in portfolio_data:
+                info.append(f"[cyan]Initial Capital:[/cyan] ${portfolio_data['initial_capital']:,.2f}")
+            if portfolio_data.get("start"):
+                info.append(f"[cyan]Start Date:[/cyan] {portfolio_data['start']}")
+            if portfolio_data.get("end"):
+                info.append(f"[cyan]End Date:[/cyan] {portfolio_data['end']}")
+        return info
+
+    def _extract_info_from_backtesting(self, results: dict[str, Any]) -> list[str]:
+        """Extract portfolio info from the first backtesting result."""
+        info = []
+        backtesting = results.get("backtesting", [])
+        first_backtest = backtesting[0] if backtesting else {}
+        if first_backtest:
             if "initial_cash" in first_backtest:
-                portfolio_info.append(f"[cyan]Initial Capital:[/cyan] ${first_backtest['initial_cash']:,.2f}")
+                info.append(f"[cyan]Initial Capital:[/cyan] ${first_backtest['initial_cash']:,.2f}")
             if "start_date" in first_backtest:
-                portfolio_info.append(f"[cyan]Start Date:[/cyan] {first_backtest['start_date']}")
+                info.append(f"[cyan]Start Date:[/cyan] {first_backtest['start_date']}")
             if "end_date" in first_backtest:
-                portfolio_info.append(f"[cyan]End Date:[/cyan] {first_backtest['end_date']}")
+                info.append(f"[cyan]End Date:[/cyan] {first_backtest['end_date']}")
+        return info
 
-        # Display portfolio information if available
+    def _display_portfolio_info(self, portfolio_info: list[str]) -> None:
+        """Display portfolio information if available."""
         if portfolio_info:
             self.console.print("[bold blue]Portfolio Information:[/bold blue]")
             for info in portfolio_info:
                 self.console.print(f"  {info}")
             self.console.print()  # Add blank line
-
-        # Display portfolio composition table (only if config and container are provided)
-        if config and container:
-            self._display_portfolio_composition(config, container)
-
-        # Show ticker-level backtest results
-        self._display_backtest_ticker_results(results["backtesting"])
-
-        # Show strategy average returns summary
-        self._display_strategy_average_returns(results["backtesting"])
 
     def _display_portfolio_composition(self, config: StockulaConfig, container: Container):
         """Display portfolio composition table.
@@ -145,60 +171,68 @@ class ResultsDisplay:
         table.add_column("Value", style="blue", justify="right")
         table.add_column("Status", style="magenta")
 
-        # Get portfolio composition information
         portfolio = container.domain_factory().create_portfolio(config)
         all_assets = portfolio.get_all_assets()
+        hold_only_categories = self._extract_hold_only_categories(config)
+        fetcher = container.data_fetcher()
+        symbols = [asset.symbol for asset in all_assets]
 
-        # Get hold-only categories from config
+        try:
+            current_prices = self._fetch_current_prices(fetcher, symbols)
+            total_portfolio_value = self._calculate_total_portfolio_value(all_assets, current_prices)
+            for asset in all_assets:
+                row = self._create_portfolio_row(asset, hold_only_categories, current_prices, total_portfolio_value)
+                table.add_row(*row)
+        except Exception:
+            for asset in all_assets:
+                row = self._create_portfolio_row_fallback(asset, hold_only_categories)
+                table.add_row(*row)
+
+        self.console.print(table)
+        self.console.print()  # Add blank line
+
+    def _extract_hold_only_categories(self, config: StockulaConfig):
         hold_only_category_names = set(config.backtest.hold_only_categories)
         hold_only_categories = set()
         for category_name in hold_only_category_names:
             try:
                 hold_only_categories.add(Category[category_name])
             except KeyError:
-                pass  # Skip unknown categories
+                pass
+        return hold_only_categories
 
-        # Get current prices for calculation
-        fetcher = container.data_fetcher()
-        symbols = [asset.symbol for asset in all_assets]
-        try:
-            current_prices = fetcher.get_current_prices(symbols, show_progress=False)
-            total_portfolio_value = sum(asset.quantity * current_prices.get(asset.symbol, 0) for asset in all_assets)
+    def _fetch_current_prices(self, fetcher, symbols):
+        return fetcher.get_current_prices(symbols, show_progress=False)
 
-            for asset in all_assets:
-                current_price = current_prices.get(asset.symbol, 0)
-                asset_value = asset.quantity * current_price
-                allocation_pct = (asset_value / total_portfolio_value * 100) if total_portfolio_value > 0 else 0
+    def _calculate_total_portfolio_value(self, all_assets, current_prices):
+        return sum(asset.quantity * current_prices.get(asset.symbol, 0) for asset in all_assets)
 
-                # Determine status
-                status = "Hold Only" if asset.category in hold_only_categories else "Tradeable"
-                status_color = "yellow" if status == "Hold Only" else "green"
+    def _create_portfolio_row(self, asset, hold_only_categories, current_prices, total_portfolio_value):
+        current_price = current_prices.get(asset.symbol, 0)
+        asset_value = asset.quantity * current_price
+        allocation_pct = (asset_value / total_portfolio_value * 100) if total_portfolio_value > 0 else 0
+        status = "Hold Only" if asset.category in hold_only_categories else "Tradeable"
+        status_color = "yellow" if status == "Hold Only" else "green"
+        return [
+            asset.symbol,
+            asset.category.name if asset.category and hasattr(asset.category, "name") else str(asset.category),
+            f"{asset.quantity:.2f}",
+            f"{allocation_pct:.1f}%",
+            f"${asset_value:,.2f}",
+            f"[{status_color}]{status}[/{status_color}]",
+        ]
 
-                table.add_row(
-                    asset.symbol,
-                    asset.category.name if asset.category and hasattr(asset.category, "name") else str(asset.category),
-                    f"{asset.quantity:.2f}",
-                    f"{allocation_pct:.1f}%",
-                    f"${asset_value:,.2f}",
-                    f"[{status_color}]{status}[/{status_color}]",
-                )
-        except Exception:
-            # Fallback if we can't get prices
-            for asset in all_assets:
-                status = "Hold Only" if asset.category in hold_only_categories else "Tradeable"
-                status_color = "yellow" if status == "Hold Only" else "green"
-
-                table.add_row(
-                    asset.symbol,
-                    asset.category.name if asset.category and hasattr(asset.category, "name") else str(asset.category),
-                    f"{asset.quantity:.2f}",
-                    "N/A",
-                    "N/A",
-                    f"[{status_color}]{status}[/{status_color}]",
-                )
-
-        self.console.print(table)
-        self.console.print()  # Add blank line
+    def _create_portfolio_row_fallback(self, asset, hold_only_categories):
+        status = "Hold Only" if asset.category in hold_only_categories else "Tradeable"
+        status_color = "yellow" if status == "Hold Only" else "green"
+        return [
+            asset.symbol,
+            asset.category.name if asset.category and hasattr(asset.category, "name") else str(asset.category),
+            f"{asset.quantity:.2f}",
+            "N/A",
+            "N/A",
+            f"[{status_color}]{status}[/{status_color}]",
+        ]
 
     def show_portfolio_summary(self, portfolio) -> None:
         """Display a brief portfolio summary table."""
@@ -230,53 +264,49 @@ class ResultsDisplay:
         holdings_table.add_column("Type", style="yellow")
         holdings_table.add_column("Quantity", style="green", justify="right")
 
-        # Add price and value columns for forecast mode
+        all_assets = portfolio.get_all_assets()
         if mode == "forecast":
             holdings_table.add_column("Price", style="white", justify="right")
             holdings_table.add_column("Value", style="blue", justify="right")
-
-            # Fetch current prices if not provided
-            all_assets = portfolio.get_all_assets()
             symbols = [asset.symbol for asset in all_assets]
-            try:
-                if prices is None and data_fetcher is not None:
+            if prices is None and data_fetcher is not None:
+                try:
                     prices = data_fetcher.get_current_prices(symbols, show_progress=False)
-            except Exception:
-                prices = {}
+                except Exception:
+                    prices = {}
         else:
-            all_assets = portfolio.get_all_assets()
             prices = prices or {}
 
         for asset in all_assets:
-            symbol = getattr(asset, "symbol", "N/A")
-            category_name = (
-                str(asset.category.name)
-                if getattr(asset, "category", None) is not None and hasattr(asset.category, "name")
-                else str(getattr(asset, "category", "N/A"))
-            )
-
-            quantity_str = "N/A"
-            quantity_val = 0.0
-            if hasattr(asset, "quantity") and isinstance(asset.quantity, int | float):
-                quantity_val = float(asset.quantity)
-                quantity_str = f"{quantity_val:.2f}"
-            elif hasattr(asset, "quantity"):
-                try:
-                    quantity_val = float(asset.quantity)
-                    quantity_str = f"{quantity_val:.2f}"
-                except (TypeError, ValueError):
-                    quantity_str = str(asset.quantity)
-
-            if mode == "forecast":
-                price = (prices or {}).get(symbol, 0.0)
-                value = quantity_val * price
-                price_str = f"${price:.2f}" if price > 0 else "N/A"
-                value_str = f"${value:,.2f}" if value > 0 else "N/A"
-                holdings_table.add_row(symbol, category_name, quantity_str, price_str, value_str)
-            else:
-                holdings_table.add_row(symbol, category_name, quantity_str)
+            row = self._create_holding_row(asset, mode, prices)
+            holdings_table.add_row(*row)
 
         self.console.print(holdings_table)
+
+    def _create_holding_row(self, asset, mode, prices):
+        symbol = getattr(asset, "symbol", "N/A")
+        category = getattr(asset, "category", "N/A")
+        category_name = (
+            str(category.name) if category is not None and hasattr(category, "name") else str(category)
+        )
+
+        quantity_val = 0.0
+        quantity_str = "N/A"
+        if hasattr(asset, "quantity"):
+            try:
+                quantity_val = float(asset.quantity)
+                quantity_str = f"{quantity_val:.2f}"
+            except (TypeError, ValueError):
+                quantity_str = str(asset.quantity)
+
+        if mode == "forecast":
+            price = (prices or {}).get(symbol, 0.0)
+            value = quantity_val * price
+            price_str = f"${price:.2f}" if price > 0 else "N/A"
+            value_str = f"${value:,.2f}" if value > 0 else "N/A"
+            return [symbol, category_name, quantity_str, price_str, value_str]
+        else:
+            return [symbol, category_name, quantity_str]
 
     def show_allocation_optimization(
         self,
@@ -539,16 +569,35 @@ class ResultsDisplay:
         """
         self.console.print("\n[bold purple]=== Forecasting Results ===[/bold purple]")
 
-        # Get date range from first non-error forecast
-        date_info = ""
+        date_info = self._get_forecast_date_info(forecast_results)
+        has_actual_prices = self._has_actual_prices(forecast_results)
+
+        table = self._create_forecast_table(date_info, has_actual_prices)
+
+        error_forecasts, valid_forecasts = self._split_forecasts(forecast_results)
+        self._add_return_pct_to_forecasts(valid_forecasts)
+        sorted_forecasts = sorted(valid_forecasts, key=lambda f: f["return_pct"], reverse=True)
+        all_forecasts = sorted_forecasts + error_forecasts
+
+        for forecast in all_forecasts:
+            row_data = self._create_forecast_row(forecast, portfolio, has_actual_prices)
+            table.add_row(*row_data)
+
+        self.console.print(table)
+
+        if self._has_evaluation(valid_forecasts):
+            self._display_evaluation_metrics(all_forecasts)
+
+    def _get_forecast_date_info(self, forecast_results):
         for forecast in forecast_results:
             if "error" not in forecast and "start_date" in forecast:
-                date_info = f" ({forecast['start_date']} to {forecast['end_date']})"
-                break
+                return f" ({forecast['start_date']} to {forecast['end_date']})"
+        return ""
 
-        # Check if we have actual prices (evaluation mode)
-        has_actual_prices = any("actual_price" in f for f in forecast_results if "error" not in f)
+    def _has_actual_prices(self, forecast_results):
+        return any("actual_price" in f for f in forecast_results if "error" not in f)
 
+    def _create_forecast_table(self, date_info, has_actual_prices):
         table = Table(title=f"Price Forecasts{date_info}", show_header=True, header_style="bold")
         table.add_column("Ticker", style="cyan", no_wrap=True)
         table.add_column("Qty", style="green", justify="right", no_wrap=True)
@@ -562,127 +611,101 @@ class ResultsDisplay:
         table.add_column("Return", style="magenta", justify="right")
         table.add_column("Confidence Range", style="yellow", justify="center")
         table.add_column("Model", style="blue")
+        return table
 
-        # Sort forecasts by return percentage (highest to lowest)
-        # Separate error results from valid forecasts
+    def _split_forecasts(self, forecast_results):
         error_forecasts = [f for f in forecast_results if "error" in f]
         valid_forecasts = [f for f in forecast_results if "error" not in f]
+        return error_forecasts, valid_forecasts
 
-        # Calculate return percentage for sorting
-        for forecast in valid_forecasts:
+    def _add_return_pct_to_forecasts(self, forecasts):
+        for forecast in forecasts:
             forecast["return_pct"] = (
                 (forecast["forecast_price"] - forecast["current_price"]) / forecast["current_price"]
             ) * 100
 
-        # Sort valid forecasts by return percentage (highest to lowest)
-        sorted_forecasts = sorted(valid_forecasts, key=lambda f: f["return_pct"], reverse=True)
+    def _create_forecast_row(self, forecast, portfolio, has_actual_prices):
+        ticker = forecast["ticker"]
+        quantity = self._get_asset_quantity(portfolio, ticker)
 
-        # Combine sorted valid forecasts with error forecasts at the end
-        all_forecasts = sorted_forecasts + error_forecasts
+        if "error" in forecast:
+            return self._forecast_error_row(ticker, forecast, has_actual_prices)
 
-        for forecast in all_forecasts:
-            ticker = forecast["ticker"]
+        current_price = forecast["current_price"]
+        forecast_price = forecast["forecast_price"]
+        current_value = quantity * current_price
+        forecast_value = quantity * forecast_price
+        return_pct = ((forecast_price - current_price) / current_price) * 100
 
-            # Get quantity from portfolio if available
-            quantity = 0.0
-            if portfolio:
-                asset = next((a for a in portfolio.get_all_assets() if a.symbol == ticker), None)
-                if asset and hasattr(asset, "quantity"):
-                    quantity = asset.quantity
+        forecast_color = self._get_forecast_color(forecast_price, current_price)
+        forecast_str = f"[{forecast_color}]${forecast_price:.2f}[/{forecast_color}]"
+        forecast_value_str = f"[{forecast_color}]${forecast_value:,.2f}[/{forecast_color}]"
+        return_str = f"[{forecast_color}]{return_pct:+.2f}%[/{forecast_color}]"
 
-            if "error" in forecast:
-                row_data = [
-                    ticker,
-                    "[red]Error[/red]",  # Quantity
-                    "[red]Error[/red]",  # Current Price
-                    "[red]Error[/red]",  # Current Value
-                ]
-                if has_actual_prices:
-                    row_data.extend(
-                        [
-                            "[red]Error[/red]",  # Actual Price
-                            "[red]Error[/red]",  # Actual Value
-                        ]
-                    )
-                row_data.extend(
-                    [
-                        "[red]Error[/red]",  # Forecast Price
-                        "[red]Error[/red]",  # Forecast Value
-                        "[red]Error[/red]",  # Return %
-                        "[red]Error[/red]",  # Confidence Range
-                        f"[red]{forecast['error']}[/red]",  # Best Model/Error
-                    ]
-                )
-                table.add_row(*row_data)
-            else:
-                current_price = forecast["current_price"]
-                forecast_price = forecast["forecast_price"]
+        row_data = [
+            ticker,
+            f"{quantity:.2f}",
+            f"${current_price:.2f}",
+            f"${current_value:,.2f}",
+        ]
 
-                # Calculate values
-                current_value = quantity * current_price
-                forecast_value = quantity * forecast_price
+        if has_actual_prices:
+            row_data.extend(self._actual_price_row(forecast, quantity, forecast_price))
+        row_data.extend([
+            forecast_str,
+            forecast_value_str,
+            return_str,
+            f"${forecast['lower_bound']:.2f} - ${forecast['upper_bound']:.2f}",
+            forecast["best_model"],
+        ])
+        return row_data
 
-                # Calculate return percentage
-                return_pct = ((forecast_price - current_price) / current_price) * 100
+    def _get_asset_quantity(self, portfolio, ticker):
+        if not portfolio:
+            return 0.0
+        asset = next((a for a in portfolio.get_all_assets() if a.symbol == ticker), None)
+        if asset and hasattr(asset, "quantity"):
+            return asset.quantity
+        return 0.0
 
-                # Color code forecast based on direction
-                forecast_color = (
-                    "green" if forecast_price > current_price else "red" if forecast_price < current_price else "white"
-                )
-                forecast_str = f"[{forecast_color}]${forecast_price:.2f}[/{forecast_color}]"
-                forecast_value_str = f"[{forecast_color}]${forecast_value:,.2f}[/{forecast_color}]"
+    def _forecast_error_row(self, ticker, forecast, has_actual_prices):
+        row_data = [
+            ticker,
+            "[red]Error[/red]",
+            "[red]Error[/red]",
+            "[red]Error[/red]",
+        ]
+        if has_actual_prices:
+            row_data.extend(["[red]Error[/red]", "[red]Error[/red]"])
+        row_data.extend([
+            "[red]Error[/red]",
+            "[red]Error[/red]",
+            "[red]Error[/red]",
+            "[red]Error[/red]",
+            f"[red]{forecast['error']}[/red]",
+        ])
+        return row_data
 
-                # Format return percentage with color
-                return_str = f"[{forecast_color}]{return_pct:+.2f}%[/{forecast_color}]"
+    def _get_forecast_color(self, forecast_price, current_price):
+        if forecast_price > current_price:
+            return "green"
+        elif forecast_price < current_price:
+            return "red"
+        return "white"
 
-                # Build row data
-                row_data = [
-                    ticker,
-                    f"{quantity:.2f}",
-                    f"${current_price:.2f}",
-                    f"${current_value:,.2f}",
-                ]
+    def _actual_price_row(self, forecast, quantity, forecast_price):
+        if "actual_price" in forecast:
+            actual_price = forecast["actual_price"]
+            actual_value = quantity * actual_price
+            actual_color = self._get_forecast_color(forecast_price, actual_price)
+            return [
+                f"[{actual_color}]${actual_price:.2f}[/{actual_color}]",
+                f"[{actual_color}]${actual_value:,.2f}[/{actual_color}]",
+            ]
+        return ["N/A", "N/A"]
 
-                # Add actual price and value if available
-                if has_actual_prices:
-                    if "actual_price" in forecast:
-                        actual_price = forecast["actual_price"]
-                        actual_value = quantity * actual_price
-                        # Color code actual vs forecast
-                        actual_color = (
-                            "green"
-                            if actual_price < forecast_price
-                            else "red"
-                            if actual_price > forecast_price
-                            else "white"
-                        )
-                        row_data.extend(
-                            [
-                                f"[{actual_color}]${actual_price:.2f}[/{actual_color}]",
-                                f"[{actual_color}]${actual_value:,.2f}[/{actual_color}]",
-                            ]
-                        )
-                    else:
-                        row_data.extend(["N/A", "N/A"])
-
-                row_data.extend(
-                    [
-                        forecast_str,
-                        forecast_value_str,
-                        return_str,
-                        f"${forecast['lower_bound']:.2f} - ${forecast['upper_bound']:.2f}",
-                        forecast["best_model"],
-                    ]
-                )
-
-                table.add_row(*row_data)
-
-        self.console.print(table)
-
-        # Display evaluation metrics if available
-        has_evaluation = any("evaluation" in f for f in forecast_results if "error" not in f)
-        if has_evaluation:
-            self._display_evaluation_metrics(all_forecasts)
+    def _has_evaluation(self, forecasts):
+        return any("evaluation" in f for f in forecasts if "error" not in f)
 
     def _display_evaluation_metrics(self, forecasts: list[dict[str, Any]]):
         """Display forecast evaluation metrics.
@@ -766,143 +789,96 @@ class ResultsDisplay:
         )
 
     def show_portfolio_forecast_value(self, config: StockulaConfig, portfolio, results: dict[str, Any]):
-        """Show portfolio value for forecast mode with consistent price calculations.
-
-        This method calculates portfolio values using consistent price baselines to ensure
-        accurate portfolio return calculations. The current value is calculated using the
-        same historical prices that the forecasting algorithm uses as its baseline, rather
-        than real-time market prices, to maintain consistency between current and forecast
-        values.
-
-        Args:
-            config: Configuration object
-            portfolio: Portfolio instance
-            results: Results dictionary containing forecasting results
-
-        Note:
-            The current portfolio value is calculated using the forecast algorithm's
-            "current price" baseline to ensure the portfolio return percentage accurately
-            reflects the forecasted price changes.
-        """
-        # Show portfolio value in a nice table
+        """Show portfolio value for forecast mode with consistent price calculations."""
         portfolio_value_table = Table(title="Portfolio Value")
         portfolio_value_table.add_column("Metric", style="cyan", no_wrap=True, width=18)
         portfolio_value_table.add_column("Date", style="white", no_wrap=True, width=25)
         portfolio_value_table.add_column("Value", style="green", no_wrap=True, width=12)
 
-        # Add initial capital row with appropriate date
+        test_start = self._get_forecast_start_date(config)
+        current_portfolio_value = self._calculate_current_portfolio_value(portfolio, results)
+        portfolio_value_table.add_row("Initial Capital", "Start", f"${portfolio.initial_capital:,.2f}")
+        portfolio_value_table.add_row("Current Value", test_start, f"${current_portfolio_value:,.2f}")
+
+        if "forecasting" in results and results["forecasting"]:
+            forecasted_value, avg_accuracy, test_end, portfolio_return = self._calculate_forecasted_values(
+                config, portfolio, results, current_portfolio_value, test_start
+            )
+            portfolio_value_table.add_row("Forecast Value", test_end, f"${forecasted_value:,.2f}")
+            if current_portfolio_value > 0:
+                portfolio_value_table.add_row(
+                    "Portfolio Return", f"{test_start} → {test_end}", f"{portfolio_return:+.2f}%"
+                )
+            if avg_accuracy is not None:
+                portfolio_value_table.add_row("Accuracy", test_end, f"{avg_accuracy:.4f}%")
+
+        self.console.print(portfolio_value_table)
+
+    def _get_forecast_start_date(self, config: StockulaConfig) -> str:
         if config.forecast.test_start_date:
-            # Historical evaluation mode - use test start date
-            test_start = (
+            return (
                 config.forecast.test_start_date.strftime("%Y-%m-%d")
                 if isinstance(config.forecast.test_start_date, date)
                 else str(config.forecast.test_start_date)
             )
-        else:
-            # Future prediction mode - use today's date
-            test_start = datetime.now().strftime("%Y-%m-%d")
+        return datetime.now().strftime("%Y-%m-%d")
 
-        # For forecast mode, calculate current value based on the prices used in forecasting
-        # This ensures consistency between current and forecast values
-        #
-        # Important: The forecasting algorithm uses the last price in the historical training
-        # data as its "current price" baseline, which may differ from real-time market prices.
-        # To ensure accurate portfolio return calculations, we use the same price baseline
-        # for both current and forecast values. This prevents misleading return percentages
-        # that could occur if different price sources were used.
+    def _calculate_current_portfolio_value(self, portfolio, results: dict[str, Any]) -> float:
         current_portfolio_value = 0.0
         if "forecasting" in results and results["forecasting"]:
-            # Calculate current value using the same prices that forecasting uses
             for forecast in results["forecasting"]:
                 if "error" not in forecast:
                     ticker = forecast["ticker"]
-                    asset = next(
-                        (a for a in portfolio.get_all_assets() if a.symbol == ticker),
-                        None,
-                    )
+                    asset = next((a for a in portfolio.get_all_assets() if a.symbol == ticker), None)
                     if asset and asset.quantity:
                         current_portfolio_value += asset.quantity * forecast["current_price"]
-
-        # Fallback to initial capital if no forecast data available
-        if current_portfolio_value == 0.0:
+        if abs(current_portfolio_value) < 1e-8:
             current_portfolio_value = portfolio.initial_capital
+        return current_portfolio_value
 
-        # Show initial capital and current value
-        portfolio_value_table.add_row("Initial Capital", "Start", f"${portfolio.initial_capital:,.2f}")
-        portfolio_value_table.add_row("Current Value", test_start, f"${current_portfolio_value:,.2f}")
+    def _calculate_forecasted_values(
+        self, config: StockulaConfig, portfolio, results: dict[str, Any], current_portfolio_value: float, test_start: str
+    ):
+        forecasted_value = 0.0
+        total_accuracy = 0
+        valid_forecasts = 0
+        is_evaluation_mode = any("evaluation" in f for f in results["forecasting"] if "error" not in f)
 
-        # Calculate forecasted portfolio value based on forecast results
-        if "forecasting" in results and results["forecasting"]:
-            forecasted_value = 0.0
-            total_accuracy = 0
-            valid_forecasts = 0
+        for forecast in results["forecasting"]:
+            if "error" not in forecast:
+                ticker = forecast["ticker"]
+                asset = next((a for a in portfolio.get_all_assets() if a.symbol == ticker), None)
+                if asset and asset.quantity:
+                    forecasted_asset_value = asset.quantity * forecast["forecast_price"]
+                    forecasted_value += forecasted_asset_value
+                    if "evaluation" in forecast:
+                        accuracy = 100 - forecast["evaluation"]["mape"]
+                        total_accuracy += accuracy
+                        valid_forecasts += 1
 
-            # Check if we're in evaluation mode (have evaluation metrics)
-            is_evaluation_mode = any("evaluation" in f for f in results["forecasting"] if "error" not in f)
+        test_end = self._get_forecast_end_date(config, results)
+        portfolio_return = ((forecasted_value - current_portfolio_value) / current_portfolio_value) * 100 if current_portfolio_value > 0 else 0.0
+        avg_accuracy = (total_accuracy / valid_forecasts) if is_evaluation_mode and valid_forecasts > 0 else None
+        return forecasted_value, avg_accuracy, test_end, portfolio_return
 
+    def _get_forecast_end_date(self, config: StockulaConfig, results: dict[str, Any]) -> str:
+        if config.forecast.test_end_date:
+            return (
+                config.forecast.test_end_date.strftime("%Y-%m-%d")
+                if isinstance(config.forecast.test_end_date, date)
+                else str(config.forecast.test_end_date)
+            )
+        elif config.forecast.forecast_length:
+            from datetime import timedelta
+            future_date = datetime.now() + timedelta(days=config.forecast.forecast_length)
+            return future_date.strftime("%Y-%m-%d") if isinstance(future_date, date) else str(future_date)
+        else:
             for forecast in results["forecasting"]:
-                if "error" not in forecast:
-                    ticker = forecast["ticker"]
-                    asset = next(
-                        (a for a in portfolio.get_all_assets() if a.symbol == ticker),
-                        None,
-                    )
-                    if asset and asset.quantity:
-                        # Calculate the forecasted value for this asset based on quantity and forecast price
-                        # This simple calculation (quantity × forecast_price) ensures the forecast value
-                        # represents what the portfolio would be worth at the forecasted prices
-                        forecasted_asset_value = asset.quantity * forecast["forecast_price"]
-                        forecasted_value += forecasted_asset_value
-
-                        # If in evaluation mode, track accuracy
-                        if "evaluation" in forecast:
-                            accuracy = 100 - forecast["evaluation"]["mape"]
-                            total_accuracy += accuracy
-                            valid_forecasts += 1
-
-            # Add forecasted value row with appropriate end date
-            test_end = None
-            if config.forecast.test_end_date:
-                test_end = (
-                    config.forecast.test_end_date.strftime("%Y-%m-%d")
-                    if isinstance(config.forecast.test_end_date, date)
-                    else str(config.forecast.test_end_date)
-                )
-            elif config.forecast.forecast_length:
-                # Calculate future date based on forecast length
-                from datetime import timedelta
-
-                future_date = datetime.now() + timedelta(days=config.forecast.forecast_length)
-                test_end = future_date.strftime("%Y-%m-%d") if isinstance(future_date, date) else str(future_date)
-            else:
-                # Try to get end date from any forecast result
-                for forecast in results["forecasting"]:
-                    if "error" not in forecast and "end_date" in forecast:
-                        test_end = forecast["end_date"]
-                        break
-
-            if not test_end:
-                # Default to 14 days if no forecast length specified
-                from datetime import timedelta
-
-                future_date = datetime.now() + timedelta(days=14)
-                test_end = future_date.strftime("%Y-%m-%d") if isinstance(future_date, date) else str(future_date)
-
-            portfolio_value_table.add_row("Forecast Value", test_end, f"${forecasted_value:,.2f}")
-
-            # Show portfolio return
-            if current_portfolio_value > 0:
-                portfolio_return = ((forecasted_value - current_portfolio_value) / current_portfolio_value) * 100
-                portfolio_value_table.add_row(
-                    "Portfolio Return", f"{test_start} → {test_end}", f"{portfolio_return:+.2f}%"
-                )
-
-            # Add average accuracy row only for evaluation mode
-            if is_evaluation_mode and valid_forecasts > 0 and test_end:
-                avg_accuracy = total_accuracy / valid_forecasts
-                portfolio_value_table.add_row("Accuracy", test_end, f"{avg_accuracy:.4f}%")
-
-        self.console.print(portfolio_value_table)
+                if "error" not in forecast and "end_date" in forecast:
+                    return forecast["end_date"]
+            from datetime import timedelta
+            future_date = datetime.now() + timedelta(days=14)
+            return future_date.strftime("%Y-%m-%d") if isinstance(future_date, date) else str(future_date)
 
     def show_strategy_summaries(self, manager, config: StockulaConfig, results: dict[str, Any]):
         """Show strategy-specific summaries.
@@ -991,44 +967,54 @@ Detailed report saved to: {
         Returns:
             Formatted broker information string
         """
-        if config.backtest.broker_config:
-            broker_config = config.backtest.broker_config
-            if broker_config.name in [
-                "td_ameritrade",
-                "etrade",
-                "robinhood",
-                "fidelity",
-                "schwab",
-            ]:
-                broker_info = f"Broker: {broker_config.name} (zero-commission)"
-            elif broker_config.commission_type == "percentage":
-                commission_val = broker_config.commission_value
-                if isinstance(commission_val, dict):
-                    # If it's a dict, use the first value or default
-                    commission_val = next(iter(commission_val.values())) if commission_val else 0.0
-                broker_info = f"Broker: {broker_config.name} ({commission_val * 100:.1f}% commission"
-                if broker_config.min_commission:
-                    broker_info += f", ${broker_config.min_commission:.2f} min"
-                broker_info += ")"
-            elif broker_config.commission_type == "per_share":
-                per_share_comm = broker_config.per_share_commission or broker_config.commission_value
-                broker_info = f"Broker: {broker_config.name} (${per_share_comm:.3f}/share"
-                if broker_config.min_commission:
-                    broker_info += f", ${broker_config.min_commission:.2f} min"
-                broker_info += ")"
-            elif broker_config.commission_type == "tiered":
-                broker_info = f"Broker: {broker_config.name} (tiered pricing"
-                if broker_config.min_commission:
-                    broker_info += f", ${broker_config.min_commission:.2f} min"
-                broker_info += ")"
-            elif broker_config.commission_type == "fixed":
-                broker_info = f"Broker: {broker_config.name} (${broker_config.commission_value:.2f}/trade)"
-            else:
-                broker_info = f"Broker: {broker_config.name} ({broker_config.commission_type})"
-        else:
-            broker_info = f"Commission: {config.backtest.commission * 100:.1f}%"
+        broker_config = getattr(config.backtest, "broker_config", None)
+        if not broker_config:
+            return f"Commission: {config.backtest.commission * 100:.1f}%"
 
-        return broker_info
+        if broker_config.name in [
+            "td_ameritrade",
+            "etrade",
+            "robinhood",
+            "fidelity",
+            "schwab",
+        ]:
+            return f"Broker: {broker_config.name} (zero-commission)"
+
+        if broker_config.commission_type == "percentage":
+            return self._format_percentage_commission(broker_config)
+        if broker_config.commission_type == "per_share":
+            return self._format_per_share_commission(broker_config)
+        if broker_config.commission_type == "tiered":
+            return self._format_tiered_commission(broker_config)
+        if broker_config.commission_type == "fixed":
+            return f"Broker: {broker_config.name} (${broker_config.commission_value:.2f}/trade)"
+
+        return f"Broker: {broker_config.name} ({broker_config.commission_type})"
+
+    def _format_percentage_commission(self, broker_config) -> str:
+        commission_val = broker_config.commission_value
+        if isinstance(commission_val, dict):
+            commission_val = next(iter(commission_val.values())) if commission_val else 0.0
+        info = f"Broker: {broker_config.name} ({commission_val * 100:.1f}% commission"
+        if broker_config.min_commission:
+            info += f", ${broker_config.min_commission:.2f} min"
+        info += ")"
+        return info
+
+    def _format_per_share_commission(self, broker_config) -> str:
+        per_share_comm = getattr(broker_config, "per_share_commission", None) or broker_config.commission_value
+        info = f"Broker: {broker_config.name} (${per_share_comm:.3f}/share"
+        if broker_config.min_commission:
+            info += f", ${broker_config.min_commission:.2f} min"
+        info += ")"
+        return info
+
+    def _format_tiered_commission(self, broker_config) -> str:
+        info = f"Broker: {broker_config.name} (tiered pricing"
+        if broker_config.min_commission:
+            info += f", ${broker_config.min_commission:.2f} min"
+        info += ")"
+        return info
 
     def _get_strategy_dates(self, config: StockulaConfig, portfolio_backtest_results) -> tuple[str, str]:
         """Get strategy date range.
@@ -1040,38 +1026,32 @@ Detailed report saved to: {
         Returns:
             Tuple of (start_date, end_date) as strings
         """
-        start_date: str = "N/A"
-        end_date: str = "N/A"
+        def _select_date(primary, secondary, fallback):
+            if primary:
+                return (
+                    primary.strftime("%Y-%m-%d")
+                    if isinstance(primary, date)
+                    else str(primary)
+                )
+            elif secondary:
+                return (
+                    secondary.strftime("%Y-%m-%d")
+                    if isinstance(secondary, date)
+                    else str(secondary)
+                )
+            elif fallback:
+                return fallback
+            return "N/A"
 
-        # First try backtest dates, then data dates, then results
-        if config.backtest.start_date:
-            start_date = (
-                config.backtest.start_date.strftime("%Y-%m-%d")
-                if isinstance(config.backtest.start_date, date)
-                else str(config.backtest.start_date)
-            )
-        elif config.data.start_date:
-            start_date = (
-                config.data.start_date.strftime("%Y-%m-%d")
-                if isinstance(config.data.start_date, date)
-                else str(config.data.start_date)
-            )
-        elif portfolio_backtest_results.date_range and portfolio_backtest_results.date_range.get("start"):
-            start_date = portfolio_backtest_results.date_range["start"]
-
-        if config.backtest.end_date:
-            end_date = (
-                config.backtest.end_date.strftime("%Y-%m-%d")
-                if isinstance(config.backtest.end_date, date)
-                else str(config.backtest.end_date)
-            )
-        elif config.data.end_date:
-            end_date = (
-                config.data.end_date.strftime("%Y-%m-%d")
-                if isinstance(config.data.end_date, date)
-                else str(config.data.end_date)
-            )
-        elif portfolio_backtest_results.date_range and portfolio_backtest_results.date_range.get("end"):
-            end_date = portfolio_backtest_results.date_range["end"]
+        start_date = _select_date(
+            getattr(config.backtest, "start_date", None),
+            getattr(config.data, "start_date", None),
+            portfolio_backtest_results.date_range.get("start") if getattr(portfolio_backtest_results, "date_range", None) else None,
+        )
+        end_date = _select_date(
+            getattr(config.backtest, "end_date", None),
+            getattr(config.data, "end_date", None),
+            portfolio_backtest_results.date_range.get("end") if getattr(portfolio_backtest_results, "date_range", None) else None,
+        )
 
         return start_date, end_date

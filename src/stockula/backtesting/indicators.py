@@ -276,6 +276,11 @@ def calculate_fractal_dimension(prices: pd.Series, period: int = 16) -> pd.Serie
 
     high2 = prices.shift(half_period).rolling(window=half_period).max()
     low2 = prices.shift(half_period).rolling(window=half_period).min()
+    # Ensure both are Series, not DataFrames
+    if isinstance(high2, pd.DataFrame):
+        high2 = high2.iloc[:, 0]
+    if isinstance(low2, pd.DataFrame):
+        low2 = low2.iloc[:, 0]
     range2 = high2 - low2
 
     # Full period range

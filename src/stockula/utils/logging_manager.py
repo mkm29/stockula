@@ -173,7 +173,7 @@ class LoggingManager:
         """
         self.logger.exception(message)
 
-    def isEnabledFor(self, level: int) -> bool:
+    def is_enabled_for(self, level: int) -> bool:
         """Check if logging is enabled for given level.
 
         Args:
