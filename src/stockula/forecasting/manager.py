@@ -326,7 +326,7 @@ class ForecastingManager:
 
         return {
             "ticker": symbol,
-            "backend": "autogluon",
+            "backend": backend_instance.name,
             "current_price": float(result.forecast["forecast"].iloc[0]),
             "forecast_price": float(result.forecast["forecast"].iloc[-1]),
             "lower_bound": float(result.forecast["lower_bound"].iloc[-1]),

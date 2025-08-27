@@ -129,7 +129,7 @@ class TestForecastingManager:
 
         # Verify result structure
         assert result["ticker"] == "AAPL"
-        assert result["backend"] == "autogluon"  # Updated to expect autogluon
+        assert result["backend"] == "simple"  # Updated to expect simple backend (new default)
         assert "current_price" in result
         assert "forecast_price" in result
         assert "lower_bound" in result
@@ -166,6 +166,7 @@ class TestForecastingManager:
 
         with patch("stockula.forecasting.factory.create_forecast_backend") as mock_create_backend:
             mock_backend = MagicMock()
+            mock_backend.name = "simple"  # Set backend name for test
             mock_create_backend.return_value = mock_backend
 
             # Setup mock result
@@ -184,7 +185,7 @@ class TestForecastingManager:
 
             assert result["ticker"] == "AAPL"
             assert result["forecast_length"] == 7
-            assert result["backend"] == "autogluon"  # Updated to expect autogluon
+            assert result["backend"] == "simple"  # Updated to expect simple backend (new default)
             assert "confidence" in result
 
     @pytest.mark.skip(reason="compare_backends method was removed during AutoTS migration")
@@ -269,6 +270,6 @@ class TestForecastingManager:
             )
             mock_backend.get_model_info.return_value = {"model_name": "TestModel"}
 
-            # Test with use_evaluation=True (should be ignored but not fail)
-            result = forecasting_manager.forecast_symbol("AAPL", mock_config, use_evaluation=True)
+            # Test forecasting without use_evaluation parameter (removed in refactoring)
+            result = forecasting_manager.forecast_symbol("AAPL", mock_config)
             assert result["ticker"] == "AAPL"

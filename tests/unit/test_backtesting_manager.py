@@ -307,7 +307,7 @@ class TestBacktestingManagerTrainTestSplit:
         """Test train/test split with custom train ratio."""
         backtesting_manager.set_runner(mock_backtest_runner)
 
-        result = backtesting_manager.run_with_train_test_split("AAPL", "smacross", train_ratio=0.8)
+        result = backtesting_manager.run_with_train_test_split("AAPL", "smacross")
 
         assert "train_results" in result
         mock_backtest_runner.run_with_train_test_split.assert_called_once()

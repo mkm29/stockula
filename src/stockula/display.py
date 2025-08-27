@@ -887,7 +887,7 @@ class ResultsDisplay:
         else:
             for forecast in results["forecasting"]:
                 if "error" not in forecast and "end_date" in forecast:
-                    return forecast["end_date"]
+                    return str(forecast["end_date"])
             from datetime import timedelta
 
             future_date = datetime.now() + timedelta(days=14)

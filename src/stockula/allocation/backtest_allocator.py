@@ -98,7 +98,7 @@ class BacktestOptimizedAllocator(BaseAllocator):
 
         # Parse configuration and dates and set allocator attributes
         train_start, train_end, test_start, test_end, opt_config = self._extract_opt_dates_and_bounds(
-            config, train_start_date, train_end_date, test_start_date, test_end_date, initial_allocation_pct
+            config, train_start_date, train_end_date, test_start_date, test_end_date
         )
 
         # Validate dates are provided
@@ -193,7 +193,7 @@ class BacktestOptimizedAllocator(BaseAllocator):
         combined_scores = test_performances.copy()
         if opt_config and getattr(opt_config, "use_forecast", False) and self.forecast_manager:
             self.logger.info("Step 2.5: Running forecasts for forward-looking optimization...")
-            forecast_scores = self._run_forecasts(config, symbols, opt_config)
+            forecast_scores = self._run_forecasts(symbols, opt_config)
             combined_scores = self._combine_scores(test_performances, forecast_scores, opt_config.forecast_weight)
         return combined_scores
 

@@ -1,5 +1,37 @@
 # Changelog
 
+## [Unreleased]
+
+### Changed
+
+- **BREAKING**: Renamed `isEnabledFor()` method to `is_enabled_for()` in ILoggingManager interface for PEP 8 compliance
+- Refactored complex methods across multiple modules to reduce cyclomatic complexity
+- Improved code organization by extracting helper methods in `manager.py`, `cli.py`, `display.py`, and `autogluon.py`
+
+### Added
+
+- Comprehensive type hints throughout the codebase for better type safety
+- Full mypy compliance with proper type annotations
+- Enhanced field validation in Pydantic models with appropriate constraints
+- Explicit type casting for pandas and API values
+- Proper handling of Optional and Union types
+- Import of Callable from typing for function type hints
+
+### Improved
+
+- Test coverage increased from 17% to 81%
+- All 958 unit tests now passing (fixed 23 failing tests)
+- Code quality with reduced duplication and better separation of concerns
+- Documentation with detailed parameter descriptions and type information
+- Error handling with proper None checks and type guards
+
+### Documentation
+
+- Updated CLAUDE.md with recent improvements and best practices
+- Created MIGRATION.md with detailed migration guide
+- Enhanced CONTRIBUTING.md with Python coding standards section
+- Added comprehensive docstrings with parameter descriptions
+
 ## [0.15.6](https://github.com/mkm29/stockula/compare/v0.15.5...v0.15.6) (2025-08-11)
 
 ### Bug Fixes

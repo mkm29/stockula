@@ -38,23 +38,21 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && add-apt-repository ppa:deadsnakes/ppa -y \
     && apt-get update \
     && apt-get install -y --no-install-recommends \
-    python${PYTHON_VERSION} \
-    python${PYTHON_VERSION}-distutils \
-    python${PYTHON_VERSION}-dev \
     build-essential \
+    curl \
     libgomp1 \
     libopenblas-base \
-    curl \
+    python${PYTHON_VERSION} \
+    python${PYTHON_VERSION}-dev \
+    python${PYTHON_VERSION}-distutils \
     && curl -sS https://bootstrap.pypa.io/get-pip.py | python${PYTHON_VERSION} \
     && ln -sf /usr/bin/python${PYTHON_VERSION} /usr/local/bin/python \
     && ln -sf /usr/bin/python${PYTHON_VERSION} /usr/local/bin/python3 \
     && apt-get remove -y software-properties-common \
     && apt-get autoremove -y \
     && apt-get clean \
-    && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
-
-# Upgrade pip
-RUN python -m pip install --no-cache-dir --upgrade pip setuptools wheel
+    && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* \
+    && python -m pip install --no-cache-dir --upgrade pip setuptools wheel
 
 # Copy requirements file
 COPY requirements-gpu.txt /tmp/
@@ -118,20 +116,18 @@ USER root
 
 # Add interactive tools
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    less \
-    nano \
     curl \
     htop \
+    less \
+    nano \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
 USER stockula
 RUN mkdir -p /home/stockula/.local/bin && \
     ln -s /usr/local/bin/python /home/stockula/.local/bin/python3 && \
-    echo 'export PATH="/home/stockula/.local/bin:$PATH"' >> /home/stockula/.bashrc
-
-# Create GPU diagnostic script
-RUN cat <<EOF > /home/stockula/.local/bin/gpu-check
+    echo 'export PATH="/home/stockula/.local/bin:$PATH"' >> /home/stockula/.bashrc && \
+    cat <<EOF > /home/stockula/.local/bin/gpu-check
 #!/bin/bash
 echo "=== GPU Information ==="
 nvidia-smi 2>/dev/null || echo "nvidia-smi not available"
@@ -141,8 +137,8 @@ python -c "import torch; print(f'PyTorch: {torch.__version__}'); print(f'CUDA Av
 echo ""
 echo "=== Stockula GPU Features ==="
 python -c "import stockula; print('Stockula loaded successfully')"
-EOF
-RUN chmod +x /home/stockula/.local/bin/gpu-check
+EOF && \
+    chmod +x /home/stockula/.local/bin/gpu-check
 
 
 CMD ["/bin/bash"]

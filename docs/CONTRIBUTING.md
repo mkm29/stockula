@@ -75,10 +75,11 @@ git checkout -b hotfix/your-hotfix-name
 We follow [PEP 8](https://www.python.org/dev/peps/pep-0008/) with the following key points:
 
 - **Naming Conventions**:
+
   - Use `snake_case` for functions, methods, and variables (e.g., `is_enabled_for()`, not `isEnabledFor()`)
   - Use `PascalCase` for classes (e.g., `StockulaManager`)
   - Use `UPPER_CASE` for constants (e.g., `MAX_RETRIES`)
-  
+
 - **Line Length**: Maximum 120 characters (configured in ruff)
 
 - **Imports**: Organized in groups (standard library, third-party, local)

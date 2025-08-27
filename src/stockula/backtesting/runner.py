@@ -122,7 +122,7 @@ class BacktestRunner:
         if per_share is None and isinstance(broker_config.commission_value, int | float):
             per_share = broker_config.commission_value
         if per_share is not None:
-            return abs(quantity) * per_share
+            return float(abs(quantity) * per_share)
         return 0.0
 
     @staticmethod
@@ -130,7 +130,7 @@ class BacktestRunner:
         if isinstance(broker_config.commission_value, dict):
             tiers = sorted([(int(k), v) for k, v in broker_config.commission_value.items()])
             if tiers:
-                return abs(quantity) * tiers[0][1]
+                return float(abs(quantity) * tiers[0][1])
         return 0.0
 
     def run(self, data: pd.DataFrame, strategy: type, **kwargs) -> dict[str, Any]:

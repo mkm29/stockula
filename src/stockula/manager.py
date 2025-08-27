@@ -1,6 +1,7 @@
 """Stockula Manager - Main business logic orchestrator."""
 
 import json
+from collections.abc import Callable
 from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any, cast
@@ -314,7 +315,7 @@ class StockulaManager:
                 analysis_type=analysis_type,
                 custom_indicators=custom_inds,
             )
-        return result
+        return cast(dict[str, Any], result)
 
     def _add_period_specific_calculations(self, result: dict[str, Any], ticker: str, ta_config: Any) -> None:
         """Add period-specific calculations and backward compatibility values."""
@@ -448,7 +449,7 @@ class StockulaManager:
             if progress and task:
                 progress.advance(task)
 
-        single_ops: list[tuple[str, callable, str]] = []
+        single_ops: list[tuple[str, Callable[[], Any], str]] = []
 
         if "rsi" in ta_config.indicators:
             single_ops.append(
@@ -564,7 +565,7 @@ class StockulaManager:
                 return None
 
             result_entry = self._create_train_test_result(ticker, strategy_config, backtest_result)
-            return [result_entry] if result_entry is not None else None
+            return [result_entry] if result_entry is not None else []
 
         # Standard (single run) backtest path
         backtest_start, backtest_end = self._get_backtest_dates()
@@ -578,8 +579,10 @@ class StockulaManager:
             end_date=backtest_end,
         )
 
-        result_entry = self._create_standard_result(ticker, strategy_config, backtest_result)
-        return [result_entry] if result_entry is not None else None
+        standard_result_entry: dict[str, Any] | None = self._create_standard_result(
+            ticker, strategy_config, backtest_result
+        )
+        return [standard_result_entry] if standard_result_entry is not None else []
 
     def _get_backtest_dates(self) -> tuple[str | None, str | None]:
         """Get backtest date range from configuration.
@@ -1150,7 +1153,6 @@ class StockulaManager:
             self._process_with_progress_results(
                 results=results,
                 mode=mode,
-                portfolio=portfolio,
                 all_assets=all_assets,
                 ticker_symbols=ticker_symbols,
                 hold_only_categories=hold_only_categories,

@@ -239,23 +239,23 @@ class TestStockulaPipeline:
 
         # Test JSON format
         json_path = tmp_path / "results.json"
-        pipeline.save_results(json_path, format="json")
+        pipeline.save_results(json_path, fmt="json")
         assert json_path.exists()
 
         # Test YAML format
         yaml_path = tmp_path / "results.yaml"
-        pipeline.save_results(yaml_path, format="yaml")
+        pipeline.save_results(yaml_path, fmt="yaml")
         assert yaml_path.exists()
 
         # Test CSV format
         pipeline.backtest_results = {"results": [{"a": 1, "b": 2}]}
         csv_path = tmp_path / "results.csv"
-        pipeline.save_results(csv_path, format="csv")
+        pipeline.save_results(csv_path, fmt="csv")
         assert csv_path.exists()
 
         # Test unsupported format
         with pytest.raises(ValueError, match="Unsupported format"):
-            pipeline.save_results("test.txt", format="txt")
+            pipeline.save_results("test.txt", fmt="txt")
 
     def test_extract_optimized_config(self, pipeline, sample_config):
         """Test extracting optimized configuration from results."""
@@ -374,7 +374,7 @@ class TestPipelineConvenienceFunctions:
         # Verify YAML format was used
         mock_pipeline.save_results.assert_called_with(
             str(tmp_path / "results.yaml"),
-            format="yaml",
+            fmt="yaml",
         )
 
     @patch("stockula.pipeline.StockulaPipeline")
@@ -396,5 +396,5 @@ class TestPipelineConvenienceFunctions:
         # Verify CSV format was used
         mock_pipeline.save_results.assert_called_with(
             str(tmp_path / "results.csv"),
-            format="csv",
+            fmt="csv",
         )

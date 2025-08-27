@@ -102,7 +102,7 @@ class BaseAllocator(ABC):
                 interval="1d",
             )
             if not data.empty and "Close" in data.columns:
-                return data["Close"].iloc[-1]
+                return float(data["Close"].iloc[-1])
             price = self._fetch_extended_or_current_price(symbol, target_date)
             return price
         except Exception as e:
@@ -126,7 +126,7 @@ class BaseAllocator(ABC):
             interval="1d",
         )
         if not data.empty and "Close" in data.columns:
-            return data["Close"].iloc[0]  # Use first available price
+            return float(data["Close"].iloc[0])  # Use first available price
 
         current_prices = self.fetcher.get_current_prices([symbol])
         if symbol in current_prices:

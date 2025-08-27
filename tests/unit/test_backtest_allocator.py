@@ -455,11 +455,6 @@ class TestBacktestOptimizedAllocator:
             "symbol": "AAPL",
         }
 
-        # Create config
-        config = StockulaConfig(
-            portfolio=PortfolioConfig(initial_capital=100000.0),
-        )
-
         opt_config = BacktestOptimizationConfig(
             forecast_length=30,
             forecast_backend="chronos",
@@ -468,7 +463,7 @@ class TestBacktestOptimizedAllocator:
         )
 
         # Run forecasts
-        scores = allocator._run_forecasts(config, ["AAPL", "GOOGL"], opt_config)
+        scores = allocator._run_forecasts(["AAPL", "GOOGL"], opt_config)
 
         # Verify forecast was called
         assert mock_forecast_manager.run_forecast.call_count == 2
@@ -484,10 +479,6 @@ class TestBacktestOptimizedAllocator:
         # Ensure no forecast manager
         allocator.forecast_manager = None
 
-        config = StockulaConfig(
-            portfolio=PortfolioConfig(initial_capital=100000.0),
-        )
-
         opt_config = BacktestOptimizationConfig(
             forecast_length=30,
             use_forecast=True,
@@ -495,7 +486,7 @@ class TestBacktestOptimizedAllocator:
         )
 
         # Should return empty scores
-        scores = allocator._run_forecasts(config, ["AAPL", "GOOGL"], opt_config)
+        scores = allocator._run_forecasts(["AAPL", "GOOGL"], opt_config)
         assert scores == {}
 
     def test_run_forecasts_error_handling(self, allocator):
@@ -507,17 +498,13 @@ class TestBacktestOptimizedAllocator:
         allocator.forecast_manager = mock_forecast_manager
         mock_forecast_manager.run_forecast.side_effect = Exception("Forecast failed")
 
-        config = StockulaConfig(
-            portfolio=PortfolioConfig(initial_capital=100000.0),
-        )
-
         opt_config = BacktestOptimizationConfig(
             forecast_length=30,
             use_forecast=True,
         )
 
         # Should handle errors gracefully
-        scores = allocator._run_forecasts(config, ["AAPL"], opt_config)
+        scores = allocator._run_forecasts(["AAPL"], opt_config)
         assert scores["AAPL"] == 0.0
 
     def test_forecast_aware_allocation_integration(self, allocator, mock_fetcher, mock_backtest_runner):

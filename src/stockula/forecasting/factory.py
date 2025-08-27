@@ -61,7 +61,7 @@ def _is_chronos_runtime_ready():
         return False
 
 
-def _create_autogluon_chronos_backend(config, forecast_length, requested_models):
+def _create_autogluon_chronos_backend(config, forecast_length, requested_models) -> ForecastBackend:
     return cast(
         ForecastBackend,
         AutoGluonBackend(
@@ -79,7 +79,7 @@ def _create_autogluon_chronos_backend(config, forecast_length, requested_models)
     )
 
 
-def _create_chronos_backend(config, forecast_length, requested_models):
+def _create_chronos_backend(config, forecast_length, requested_models) -> ForecastBackend:
     model_name = next(
         (
             m
@@ -88,16 +88,19 @@ def _create_chronos_backend(config, forecast_length, requested_models):
         ),
         None,
     )
-    return ChronosBackend(
-        forecast_length=forecast_length,
-        frequency=config.frequency,
-        prediction_interval=config.prediction_interval,
-        no_negatives=config.no_negatives,
-        model_name=model_name,
+    return cast(
+        ForecastBackend,
+        ChronosBackend(
+            forecast_length=forecast_length,
+            frequency=config.frequency,
+            prediction_interval=config.prediction_interval,
+            no_negatives=config.no_negatives,
+            model_name=model_name,
+        ),
     )
 
 
-def _create_autogluon_backend(config, forecast_length, requested_models):
+def _create_autogluon_backend(config, forecast_length, requested_models) -> ForecastBackend:
     return cast(
         ForecastBackend,
         AutoGluonBackend(
@@ -123,10 +126,13 @@ def _warn_if_no_autogluon(logging_manager):
     )
 
 
-def _create_simple_backend(config, forecast_length):
-    return SimpleForecastBackend(
-        forecast_length=forecast_length,
-        frequency=config.frequency,
-        prediction_interval=config.prediction_interval,
-        no_negatives=config.no_negatives,
+def _create_simple_backend(config, forecast_length) -> ForecastBackend:
+    return cast(
+        ForecastBackend,
+        SimpleForecastBackend(
+            forecast_length=forecast_length,
+            frequency=config.frequency,
+            prediction_interval=config.prediction_interval,
+            no_negatives=config.no_negatives,
+        ),
     )

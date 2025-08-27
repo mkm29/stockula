@@ -205,9 +205,10 @@ class DataFetcher:
             ticker = yf.Ticker(symbol)
             history = ticker.history(period="1d")
             if not history.empty:
-                return history["Close"].iloc[-1]
+                return float(history["Close"].iloc[-1])
             info = ticker.info
-            return info.get("currentPrice") or info.get("regularMarketPrice")
+            price = info.get("currentPrice") or info.get("regularMarketPrice")
+            return float(price) if price is not None else None
         except Exception as e:
             self.logger.error(f"Error fetching price for {symbol}: {e}")
         return None

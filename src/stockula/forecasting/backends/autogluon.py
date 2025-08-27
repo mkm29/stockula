@@ -354,7 +354,7 @@ class AutoGluonBackend(ForecastBackend):
             model_params=model_info.get("model_params", {}),
             metrics={
                 "score": float(best_model_metrics.get("score", 0.0)),
-                "eval_metric": self.eval_metric,
+                "eval_metric": 0.0,  # Convert to float for type consistency
                 "pred_time": float(best_model_metrics.get("pred_time", 0.0)),
                 "fit_time": float(best_model_metrics.get("fit_time", 0.0)),
             },
@@ -401,7 +401,7 @@ class AutoGluonBackend(ForecastBackend):
         if "0.5" in pred_df.columns:
             return "0.5"
         numeric_cols = [c for c in pred_df.columns if pd.api.types.is_numeric_dtype(pred_df[c])]
-        return numeric_cols[-1] if numeric_cols else pred_df.columns[-1]
+        return str(numeric_cols[-1]) if numeric_cols else str(pred_df.columns[-1])
 
     def _get_quantile_cols(self, pred_df: pd.DataFrame) -> tuple[str | None, str | None]:
         """Determine interval columns closest to requested interval."""

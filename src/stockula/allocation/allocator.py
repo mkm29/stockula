@@ -131,7 +131,7 @@ class Allocator(BaseAllocator):
         if remaining_capital > 0 and not config.portfolio.allow_fractional_shares:
             self.logger.debug(f"\nRedistributing unused capital: ${remaining_capital:.2f}")
             redistributed, remaining_capital = self._redistribute_unused_capital(
-                calculated_quantities, calculation_prices, remaining_capital, config
+                calculated_quantities, calculation_prices, remaining_capital
             )
             total_allocated += redistributed
             self.logger.debug(f"Final unused capital: ${remaining_capital:.2f}")
@@ -163,6 +163,8 @@ class Allocator(BaseAllocator):
         self, config: StockulaConfig, tickers_by_category: dict[str, list[TickerConfig]], target_capital: float
     ) -> dict[str, dict]:
         category_allocations: dict[str, dict] = {}
+        if config.portfolio.category_ratios is None:
+            return category_allocations
         for category, ratio in config.portfolio.category_ratios.items():
             category_upper = category.upper()
             if category_upper not in tickers_by_category:
