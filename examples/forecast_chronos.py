@@ -24,12 +24,17 @@ def main() -> None:
     parser.add_argument("--ticker", default="AAPL", help="Ticker symbol to forecast")
     args = parser.parse_args()
 
-    run_stockula(
-        config=args.config,
+    from stockula.utils import DateOverrides, RunConfig, SavePaths
+
+    run_config = RunConfig(
+        config_file=args.config,
         ticker=args.ticker,
         mode="forecast",
         output="console",
+        save_paths=SavePaths(),
+        date_overrides=DateOverrides(),
     )
+    run_stockula(run_config)
 
 
 if __name__ == "__main__":

@@ -34,10 +34,6 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = [
-    "ruff>=0.12.5",
-    "pytest>=8.4.1",
-]
 timescaledb = [
     # TimescaleDB extensions and utilities
     "asyncpg>=0.29.0",  # Async PostgreSQL driver for better performance
@@ -61,15 +57,8 @@ gpu = [
     # "gluonts>=0.14.0; python_version<'3.13'",  # GluonTS for advanced time series models
 ]
 
-[build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
-
-[tool.hatch.build.targets.wheel]
-packages = ["src/stockula", "utils"]
-
-[tool.uv]
-dev-dependencies = [
+[dependency-groups]
+dev = [
     "ruff>=0.12.5",
     "pytest>=8.4.1",
     "pytest-cov>=6.2.1",
@@ -81,6 +70,14 @@ dev-dependencies = [
     "types-pyyaml>=6.0.12.20250516",
     "types-requests>=2.32.0",
 ]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/stockula", "utils"]
+
 
 [tool.coverage.run]
 omit = [

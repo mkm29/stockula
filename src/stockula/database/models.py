@@ -60,6 +60,7 @@ class Stock(SQLModel, table=True):  # type: ignore[call-arg]
         Index("idx_stocks_sector", "sector"),
         Index("idx_stocks_market_cap", "market_cap"),
         Index("idx_stocks_updated_at", "updated_at"),
+        {"extend_existing": True},
     )
 
     symbol: str = Field(primary_key=True, description="Stock ticker symbol")
@@ -112,6 +113,7 @@ class PriceHistory(SQLModel, table=True):  # type: ignore[call-arg]
         Index("idx_price_history_symbol_interval", "symbol", "interval"),
         Index("idx_price_history_volume", "volume"),  # Volume analysis
         Index("idx_price_history_close_price", "close_price"),  # Price analysis
+        {"extend_existing": True},
     )
 
     id: int | None = Field(default=None, primary_key=True, description="Primary key")
@@ -202,6 +204,7 @@ class Dividend(SQLModel, table=True):  # type: ignore[call-arg]
         Index("idx_dividends_symbol_timestamp", "symbol", "timestamp"),
         Index("idx_dividends_timestamp", "timestamp"),
         Index("idx_dividends_amount", "amount"),
+        {"extend_existing": True},
     )
 
     id: int | None = Field(default=None, primary_key=True, description="Primary key")
@@ -255,6 +258,7 @@ class Split(SQLModel, table=True):  # type: ignore[call-arg]
         Index("idx_splits_symbol_timestamp", "symbol", "timestamp"),
         Index("idx_splits_timestamp", "timestamp"),
         Index("idx_splits_ratio", "ratio"),
+        {"extend_existing": True},
     )
 
     id: int | None = Field(default=None, primary_key=True, description="Primary key")
@@ -315,6 +319,7 @@ class OptionsCall(SQLModel, table=True):  # type: ignore[call-arg]
         Index("idx_options_calls_data_timestamp", "data_timestamp"),
         Index("idx_options_calls_strike", "strike"),
         Index("idx_options_calls_volume", "volume"),
+        {"extend_existing": True},
     )
 
     id: int | None = Field(default=None, primary_key=True, description="Primary key")
@@ -409,6 +414,7 @@ class OptionsPut(SQLModel, table=True):  # type: ignore[call-arg]
         Index("idx_options_puts_data_timestamp", "data_timestamp"),
         Index("idx_options_puts_strike", "strike"),
         Index("idx_options_puts_volume", "volume"),
+        {"extend_existing": True},
     )
 
     id: int | None = Field(default=None, primary_key=True, description="Primary key")
@@ -490,6 +496,7 @@ class StockInfo(SQLModel, table=True):  # type: ignore[call-arg]
     """Raw yfinance info data stored as JSONB for efficient querying."""
 
     __tablename__ = "stock_info"
+    __table_args__ = ({"extend_existing": True},)
 
     symbol: str = Field(foreign_key="stocks.symbol", primary_key=True, description="Stock ticker symbol")
 
@@ -550,6 +557,7 @@ class Strategy(SQLModel, table=True):  # type: ignore[call-arg]
         Index("idx_strategies_name", "name"),
         Index("idx_strategies_category", "category"),
         Index("idx_strategies_is_active", "is_active"),
+        {"extend_existing": True},
     )
 
     id: int | None = Field(default=None, primary_key=True)
@@ -586,6 +594,7 @@ class StrategyPreset(SQLModel, table=True):  # type: ignore[call-arg]
         Index("idx_strategy_presets_strategy_id", "strategy_id"),
         Index("idx_strategy_presets_name", "name"),
         Index("idx_strategy_presets_is_default", "is_default"),
+        {"extend_existing": True},
     )
 
     id: int | None = Field(default=None, primary_key=True)
@@ -653,6 +662,7 @@ class AutoTSModel(SQLModel, table=True):  # type: ignore[call-arg]
         Index("idx_autots_models_name", "name"),
         Index("idx_autots_models_is_slow", "is_slow"),
         Index("idx_autots_models_is_gpu_enabled", "is_gpu_enabled"),
+        {"extend_existing": True},
     )
 
     # Class-level registry of valid models (loaded from models.json)
@@ -819,6 +829,7 @@ class AutoTSPreset(SQLModel, table=True):  # type: ignore[call-arg]
         UniqueConstraint("name", name="uq_autots_preset_name"),
         Index("idx_autots_presets_name", "name"),
         Index("idx_autots_presets_use_case", "use_case"),
+        {"extend_existing": True},
     )
 
     # Class-level registry of valid presets
@@ -955,6 +966,7 @@ class PriceAggregatesDaily(SQLModel, table=True):  # type: ignore[call-arg]
     __table_args__ = (
         Index("idx_price_aggregates_daily_symbol_day", "symbol", "day"),
         Index("idx_price_aggregates_daily_day", "day"),
+        {"extend_existing": True},
     )
 
     symbol: str = Field(primary_key=True, description="Stock ticker symbol")
@@ -1002,6 +1014,7 @@ class PriceAggregatesHourly(SQLModel, table=True):  # type: ignore[call-arg]
     __table_args__ = (
         Index("idx_price_aggregates_hourly_symbol_hour", "symbol", "hour"),
         Index("idx_price_aggregates_hourly_hour", "hour"),
+        {"extend_existing": True},
     )
 
     symbol: str = Field(primary_key=True, description="Stock ticker symbol")

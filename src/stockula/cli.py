@@ -1,20 +1,20 @@
 """Command-line interface for Stockula."""
 
-from datetime import datetime
 from enum import Enum
 from typing import Annotated, Any, cast
 
 import typer
 from pydantic import ValidationError
-from rich.panel import Panel
 
 from .cli_manager import cli_manager
-from .config import TickerConfig
+from .config import StockulaConfig, TickerConfig
 from .config.settings import save_config
-from .container import create_container
+from .container import Container, create_container
 from .display import ResultsDisplay
+from .domain import Portfolio
 from .manager import StockulaManager
 from .pipeline import StockulaPipeline
+from .utils import DateOverrides, PipelineConfig, RunConfig, SavePaths, error_handler
 
 # Create Typer app
 app = typer.Typer(
@@ -44,7 +44,13 @@ class OutputFormat(str, Enum):
     JSON = "json"
 
 
-def print_results(results: dict[str, Any], output_format: str = "console", config=None, container=None, portfolio=None):
+def print_results(
+    results: dict[str, Any],
+    output_format: str = "console",
+    config: StockulaConfig | None = None,
+    container: Container | None = None,
+    portfolio: Portfolio | None = None,
+) -> None:
     """Print results in specified format using ResultsDisplay.
 
     Args:
@@ -54,33 +60,22 @@ def print_results(results: dict[str, Any], output_format: str = "console", confi
         container: Optional DI container for fetching data
         portfolio: Optional portfolio instance for forecast display
     """
-    display = ResultsDisplay(cli_manager.get_console())
+    display = ResultsDisplay()
     display.print_results(results, output_format, config, container, portfolio)
 
 
-def run_stockula(
-    config: str | None = None,
-    ticker: str | None = None,
-    mode: str = "all",
-    output: str = "console",
-    save_config_path: str | None = None,
-    save_optimized_config: str | None = None,
-    train_start: str | None = None,
-    train_end: str | None = None,
-    test_start: str | None = None,
-    test_end: str | None = None,
-):
-    """Core logic for running Stockula."""
+def run_stockula(run_config: RunConfig) -> int | None:
+    """Core logic for running Stockula with simplified parameters."""
     # Initialize DI container first
-    container = create_container(config)
+    container = create_container(run_config.config_file)
 
     # Load configuration - the container will handle this
     try:
         stockula_config = container.stockula_config()
     except ValidationError as e:
         # Use the provided config path or default
-        config_path = config or ".stockula.yaml"
-        handle_validation_error(e, config_path)
+        config_path = run_config.config_file or ".stockula.yaml"
+        error_handler.handle_validation_error(e, config_path)
 
     # Set up logging based on configuration
     from .interfaces import ILoggingManager
@@ -89,90 +84,101 @@ def run_stockula(
     setup_logging(stockula_config, logging_manager=cast(ILoggingManager, container.logging_manager()))
 
     # Override ticker if provided
-    if ticker:
-        stockula_config.portfolio.tickers = [TickerConfig(symbol=ticker, quantity=1.0)]
-        # Disable auto-allocation for single ticker mode since we don't have categories
-        stockula_config.portfolio.auto_allocate = False
-        stockula_config.portfolio.dynamic_allocation = False
-        stockula_config.portfolio.allocation_method = "equal_weight"
-        # Allow 100% position for single ticker mode
-        stockula_config.portfolio.max_position_size = 100.0
+    if run_config.ticker:
+        _apply_single_ticker_mode(stockula_config, run_config.ticker)
 
     # Override date ranges if provided
-    if train_start:
-        stockula_config.forecast.train_start_date = datetime.strptime(train_start, "%Y-%m-%d").date()
-    if train_end:
-        stockula_config.forecast.train_end_date = datetime.strptime(train_end, "%Y-%m-%d").date()
-    if test_start:
-        stockula_config.forecast.test_start_date = datetime.strptime(test_start, "%Y-%m-%d").date()
-    if test_end:
-        stockula_config.forecast.test_end_date = datetime.strptime(test_end, "%Y-%m-%d").date()
+    if run_config.date_overrides is not None:
+        run_config.date_overrides.apply_to_config(stockula_config)
 
     # Create manager instance
     manager = StockulaManager(stockula_config, container, console)
 
     # Handle optimize-allocation mode early (before portfolio creation)
-    if mode == "optimize-allocation":
-        save_path = save_optimized_config or save_config_path
+    if run_config.is_optimization_mode():
+        save_path = (
+            run_config.save_paths.get_save_path_for_optimization() if run_config.save_paths is not None else None
+        )
         return manager.run_optimize_allocation(save_path)
 
     # Save configuration if requested (for non-optimize-allocation modes)
-    if save_config_path and mode != "optimize-allocation":
-        save_config(stockula_config, save_config_path)
-        print(f"Configuration saved to {save_config_path}")
-        return
+    if run_config.should_save_config():
+        if run_config.save_paths is not None and run_config.save_paths.config_path:
+            save_config(stockula_config, run_config.save_paths.config_path)
+            print(f"Configuration saved to {run_config.save_paths.config_path}")
+        else:
+            print("Error: No config path specified for saving")
+        return None
 
     # Create portfolio
     try:
         portfolio = manager.create_portfolio()
     except ValueError as e:
-        # Handle portfolio validation errors (e.g., insufficient capital)
-        error_msg = str(e)
-        if "insufficient" in error_msg.lower() and "capital" in error_msg.lower():
-            console.print("\n[bold red]❌ Portfolio Configuration Error[/bold red]\n")
-            console.print(f"[red]{error_msg}[/red]\n")
-            console.print("[dim]💡 Suggestions:[/dim]")
-            console.print("[dim]  • Increase the initial_capital in your configuration[/dim]")
-            console.print("[dim]  • Reduce the quantities of some assets[/dim]")
-            console.print("[dim]  • Enable fractional shares: allow_fractional_shares: true[/dim]")
-        else:
-            console.print(f"\n[bold red]❌ Portfolio Error:[/bold red] [red]{error_msg}[/red]\n")
-        raise typer.Exit(1) from None
+        error_handler.handle_portfolio_error(e)
 
     # Display portfolio summary and holdings via display layer
-    display = ResultsDisplay(cli_manager.get_console())
+    display = ResultsDisplay()
     display.show_portfolio_summary(portfolio)
-    display.show_portfolio_holdings(portfolio, mode=mode, data_fetcher=container.data_fetcher())
+    display.show_portfolio_holdings(portfolio, mode=run_config.mode, data_fetcher=container.data_fetcher())
 
     # Run main processing through StockulaManager
     try:
-        results = manager.run_main_processing(mode, portfolio)
+        results = manager.run_main_processing(run_config.mode, portfolio)
     except Exception as e:
-        # Handle processing errors with clean output
-        error_msg = str(e)
-        if "insufficient" in error_msg.lower() and "data" in error_msg.lower():
-            console.print(f"\n[bold red]❌ Data Error:[/bold red] [red]{error_msg}[/red]")
-            console.print("[dim]💡 Try adjusting the date range in your configuration[/dim]\n")
-        elif "network" in error_msg.lower() or "connection" in error_msg.lower():
-            console.print(f"\n[bold red]❌ Network Error:[/bold red] [red]{error_msg}[/red]")
-            console.print("[dim]💡 Check your internet connection and try again[/dim]\n")
-        else:
-            console.print(f"\n[bold red]❌ Processing Error:[/bold red] [red]{error_msg}[/red]\n")
-        raise typer.Exit(1) from None
+        error_handler.handle_processing_error(e)
 
+    # Handle mode-specific display and output
+    _handle_results_display(run_config, stockula_config, portfolio, results, container, manager)
+    return None
+
+
+def _apply_single_ticker_mode(stockula_config: StockulaConfig, ticker: str) -> None:
+    """Apply single ticker mode configuration."""
+    stockula_config.portfolio.tickers = [TickerConfig(symbol=ticker, quantity=1.0)]
+    # Disable auto-allocation for single ticker mode since we don't have categories
+    stockula_config.portfolio.auto_allocate = False
+    stockula_config.portfolio.dynamic_allocation = False
+    stockula_config.portfolio.allocation_method = "equal_weight"
+    # Allow 100% position for single ticker mode
+    stockula_config.portfolio.max_position_size = 100.0
+
+
+def _handle_results_display(
+    run_config: RunConfig,
+    stockula_config: StockulaConfig,
+    portfolio: Portfolio,
+    results: dict[str, Any],
+    container: Container,
+    manager: StockulaManager,
+) -> None:
+    """Handle mode-specific display and output operations."""
     # Show current portfolio value for forecast mode
-    if mode == "forecast":
-        display = ResultsDisplay(cli_manager.get_console())
+    if run_config.mode == "forecast":
+        display = ResultsDisplay()
         display.show_portfolio_forecast_value(stockula_config, portfolio, results)
 
     # Output results
-    output_format = output or stockula_config.output.get("format", "console")
+    output_format = run_config.output or stockula_config.output.get("format", "console")
     print_results(results, output_format, stockula_config, container, portfolio)
 
     # Show strategy-specific summaries after backtesting
-    if mode in ["all", "backtest"] and "backtesting" in results:
-        display = ResultsDisplay(cli_manager.get_console())
+    if run_config.mode in ["all", "backtest"] and "backtesting" in results:
+        display = ResultsDisplay()
         display.show_strategy_summaries(manager, stockula_config, results)
+
+
+def _run_pipeline_with_config(pipeline: StockulaPipeline, pipeline_config: PipelineConfig) -> dict[str, Any]:
+    """Run pipeline with given configuration and return results."""
+    if pipeline_config.skip_optimization:
+        # Run backtest only
+        return pipeline.run_backtest()
+    elif pipeline_config.skip_backtest:
+        # Run optimization only
+        _, results = pipeline.run_optimization()
+        return results
+    else:
+        # Run full pipeline (optimization + backtest)
+        return pipeline.run_full_pipeline()
 
 
 @app.callback(invoke_without_command=True)
@@ -197,7 +203,7 @@ def main(
     train_end: Annotated[str | None, typer.Option("--train-end", help="Training end date (YYYY-MM-DD)")] = None,
     test_start: Annotated[str | None, typer.Option("--test-start", help="Testing start date (YYYY-MM-DD)")] = None,
     test_end: Annotated[str | None, typer.Option("--test-end", help="Testing end date (YYYY-MM-DD)")] = None,
-):
+) -> None:
     """
     Run Stockula trading analysis with various modes.
 
@@ -210,18 +216,17 @@ def main(
         return
 
     # Otherwise, run the main stockula logic
-    run_stockula(
-        config=config,
+    run_config = RunConfig(
+        config_file=config,
         ticker=ticker,
         mode=mode.value,
         output=output.value,
-        save_config_path=save_config_path,
-        save_optimized_config=save_optimized_config,
-        train_start=train_start,
-        train_end=train_end,
-        test_start=test_start,
-        test_end=test_end,
+        save_paths=SavePaths(config_path=save_config_path, optimized_config_path=save_optimized_config),
+        date_overrides=DateOverrides(
+            train_start=train_start, train_end=train_end, test_start=test_start, test_end=test_end
+        ),
     )
+    run_stockula(run_config)
 
 
 @app.command(name="pipeline")
@@ -271,7 +276,7 @@ def pipeline_command(
             help="Enable verbose output",
         ),
     ] = False,
-):
+) -> None:
     """
     Run the complete Stockula pipeline: optimization followed by backtesting.
 
@@ -297,115 +302,44 @@ def pipeline_command(
     console = Console()
 
     try:
-        # Create pipeline instance
-        pipeline = StockulaPipeline(
-            base_config_path=base_config,
+        pipeline_config = PipelineConfig(
+            base_config=base_config,
+            optimized_config=optimized_config,
+            output=output,
+            skip_optimization=skip_optimization,
+            skip_backtest=skip_backtest,
             verbose=verbose,
-            console=console,
         )
 
-        if skip_optimization and skip_backtest:
+        # Validate configuration
+        if pipeline_config.should_skip_both():
             console.print("[red]Error: Cannot skip both optimization and backtesting[/red]")
             raise typer.Exit(1)
 
-        # Run based on options
-        if not skip_optimization and not skip_backtest:
-            # Run full pipeline
-            results = pipeline.run_full_pipeline(
-                optimized_config_path=optimized_config,
-            )
-        elif skip_optimization:
-            # Just run backtest with existing config
-            config = pipeline.load_configuration(base_config)
-            results = pipeline.run_backtest(config=config, use_optimized=False)
-        else:  # skip_backtest
-            # Just run optimization
-            config = pipeline.load_configuration(base_config)
-            _, results = pipeline.run_optimization(
-                config=config,
-                save_config_path=optimized_config,
-            )
+        # Create and run pipeline
+        pipeline = StockulaPipeline(
+            base_config_path=pipeline_config.base_config,
+            verbose=pipeline_config.verbose,
+            console=console,
+        )
+
+        _run_pipeline_with_config(pipeline, pipeline_config)
 
         # Save results if output path provided
-        if output:
-            format = "json"
-            if output.endswith(".yaml") or output.endswith(".yml"):
-                format = "yaml"
-            elif output.endswith(".csv"):
-                format = "csv"
-            pipeline.save_results(output, format=format)
+        if pipeline_config.output:
+            pipeline.save_results(pipeline_config.output, format=pipeline_config.get_output_format())
 
-        console.print("\n[bold green]✨ Pipeline completed successfully![/bold green]")
+        console.print("[bold green]✨ Pipeline completed successfully![/bold green]")
 
-    except FileNotFoundError as e:
-        console.print(f"[red]Error: {e}[/red]")
-        raise typer.Exit(1) from None
     except ValidationError as e:
-        handle_validation_error(e, base_config)
-        raise typer.Exit(1) from None
+        error_handler.handle_validation_error(e, base_config)
     except KeyboardInterrupt:
-        console.print("\n[yellow]Pipeline interrupted by user[/yellow]")
-        raise typer.Exit(130) from None
-    except Exception as e:
-        console.print(f"[red]Unexpected error: {e}[/red]")
-        if verbose:
-            import traceback
-
-            console.print(traceback.format_exc())
-        raise typer.Exit(1) from None
+        console.print("[yellow]Pipeline cancelled by user[/yellow]")
+    except (FileNotFoundError, Exception) as e:
+        error_handler.handle_pipeline_error(e, verbose=verbose)
 
 
-def handle_validation_error(error: ValidationError, config_path: str) -> None:
-    """Handle validation errors with clean, user-friendly output.
-
-    Args:
-        error: The validation error
-        config_path: Path to the configuration file
-    """
-    console.print("\n[bold red]Configuration Validation Error[/bold red]\n")
-    console.print(f"Failed to load configuration from: [cyan]{config_path}[/cyan]\n")
-
-    # Parse and display errors in a user-friendly format
-    errors = []
-    for err in error.errors():
-        location = " → ".join(str(loc) for loc in err["loc"])
-        message = err["msg"]
-
-        # Clean up common error messages
-        if "test_start_date must be before test_end_date" in message:
-            errors.append("[yellow]Date Range Error:[/yellow] Test end date is before test start date")
-        elif "train_start_date must be before train_end_date" in message:
-            errors.append("[yellow]Date Range Error:[/yellow] Train end date is before train start date")
-        elif "train_end_date must be before or equal to test_start_date" in message:
-            errors.append("[yellow]Date Sequence Error:[/yellow] Training period must end before test period begins")
-        else:
-            errors.append(f"[yellow]{location}:[/yellow] {message}")
-
-    # Display errors in a panel
-    error_text = "\n".join(f"  • {err}" for err in errors)
-    console.print(
-        Panel(
-            error_text,
-            title="[bold]Validation Issues[/bold]",
-            border_style="red",
-            padding=(1, 2),
-        )
-    )
-
-    # Show the problematic configuration section if possible
-    if "backtest_optimization" in str(error):
-        console.print("\n[dim]Check your backtest_optimization section in the config file.[/dim]")
-        console.print("[dim]Ensure that:[/dim]")
-        console.print("[dim]  • All dates are in YYYY-MM-DD format[/dim]")
-        console.print("[dim]  • train_start_date < train_end_date[/dim]")
-        console.print("[dim]  • test_start_date < test_end_date[/dim]")
-        console.print("[dim]  • train_end_date ≤ test_start_date[/dim]")
-
-    console.print()
-    raise typer.Exit(1)
-
-
-def parse_test_args():
+def parse_test_args() -> dict[str, str]:
     """Parse command line arguments for test compatibility."""
     import sys
 

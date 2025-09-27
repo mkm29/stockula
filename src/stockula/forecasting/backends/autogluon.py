@@ -7,8 +7,8 @@ import pandas as pd
 from dependency_injector.wiring import Provide, inject
 from rich.progress import Progress, SpinnerColumn, TextColumn
 
-from ...cli_manager import cli_manager
 from ...interfaces import ILoggingManager
+from ...utils import get_console
 from .base import ForecastBackend, ForecastResult
 
 # Suppress AutoGluon warnings
@@ -302,7 +302,7 @@ class AutoGluonBackend(ForecastBackend):
             with Progress(
                 SpinnerColumn(),
                 TextColumn("[progress.description]{task.description}"),
-                console=cli_manager.get_console(),
+                console=get_console(),
                 transient=True,
             ) as progress:
                 task = progress.add_task("[cyan]Training AutoGluon models on historical data...", total=None)

@@ -6,7 +6,6 @@ import pandas as pd
 from dependency_injector.wiring import Provide, inject
 from rich.progress import BarColumn, Progress, SpinnerColumn, TextColumn, TimeRemainingColumn
 
-from ..cli_manager import cli_manager
 from ..interfaces import ILoggingManager
 from .backends import ForecastBackend
 from .factory import create_forecast_backend
@@ -214,8 +213,9 @@ class ForecastingManager:
         Returns:
             List of forecast results
         """
-        if console is None:
-            console = cli_manager.get_console()
+        from ...utils import get_console
+
+        console = get_console(console)
 
         # Determine display label from actual backend selected by factory
         selected_backend = self.create_backend(config.forecast)

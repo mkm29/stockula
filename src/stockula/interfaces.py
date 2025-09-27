@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING, Any
 import pandas as pd
 
 if TYPE_CHECKING:
-    from stockula.domain.models import Asset, Portfolio
+    from stockula.domain import Asset, Portfolio
 
 
 class IDataFetcher(ABC):

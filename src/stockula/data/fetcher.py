@@ -106,10 +106,10 @@ class DataFetcher:
         # Try to get data from cache first
         if self.use_cache and not force_refresh and self.db is not None:
             try:
-                cached_data = self.db.get_price_history(symbol, start, end, interval)
+                cached_data = self.db.get_price_history(symbol, start, end)
                 if not cached_data.empty:
                     # Check if we have complete data for the requested range
-                    if self.db.has_data(symbol, start, end):
+                    if self.db.has_data(symbol, start):
                         return cached_data
             except Exception as e:
                 # If database fails, fall back to yfinance
@@ -148,7 +148,7 @@ class DataFetcher:
 
         # Store in database if caching is enabled
         if self.use_cache and not data.empty and self.db is not None:
-            self.db.store_price_history(symbol, data, interval)
+            self.db.store_price_history(symbol, data)
 
         return data
 
@@ -272,8 +272,8 @@ class DataFetcher:
         # Try to get from cache first
         if self.use_cache and not force_refresh and self.db is not None:
             cached_info = self.db.get_stock_info(symbol)
-            if cached_info:
-                return cached_info
+            if cached_info and cached_info.info_jsonb:
+                return dict(cached_info.info_jsonb)
 
         # Fetch from yfinance
         try:
@@ -349,7 +349,8 @@ class DataFetcher:
 
             # Store in database if caching is enabled
             if self.use_cache and self.db is not None:
-                self.db.store_options_chain(symbol, calls, puts, expiration_date)
+                options_data = {"calls": calls, "puts": puts, "expiration_date": expiration_date}
+                self.db.store_options_chain(symbol, options_data)
 
             return calls, puts
         except Exception as e:
@@ -496,7 +497,7 @@ class DataFetcher:
                         results[symbol] = data
                         # Store in cache
                         if self.use_cache and self.db is not None:
-                            self.db.store_price_history(symbol, data, interval)
+                            self.db.store_price_history(symbol, data)
                 else:
                     # Multiple symbols returns multi-level columns
                     for symbol in symbols_to_fetch:
@@ -507,7 +508,7 @@ class DataFetcher:
                                 results[symbol] = symbol_data
                                 # Store in cache
                                 if self.use_cache and self.db is not None:
-                                    self.db.store_price_history(symbol, symbol_data, interval)
+                                    self.db.store_price_history(symbol, symbol_data)
                         except KeyError:
                             self.logger.warning(f"No data returned for {symbol}")
 
@@ -621,15 +622,16 @@ class DataFetcher:
         except Exception as e:
             print(f"  ✗ Error fetching options chain: {e}")
 
-    def get_database_stats(self) -> dict[str, int]:
+    def get_database_stats(self) -> dict[str, Any]:
         """Get database statistics.
 
         Returns:
-            Dictionary with table row counts
+            Dictionary with database statistics
         """
         if not self.use_cache or self.db is None:
             return {}
-        return self.db.get_database_stats()
+        stats = self.db.get_database_stats()
+        return dict(stats) if stats is not None else {}
 
     def cleanup_old_data(self, days_to_keep: int = 365) -> None:
         """Clean up old data to keep database size manageable.
@@ -640,8 +642,20 @@ class DataFetcher:
         if not self.use_cache or self.db is None:
             print("Warning: Caching is disabled, no data to clean up")
             return
-        self.db.cleanup_old_data(days_to_keep)
-        print(f"Cleaned up data older than {days_to_keep} days")
+
+        # Clean up old data for all cached symbols
+        try:
+            cached_symbols = self.get_cached_symbols()
+            total_cleaned = 0
+            for symbol in cached_symbols:
+                try:
+                    cleaned = self.db.cleanup_old_data(symbol, days_to_keep)
+                    total_cleaned += cleaned
+                except Exception as e:
+                    self.logger.warning(f"Failed to cleanup data for {symbol}: {e}")
+            print(f"Cleaned up {total_cleaned} records older than {days_to_keep} days")
+        except Exception as e:
+            self.logger.error(f"Error during cleanup: {e}")
 
     def get_cached_symbols(self) -> list[str]:
         """Get all symbols that have cached data.
@@ -651,7 +665,8 @@ class DataFetcher:
         """
         if not self.use_cache or self.db is None:
             return []
-        return self.db.get_all_symbols()
+        symbols = self.db.get_all_symbols()
+        return list(symbols) if symbols is not None else []
 
     def disable_cache(self) -> None:
         """Disable database caching for this session."""

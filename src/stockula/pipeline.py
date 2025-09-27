@@ -16,6 +16,7 @@ from .config import StockulaConfig
 from .container import Container
 from .display import ResultsDisplay
 from .manager import StockulaManager
+from .utils import get_console
 
 
 class StockulaPipeline:
@@ -44,7 +45,7 @@ class StockulaPipeline:
         """
         self.base_config_path = Path(base_config_path) if base_config_path else None
         self.verbose = verbose
-        self.console = console or Console()
+        self.console = get_console(console)
 
         # Initialize container and manager
         self.container = Container()

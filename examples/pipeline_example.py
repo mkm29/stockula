@@ -77,7 +77,7 @@ def main():
         yaml_path = results_path.replace(".json", ".yaml")
         pipeline.save_results(yaml_path, format="yaml")
 
-        print(f"\n✨ Pipeline completed successfully!")
+        print("\n✨ Pipeline completed successfully!")
         print(f"   • Optimized config: {optimized_config_path}")
         print(f"   • Results: {results_path}, {yaml_path}")
 
