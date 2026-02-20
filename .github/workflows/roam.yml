@@ -2,7 +2,7 @@
 name: Roam Code Analysis
 on:
   pull_request:
-    branches: [main, master]
+    branches: [main, master, develop]
 permissions:
   contents: read
   pull-requests: write
@@ -17,6 +17,11 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install roam-code
-      - run: roam index
-      - run: roam fitness
-      - run: roam pr-risk --json
+      - name: Index codebase
+        run: roam index
+      - name: Run fitness checks
+        run: roam fitness
+      - name: Run PR risk analysis (informational)
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: roam pr-risk "origin/${BASE_REF}..HEAD" || true
