@@ -180,6 +180,8 @@ class StrategyRepository(Repository[type[BaseStrategy]]):
                         )
                         session.add(strategy)
                         session.flush()  # Get the ID
+                        if strategy.id is None:
+                            continue
 
                         # Add default preset
                         if name in self._preset_values:
@@ -187,8 +189,9 @@ class StrategyRepository(Repository[type[BaseStrategy]]):
                                 strategy_id=strategy.id,
                                 name="default",
                                 is_default=True,
+                                parameters_json="{}",
                             )
-                            preset.set_parameters(cast(dict[Any, Any], self._preset_values[name]))
+                            preset.set_parameters(self._preset_values[name])  # type: ignore[arg-type]
                             session.add(preset)
 
                 session.commit()
@@ -463,6 +466,7 @@ class StrategyRepository(Repository[type[BaseStrategy]]):
                         strategy_id=strategy.id,
                         name="default",
                         is_default=True,
+                        parameters_json="{}",
                     )
                     preset.set_parameters(parameters)
                     session.add(preset)
