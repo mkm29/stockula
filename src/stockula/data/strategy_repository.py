@@ -162,38 +162,8 @@ class StrategyRepository(Repository[type[BaseStrategy]]):
         session: Session | None = None
         try:
             with self.db_manager.get_session() as session:
-                # Bulk fetch all existing strategy names in one query
-                existing_name_rows: list[tuple[str]] = (
-                    session.query(Strategy.name).filter(Strategy.name.in_(list(self._items.keys()))).all()  # type: ignore[arg-type, attr-defined]
-                )
-                existing_names: set[str] = {row[0] for row in existing_name_rows}
-
-                # Only insert strategies that don't already exist
-                for name, strategy_class in self._items.items():
-                    if name not in existing_names:
-                        strategy = Strategy(
-                            name=name,
-                            class_name=strategy_class.__name__,
-                            module_path=strategy_class.__module__,
-                            description=strategy_class.__doc__.split("\n")[0] if strategy_class.__doc__ else None,
-                            category=self._get_strategy_category(name),
-                        )
-                        session.add(strategy)
-                        session.flush()  # Get the ID
-                        if strategy.id is None:
-                            continue
-
-                        # Add default preset
-                        if name in self._preset_values:
-                            preset = StrategyPreset(
-                                strategy_id=strategy.id,
-                                name="default",
-                                is_default=True,
-                                parameters_json="{}",
-                            )
-                            preset.set_parameters(self._preset_values[name])  # type: ignore[arg-type]
-                            session.add(preset)
-
+                existing_names = self._get_existing_strategy_names(session)
+                self._insert_missing_strategies(session, existing_names)
                 session.commit()
         except (IntegrityError, OperationalError):
             # Handle cases where:
@@ -202,6 +172,48 @@ class StrategyRepository(Repository[type[BaseStrategy]]):
             # - Concurrent access from multiple processes/threads
             if session is not None:
                 session.rollback()
+
+    def _get_existing_strategy_names(self, session: Session) -> set[str]:
+        """Get existing strategy names from the database."""
+        existing_name_rows = cast(
+            list[tuple[str]],
+            session.query(Strategy.name).filter(Strategy.name.in_(list(self._items.keys()))).all(),  # type: ignore[arg-type, attr-defined]
+        )
+        return {row[0] for row in existing_name_rows}
+
+    def _insert_missing_strategies(self, session: Session, existing_names: set[str]) -> None:
+        """Insert strategies that do not already exist in the database."""
+        for name, strategy_class in self._items.items():
+            if name in existing_names:
+                continue
+
+            strategy = Strategy(
+                name=name,
+                class_name=strategy_class.__name__,
+                module_path=strategy_class.__module__,
+                description=strategy_class.__doc__.split("\n")[0] if strategy_class.__doc__ else None,
+                category=self._get_strategy_category(name),
+            )
+            session.add(strategy)
+            session.flush()  # Get the ID
+            if strategy.id is None:
+                continue
+
+            self._add_default_preset_if_available(session, name, strategy.id)
+
+    def _add_default_preset_if_available(self, session: Session, name: str, strategy_id: int) -> None:
+        """Add default preset for a strategy if configured."""
+        if name not in self._preset_values:
+            return
+
+        preset = StrategyPreset(
+            strategy_id=strategy_id,
+            name="default",
+            is_default=True,
+            parameters_json="{}",
+        )
+        preset.set_parameters(self._preset_values[name])  # type: ignore[arg-type]
+        session.add(preset)
 
     def _get_strategy_category(self, strategy_name: str) -> str | None:
         """Determine the category of a strategy based on groups."""
