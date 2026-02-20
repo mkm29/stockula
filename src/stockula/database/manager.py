@@ -1,7 +1,7 @@
 """Database manager using SQLModel for type-safe database operations."""
 
 import os
-from collections.abc import Iterator
+from collections.abc import Generator
 from contextlib import contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
@@ -136,7 +136,7 @@ class DatabaseManager:
             pass
 
     @contextmanager
-    def get_session(self) -> Iterator[Session]:
+    def get_session(self) -> Generator[Session, None, None]:
         """Get a database session as context manager."""
         with Session(self.engine) as session:
             yield session

@@ -180,12 +180,17 @@ def calculate_vidya(prices: pd.Series, cmo_period: int = 9, smoothing_period: in
     # Initialize VIDYA with SMA
     vidya_values = prices.rolling(window=smoothing_period).mean()
 
-    # Calculate VIDYA using adaptive alpha
-    for i in range(smoothing_period, len(prices)):
-        if pd.notna(vidya_values.iloc[i - 1]) and pd.notna(alpha.iloc[i]):
-            vidya_values.iloc[i] = alpha.iloc[i] * prices.iloc[i] + (1 - alpha.iloc[i]) * vidya_values.iloc[i - 1]
+    # Calculate VIDYA using adaptive alpha (use numpy arrays for fast loop access)
+    vidya_arr = vidya_values.to_numpy(dtype=float, copy=True)
+    alpha_arr = alpha.to_numpy(dtype=float)
+    prices_arr = prices.to_numpy(dtype=float)
+    n = len(prices_arr)
 
-    return vidya_values
+    for i in range(smoothing_period, n):
+        if not np.isnan(vidya_arr[i - 1]) and not np.isnan(alpha_arr[i]):
+            vidya_arr[i] = alpha_arr[i] * prices_arr[i] + (1 - alpha_arr[i]) * vidya_arr[i - 1]
+
+    return pd.Series(vidya_arr, index=prices.index)
 
 
 def calculate_kama(prices: pd.Series, er_period: int = 10, fast_period: int = 2, slow_period: int = 30) -> pd.Series:
@@ -218,15 +223,18 @@ def calculate_kama(prices: pd.Series, er_period: int = 10, fast_period: int = 2,
     # Calculate adaptive smoothing constant
     sc = ((er * (fast_sc - slow_sc)) + slow_sc) ** 2
 
-    # Initialize KAMA
-    kama = prices.copy()
+    # Initialize KAMA (use numpy arrays for fast loop access)
+    kama_arr = prices.to_numpy(dtype=float, copy=True)
+    sc_arr = sc.to_numpy(dtype=float)
+    prices_arr = prices.to_numpy(dtype=float)
+    n = len(prices_arr)
 
     # Calculate KAMA
-    for i in range(er_period, len(prices)):
-        if pd.notna(kama.iloc[i - 1]):
-            kama.iloc[i] = kama.iloc[i - 1] + sc.iloc[i] * (prices.iloc[i] - kama.iloc[i - 1])
+    for i in range(er_period, n):
+        if not np.isnan(kama_arr[i - 1]):
+            kama_arr[i] = kama_arr[i - 1] + sc_arr[i] * (prices_arr[i] - kama_arr[i - 1])
 
-    return kama
+    return pd.Series(kama_arr, index=prices.index)
 
 
 def calculate_efficiency_ratio(prices: pd.Series, period: int = 10) -> pd.Series:
@@ -317,15 +325,18 @@ def calculate_frama(prices: pd.Series, period: int = 16) -> pd.Series:
     alpha = np.exp(-4.6 * (d - 1))
     alpha = alpha.clip(0.01, 1)
 
-    # Initialize FRAMA
-    frama = prices.copy()
+    # Initialize FRAMA (use numpy arrays for fast loop access)
+    frama_arr = prices.to_numpy(dtype=float, copy=True)
+    alpha_arr = alpha.to_numpy(dtype=float)
+    prices_arr = prices.to_numpy(dtype=float)
+    n = len(prices_arr)
 
     # Calculate FRAMA
-    for i in range(period, len(prices)):
-        if pd.notna(frama.iloc[i - 1]) and pd.notna(alpha.iloc[i]):
-            frama.iloc[i] = alpha.iloc[i] * prices.iloc[i] + (1 - alpha.iloc[i]) * frama.iloc[i - 1]
+    for i in range(period, n):
+        if not np.isnan(frama_arr[i - 1]) and not np.isnan(alpha_arr[i]):
+            frama_arr[i] = alpha_arr[i] * prices_arr[i] + (1 - alpha_arr[i]) * frama_arr[i - 1]
 
-    return frama
+    return pd.Series(frama_arr, index=prices.index)
 
 
 def calculate_vama(prices: pd.Series, volumes: pd.Series, period: int = 20) -> pd.Series:

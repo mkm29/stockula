@@ -91,15 +91,15 @@ def load_config(config_path: str | Path | None = None) -> StockulaConfig:
 
         # If no env var, check for default files
         if config_path is None:
-            default_files = [
-                ".stockula.yaml",
-                ".stockula.yml",
-                "stockula.yaml",
-                "stockula.yml",
+            default_paths = [
+                Path(".stockula.yaml"),
+                Path(".stockula.yml"),
+                Path("stockula.yaml"),
+                Path("stockula.yml"),
             ]
-            for filename in default_files:
-                if Path(filename).exists():
-                    config_path = filename
+            for filepath in default_paths:
+                if filepath.exists():
+                    config_path = str(filepath)
                     break
 
     # If no config file specified or found, return default configuration

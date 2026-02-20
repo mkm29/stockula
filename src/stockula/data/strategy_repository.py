@@ -35,7 +35,7 @@ class StrategyRepository(Repository[type[BaseStrategy]]):
     """
 
     # Class property: mappings of strategy names to classes
-    DEFAULT_MAPPINGS = {
+    DEFAULT_MAPPINGS: dict[str, type[BaseStrategy]] = {
         "smacross": SMACrossStrategy,
         "rsi": RSIStrategy,
         "macd": MACDStrategy,
@@ -79,7 +79,7 @@ class StrategyRepository(Repository[type[BaseStrategy]]):
     }
 
     # Default parameter presets
-    DEFAULT_PRESETS = {
+    DEFAULT_PRESETS: dict[str, dict[str, Any]] = {
         "smacross": {"fast_period": 10, "slow_period": 20},
         "rsi": {"period": 14, "oversold_threshold": 30.0, "overbought_threshold": 70.0},
         "macd": {"fast_period": 12, "slow_period": 26, "signal_period": 9},
@@ -133,15 +133,20 @@ class StrategyRepository(Repository[type[BaseStrategy]]):
         with self.db_manager.get_session() as session:
             # Load active strategies
             # Use type: ignore for SQLAlchemy filter
-            strategies = session.query(Strategy).filter(Strategy.is_active == True).all()  # type: ignore[arg-type] # noqa: E712
+            strategies = cast(
+                list[Strategy],
+                session.query(Strategy).filter(Strategy.is_active == True).all(),  # type: ignore[arg-type] # noqa: E712
+            )
             for strategy in strategies:
                 # For now, we only load presets - actual strategy classes
                 # would need to be dynamically imported from module_path
                 self._load_strategy_presets(session, strategy)
 
-    def _load_strategy_presets(self, session: Session, strategy: Strategy) -> None:
+    def _load_strategy_presets(self, session: Any, strategy: Strategy) -> None:
         """Load presets for a specific strategy from the database."""
-        presets = session.query(StrategyPreset).filter(StrategyPreset.strategy_id == strategy.id).all()  # type: ignore[arg-type]
+        presets = (
+            session.query(StrategyPreset).filter(StrategyPreset.strategy_id == strategy.id).all()  # type: ignore[arg-type]
+        )
 
         for preset in presets:
             if preset.is_default:
@@ -154,12 +159,18 @@ class StrategyRepository(Repository[type[BaseStrategy]]):
 
         from sqlalchemy.exc import IntegrityError, OperationalError
 
+        session: Session | None = None
         try:
             with self.db_manager.get_session() as session:
-                # Sync strategies
+                # Bulk fetch all existing strategy names in one query
+                existing_name_rows: list[tuple[str]] = (
+                    session.query(Strategy.name).filter(Strategy.name.in_(list(self._items.keys()))).all()  # type: ignore[arg-type, attr-defined]
+                )
+                existing_names: set[str] = {cast(str, row[0]) for row in existing_name_rows}
+
+                # Only insert strategies that don't already exist
                 for name, strategy_class in self._items.items():
-                    existing = session.query(Strategy).filter(Strategy.name == name).first()  # type: ignore[arg-type]
-                    if not existing:
+                    if name not in existing_names:
                         strategy = Strategy(
                             name=name,
                             class_name=strategy_class.__name__,
@@ -186,7 +197,8 @@ class StrategyRepository(Repository[type[BaseStrategy]]):
             # - Strategy already exists (IntegrityError on unique constraint)
             # - Tables don't exist yet (OperationalError)
             # - Concurrent access from multiple processes/threads
-            session.rollback()
+            if session is not None:
+                session.rollback()
 
     def _get_strategy_category(self, strategy_name: str) -> str | None:
         """Determine the category of a strategy based on groups."""

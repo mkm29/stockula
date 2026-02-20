@@ -2,27 +2,32 @@
 
 ## [0.16.0](https://github.com/mkm29/stockula/compare/v0.15.7...v0.16.0) (2025-08-11)
 
-
 ### Features
 
-* enhance backtesting with date range configuration and error logging ([6a5b312](https://github.com/mkm29/stockula/commit/6a5b3120cd2a48f6146be0abf217474171042f5c))
-
+- enhance backtesting with date range configuration and error logging
+  ([6a5b312](https://github.com/mkm29/stockula/commit/6a5b3120cd2a48f6146be0abf217474171042f5c))
 
 ### Bug Fixes
 
-* update StockulaManager to adhere to SOLID ([924694b](https://github.com/mkm29/stockula/commit/924694b527cb7d8550fae35fd4bbe214066a13cb))
+- update StockulaManager to adhere to SOLID
+  ([924694b](https://github.com/mkm29/stockula/commit/924694b527cb7d8550fae35fd4bbe214066a13cb))
 
 ## [0.15.7](https://github.com/mkm29/stockula/compare/v0.15.6...v0.15.7) (2025-08-11)
 
-
 ### Bug Fixes
 
-* changed release please config to only cut releases on merge to m… ([ff15386](https://github.com/mkm29/stockula/commit/ff153863f98293f1aa8a49f0c5c3294f4b9745d3))
-* changed release please config to only cut releases on merge to main branch ([511b98d](https://github.com/mkm29/stockula/commit/511b98d1eacfa1cdb5930b0019316f34f612db1e))
-* update branch protection rules to allow 'release-please*' branch… ([18bb034](https://github.com/mkm29/stockula/commit/18bb034a4175394290d1b5e6bacf50faebd297a4))
-* update branch protection rules to allow 'release-please*' branches for merging to main ([0f06540](https://github.com/mkm29/stockula/commit/0f06540a6d0e87588ec7e2613fc29079d64dbd02))
-* update branch protection workflow ([3426587](https://github.com/mkm29/stockula/commit/34265879def9579b68803727f7f882ff431fa5c2))
-* update to versioning with release please and GH ([71e09de](https://github.com/mkm29/stockula/commit/71e09deee001c2f4058aeba9d18f377f6be1c51b))
+- changed release please config to only cut releases on merge to m…
+  ([ff15386](https://github.com/mkm29/stockula/commit/ff153863f98293f1aa8a49f0c5c3294f4b9745d3))
+- changed release please config to only cut releases on merge to main branch
+  ([511b98d](https://github.com/mkm29/stockula/commit/511b98d1eacfa1cdb5930b0019316f34f612db1e))
+- update branch protection rules to allow 'release-please\*' branch…
+  ([18bb034](https://github.com/mkm29/stockula/commit/18bb034a4175394290d1b5e6bacf50faebd297a4))
+- update branch protection rules to allow 'release-please\*' branches for merging to main
+  ([0f06540](https://github.com/mkm29/stockula/commit/0f06540a6d0e87588ec7e2613fc29079d64dbd02))
+- update branch protection workflow
+  ([3426587](https://github.com/mkm29/stockula/commit/34265879def9579b68803727f7f882ff431fa5c2))
+- update to versioning with release please and GH
+  ([71e09de](https://github.com/mkm29/stockula/commit/71e09deee001c2f4058aeba9d18f377f6be1c51b))
 
 ## [0.15.6](https://github.com/mkm29/stockula/compare/v0.15.5...v0.15.6) (2025-08-11)
 
