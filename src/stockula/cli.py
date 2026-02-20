@@ -129,14 +129,13 @@ def run_stockula(
         # Handle portfolio validation errors (e.g., insufficient capital)
         error_msg = str(e)
         if "insufficient" in error_msg.lower() and "capital" in error_msg.lower():
-            console.print("\n[bold red]❌ Portfolio Configuration Error[/bold red]\n")
-            console.print(f"[red]{error_msg}[/red]\n")
+            cli_manager.print_error(error_msg, "Portfolio Configuration Error")
             console.print("[dim]💡 Suggestions:[/dim]")
             console.print("[dim]  • Increase the initial_capital in your configuration[/dim]")
             console.print("[dim]  • Reduce the quantities of some assets[/dim]")
             console.print("[dim]  • Enable fractional shares: allow_fractional_shares: true[/dim]")
         else:
-            console.print(f"\n[bold red]❌ Portfolio Error:[/bold red] [red]{error_msg}[/red]\n")
+            cli_manager.print_error(error_msg, "Portfolio Error")
         raise typer.Exit(1) from None
 
     # Display portfolio summary and holdings via display layer
@@ -151,13 +150,13 @@ def run_stockula(
         # Handle processing errors with clean output
         error_msg = str(e)
         if "insufficient" in error_msg.lower() and "data" in error_msg.lower():
-            console.print(f"\n[bold red]❌ Data Error:[/bold red] [red]{error_msg}[/red]")
+            cli_manager.print_error(error_msg, "Data Error")
             console.print("[dim]💡 Try adjusting the date range in your configuration[/dim]\n")
         elif "network" in error_msg.lower() or "connection" in error_msg.lower():
-            console.print(f"\n[bold red]❌ Network Error:[/bold red] [red]{error_msg}[/red]")
+            cli_manager.print_error(error_msg, "Network Error")
             console.print("[dim]💡 Check your internet connection and try again[/dim]\n")
         else:
-            console.print(f"\n[bold red]❌ Processing Error:[/bold red] [red]{error_msg}[/red]\n")
+            cli_manager.print_error(error_msg, "Processing Error")
         raise typer.Exit(1) from None
 
     # Show current portfolio value for forecast mode
@@ -292,20 +291,18 @@ def pipeline_command(
         # Skip optimization and use existing optimized config
         stockula pipeline -b optimized.yaml --skip-optimization
     """
-    from rich.console import Console
-
-    console = Console()
+    pipeline_console = cli_manager.get_console()
 
     try:
         # Create pipeline instance
         pipeline = StockulaPipeline(
             base_config_path=base_config,
             verbose=verbose,
-            console=console,
+            console=pipeline_console,
         )
 
         if skip_optimization and skip_backtest:
-            console.print("[red]Error: Cannot skip both optimization and backtesting[/red]")
+            cli_manager.print_error("Cannot skip both optimization and backtesting")
             raise typer.Exit(1)
 
         # Run based on options
@@ -335,23 +332,23 @@ def pipeline_command(
                 format = "csv"
             pipeline.save_results(output, format=format)
 
-        console.print("\n[bold green]✨ Pipeline completed successfully![/bold green]")
+        cli_manager.print_success("Pipeline completed successfully!")
 
     except FileNotFoundError as e:
-        console.print(f"[red]Error: {e}[/red]")
+        cli_manager.print_error(str(e))
         raise typer.Exit(1) from None
     except ValidationError as e:
         handle_validation_error(e, base_config)
         raise typer.Exit(1) from None
     except KeyboardInterrupt:
-        console.print("\n[yellow]Pipeline interrupted by user[/yellow]")
+        cli_manager.print_warning("Pipeline interrupted by user")
         raise typer.Exit(130) from None
     except Exception as e:
-        console.print(f"[red]Unexpected error: {e}[/red]")
+        cli_manager.print_error(str(e), "Unexpected error")
         if verbose:
             import traceback
 
-            console.print(traceback.format_exc())
+            pipeline_console.print(traceback.format_exc())
         raise typer.Exit(1) from None
 
 
@@ -362,12 +359,13 @@ def handle_validation_error(error: ValidationError, config_path: str) -> None:
         error: The validation error
         config_path: Path to the configuration file
     """
-    console.print("\n[bold red]Configuration Validation Error[/bold red]\n")
-    console.print(f"Failed to load configuration from: [cyan]{config_path}[/cyan]\n")
+    cli_manager.print_error(f"Failed to load configuration from: {config_path}", "Configuration Validation Error")
 
     # Parse and display errors in a user-friendly format
+    error_list = error.errors()
+    error_str = str(error)
     errors = []
-    for err in error.errors():
+    for err in error_list:
         location = " → ".join(str(loc) for loc in err["loc"])
         message = err["msg"]
 
@@ -393,7 +391,7 @@ def handle_validation_error(error: ValidationError, config_path: str) -> None:
     )
 
     # Show the problematic configuration section if possible
-    if "backtest_optimization" in str(error):
+    if "backtest_optimization" in error_str:
         console.print("\n[dim]Check your backtest_optimization section in the config file.[/dim]")
         console.print("[dim]Ensure that:[/dim]")
         console.print("[dim]  • All dates are in YYYY-MM-DD format[/dim]")

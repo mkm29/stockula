@@ -39,10 +39,7 @@ class TestDataManager:
     def test_initialization_with_db_and_logging(self):
         """Test initializing DataManager with database and logging."""
         mock_db = Mock()
-        mock_session = MagicMock()
-        mock_db.get_session.return_value = MagicMock(__enter__=Mock(return_value=mock_session))
-        # Mock empty database
-        mock_session.query.return_value.filter.return_value.all.return_value = []
+        mock_db.load_active_strategies.return_value = []
 
         mock_logging = Mock()
 
@@ -189,10 +186,7 @@ class TestDataManager:
     def test_initialize_registry_idempotent(self):
         """Test that _initialize_registry is idempotent."""
         mock_db = Mock()
-        mock_session = MagicMock()
-        mock_db.get_session.return_value = MagicMock(__enter__=Mock(return_value=mock_session))
-        # Mock empty database
-        mock_session.query.return_value.filter.return_value.all.return_value = []
+        mock_db.load_active_strategies.return_value = []
 
         manager = DataManager(db_manager=mock_db)
 

@@ -1,0 +1,7 @@
+---
+rules:
+  - name: Complexity threshold
+    type: metric
+    metric: cognitive_complexity
+    max: 200
+    reason: "Functions above 200 cognitive complexity need immediate refactoring"

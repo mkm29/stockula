@@ -14,10 +14,13 @@ from __future__ import annotations
 import argparse
 import json
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any, cast
 
 import numpy as np
 import pandas as pd
+
+if TYPE_CHECKING:
+    from chronos import BaseChronosPipeline
 
 
 def load_dataset(path: Path, fmt: str) -> list[dict[str, Any]]:
@@ -27,28 +30,23 @@ def load_dataset(path: Path, fmt: str) -> list[dict[str, Any]]:
         except Exception as e:  # pragma: no cover
             raise RuntimeError("pyarrow is required for --format arrow. Install with: uv pip install pyarrow") from e
         table = feather.read_table(path)
-        df = table.to_pandas()
+        df: pd.DataFrame = table.to_pandas()
         # Expect columns: item_id, start, target (list)
-        records = []
-        for _, row in df.iterrows():
-            records.append(
-                {
-                    "item_id": row["item_id"],
-                    "start": row["start"],
-                    "target": row["target"],
-                }
-            )
-        return records
+        result: list[dict[str, Any]] = []
+        selected = cast(pd.DataFrame, df[["item_id", "start", "target"]])
+        for item_id, start, target in selected.itertuples(index=False, name=None):
+            result.append({"item_id": item_id, "start": start, "target": target})
+        return result
     else:
         # JSONL
-        recs = []
+        recs: list[dict[str, Any]] = []
         with path.open() as f:
             for line in f:
                 recs.append(json.loads(line))
         return recs
 
 
-def setup_pipeline(model_id: str, device: str | None, dtype_str: str | None):
+def setup_pipeline(model_id: str, device: str | None, dtype_str: str | None) -> "BaseChronosPipeline":
     try:
         from chronos import BaseChronosPipeline
     except Exception as e:  # pragma: no cover
@@ -69,7 +67,9 @@ def setup_pipeline(model_id: str, device: str | None, dtype_str: str | None):
         except Exception:
             device = "cpu"
 
-    return BaseChronosPipeline.from_pretrained(model_id, device_map=device, torch_dtype=torch_dtype)
+    return cast(
+        "BaseChronosPipeline", BaseChronosPipeline.from_pretrained(model_id, device_map=device, torch_dtype=torch_dtype)
+    )
 
 
 def main() -> None:
@@ -90,6 +90,8 @@ def main() -> None:
 
     alpha = 0.05  # default interval 90%
     q_levels = [alpha, 0.5, 1.0 - alpha]
+    prediction_length = int(args.prediction_length)
+    num_samples = int(args.num_samples)
 
     outputs: list[pd.DataFrame] = []
     for rec in records:
@@ -98,9 +100,7 @@ def main() -> None:
         if target.size == 0:
             continue
 
-        samples = pipeline.predict(
-            context=target, prediction_length=int(args.prediction_length), num_samples=int(args.num_samples)
-        )
+        samples = pipeline.predict(context=target, prediction_length=prediction_length, num_samples=num_samples)
         if samples.ndim != 2:
             samples = np.atleast_2d(samples)
 
@@ -110,9 +110,7 @@ def main() -> None:
         # When exporting, 'start' is for the first observed timestamp; derive last observed from length
         start = pd.to_datetime(rec["start"])  # type: ignore[arg-type]
         last_obs = start + pd.Timedelta(days=len(target) - 1)
-        future_index = pd.date_range(
-            start=last_obs + pd.Timedelta(days=1), periods=int(args.prediction_length), freq="D"
-        )
+        future_index = pd.date_range(start=last_obs + pd.Timedelta(days=1), periods=prediction_length, freq="D")
 
         df = pd.DataFrame(
             {

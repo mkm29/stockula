@@ -54,11 +54,14 @@ def get_markdown_files(paths: list[str] | None = None) -> list[Path]:
         # Default: format all .md files in the project
         paths = ["."]
 
+    md_suffixes = {".md", ".markdown"}
+    ignore_dirs = {".venv", "venv", "node_modules", ".git", "dist", "build", ".tox"}
+
     md_files = []
     for path_str in paths:
         path = Path(path_str)
         if path.is_file():
-            if path.suffix.lower() in {".md", ".markdown"}:
+            if path.suffix.lower() in md_suffixes:
                 md_files.append(path)
         elif path.is_dir():
             # Recursively find all .md files
@@ -66,7 +69,6 @@ def get_markdown_files(paths: list[str] | None = None) -> list[Path]:
             md_files.extend(path.glob("**/*.markdown"))
 
     # Filter out common directories to ignore
-    ignore_dirs = {".venv", "venv", "node_modules", ".git", "dist", "build", ".tox"}
     md_files = [f for f in md_files if not any(ignored in f.parts for ignored in ignore_dirs)]
 
     return sorted(set(md_files))

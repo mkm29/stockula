@@ -5,30 +5,16 @@ warnings, or environment variables). Runtime configuration is handled in
 `stockula.main.setup_logging` and the CLI entrypoint.
 """
 
-# Package imports
-from .backtesting import BacktestRunner, BaseStrategy, MACDStrategy, RSIStrategy, SMACrossStrategy
-from .config import StockulaConfig, load_config
+# Package imports - only re-export symbols that are actually consumed via this path
+from .backtesting import BacktestRunner, SMACrossStrategy
 from .data import DataFetcher
-from .display import ResultsDisplay
-from .forecasting import ForecastingManager
-from .manager import StockulaManager
-from .technical_analysis import TechnicalIndicators
 
 # x-release-please-start-version
-__version__ = "0.15.6"
+__version__ = "0.16.0"
 # x-release-please-end
 
 __all__ = [
     "DataFetcher",
-    "TechnicalIndicators",
-    "BaseStrategy",
     "SMACrossStrategy",
-    "RSIStrategy",
-    "MACDStrategy",
     "BacktestRunner",
-    "ForecastingManager",
-    "StockulaConfig",
-    "load_config",
-    "StockulaManager",
-    "ResultsDisplay",
 ]
