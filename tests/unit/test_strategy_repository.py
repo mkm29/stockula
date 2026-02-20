@@ -1,9 +1,8 @@
 """Unit tests for the StrategyRepository class."""
 
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import Mock
 
 import pytest
-from sqlalchemy.exc import IntegrityError, OperationalError
 
 from stockula.backtesting.strategies import BaseStrategy, RSIStrategy, SMACrossStrategy
 from stockula.data.strategy_repository import StrategyRepository
@@ -26,16 +25,12 @@ class TestStrategyRepository:
     def test_initialization_with_db(self):
         """Test initializing repository with database."""
         mock_db = Mock()
-        mock_session = MagicMock()
-        mock_db.get_session.return_value = MagicMock(__enter__=Mock(return_value=mock_session))
-
-        # Mock empty database
-        mock_session.query.return_value.filter.return_value.all.return_value = []
+        mock_db.load_active_strategies.return_value = []
 
         repo = StrategyRepository(mock_db)
 
         assert repo.db_manager is mock_db
-        mock_db.get_session.assert_called_once()
+        mock_db.load_active_strategies.assert_called_once()
 
     def test_presets_property_immutable(self):
         """Test that presets property returns immutable copy."""
@@ -302,64 +297,35 @@ class TestStrategyRepository:
         repo = StrategyRepository()
         repo.sync_to_database()  # Should not raise
 
-    @patch("stockula.data.strategy_repository.Strategy")
-    @patch("stockula.data.strategy_repository.StrategyPreset")
-    def test_sync_to_database_with_new_strategies(self, mock_preset_model, mock_strategy_model):
+    def test_sync_to_database_with_new_strategies(self):
         """Test syncing new strategies to database."""
         mock_db = Mock()
-        mock_session = MagicMock()
-        mock_db.get_session.return_value = MagicMock(__enter__=Mock(return_value=mock_session))
-
-        # Mock no existing strategies
-        mock_session.query.return_value.filter.return_value.first.return_value = None
+        mock_db.load_active_strategies.return_value = []
 
         repo = StrategyRepository(mock_db)
         repo._items = {"test": SMACrossStrategy}
         repo._preset_values = {"test": {"param": 1}}
 
-        # Create mock strategy instance
-        mock_strategy = Mock()
-        mock_strategy.id = 1
-        mock_strategy_model.return_value = mock_strategy
-
         repo.sync_to_database()
 
-        # Verify strategy was created
-        mock_strategy_model.assert_called_once()
-        mock_session.add.assert_called()
-        mock_session.commit.assert_called_once()
+        # Verify sync_strategies was called with correct structure
+        mock_db.sync_strategies.assert_called_once()
+        strategies_arg = mock_db.sync_strategies.call_args[0][0]
+        assert len(strategies_arg) == 1
+        assert strategies_arg[0]["name"] == "test"
+        assert strategies_arg[0]["class_name"] == "SMACrossStrategy"
+        assert strategies_arg[0]["default_preset"] == {"param": 1}
 
-    def test_sync_to_database_handles_integrity_error(self):
-        """Test sync_to_database handles IntegrityError gracefully."""
-        mock_db = Mock()
-        mock_session = MagicMock()
-        mock_db.get_session.return_value = MagicMock(__enter__=Mock(return_value=mock_session))
-
-        # Mock IntegrityError
-        mock_session.commit.side_effect = IntegrityError("test", "test", "test")
-
-        repo = StrategyRepository(mock_db)
-        repo.sync_to_database()  # Should not raise
-
-        mock_session.rollback.assert_called_once()
-
-    def test_sync_to_database_handles_operational_error(self):
-        """Test sync_to_database handles OperationalError gracefully."""
-        # Create repository without DB first
+    def test_sync_to_database_delegates_error_handling(self):
+        """Test sync_to_database delegates error handling to DatabaseManager."""
         repo = StrategyRepository()
 
-        # Then add DB manager
         mock_db = Mock()
-        mock_session = MagicMock()
-        mock_db.get_session.return_value = MagicMock(__enter__=Mock(return_value=mock_session))
-
-        # Mock OperationalError
-        mock_session.query.side_effect = OperationalError("test", "test", "test")
-
         repo.db_manager = mock_db
+
         repo.sync_to_database()  # Should not raise
 
-        mock_session.rollback.assert_called_once()
+        mock_db.sync_strategies.assert_called_once()
 
     def test_get_strategy_category(self):
         """Test determining strategy category."""
@@ -373,24 +339,8 @@ class TestStrategyRepository:
     def test_load_from_database(self):
         """Test loading strategies from database."""
         mock_db = Mock()
-        mock_session = MagicMock()
-        mock_db.get_session.return_value = MagicMock(__enter__=Mock(return_value=mock_session))
-
-        # Create mock strategy
-        mock_strategy = Mock()
-        mock_strategy.id = 1
-        mock_strategy.name = "test_strategy"
-        mock_strategy.is_active = True
-
-        # Create mock preset
-        mock_preset = Mock()
-        mock_preset.is_default = True
-        mock_preset.parameters = {"param": 123}
-
-        # Setup query results
-        mock_session.query.return_value.filter.side_effect = [
-            Mock(all=Mock(return_value=[mock_strategy])),  # strategies query
-            Mock(all=Mock(return_value=[mock_preset])),  # presets query
+        mock_db.load_active_strategies.return_value = [
+            {"name": "test_strategy", "parameters": {"param": 123}},
         ]
 
         repo = StrategyRepository(mock_db)
@@ -398,43 +348,25 @@ class TestStrategyRepository:
         # Verify preset was loaded
         assert repo._preset_values.get("test_strategy") == {"param": 123}
 
-    def test_save_preset_to_database_update_existing(self):
-        """Test updating existing preset in database."""
+    def test_save_preset_to_database_delegates_to_db_manager(self):
+        """Test that _save_preset_to_database delegates to DatabaseManager."""
         mock_db = Mock()
-        mock_session = MagicMock()
-        mock_db.get_session.return_value = MagicMock(__enter__=Mock(return_value=mock_session))
-
-        # Mock existing strategy and preset
-        mock_strategy = Mock()
-        mock_strategy.id = 1
-        mock_preset = Mock()
-
-        mock_session.query.return_value.filter.return_value.first.side_effect = [
-            mock_strategy,  # Strategy exists
-            mock_preset,  # Preset exists
-        ]
+        mock_db.load_active_strategies.return_value = []
 
         repo = StrategyRepository(mock_db)
         repo._save_preset_to_database("smacross", {"fast": 15})
 
-        # Verify preset was updated
-        mock_preset.set_parameters.assert_called_once_with({"fast": 15})
-        mock_session.commit.assert_called_once()
+        mock_db.save_strategy_preset.assert_called_once_with("smacross", {"fast": 15})
 
     def test_update_strategy_preset_with_db_saves(self):
         """Test that update_strategy_preset saves to database when DB manager exists."""
         mock_db = Mock()
-        mock_session = MagicMock()
-        mock_db.get_session.return_value = MagicMock(__enter__=Mock(return_value=mock_session))
-        # Mock empty database
-        mock_session.query.return_value.filter.return_value.all.return_value = []
+        mock_db.load_active_strategies.return_value = []
 
         repo = StrategyRepository(mock_db)
+        repo.update_strategy_preset("smacross", {"fast_period": 15})
 
-        with patch.object(repo, "_save_preset_to_database") as mock_save:
-            repo.update_strategy_preset("smacross", {"fast_period": 15})
-
-            mock_save.assert_called_once_with("smacross", repo._preset_values["smacross"])
+        mock_db.save_strategy_preset.assert_called_once_with("smacross", repo._preset_values["smacross"])
 
     def test_repository_implements_base_methods(self):
         """Test that StrategyRepository implements all Repository methods."""

@@ -1,9 +1,7 @@
 """Strategy Repository - Repository for managing trading strategies with database support."""
 
 from copy import deepcopy
-from typing import TYPE_CHECKING, Any, cast
-
-from sqlalchemy.orm import Session
+from typing import TYPE_CHECKING, Any
 
 from ..backtesting.strategies import (
     BaseStrategy,
@@ -19,7 +17,6 @@ from ..backtesting.strategies import (
     VAMAStrategy,
     VIDYAStrategy,
 )
-from ..database.models import Strategy, StrategyPreset
 from .repository import Repository
 
 if TYPE_CHECKING:
@@ -130,90 +127,29 @@ class StrategyRepository(Repository[type[BaseStrategy]]):
         if not self.db_manager:
             return
 
-        with self.db_manager.get_session() as session:
-            # Load active strategies
-            # Use type: ignore for SQLAlchemy filter
-            strategies = cast(
-                list[Strategy],
-                session.query(Strategy).filter(Strategy.is_active == True).all(),  # type: ignore[arg-type] # noqa: E712
-            )
-            for strategy in strategies:
-                # For now, we only load presets - actual strategy classes
-                # would need to be dynamically imported from module_path
-                self._load_strategy_presets(session, strategy)
-
-    def _load_strategy_presets(self, session: Any, strategy: Strategy) -> None:
-        """Load presets for a specific strategy from the database."""
-        presets = (
-            session.query(StrategyPreset).filter(StrategyPreset.strategy_id == strategy.id).all()  # type: ignore[arg-type]
-        )
-
-        for preset in presets:
-            if preset.is_default:
-                self._preset_values[strategy.name] = cast(dict[str, Any], preset.parameters)
+        for entry in self.db_manager.load_active_strategies():
+            if entry["parameters"] is not None:
+                self._preset_values[entry["name"]] = entry["parameters"]
 
     def sync_to_database(self) -> None:
         """Sync current strategies and presets to the database."""
         if not self.db_manager:
             return
 
-        from sqlalchemy.exc import IntegrityError, OperationalError
-
-        session: Session | None = None
-        try:
-            with self.db_manager.get_session() as session:
-                existing_names = self._get_existing_strategy_names(session)
-                self._insert_missing_strategies(session, existing_names)
-                session.commit()
-        except (IntegrityError, OperationalError):
-            # Handle cases where:
-            # - Strategy already exists (IntegrityError on unique constraint)
-            # - Tables don't exist yet (OperationalError)
-            # - Concurrent access from multiple processes/threads
-            if session is not None:
-                session.rollback()
-
-    def _get_existing_strategy_names(self, session: Session) -> set[str]:
-        """Get existing strategy names from the database."""
-        existing_name_rows = cast(
-            list[tuple[str]],
-            session.query(Strategy.name).filter(Strategy.name.in_(list(self._items.keys()))).all(),  # type: ignore[arg-type, attr-defined]
-        )
-        return {row[0] for row in existing_name_rows}
-
-    def _insert_missing_strategies(self, session: Session, existing_names: set[str]) -> None:
-        """Insert strategies that do not already exist in the database."""
+        strategy_dicts = []
         for name, strategy_class in self._items.items():
-            if name in existing_names:
-                continue
+            strat_dict: dict[str, Any] = {
+                "name": name,
+                "class_name": strategy_class.__name__,
+                "module_path": strategy_class.__module__,
+                "description": strategy_class.__doc__.split("\n")[0] if strategy_class.__doc__ else None,
+                "category": self._get_strategy_category(name),
+            }
+            if name in self._preset_values:
+                strat_dict["default_preset"] = self._preset_values[name]
+            strategy_dicts.append(strat_dict)
 
-            strategy = Strategy(
-                name=name,
-                class_name=strategy_class.__name__,
-                module_path=strategy_class.__module__,
-                description=strategy_class.__doc__.split("\n")[0] if strategy_class.__doc__ else None,
-                category=self._get_strategy_category(name),
-            )
-            session.add(strategy)
-            session.flush()  # Get the ID
-            if strategy.id is None:
-                continue
-
-            self._add_default_preset_if_available(session, name, strategy.id)
-
-    def _add_default_preset_if_available(self, session: Session, name: str, strategy_id: int) -> None:
-        """Add default preset for a strategy if configured."""
-        if name not in self._preset_values:
-            return
-
-        preset = StrategyPreset(
-            strategy_id=strategy_id,
-            name="default",
-            is_default=True,
-            parameters_json="{}",
-        )
-        preset.set_parameters(self._preset_values[name])  # type: ignore[arg-type]
-        session.add(preset)
+        self.db_manager.sync_strategies(strategy_dicts)
 
     def _get_strategy_category(self, strategy_name: str) -> str | None:
         """Determine the category of a strategy based on groups."""
@@ -229,7 +165,7 @@ class StrategyRepository(Repository[type[BaseStrategy]]):
         Returns:
             Dictionary of default presets (read-only deep copy)
         """
-        return cast(dict[str, dict[str, Any]], deepcopy(self.DEFAULT_PRESETS))
+        return deepcopy(self.DEFAULT_PRESETS)
 
     @property
     def values(self) -> dict[str, dict[str, Any]]:  # type: ignore[override]
@@ -238,7 +174,7 @@ class StrategyRepository(Repository[type[BaseStrategy]]):
         Returns:
             Dictionary of current preset values (can be modified)
         """
-        return cast(dict[str, dict[str, Any]], self._preset_values)
+        return self._preset_values
 
     def add(self, name: str, strategy_class: type[BaseStrategy]) -> None:
         """Add a strategy to the repository.
@@ -250,7 +186,7 @@ class StrategyRepository(Repository[type[BaseStrategy]]):
         lowercase_name = name.lower()
         self._items[lowercase_name] = strategy_class
 
-    def get(self, key: str, default=None):
+    def get(self, key: str, default: Any = None) -> type[BaseStrategy] | None:  # type: ignore[override]
         """Get a strategy by name (case-insensitive with normalization).
 
         Args:
@@ -261,7 +197,7 @@ class StrategyRepository(Repository[type[BaseStrategy]]):
             Strategy class or default
         """
         normalized_key = self.normalize_strategy_name(key)
-        return self._items.get(normalized_key, default)
+        return self._items.get(normalized_key, default)  # type: ignore[no-any-return]
 
     def remove(self, key: str) -> None:
         """Remove a strategy from the repository.
@@ -300,7 +236,7 @@ class StrategyRepository(Repository[type[BaseStrategy]]):
         Returns:
             Strategy class or None if not found
         """
-        return cast(type[BaseStrategy] | None, self.get(strategy_name))
+        return self.get(strategy_name)
 
     def normalize_strategy_name(self, strategy_name: str) -> str:
         """Normalize strategy name to canonical format.
@@ -380,7 +316,7 @@ class StrategyRepository(Repository[type[BaseStrategy]]):
         Returns:
             Dictionary of strategy names to parameter presets
         """
-        return cast(dict[str, dict[str, Any]], self._preset_values.copy())
+        return self._preset_values.copy()
 
     def get_strategy_preset(self, strategy_name: str) -> dict[str, Any]:
         """Get parameter preset for a specific strategy.
@@ -393,7 +329,7 @@ class StrategyRepository(Repository[type[BaseStrategy]]):
         """
         normalized_name = self.normalize_strategy_name(strategy_name)
         preset = self._preset_values.get(normalized_name, {})
-        return cast(dict[str, Any], preset.copy() if isinstance(preset, dict) else {})
+        return preset.copy()
 
     def validate_strategies(self, strategy_names: list[str]) -> tuple[list[str], list[str]]:
         """Validate a list of strategy names.
@@ -404,8 +340,8 @@ class StrategyRepository(Repository[type[BaseStrategy]]):
         Returns:
             Tuple of (valid_strategies, invalid_strategies) - valid names are normalized to lowercase
         """
-        valid = []
-        invalid = []
+        valid: list[str] = []
+        invalid: list[str] = []
 
         for name in strategy_names:
             lowercase_name = name.lower()
@@ -450,40 +386,19 @@ class StrategyRepository(Repository[type[BaseStrategy]]):
             self._preset_values[lowercase_name] = {}
 
         # Cast to dict for type safety
-        preset = cast(dict[str, Any], self._preset_values[lowercase_name])
+        preset = self._preset_values[lowercase_name]
         preset.update(parameters)
 
         # Sync to database if available
         if self.db_manager:
-            self._save_preset_to_database(lowercase_name, cast(dict[str, Any], self._preset_values[lowercase_name]))
+            self._save_preset_to_database(lowercase_name, self._preset_values[lowercase_name])
 
     def _save_preset_to_database(self, strategy_name: str, parameters: dict[str, Any]) -> None:
         """Save a preset to the database."""
         if not self.db_manager:
             return
 
-        with self.db_manager.get_session() as session:
-            strategy = session.query(Strategy).filter(Strategy.name == strategy_name).first()  # type: ignore[arg-type]
-            if strategy:
-                preset = (
-                    session.query(StrategyPreset)
-                    .filter(StrategyPreset.strategy_id == strategy.id, StrategyPreset.name == "default")  # type: ignore[arg-type]
-                    .first()
-                )
-
-                if preset:
-                    preset.set_parameters(parameters)
-                else:
-                    preset = StrategyPreset(
-                        strategy_id=strategy.id,
-                        name="default",
-                        is_default=True,
-                        parameters_json="{}",
-                    )
-                    preset.set_parameters(parameters)
-                    session.add(preset)
-
-                session.commit()
+        self.db_manager.save_strategy_preset(strategy_name, parameters)
 
 
 # Create a singleton instance (without database for backward compatibility)

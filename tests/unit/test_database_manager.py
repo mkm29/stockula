@@ -610,6 +610,109 @@ class TestErrorHandling:
             db_manager.get_stock_info("TEST")
 
 
+class TestStrategyOperations:
+    """Test strategy persistence methods."""
+
+    @pytest.fixture
+    def db_manager(self, tmp_path):
+        """Create a DatabaseManager instance."""
+        return DatabaseManager(str(tmp_path / "test.db"))
+
+    def test_sync_strategies_inserts_new(self, db_manager):
+        """Test syncing new strategies to the database."""
+        strategies = [
+            {
+                "name": "test_strat",
+                "class_name": "TestStrategy",
+                "module_path": "stockula.test",
+                "description": "A test strategy",
+                "category": "basic",
+                "default_preset": {"period": 14},
+            }
+        ]
+
+        db_manager.sync_strategies(strategies)
+
+        # Verify strategy was stored
+        loaded = db_manager.load_active_strategies()
+        assert len(loaded) == 1
+        assert loaded[0]["name"] == "test_strat"
+        assert loaded[0]["parameters"] == {"period": 14}
+
+    def test_sync_strategies_skips_existing(self, db_manager):
+        """Test that sync_strategies does not duplicate existing strategies."""
+        strategies = [
+            {
+                "name": "test_strat",
+                "class_name": "TestStrategy",
+                "module_path": "stockula.test",
+            }
+        ]
+
+        db_manager.sync_strategies(strategies)
+        db_manager.sync_strategies(strategies)  # Second call should be a no-op
+
+        loaded = db_manager.load_active_strategies()
+        assert len(loaded) == 1
+
+    def test_sync_strategies_handles_no_preset(self, db_manager):
+        """Test syncing a strategy without a default preset."""
+        strategies = [
+            {
+                "name": "no_preset_strat",
+                "class_name": "NoPesetStrategy",
+                "module_path": "stockula.test",
+            }
+        ]
+
+        db_manager.sync_strategies(strategies)
+
+        loaded = db_manager.load_active_strategies()
+        assert len(loaded) == 1
+        assert loaded[0]["name"] == "no_preset_strat"
+        assert loaded[0]["parameters"] is None
+
+    def test_load_active_strategies_empty(self, db_manager):
+        """Test loading from empty database."""
+        loaded = db_manager.load_active_strategies()
+        assert loaded == []
+
+    def test_save_strategy_preset_creates_new(self, db_manager):
+        """Test saving a preset for a strategy that has no preset."""
+        # First create a strategy without a preset
+        db_manager.sync_strategies([{"name": "strat_a", "class_name": "A", "module_path": "mod"}])
+
+        db_manager.save_strategy_preset("strat_a", {"fast": 10, "slow": 20})
+
+        loaded = db_manager.load_active_strategies()
+        assert loaded[0]["parameters"] == {"fast": 10, "slow": 20}
+
+    def test_save_strategy_preset_updates_existing(self, db_manager):
+        """Test updating an existing preset."""
+        db_manager.sync_strategies(
+            [
+                {
+                    "name": "strat_b",
+                    "class_name": "B",
+                    "module_path": "mod",
+                    "default_preset": {"fast": 5},
+                }
+            ]
+        )
+
+        db_manager.save_strategy_preset("strat_b", {"fast": 15, "extra": 99})
+
+        loaded = db_manager.load_active_strategies()
+        assert loaded[0]["parameters"] == {"fast": 15, "extra": 99}
+
+    def test_save_strategy_preset_nonexistent_strategy(self, db_manager):
+        """Test saving preset for a strategy that doesn't exist is a no-op."""
+        db_manager.save_strategy_preset("nonexistent", {"p": 1})  # Should not raise
+
+        loaded = db_manager.load_active_strategies()
+        assert loaded == []
+
+
 class TestDatabaseFixtures:
     """Test database fixtures to ensure they work correctly."""
 

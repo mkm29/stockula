@@ -15,7 +15,7 @@ from sqlmodel import Session, SQLModel, create_engine, select
 from alembic import command  # type: ignore[attr-defined]
 from alembic.config import Config
 
-from .models import Dividend, OptionsCall, OptionsPut, PriceHistory, Split, Stock, StockInfo
+from .models import Dividend, OptionsCall, OptionsPut, PriceHistory, Split, Stock, StockInfo, Strategy, StrategyPreset
 
 
 class DatabaseManager:
@@ -715,6 +715,120 @@ class DatabaseManager:
                     print(f"Warning: VACUUM failed: {e}")
 
             return deleted_count
+
+    # --- Strategy persistence methods ---
+
+    def load_active_strategies(self) -> list[dict[str, Any]]:
+        """Load active strategies with their default presets from the database.
+
+        Returns:
+            List of dicts with keys: name, parameters (dict or None)
+        """
+        with self.get_session() as session:
+            stmt = select(Strategy).where(Strategy.is_active == True)  # noqa: E712
+            strategies = session.exec(stmt).all()
+
+            results: list[dict[str, Any]] = []
+            for strategy in strategies:
+                preset_stmt = select(StrategyPreset).where(
+                    StrategyPreset.strategy_id == strategy.id,
+                    StrategyPreset.is_default == True,  # noqa: E712
+                )
+                default_preset = session.exec(preset_stmt).first()
+
+                results.append(
+                    {
+                        "name": strategy.name,
+                        "parameters": default_preset.parameters if default_preset else None,
+                    }
+                )
+
+            return results
+
+    def sync_strategies(self, strategies: list[dict[str, Any]]) -> None:
+        """Sync strategy definitions to the database.
+
+        Each dict should have keys: name, class_name, module_path,
+        and optionally: description, category, default_preset (dict of params).
+
+        Handles IntegrityError/OperationalError internally with rollback.
+
+        Args:
+            strategies: List of strategy definition dicts
+        """
+        from sqlalchemy.exc import IntegrityError, OperationalError
+
+        with self.get_session() as session:
+            try:
+                # Get existing strategy names in one query
+                names = [s["name"] for s in strategies]
+                stmt = select(Strategy.name).where(Strategy.name.in_(names))  # type: ignore[attr-defined]
+                existing_names = set(session.exec(stmt).all())
+
+                for strat_dict in strategies:
+                    if strat_dict["name"] in existing_names:
+                        continue
+
+                    strategy = Strategy(
+                        name=strat_dict["name"],
+                        class_name=strat_dict["class_name"],
+                        module_path=strat_dict["module_path"],
+                        description=strat_dict.get("description"),
+                        category=strat_dict.get("category"),
+                    )
+                    session.add(strategy)
+                    session.flush()
+
+                    if strategy.id is None:
+                        continue
+
+                    default_preset = strat_dict.get("default_preset")
+                    if default_preset:
+                        preset = StrategyPreset(
+                            strategy_id=strategy.id,
+                            name="default",
+                            is_default=True,
+                            parameters_json="{}",
+                        )
+                        preset.set_parameters(default_preset)
+                        session.add(preset)
+
+                session.commit()
+            except (IntegrityError, OperationalError):
+                session.rollback()
+
+    def save_strategy_preset(self, strategy_name: str, parameters: dict[str, Any]) -> None:
+        """Save or update the default preset for a named strategy.
+
+        Args:
+            strategy_name: Name of the strategy
+            parameters: Parameter dict to save
+        """
+        with self.get_session() as session:
+            stmt = select(Strategy).where(Strategy.name == strategy_name)
+            strategy = session.exec(stmt).first()
+            if not strategy:
+                return
+
+            preset_stmt = select(StrategyPreset).where(
+                StrategyPreset.strategy_id == strategy.id,
+                StrategyPreset.name == "default",
+            )
+            preset = session.exec(preset_stmt).first()
+
+            if preset:
+                preset.set_parameters(parameters)
+            else:
+                preset = StrategyPreset(
+                    strategy_id=strategy.id,
+                    name="default",
+                    is_default=True,
+                    parameters_json="{}",
+                )
+                preset.set_parameters(parameters)
+                session.add(preset)
+
+            session.commit()
 
     # Backward compatibility methods
     def add_stock(self, symbol: str, name: str, sector: str = "", market_cap: float | None = None):
