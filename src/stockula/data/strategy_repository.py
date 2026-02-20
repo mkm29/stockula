@@ -166,7 +166,7 @@ class StrategyRepository(Repository[type[BaseStrategy]]):
                 existing_name_rows: list[tuple[str]] = (
                     session.query(Strategy.name).filter(Strategy.name.in_(list(self._items.keys()))).all()  # type: ignore[arg-type, attr-defined]
                 )
-                existing_names: set[str] = {cast(str, row[0]) for row in existing_name_rows}
+                existing_names: set[str] = {row[0] for row in existing_name_rows}
 
                 # Only insert strategies that don't already exist
                 for name, strategy_class in self._items.items():
