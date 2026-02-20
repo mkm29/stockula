@@ -1,9 +1,9 @@
-VERDICT: Unhealthy codebase (34/100) — 7 critical, 10 warnings
+VERDICT: Unhealthy codebase (30/100) — 9 critical, 8 warnings
 
-Health Score: 34/100 | Tangle: 1.9% (51/2683 symbols in cycles) Propagation Cost: 0.1% | Algebraic Connectivity: 0.0000
+Health Score: 30/100 | Tangle: 1.9% (51/2692 symbols in cycles) Propagation Cost: 0.1% | Algebraic Connectivity: 0.0000
 
-Health: 39 issues — 7 CRITICAL, 10 WARNING, 22 INFO (12 cycles, 12 god components (8 actionable, 4 expected utilities),
-15 bottlenecks (13 actionable, 2 expected utilities))
+Health: 37 issues — 9 CRITICAL, 8 WARNING, 20 INFO (12 cycles, 10 god components (6 actionable, 4 expected utilities),
+15 bottlenecks (12 actionable, 3 expected utilities))
 
 === Cycles === [INFO] cycle 1 (12 symbols, 1 dir): run_command, check_docker_installation, check_docker_compose,
 test_docker_build, test_basic_functionality, test_uv_functionality, test_python_version, test_security,
@@ -26,32 +26,32 @@ remove dependency PriceHistory -> Stock (highest edge betweenness in cycle (0.14
 -> main (highest edge betweenness in cycle (0.700)) Break: remove dependency run_command -> main (highest edge
 betweenness in cycle (0.600)) Break: remove dependency run_command -> main (highest edge betweenness in cycle (0.583))
 Break: remove dependency check_file_exists -> main (highest edge betweenness in cycle (0.583)) Break: remove dependency
-format_markdown -> run_command (highest edge betweenness in cycle (0.500))
+run_command -> main (highest edge betweenness in cycle (0.500))
 
 === God Components (degree > 20) === Sev Name Kind Degree Cat File
 
 ______________________________________________________________________
 
 CRITICAL print meth 67 act src/stockula/cli_manager.py INFO BacktestOptimizedAllocator cls 26 act
-src/stockula/allocation/backtest_allocator.py INFO DatabaseManager cls 24 act src/stockula/database/manager.py INFO
-StrategyRepository cls 23 act src/stockula/data/strategy_repository.py INFO StockulaManager cls 23 act
-src/stockula/manager.py INFO BaseStrategy cls 22 act src/stockula/backtesting/strategies.py INFO Container cls 22 act
-src/stockula/container.py INFO StrategyRegistry var 21 act src/stockula/backtesting/__init__.py INFO StockulaConfig cls
-44 util src/stockula/config/models.py INFO exception meth 38 util src/stockula/utils/logging_manager.py INFO field prop
-33 util src/stockula/config/exceptions.py INFO TickerConfig cls 26 util src/stockula/config/models.py
+src/stockula/allocation/backtest_allocator.py INFO DatabaseManager cls 26 act src/stockula/database/manager.py INFO
+Container cls 22 act src/stockula/container.py INFO StockulaManager cls 22 act src/stockula/manager.py INFO BaseStrategy
+cls 21 act src/stockula/backtesting/strategies.py INFO StockulaConfig cls 43 util src/stockula/config/models.py INFO
+exception meth 38 util src/stockula/utils/logging_manager.py INFO field prop 33 util src/stockula/config/exceptions.py
+INFO TickerConfig cls 26 util src/stockula/config/models.py
 
 === Bottlenecks (high betweenness) === Sev Name Kind Betweenness Cat File
 
 ______________________________________________________________________
 
-CRITICAL Container cls 1962 act src/stockula/container.py CRITICAL app var 1299 act src/stockula/cli.py CRITICAL
-run_stockula fn 1081 act src/stockula/cli.py CRITICAL StockulaManager cls 848 act src/stockula/manager.py CRITICAL
-BacktestOptimizedAllocator cls 605 act src/stockula/allocation/backtest_allocator.py CRITICAL ResultsDisplay cls 598 act
-src/stockula/display.py WARNING DatabaseManager cls 541 act src/stockula/database/manager.py WARNING create_container fn
-373 act src/stockula/container.py WARNING ForecastingManager cls 356 act src/stockula/forecasting/manager.py WARNING
-BacktestRunner cls 210 act src/stockula/backtesting/runner.py WARNING StockulaPipeline cls 210 act
-src/stockula/pipeline.py WARNING BaseStrategy cls 175 act src/stockula/backtesting/strategies.py WARNING DataManager cls
-172 act src/stockula/data/manager.py WARNING StockulaConfig cls 560 util src/stockula/config/models.py WARNING
-load_config fn 269 util src/stockula/config/settings.py
+CRITICAL Container cls 2590 act src/stockula/container.py CRITICAL StockulaPipeline cls 1226 act
+src/stockula/pipeline.py CRITICAL DatabaseManager cls 1178 act src/stockula/database/manager.py CRITICAL
+create_container fn 1085 act src/stockula/container.py CRITICAL BacktestingManager cls 648 act
+src/stockula/backtesting/manager.py CRITICAL BacktestOptimizedAllocator cls 609 act
+src/stockula/allocation/backtest_allocator.py CRITICAL StockulaManager cls 480 act src/stockula/manager.py WARNING
+StrategyRepository cls 457 act src/stockula/data/strategy_repository.py WARNING Stock cls 420 act
+src/stockula/database/models.py WARNING ForecastingManager cls 385 act src/stockula/forecasting/manager.py WARNING
+ResultsDisplay cls 312 act src/stockula/display.py WARNING BacktestRunner cls 273 act src/stockula/backtesting/runner.py
+CRITICAL StockulaConfig cls 763 util src/stockula/config/models.py WARNING main fn 270 util utils/validate_docker.py
+WARNING load_config fn 268 util src/stockula/config/settings.py
 
 === Layer Violations (0) === (none)

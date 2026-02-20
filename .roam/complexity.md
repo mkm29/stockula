@@ -1,4 +1,4 @@
-Cognitive complexity (2349 functions analyzed, avg=2.9, p90=5.0, 49 critical, 30 high):
+Cognitive complexity (2358 functions analyzed, avg=2.9, p90=5.0, 49 critical, 30 high):
 
 !! 171 DataFetcher.get_stock_data_batch meth src/stockula/data/fetcher.py:435 (nest=7, bool=3, params=5, density=2.01,
 H.vol=1163) !! 119 Allocator.calculate_auto_allocation_quantities meth src/stockula/allocation/allocator.py:81 (nest=5,

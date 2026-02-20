@@ -2,10 +2,10 @@
 
 ## Project Overview
 
-- **Files:** 213
-- **Symbols:** 2683
-- **Edges:** 1241
-- **Languages:** python (120), markdown (39), yaml (28), bash (7), json (3), toml (1)
+- **Files:** 214
+- **Symbols:** 2692
+- **Edges:** 1221
+- **Languages:** python (120), markdown (39), yaml (29), bash (7), json (3), toml (1)
 
 ## Directory Structure
 
@@ -17,7 +17,7 @@
 | `./`         | 27    | yaml             |
 | `examples/`  | 20    | yaml             |
 | `utils/`     | 9     | python           |
-| `.github/`   | 8     | yaml             |
+| `.github/`   | 9     | yaml             |
 | `scripts/`   | 7     | bash             |
 | `alembic/`   | 7     | python           |
 | `notebooks/` | 2     | markdown         |
@@ -48,8 +48,8 @@
 - `examples/forecast_chronos.py`
 - `examples/pipeline_example.py`
 - `examples/treasury_rate_example.py`
-- `scripts/chronos_batch_infer.py`
 - `scripts/export_to_gluonts_file_dataset.py`
+- `tests/data/fetch_test_data.py`
 
 ## Key Abstractions
 
@@ -63,10 +63,10 @@ Top symbols by importance (PageRank):
 | `BacktestOptimizedAllocator class BacktestOptimizedAllocator(BaseAllocator)` | class    | `src/stockula/allocation/backtest_allocator.py:29` |
 | `TickerConfig class TickerConfig(BaseModel)`                                 | class    | `src/stockula/config/models.py:51`                 |
 | `DatabaseManager class DatabaseManager`                                      | class    | `src/stockula/database/manager.py:21`              |
-| `StrategyRepository class StrategyRepository(Repository[type[BaseSt...`      | class    | `src/stockula/data/strategy_repository.py:29`      |
+| `Container class Container(containers.DeclarativeContainer)`                 | class    | `src/stockula/container.py:19`                     |
 | `StockulaManager class StockulaManager`                                      | class    | `src/stockula/manager.py:22`                       |
 | `BaseStrategy class BaseStrategy(Strategy)`                                  | class    | `src/stockula/backtesting/strategies.py:22`        |
-| `Container class Container(containers.DeclarativeContainer)`                 | class    | `src/stockula/container.py:19`                     |
+| `StrategyRepository class StrategyRepository(Repository[type[BaseSt...`      | class    | `src/stockula/data/strategy_repository.py:26`      |
 | `Stock class Stock(SQLModel, table=True)`                                    | class    | `src/stockula/database/models.py:17`               |
 | `ILoggingManager class ILoggingManager(ABC)`                                 | class    | `src/stockula/interfaces.py:75`                    |
 | `BacktestRunner class BacktestRunner`                                        | class    | `src/stockula/backtesting/runner.py:15`            |
@@ -78,14 +78,14 @@ Top symbols by importance (PageRank):
 
 - **Dependency layers:** 13
 - **Cycles (SCCs):** 12
-- **Layer distribution:** L0: 2492 symbols, L1: 73 symbols, L2: 17 symbols, L3: 3 symbols, L4: 4 symbols
+- **Layer distribution:** L0: 2501 symbols, L1: 74 symbols, L2: 16 symbols, L3: 3 symbols, L4: 4 symbols
 
 ## Testing
 
 **Test directories:** `tests/`
 
 - **Test files:** 49
-- **Source files:** 164
+- **Source files:** 165
 - **Test-to-source ratio:** 0.30
 
 ## Coding Conventions
@@ -93,14 +93,14 @@ Top symbols by importance (PageRank):
 Follow these conventions when writing code in this project:
 
 - **Functions:** Use `snake_case` (99% of 180 functions)
-- **Classes:** Use `PascalCase` (100% of 301 classes)
-- **Methods:** Use `snake_case` (100% of 1611 methods)
+- **Classes:** Use `PascalCase` (100% of 302 classes)
+- **Methods:** Use `snake_case` (100% of 1620 methods)
 - **Imports:** Prefer absolute imports (100% are cross-directory)
 - **Test files:** test\_\*.py
 
 ## Complexity Hotspots
 
-Average function complexity: 2.9 (2349 functions analyzed)
+Average function complexity: 2.9 (2358 functions analyzed)
 
 Functions with highest complexity (consider refactoring):
 
@@ -119,9 +119,8 @@ Functions with highest complexity (consider refactoring):
 
 ## Domain Keywords
 
-- **Top domain terms:** strategy, backtest, calculate, portfolio, allocation, manager, forecast, results,
-  initialization, quantities, strategies, dynamic, calculation, fetcher, database, date, exception, logging, ticker,
-  category
+- **Top domain terms:** strategy, backtest, calculate, portfolio, allocation, forecast, strategies, results, manager,
+  quantities, initialization, calculation, dynamic, fetcher, date, logging, exception, ticker, category, symbol
 
 ## Core Modules
 
@@ -130,11 +129,11 @@ Most-imported modules (everything depends on these):
 | Module                                   | Imported By | Symbols Used |
 | ---------------------------------------- | ----------- | ------------ |
 | `src/stockula/utils/logging_manager.py`  | 39 files    | 48           |
-| `src/stockula/config/models.py`          | 37 files    | 212          |
+| `src/stockula/config/models.py`          | 36 files    | 211          |
 | `src/stockula/cli_manager.py`            | 24 files    | 70           |
 | `src/stockula/interfaces.py`             | 20 files    | 58           |
-| `src/stockula/backtesting/strategies.py` | 18 files    | 105          |
-| `src/stockula/database/models.py`        | 17 files    | 48           |
+| `src/stockula/backtesting/strategies.py` | 18 files    | 98           |
+| `src/stockula/database/models.py`        | 16 files    | 47           |
 | `src/stockula/domain/ticker.py`          | 16 files    | 29           |
 | `src/stockula/data/fetcher.py`           | 15 files    | 28           |
 | `src/stockula/cli.py`                    | 14 files    | 24           |

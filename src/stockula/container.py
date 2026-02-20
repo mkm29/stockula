@@ -1,6 +1,7 @@
 """Dependency injection container for Stockula."""
 
 import threading
+from typing import Any
 
 from dependency_injector import containers, providers
 
@@ -8,12 +9,48 @@ from .allocation import Allocator, AllocatorManager, BacktestOptimizedAllocator
 from .backtesting import BacktestingManager
 from .backtesting.runner import BacktestRunner
 from .config import load_config
+from .data.fetcher import DataFetcher
 from .data.manager import DataManager
 from .database.manager import DatabaseManager
 from .domain.factory import DomainFactory
 from .forecasting import ForecastingManager
 from .technical_analysis import TechnicalAnalysisManager, TechnicalIndicators
 from .utils.logging_manager import LoggingManager
+
+
+def _get_db_path(config: Any) -> str:
+    """Extract db_path from configuration with a typed signature."""
+    return str(config.data.db_path)
+
+
+def _get_use_cache(config: Any) -> bool:
+    """Extract use_cache from configuration with a typed signature."""
+    return bool(config.data.use_cache)
+
+
+def _get_data_fetcher(data_mgr: DataManager) -> DataFetcher:
+    """Extract data fetcher from data manager with a typed signature."""
+    return data_mgr.fetcher
+
+
+def _get_strategy_repository(data_mgr: DataManager) -> Any:
+    """Extract strategy repository from data manager with a typed signature."""
+    return data_mgr.strategies
+
+
+def _get_initial_cash(config: Any) -> float:
+    """Extract initial_cash from configuration with a typed signature."""
+    return float(config.backtest.initial_cash)
+
+
+def _get_commission(config: Any) -> float:
+    """Extract commission from configuration with a typed signature."""
+    return float(config.backtest.commission)
+
+
+def _get_broker_config(config: Any) -> Any:
+    """Extract broker_config from configuration with a typed signature."""
+    return config.backtest.broker_config
 
 
 class Container(containers.DeclarativeContainer):
@@ -30,21 +67,21 @@ class Container(containers.DeclarativeContainer):
     config = providers.Configuration()
 
     # Config file path
-    config_path: providers.Object[str | None] = providers.Object(None)
+    config_path: providers.Provider[str | None] = providers.Object[str | None](None)
 
     # Logger - thread-safe singleton
     logging_manager = providers.ThreadSafeSingleton(LoggingManager, name="stockula")
 
     # Stockula configuration - thread-safe singleton
     stockula_config = providers.ThreadSafeSingleton(
-        lambda config_path: load_config(config_path),
+        load_config,
         config_path=config_path,
     )
 
     # Database manager - thread-safe singleton
     database_manager = providers.ThreadSafeSingleton(
         DatabaseManager,
-        db_path=providers.Callable(lambda config: config.data.db_path, stockula_config),
+        db_path=providers.Callable(_get_db_path, stockula_config),
     )
 
     # Data manager - thread-safe singleton
@@ -52,19 +89,19 @@ class Container(containers.DeclarativeContainer):
         DataManager,
         db_manager=database_manager,
         logging_manager=logging_manager,
-        use_cache=providers.Callable(lambda config: config.data.use_cache, stockula_config),
-        db_path=providers.Callable(lambda config: config.data.db_path, stockula_config),
+        use_cache=providers.Callable(_get_use_cache, stockula_config),
+        db_path=providers.Callable(_get_db_path, stockula_config),
     )
 
     # Data fetcher extracted from data manager - thread-safe singleton
     data_fetcher = providers.ThreadSafeSingleton(
-        lambda data_mgr: data_mgr.fetcher,
+        _get_data_fetcher,
         data_mgr=data_manager,
     )
 
     # Strategy repository - thread-safe singleton via DataManager
     strategy_repository = providers.ThreadSafeSingleton(
-        lambda data_mgr: data_mgr.strategies,
+        _get_strategy_repository,
         data_mgr=data_manager,
     )
 
@@ -74,9 +111,9 @@ class Container(containers.DeclarativeContainer):
     # Backtesting runner
     backtest_runner = providers.Factory(
         BacktestRunner,
-        cash=providers.Callable(lambda config: config.backtest.initial_cash, stockula_config),
-        commission=providers.Callable(lambda config: config.backtest.commission, stockula_config),
-        broker_config=providers.Callable(lambda config: config.backtest.broker_config, stockula_config),
+        cash=providers.Callable(_get_initial_cash, stockula_config),
+        commission=providers.Callable(_get_commission, stockula_config),
+        broker_config=providers.Callable(_get_broker_config, stockula_config),
         data_fetcher=data_fetcher,
     )
 
@@ -143,10 +180,7 @@ def create_container(config_path: str | None = None) -> Container:
     Returns:
         Configured container instance
     """
-    container = Container()
-
-    if config_path:
-        container.config_path.override(config_path)
+    container = Container(config_path=providers.Object(config_path))
 
     # Wire the container to modules that need it
     container.wire(
